@@ -1,0 +1,13 @@
+diff --git a/src/overlays/wled/FX.cpp b/src/overlays/wled/FX.cpp
+index eb90d3224..d060b9a54 100644
+--- a/src/overlays/wled/FX.cpp
++++ b/src/overlays/wled/FX.cpp
+@@ -10,6 +10,8 @@
+   Modified heavily for WLED
+ */
+ 
++#include <ctime>
++
+ #include "wled.h"
+ #include "FX.h"
+ #include "fcn_declare.h"

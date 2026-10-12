@@ -1,0 +1,76 @@
+name: Scenarios
+
+on:
+  schedule:
+    # 07:00 UTC, the middle of the night in the US
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      fpp_ref:
+        description: fpp branch, tag or commit to test
+        default: master
+      flavor:
+        description: Build flavor
+        type: choice
+        options: [asan, tsan, debug, optimized]
+        default: asan
+      pytest_args:
+        description: Extra pytest arguments (e.g. -k presets)
+        default: ""
+  # Lets an fpp workflow ask for a run:
+  #   gh api repos/FalconChristmas/fpp-tests/dispatches \
+  #     -f event_type=fpp-push -F client_payload[ref]=<sha>
+  repository_dispatch:
+    types: [fpp-push]
+
+concurrency:
+  group: scenarios-${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}-${{ github.event.inputs.flavor || 'asan' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  scenarios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FPP_REF: ${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}
+      FLAVOR: ${{ github.event.inputs.flavor || 'asan' }}
+    steps:
+      - name: Checkout fpp-tests
+        uses: actions/checkout@v6
+
+      - name: Checkout fpp
+        uses: actions/checkout@v6
+        with:
+          repository: FalconChristmas/fpp
+          ref: ${{ env.FPP_REF }}
+          path: fpp
+          # Full history without blobs: enough for `git describe` to name the
+          # version, without downloading every file ever committed.
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Restore ccache
+        uses: actions/cache@v5
+        with:
+          path: .ccache
+          key: ccache-${{ env.FLAVOR }}-${{ github.run_id }}
+          restore-keys: ccache-${{ env.FLAVOR }}-
+
+      - name: Build fpp and run scenarios
+        env:
+          FPP_TESTS_CCACHE: .ccache
+          PYTEST_ARGS: ${{ github.event.inputs.pytest_args }}
+        # PYTEST_ARGS is left unquoted on purpose, to split into arguments.
+        run: ./run.sh --fpp fpp --ref HEAD --flavor "$FLAVOR" -v -rA $PYTEST_ARGS
+
+      - name: Upload failed scenarios
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failed-scenarios-${{ env.FLAVOR }}
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
