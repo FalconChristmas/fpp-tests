@@ -50,7 +50,8 @@ rm -rf "$ARTIFACTS"
 mkdir -p "$ARTIFACTS"
 
 # Each built tree is ~500MB; keep the most recently used FPP_TESTS_KEEP_TREES.
-$DOCKER fpp-tests-env sh -c "touch '$TREE' 2>/dev/null; ls -1dt /work/*/ 2>/dev/null |
+# (touch only an existing tree: on a new one it would create a plain file.)
+$DOCKER fpp-tests-env sh -c "if [ -d '$TREE' ]; then touch '$TREE'; fi; ls -1dt /work/*/ 2>/dev/null |
     tail -n +$((${FPP_TESTS_KEEP_TREES:-8} + 1)) | xargs -r rm -rf"
 
 # Export the tree once per commit and flavor; flavors can't share object files.

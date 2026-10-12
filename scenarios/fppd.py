@@ -36,6 +36,9 @@ class Fppd:
         for d in MEDIA_DIRS:
             os.makedirs(os.path.join(self.media, d))
         self.proc = None
+        # Set by a scenario that makes fppd exit on purpose and has checked
+        # how it exited; the fixture then skips its own end-of-test checks.
+        self.exit_expected = False
 
     # --- setup, before start() -------------------------------------------
 

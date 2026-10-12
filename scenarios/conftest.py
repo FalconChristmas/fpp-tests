@@ -22,7 +22,7 @@ def fppd(request):
     teardown_failed = False
     try:
         yield f
-        if f.proc is not None and not test_failed(request):
+        if f.proc is not None and not f.exit_expected and not test_failed(request):
             teardown_failed = True
             f.check_alive()
             rc = f.stop()

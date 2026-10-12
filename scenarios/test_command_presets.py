@@ -1,5 +1,6 @@
 """Command presets: loading, reloading and firing them."""
 
+import os
 import time
 
 
@@ -42,6 +43,39 @@ def test_edit_reloads_without_wedging(fppd):
         return variable(fppd, "X") == "2"
 
     fppd.wait_for(reloaded, timeout=15, interval=0.5, what="the edited preset to take effect")
+
+
+def replace_presets(fppd, commands, mtime_ns):
+    """Replace commandPresets.json the way FPP's own writers do (temp file,
+    then rename), arriving with the given modification time already set."""
+    path = os.path.join(fppd.media, "config", "commandPresets.json")
+    tmp = fppd.write("config/.commandPresets.json.tmp", {"commands": commands})
+    os.utime(tmp, ns=(mtime_ns, mtime_ns))
+    os.rename(tmp, path)
+
+
+def test_two_saves_in_one_second_both_load(fppd):
+    """A save in the same second as the previous one is still picked up.
+
+    Regression: ad22d9f73. The reload compared whole-second modification times and
+    skipped a file whose second matched the last load, so the second of two
+    quick saves was lost until the file was saved again.
+    """
+    fppd.write("config/commandPresets.json", {"commands": [set_variable("X", 1)]})
+    fppd.start()
+
+    def becomes(value):
+        def check():
+            fppd.command("Trigger Command Preset", "P", timeout=5)
+            return variable(fppd, "X") == str(value)
+        return check
+
+    # Both saves are stamped inside one whole second, later than the load.
+    second = (int(time.time()) + 5) * 1_000_000_000
+    replace_presets(fppd, [set_variable("X", 2)], second + 200_000_000)
+    fppd.wait_for(becomes(2), timeout=15, interval=0.25, what="the first save to load")
+    replace_presets(fppd, [set_variable("X", 3)], second + 700_000_000)
+    fppd.wait_for(becomes(3), timeout=15, interval=0.25, what="the second save to load")
 
 
 def test_keyword_whose_value_contains_itself(fppd):
