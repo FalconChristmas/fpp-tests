@@ -35,6 +35,11 @@ class Fppd:
         self.media = tempfile.mkdtemp(prefix="media-")
         for d in MEDIA_DIRS:
             os.makedirs(os.path.join(self.media, d))
+        # A crash report would run scripts/generate_crash_report, which
+        # works in the hard-coded /home/fpp/media -- the device's own media
+        # when run-local.sh tests on an FPP device. The sanitizer report and
+        # the saved artifacts cover what the crash report would.
+        self.settings(ShareCrashData="-1")
         self.proc = None
         # Set by a scenario that makes fppd exit on purpose and has checked
         # how it exited; the fixture then skips its own end-of-test checks.

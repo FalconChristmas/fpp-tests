@@ -17,6 +17,9 @@ on:
       pytest_args:
         description: Extra pytest arguments (e.g. -k presets)
         default: ""
+  # A pull request to this repo runs the suite against fpp master, so a
+  # contributor can add a scenario without Docker or an FPP device.
+  pull_request:
   # Lets an fpp workflow ask for a run:
   #   gh api repos/FalconChristmas/fpp-tests/dispatches \
   #     -f event_type=fpp-push -F client_payload[ref]=<sha>
@@ -24,7 +27,7 @@ on:
     types: [fpp-push]
 
 concurrency:
-  group: scenarios-${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}-${{ github.event.inputs.flavor || 'asan' }}
+  group: scenarios-${{ github.event.pull_request.number || '' }}-${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}-${{ github.event.inputs.flavor || 'asan' }}
   cancel-in-progress: true
 
 permissions:

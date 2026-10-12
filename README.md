@@ -28,6 +28,20 @@ Requires Docker. From this directory, with fpp checked out next to it (`../fpp`)
 ./run.sh --fpp ~/src/fpp -k presets       # a different fpp checkout
 ```
 
+On an FPP device (or any Debian box with a built fpp tree), run against the tree as
+it is built right now, uncommitted changes included, without Docker:
+
+```sh
+sudo ./run-local.sh                       # tests /opt/fpp/src/fppd; build it first with make
+sudo ./run-local.sh --fpp ~/fpp -k presets
+```
+
+The device's own fppd keeps running. Each test fppd gets private network, /tmp, /run
+and /dev/shm, an overlay over the tree (so its writes to `www/` never reach the real
+one), no sound cards or SPI devices, and a read-only /sys. pytest is installed if
+missing. ASan doesn't run on FPP's Pi kernels (39-bit address space); use the normal,
+debug, tsan or ubsan build there.
+
 The first build of a commit takes a few minutes; ccache makes later builds of nearby
 commits take seconds. Builds are cached per commit and flavor in the `fpp-tests-work`
 Docker volume (`docker volume rm fpp-tests-work fpp-tests-ccache` to clear them).
