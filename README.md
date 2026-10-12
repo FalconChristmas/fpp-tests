@@ -67,7 +67,17 @@ def test_something(fppd):
 ```
 
 The fixture provides `write`, `settings`, `start`, `get`/`post`/`command` (which fail
-with "fppd is wedged" on a timeout), `wait_for`, and `log`.
+with "fppd is wedged" on a timeout), `wait_for`, and `log`. Helpers for the show itself:
+
+| Module | What |
+|---|---|
+| `fseq.py` | `write_fseq()` writes sequences with FPP's own `FSEQFile` writer (built from `tools/fseqgen.cpp` against the tree under test), so playing them tests the writer too; `write_fseq_reference()` is an independent writer for checking the reader; `unique_frames()` makes every frame identifiable |
+| `show.py` | `install()`: a sequence, a playlist and a DDP output to this machine in one call |
+| `ddp.py` | `DdpReceiver` rebuilds frames from DDP like a pixel controller, with arrival times |
+| `frames.py` | `analyze()` matches received frames to source frames: drops, repeats, reordering, corruption, black padding, cadence |
+| `udp.py` | `Listener` counts what arrives on a UDP port |
+| `capture.py` | `UdpCapture` sees packets fppd sends to a port it also holds (MultiSync), off the loopback interface |
+| `multisync.py` | Parses and builds MultiSync sync packets |
 
 **Every scenario that guards a fix must be shown to fail without it.** A test that
 passes on both sides of a fix proves nothing. `scripts/verify-fix.sh` checks this:
@@ -101,4 +111,5 @@ these flags (a missing include the precompiled header used to supply, for instan
 | `scripts/verify-fix.sh` | Red-before, green-after check for a fix |
 | `scenarios/fppd.py` | Starts, drives and stops one fppd |
 | `scenarios/conftest.py` | The `fppd` fixture and its end-of-test checks |
+| `tools/fseqgen.cpp` | Writes an FSEQ file with FPP's `FSEQFile` writer |
 | `fixups/` | Build fixes for old commits |

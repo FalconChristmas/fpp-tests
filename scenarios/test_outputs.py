@@ -20,7 +20,7 @@ def universes(description):
     return {"channelOutputs": [{
         "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 512,
         "universes": [{"active": 1, "description": description, "id": 1,
-                       "startChannel": 1, "size": 512, "type": 1,
+                       "startChannel": 1, "channelCount": 512, "type": 1,
                        "address": E131_ADDRESS, "priority": 0, "monitor": 0,
                        "deDuplicate": 0}],
     }]}
