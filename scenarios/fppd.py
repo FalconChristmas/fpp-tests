@@ -66,7 +66,14 @@ class Fppd:
 
     # --- lifecycle -------------------------------------------------------
 
-    def start(self, timeout=60):
+    def start(self, timeout=60, fake_time=None, tz=None):
+        """Start fppd and wait until its API answers.
+
+        fake_time: "YYYY-MM-DD HH:MM:SS" -- fppd's wall clock starts there
+                   and runs on in real time (libfaketime; the monotonic
+                   clock is left alone, so timers behave).
+        tz:        a zone name such as "America/New_York" for fppd's TZ.
+        """
         with open(os.path.join(self.tree, "www", "media_root.txt"), "w") as f:
             f.write(self.media)
         env = dict(os.environ)
@@ -80,7 +87,22 @@ class Fppd:
             f"log_path={self.media}/logs/asan"
         )
         env["TSAN_OPTIONS"] = f"halt_on_error=0:log_path={self.media}/logs/tsan"
+        if tz:
+            env["TZ"] = tz
+        if fake_time:
+            env.update(faketime_env(os.path.join(src, "fppd"), fake_time))
+            # Read from a file on every call, so set_clock() can step it.
+            self.clock_file = os.path.join(self.media, "tmp", "faketime")
+            with open(self.clock_file, "w") as f:
+                f.write(env.pop("FAKETIME") + "\n")
+            env["FAKETIME_TIMESTAMP_FILE"] = self.clock_file
+            # ASan's allocator reads the clock (via libfaketime) for its
+            # release-to-OS bookkeeping, and libfaketime's first clock read
+            # allocates: the two deadlock. Turning the release off removes
+            # ASan's clock read from the allocator.
+            env["ASAN_OPTIONS"] += ":allocator_release_to_os_interval_ms=-1"
         self.out = open(os.path.join(self.media, "logs", "fppd.stdout"), "w")
+        self.started = time.monotonic()
         self.proc = subprocess.Popen(
             [os.path.join(self.tree, "src", "fppd"), "-f"],
             cwd=os.path.join(self.tree, "src"),
@@ -98,6 +120,16 @@ class Fppd:
                 pass
             time.sleep(0.25)
         raise TimeoutError(f"fppd did not answer /fppd/status within {timeout}s\n{self.tail()}")
+
+    def set_clock(self, when):
+        """Step fppd's faked wall clock (started with fake_time=) so that it
+        reads about `when` ("YYYY-MM-DD HH:MM:SS") now. libfaketime counts
+        from the process's start, so the elapsed run time is subtracted."""
+        import datetime
+        target = datetime.datetime.strptime(when, "%Y-%m-%d %H:%M:%S")
+        base = target - datetime.timedelta(seconds=time.monotonic() - self.started)
+        with open(self.clock_file, "w") as f:
+            f.write("@" + base.strftime("%Y-%m-%d %H:%M:%S") + "\n")
 
     def check_alive(self):
         if self.proc is None:
@@ -227,6 +259,29 @@ class Fppd:
                 return last
             time.sleep(interval)
         raise TimeoutError(f"timed out after {timeout}s waiting for {what} (last: {last!r})")
+
+
+def faketime_env(binary, when):
+    """Environment that starts `binary`'s wall clock at `when`."""
+    import glob
+    import pytest
+    libs = glob.glob("/usr/lib/*/faketime/libfaketimeMT.so.1")
+    if not libs:
+        pytest.skip("libfaketime is not installed (apt-get install faketime)")
+    preload = [libs[0]]
+    # A sanitizer runtime has to come first in the preload list.
+    ldd = subprocess.run(["ldd", binary], capture_output=True, text=True).stdout
+    for line in ldd.splitlines():
+        if any(n in line for n in ("libasan.so", "libtsan.so")) and "=>" in line:
+            preload.insert(0, line.split("=>")[1].split()[0])
+    return {
+        "LD_PRELOAD": " ".join(preload),
+        "FAKETIME": "@" + when,
+        "FAKETIME_DONT_FAKE_MONOTONIC": "1",
+        "FAKETIME_NO_CACHE": "1",
+        # fppd's child processes (scripts, gdb) see the real clock.
+        "FAKETIME_SKIP_CMDS": "gdb,sh,bash",
+    }
 
 
 def describe_rc(rc):

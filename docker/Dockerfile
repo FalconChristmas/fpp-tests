@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libsamplerate0-dev \
         libusb-1.0-0-dev libasound2-dev libpipewire-0.3-dev libsdl2-dev mesa-common-dev \
         gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
-        python3 python3-pytest python3-zstandard procps iproute2 gdb patch \
+        python3 python3-pytest python3-zstandard faketime tzdata procps iproute2 gdb patch \
     && rm -rf /var/lib/apt/lists/*
 
 # FPP's makefiles skip the OLED/cape/RTC tools when this marker exists, and

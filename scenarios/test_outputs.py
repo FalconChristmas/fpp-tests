@@ -79,3 +79,44 @@ def test_generic_udp_survives_config_saves(fppd):
         fppd.write("config/co-other.json", generic_udp("c", enabled=0))
         rate = steady_rate(listener)
         assert rate == 0, f"a disabled GenericUDP output still sends {rate:.1f} packets/s"
+
+
+def test_controller_that_comes_up_late_gets_the_show(fppd):
+    """A controller that is off when the show starts is dropped from the
+    output with a warning once its pings fail, and picked back up -- data
+    flowing, warning gone -- once it answers again, without any reload.
+    (fppd pings every 15 s and drops a host after two failed pings and a
+    failed HTTP probe, so this takes a minute or so.)"""
+    import subprocess
+
+    from ddp import DdpReceiver
+    from fseq import unique_frames
+    from show import CHANNELS, ddp_output, install
+
+    address = "10.77.0.2"   # nothing answers here until the test adds it
+
+    def host_warnings():
+        return [w for w in fppd.get("/fppd/status").get("warningInfo", [])
+                if w.get("id") == 27]
+
+    frames = unique_frames(4000, CHANNELS)  # 200 s, longer than the test
+    with DdpReceiver(CHANNELS) as rx:
+        install(fppd, frames)
+        config = ddp_output(CHANNELS, address=address)
+        config["channelOutputs"][0]["universes"][0]["monitor"] = 1
+        fppd.write("config/co-universes.json", config)
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "false", "false")
+        fppd.wait_for(host_warnings, timeout=120, interval=1,
+                      what="fppd to give up on the unreachable controller")
+        try:
+            subprocess.run(["ip", "addr", "add", address + "/32", "dev", "lo"], check=True)
+            up = time.monotonic()
+            assert rx.wait_frames(20, timeout=40, since=up), \
+                "the controller came up but fppd never sent it anything"
+            fppd.wait_for(lambda: not host_warnings(), timeout=40, interval=1,
+                          what="the unreachable-controller warning to clear")
+            latest = rx.last()[:CHANNELS]
+            assert latest in frames, "the late controller got data that is not the show"
+        finally:
+            subprocess.run(["ip", "addr", "del", address + "/32", "dev", "lo"])

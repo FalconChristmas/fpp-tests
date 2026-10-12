@@ -19,7 +19,7 @@
 #   - no sound cards, SPI devices as /dev/null (fppd probes SPI0 for a GPIO
 #     expander at startup), read-only /sys, and a scratch HOME.
 #
-# Needs root (for the namespaces). Installs python3-pytest if it is missing.
+# Needs root (for the namespaces). Installs python3-pytest and faketime if missing.
 set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -44,10 +44,15 @@ if [ ! -x "$TREE/src/fppd" ]; then
     echo "$TREE/src/fppd is not built; run make in $TREE/src first" >&2
     exit 2
 fi
-if ! python3 -c "import pytest" 2>/dev/null; then
-    echo "pytest is not installed; installing python3-pytest"
+# pytest runs the suite; libfaketime lets the calendar scenarios fake fppd's
+# clock (they skip without it).
+MISSING=""
+python3 -c "import pytest" 2>/dev/null || MISSING="$MISSING python3-pytest"
+ls /usr/lib/*/faketime/libfaketimeMT.so.1 > /dev/null 2>&1 || MISSING="$MISSING faketime"
+if [ -n "$MISSING" ]; then
+    echo "installing:$MISSING"
     apt-get -q update > /dev/null
-    DEBIAN_FRONTEND=noninteractive apt-get -q -y install --no-install-recommends python3-pytest
+    DEBIAN_FRONTEND=noninteractive apt-get -q -y install --no-install-recommends $MISSING
 fi
 
 ARTIFACTS="$HERE/artifacts"

@@ -68,7 +68,7 @@ TTY=""
 [ -t 1 ] && TTY="-t"
 exec $DOCKER $TTY -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" \
     -e FPP_TREE="$TREE" -e FPP_FLAVOR="$FLAVOR" -e FPP_TESTS_ARTIFACTS=/artifacts \
-    --cap-add SYS_PTRACE --cap-add SYS_NICE \
+    --cap-add SYS_PTRACE --cap-add SYS_NICE --cap-add NET_ADMIN \
     fpp-tests-env sh -c '/tests/scripts/build-fpp.sh "$FPP_TREE" "$FPP_FLAVOR" && cd /tests &&
         if [ $# -eq 0 ]; then set -- scenarios; fi &&
         exec python3 -m pytest -p no:cacheprovider "$@"' sh "$@"
