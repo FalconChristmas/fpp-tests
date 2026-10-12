@@ -132,11 +132,14 @@ class Fppd:
             )
         return path
 
+    def kill(self):
+        if self.proc is not None and self.proc.poll() is None:
+            os.killpg(self.proc.pid, signal.SIGKILL)
+            self.proc.wait()
+
     def cleanup(self):
         try:
-            if self.proc is not None and self.proc.poll() is None:
-                os.killpg(self.proc.pid, signal.SIGKILL)
-                self.proc.wait()
+            self.kill()
         finally:
             if self.proc is not None:
                 self.out.close()

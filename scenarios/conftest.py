@@ -36,8 +36,14 @@ def fppd(request):
                 f.backtrace()
             except Exception as e:  # never mask the real failure
                 print(f"could not take a backtrace: {e}")
+            # Stop fppd before copying its media directory: a copy taken
+            # while it still writes there can trip over files that vanish.
+            f.kill()
             if os.environ.get("FPP_TESTS_ARTIFACTS"):
-                save_artifacts(f, request.node.nodeid)
+                try:
+                    save_artifacts(f, request.node.nodeid)
+                except Exception as e:  # never mask the real failure
+                    print(f"could not save artifacts: {e}")
         f.cleanup()
 
 
