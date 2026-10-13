@@ -8,7 +8,7 @@ import os
 import statistics
 import time
 
-from audio import RATE, rms_windows, write_tone_wav
+from audio import RATE, card_position, rms_windows, write_tone_wav
 from ddp import DdpReceiver
 from fseq import unique_frames, write_fseq
 from show import CHANNELS, ddp_output, playlist, status
@@ -206,3 +206,68 @@ def test_long_song_stays_locked_to_the_sound_card(fppd, audio):
     wander = max(settled) - min(settled)
     assert wander <= 75, \
         f"after the first 20 s the gap between lights and sound wandered over {wander:.0f} ms"
+
+
+def test_offset_does_not_carry_across_songs(fppd, audio):
+    """Back-to-back sequence+media songs each start with the same offset
+    between lights and sound: whatever drift builds up within a song does not
+    carry into the next. The persistent PipeWire output stream stays open
+    across songs, so a queue that grew or drained inside it would show here
+    as a steadily changing offset.
+
+    Measured on a +432 ppm card, ten 1-minute songs: 244, 258, 244, 241, 253,
+    233, 241, 256, 245, 240 ms -- no build-up. (The absolute value includes
+    the recording's uncalibrated start; only the change matters.)
+
+    Opt-in, real card only: run-local.sh --host-audio with FPP_TESTS_SONGS
+    (number of songs; FPP_TESTS_SONG_SECONDS, default 60)."""
+    import pytest
+    if not os.environ.get("FPP_TESTS_HOST_AUDIO") or not os.environ.get("FPP_TESTS_SONGS"):
+        pytest.skip("needs a real card and FPP_TESTS_SONGS: run-local.sh --host-audio")
+    SONGS = int(os.environ["FPP_TESTS_SONGS"])
+    SECS = int(os.environ.get("FPP_TESTS_SONG_SECONDS", "60"))
+    # Each song: a unique-frame sequence (frames encode song and index) and a
+    # media file with one burst 1 s in.
+    entries, starts = [], {}
+    for n in range(SONGS):
+        frames = unique_frames(SECS * 20, CHANNELS, first=20000 * n)
+        starts[n] = frames[20]
+        write_fseq(os.path.join(fppd.media, "sequences", f"S{n}.fseq"), frames)
+        write_tone_wav(os.path.join(fppd.media, "music", f"S{n}.wav"), SECS, amplitude=0.3, bursts=[(1, 0.1)])
+        entries.append({"type": "both", "enabled": 1, "playOnce": 0,
+                        "sequenceName": f"S{n}.fseq", "mediaName": f"S{n}.wav"})
+    fppd.write("playlists/Songs.json", playlist("Songs", entries))
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    readings = []
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        rec = audio.record(rate=8000)
+        fppd.command("Start Playlist", "Songs", "false", "false")
+        end = time.monotonic() + SONGS * SECS + 10
+        while time.monotonic() < end:
+            p = card_position()
+            if p: readings.append(p)
+            time.sleep(0.5)
+        samples = rec.stop()
+        received = rx.snapshot()
+    same = [r for r in readings if r[2] == readings[-1][2]]
+    nominal = same[-1][3]
+    ts = [r[1] for r in same]; hw = [r[0] for r in same]
+    mt, mh = statistics.fmean(ts), statistics.fmean(hw)
+    ppm = (sum((t - mt) * (h - mh) for t, h in zip(ts, hw)) / sum((t - mt) ** 2 for t in ts) / nominal - 1) * 1e6
+    thr = max(abs(x) for x in samples) * 0.3
+    onsets, quiet = [], 0
+    for i, x in enumerate(samples):
+        if abs(x) > thr and quiet > rec.rate * 0.5:
+            onsets.append(rec.started + i / rec.rate / (1 + ppm / 1e6))
+        quiet = 0 if abs(x) > thr else quiet + 1
+    lights = []
+    for n in range(SONGS):
+        t = next((t for t, d in received if d[:CHANNELS] == starts[n]), None)
+        lights.append(t)
+    offs = [round((l - a) * 1000) if l and a else None for l, a in zip(lights, onsets)]
+    print(f"card {ppm:+.0f} ppm; lights minus audio at each song start (ms): {offs}")
+    assert None not in offs, f"a song's start was not seen on the wire or heard: {offs}"
+    assert max(offs) - min(offs) <= 50, \
+        f"the offset moved {max(offs) - min(offs)} ms from song to song: {offs}"
