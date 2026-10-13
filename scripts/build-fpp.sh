@@ -19,6 +19,11 @@ for p in /tests/fixups/*.patch; do
     fi
 done
 
+# The compiler's temporaries go on the work volume: /tmp is a tmpfs (run.sh,
+# for the fppinit sandbox's overlay), and -j$(nproc) ASan temporaries there
+# count against the VM's memory and got the compilers OOM-killed.
+export TMPDIR="$TREE/.build-tmp"
+mkdir -p "$TMPDIR"
 export CCACHE_DIR=/ccache
 export CCACHE=ccache
 # DISTRIBUTED_COMPILE=1 turns off the precompiled header, which is built with
