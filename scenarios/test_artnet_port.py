@@ -66,3 +66,35 @@ def test_taken_artnet_port_warns_once_and_keeps_the_log_quiet(fppd):
     # warning comes down.
     fppd.wait_for(lambda: not artnet_warnings(fppd), timeout=20, interval=0.5,
                   what="the ArtNet port warning to clear once the port was free")
+
+
+def test_taken_artnet_port_leaks_no_sockets(fppd):
+    """While another program holds 6454, fppd's open file descriptors stay
+    put.
+
+    Regression: a4184c927. A failed bind returned without closing the socket
+    it had just made, and the output asked for the socket every frame: one
+    leaked fd per frame until fppd ran out.
+    """
+    import os
+    frames = unique_frames(1200, 100)
+    write_fseq(os.path.join(fppd.media, "sequences", "Show.fseq"), frames, step_ms=50)
+    fppd.write("playlists/Show.json", playlist("Show", [sequence_entry("Show.fseq")]))
+    fppd.write("config/co-universes.json", {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 100,
+        "universes": [{"active": 1, "description": "from 6454", "id": 1, "startChannel": 1,
+                       "channelCount": 100, "type": 3, "address": "127.0.0.1", "priority": 0,
+                       "monitor": 0, "deDuplicate": 0}]}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    held = Listener(ARTNET_PORT)
+    try:
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "false", "false")
+        time.sleep(2)
+        fds = lambda: len(os.listdir(f"/proc/{fppd.proc.pid}/fd"))
+        before = fds()
+        time.sleep(5)
+        grew = fds() - before
+        assert grew < 5, f"fppd opened {grew} more file descriptors in 5 s with the ArtNet port taken"
+    finally:
+        held.close()

@@ -187,3 +187,22 @@ def test_deduplicate_resends_only_changes_and_keepalives(fppd):
     moving = sum(1 for e in recent if e["universe"] == 2)
     assert moving >= 30, f"the changing universe was sent only {moving} times in 2 s"
     assert 1 <= still <= 6, f"the static universe was sent {still} times in 2 s (want a keepalive every 11 frames)"
+
+
+def test_artnet_deduplicate_keeps_working(fppd):
+    """With deDuplicate on, an ArtNet universe that doesn't change is resent
+    only as a keepalive (every 11th frame) for the whole run.
+
+    Regression: c65e2cf67. ArtNet never reset its skipped-frame counter, so
+    after the first ten skipped frames de-duplication was off for good and
+    the static universe went out every frame.
+    """
+    frames = [bytes([0x30] * 100)] * 200  # static, 10 s
+    with Listener(ARTNET_PORT) as rx:
+        play(fppd, frames, [output(9, 1, 1, 100, deDuplicate=1)])
+        time.sleep(2)  # well past the first ten skipped frames
+        start = time.monotonic()
+        time.sleep(3)
+        with rx.lock:
+            sent = sum(1 for t, p in rx.packets if t >= start and parse_artdmx(p))
+    assert 2 <= sent <= 10, f"a static ArtNet universe was sent {sent} times in 3 s (keepalive is every 11th frame)"
