@@ -223,3 +223,60 @@ def test_lor_heartbeat_keeps_going_across_a_clock_step(fppd):
         time.sleep(3)
         sent = heartbeats() - before
         assert sent >= 3, f"{sent} LOR heartbeats in the 3 s after the clock stepped back"
+
+
+@pytest.mark.parametrize("step", list(STEPS))
+def test_uptime_survives_a_clock_step(fppd, step):
+    """fppd's uptime (in /fppd/status and the fpp_uptime_seconds variable)
+    keeps counting from start-up through a wall-clock step.
+
+    Regression: both were "now - start" on the wall clock, so a step back
+    made the uptime negative and a step forward added the hour. Fixed by
+    d0ca69df0.
+    """
+    fppd.start(fake_time="2026-12-24 18:00:00")
+    time.sleep(2)
+    fppd.set_clock(STEPS[step])
+    time.sleep(1)
+    total = fppd.get("/fppd/status").get("uptimeTotalSeconds")
+    assert total is not None and 2 <= int(total) <= 30, f"uptime {total} s after about 3 s"
+    # fpp_* variables are read through expressions, as an If condition does
+    fppd.command("Set Variable", "Up", "Expression", "", "1", "0", "100", "=fpp_uptime_seconds")
+    var = int(float(variable(fppd, "Up")))
+    assert 2 <= var <= 30, f"fpp_uptime_seconds {var} after about 3 s"
+
+
+def test_mqtt_status_keeps_publishing_across_a_clock_step(fppd):
+    """The periodic MQTT status publish (MQTTStatusFrequency) carries on
+    after the wall clock steps back.
+
+    Regression: the publish thread compared the next publish time with the
+    wall clock, so a step back stopped every periodic publish (playlist,
+    fppd and port status) for the size of the step. Fixed by 4711cf9d7.
+    """
+    import shutil
+    import subprocess
+    if not shutil.which("mosquitto") or not shutil.which("mosquitto_sub"):
+        pytest.skip("mosquitto and mosquitto_sub are not installed")
+    port = "18830"
+    broker = subprocess.Popen(["mosquitto", "-p", port], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    sub = None
+    try:
+        time.sleep(0.5)
+        sub = subprocess.Popen(["mosquitto_sub", "-h", "127.0.0.1", "-p", port, "-t", "#", "-v"],
+                               stdout=subprocess.PIPE, text=True)
+        fppd.settings(MQTTHost="127.0.0.1", MQTTPort=port, MQTTStatusFrequency="1")
+        fppd.start(fake_time="2026-12-24 18:00:00")
+        time.sleep(3)
+        fppd.set_clock("2026-12-24 17:00:00")
+        time.sleep(4.5)
+    finally:
+        if sub:
+            sub.terminate()
+        broker.terminate()
+    out = sub.communicate(timeout=5)[0] if sub else ""
+    statuses = [l for l in out.splitlines() if l.split(" ", 1)[0].endswith("/fppd_status")]
+    # once a second for about 7.5 s, less the time to connect: 2-3 before
+    # the step and 4 after
+    assert len(statuses) >= 4, \
+        f"{len(statuses)} fppd_status publishes in 7.5 s: they stopped after the clock stepped back"
