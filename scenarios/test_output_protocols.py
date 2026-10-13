@@ -47,20 +47,22 @@ def slices(frames, start, size):
     return {f[start:start + size] for f in frames}
 
 
-def check_sequence_numbers(seqs, what, skip_zero=False, settle=10):
-    """A stream's sequence numbers only move forward (wrapping at 255, to 0
-    or, where 0 is reserved, to 1) -- a receiver drops a packet that goes
-    backwards or repeats. Once the stream is running they count up by
-    exactly one. The first few may skip: when playback starts a frame can
-    be prepared, and numbered, twice before one is sent."""
+def check_sequence_numbers(seqs, what, skip_zero=False, low=0, high=255):
+    """A stream's sequence numbers count up by exactly one per packet from
+    the first, wrapping from `high` to `low` (to 1 for Art-Net, where 0
+    means "no sequence numbers").
+
+    Regression: a frame prepared twice before it was sent (as one is when
+    playback starts) used up a sequence number for the discarded
+    preparation, so the stream skipped one or two numbers as it started --
+    which a receiver counts as lost packets. Fixed by 256b0cf8e.
+    """
     for i, (a, b) in enumerate(zip(seqs, seqs[1:])):
-        step = (b - a) & 0xFF
-        if skip_zero and b < a:
-            step -= 1  # the wrap skipped 0
-        context = f"(packet {i + 1}: {seqs[max(0, i - 5):i + 6]})"
-        assert 0 < step < 20, f"{what}: sequence number went {a} -> {b}, not forward {context}"
-        if i >= settle:
-            assert step == 1, f"{what}: sequence number went {a} -> {b} mid-stream {context}"
+        want = low if a == high else a + 1
+        if skip_zero and want == 0:
+            want = 1
+        assert b == want, \
+            f"{what}: sequence number went {a} -> {b} (packet {i + 1}: {seqs[max(0, i - 5):i + 6]})"
 
 
 def e131_lengths_agree(pkt):
@@ -144,6 +146,8 @@ def test_ddp_offsets_and_push(fppd, ddp_type, first_offset):
         time.sleep(2)
         pkts = packets(rx)
     assert len(pkts) > 20
+    # DDP numbers every packet 1..15 (0 means unnumbered)
+    check_sequence_numbers([p[1] & 0x0F for p in pkts], "DDP", low=1, high=15)
     for i in range(0, len(pkts) - 1):
         p = pkts[i]
         flags, offset, length = p[0], struct.unpack(">I", p[4:8])[0], struct.unpack(">H", p[8:10])[0]
