@@ -206,3 +206,34 @@ def test_control_channel_preset_does_not_stall_output(fppd):
             f"output stalled {max(gaps) * 1000:.0f} ms while the preset ran" if gaps else "no frames"
     finally:
         srv.close()
+
+
+def e131_universes(count, address="127.0.0.1", **extra):
+    entry = {"active": 1, "description": "big controller", "id": 1, "startChannel": 1,
+             "channelCount": 510, "type": 0, "address": address, "priority": 0,
+             "monitor": 0, "deDuplicate": 0, "universeCount": count}
+    entry.update(extra)
+    return {"channelOutputs": [{"type": "universes", "enabled": 1, "startChannel": 1,
+                                "channelCount": count * 510, "universes": [entry]}]}
+
+
+def test_destination_slower_than_the_frame_rate(fppd):
+    """A destination whose frame takes longer to send than the output waits
+    (here 1500 universes of E1.31, which a sanitizer build sends slowly) keeps
+    getting whole frames, and the rest of the show keeps running.
+
+    Regression: b95acec2f. When SendData() stopped
+    waiting for a slow destination after 50 ms, the next frame's PrepData()
+    rewrote that destination's headers, iovecs and dedup copy while the
+    worker was still sending them. On the wire that is packets carrying half
+    of one frame. Only a TSan build sends this slowly in a container: there
+    the parent reported the race in 3 of 3 runs, the fix in 0 of 2.
+    """
+    count = 1500
+    fppd.write("config/co-universes.json", e131_universes(count))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    for value in (10, 20, 30, 40):
+        fppd.request("PUT", f"/overlays/range/1-{count * 510}", {"Value": value})
+        time.sleep(2.5)
+    fppd.request("PUT", "/overlays/range/1-1", {"deleteAll": True})

@@ -26,29 +26,23 @@ race:UncompressedFrameData::readFrame
 # ...and the bridge receive path writing and merging input into it.
 race:Sequence::CommitBridgeRanges
 race:Sequence::WriteBridgeData
-# UDP output: headers, iovecs and the de-duplication copy re-prepared on
-# the output thread while a slow destination's worker is still in sendmmsg
-# on the previous frame.
-race_top:DDPOutputData::PrepareData
-race_top:E131OutputData::PrepareData
-race:UDPOutputData::NeedToOutputFrame
-race:UDPOutput::SendMessages
+# ...and UDP outputs send straight from it (zero copy): a worker still
+# sending frame N to a slow destination reads the buffer while the output
+# thread builds frame N+1 into it. Fix: double-buffer the frame, or wait for
+# such stragglers before building the next one. Suppressed on the writer
+# side so a reader-side pattern can't hide the PrepData race fixed in fpp
+# b95acec2f.
+race_top:PixelOverlayManager::doOverlays
 
 # ---- fppd: flags and counters shared across threads (std::atomic) ----------
 
 race:^channelOutputFrame$
 race:^mediaElapsedSeconds$
-# Sequence::m_seqMSElapsed / m_seqMSRemaining
-race_top:Sequence::ReadSequenceData
 race:^hasDMX$
 race:^hasUDP$
 race:^bridgeDataReceived$
 race:wakeUpTime
 race_top:GetPipeWireGraphRate
-race_top:Timers::updateTimers
-race_top:CurlManager::processCurls
-race_top:ChannelTester::Testing
-race_top:UDPOutput::SetHostValid
 race:^mediaOutputStatus$
 # The crash log ring accepts a torn line by design (log.cpp). Permanent.
 race:^s_crashRing$
@@ -89,9 +83,6 @@ signal:handleCrash
 
 # ---- fppd: shutdown only ---------------------------------------------------
 
-race:WLEDAPIResponder::Cleanup
-race_top:PingManager::PingInfo::Cleanup
-race_top:Sequence::~Sequence
 
 # ---- uninstrumented libraries ----------------------------------------------
 
