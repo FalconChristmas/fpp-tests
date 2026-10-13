@@ -192,6 +192,8 @@ def test_processors_reload_when_the_file_is_saved(fppd):
 
 @pytest.mark.parametrize("bad", [
     proc("Set Value", start=8388600, count=100, value=1),
+    proc("Set Value", start=2000000000, count=100, value=1),
+    proc("Remap", source=1, destination=2000000000, count=50, loops=1, reverse=0),
     proc("Remap", source=1, destination=8388600, count=50, loops=4, reverse=0),
     proc("Remap", source=-5, destination=1, count=10, loops=1, reverse=0),
     proc("Brightness", start=1, count=-10, brightness=50, gamma=1.0),
@@ -200,17 +202,54 @@ def test_processors_reload_when_the_file_is_saved(fppd):
     proc("Three to Four", start=8388600, count=100, colorOrder=1234, algorithm=0),
     proc("Brightness", start=1, count=30),
     proc("No Such Processor", start=1, count=30),
-], ids=["set past the end", "remap past the end", "remap negative source",
+    proc("Brightness", start=1, count=30, brightness=50, gamma="nan"),
+    proc("Brightness", start="1", count="30", brightness="50", gamma="2.2"),
+    proc("Set Value", start=[1], count={"a": 1}, value=None),
+    proc("Remap", source="x", destination=31, count=6, loops=1e300, reverse="y"),
+], ids=["set past the end", "set far past the end", "remap far past the end", "remap past the end", "remap negative source",
         "negative count", "fold source 0", "fold unknown node", "three-to-four past the end",
-        "brightness with no values", "unknown type"])
+        "brightness with no values", "unknown type", "gamma nan", "numbers as strings",
+        "values of the wrong type", "remap junk"])
 def test_bad_processor_is_refused_or_survived(fppd, bad):
     """A processor whose channels fall outside channel space, or with a bad
     or missing value, is refused (with a warning) or clamped -- never let
     write outside the channel buffer -- and the show plays on.
-    (Regressions from the channel output audit: rangeIsValid() in
-    OutputProcessors, the Fold and Brightness checks.)"""
+
+    Regressions: 8173f97c7 (processors reaching past the sequence buffer:
+    the far cases and a negative source crash its parent; ones just past
+    the end land in unchecked memory there), 0d9f83978 (values of the wrong
+    JSON type terminated fppd at startup), and the Fold and Brightness
+    checks from the same audit."""
     with DdpReceiver(CHANNELS) as rx:
         run(fppd, [bad, proc("Set Value", start=150, count=1, value=7)])
         latest(fppd, rx, lambda f: f[149] == 7, "the good processor after the bad one")
         time.sleep(1)
         assert status(fppd).get("status_name") == "playing"
+
+
+def test_reload_never_drops_the_chain(fppd):
+    """A brightness limit stays on through reloads of outputprocessors.json:
+    a file caught half-written keeps the running chain, and rewriting the
+    file over and over never lets a frame out without it.
+
+    Regression: d4011f0ee. A reload that failed to parse loaded an empty
+    chain, and every reload removed the old processors before adding the
+    new ones one at a time -- either way frames went out at full brightness.
+    """
+    full = [bytes([255] * CHANNELS)] * 1200
+    limit = [proc("Brightness", start=1, count=CHANNELS, brightness=10, gamma=1.0)]
+    with DdpReceiver(CHANNELS) as rx:
+        run(fppd, limit, frames=full)
+        latest(fppd, rx, lambda f: f[0] == 26, "the limited output")
+        since = time.monotonic()
+        import os
+        path = os.path.join(fppd.media, "config", "outputprocessors.json")
+        for i in range(40):
+            with open(path, "w") as f:  # caught part way through a write
+                f.write('{"outputProcessors": [{"type": "Brightness", "active": 1, ')
+            time.sleep(0.05)
+            write_processors(fppd, limit)
+            time.sleep(0.05)
+        time.sleep(1)
+        over = [f[0] for _, f in rx.snapshot(since) if f[0] > 26]
+        assert not over, f"{len(over)} frames went out without the brightness limit"

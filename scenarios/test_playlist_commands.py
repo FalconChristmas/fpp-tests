@@ -147,6 +147,15 @@ def test_pause_and_resume(fppd):
     wait_idle(fppd)
 
 
+def wait_in_pause(fppd, want):
+    """Wait for the trace to read `want` and the playlist to have moved on
+    into the pause after it. A command sent as soon as a step has run can
+    land while that step is still the current entry."""
+    fppd.wait_for(lambda: trace(fppd) == want
+                  and status(fppd).get("current_playlist", {}).get("type") == "pause",
+                  timeout=10, interval=0.05, what=f"the pause after {want!r}")
+
+
 def test_next_and_prev_item(fppd):
     """Next Playlist Item cuts the current entry short; Prev Playlist Item
     goes back one entry."""
@@ -154,13 +163,12 @@ def test_next_and_prev_item(fppd):
         "P", main=[step(1), pause(30), step(2), pause(30), step(3)]))
     fppd.start()
     start(fppd, "P")
-    wait_trace(fppd, "1")
+    wait_in_pause(fppd, "1")
     fppd.command("Next Playlist Item")      # out of the first pause
-    wait_trace(fppd, "12")
+    wait_in_pause(fppd, "12")
     fppd.command("Prev Playlist Item")      # from the second pause back to step 2
-    wait_trace(fppd, "122")
-    fppd.command("Next Playlist Item")
-    fppd.command("Next Playlist Item")      # skip the pause again, to step 3
+    wait_in_pause(fppd, "122")
+    fppd.command("Next Playlist Item")      # out of the second pause, to step 3
     wait_trace(fppd, "1223")
     wait_idle(fppd)
 
