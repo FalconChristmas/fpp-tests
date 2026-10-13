@@ -96,3 +96,31 @@ def test_wled_effect_keeps_running_across_a_clock_step(fppd, step):
         effect(fppd, "M", wled[0])
         assert rx.wait_frames(20, timeout=10), "the WLED effect never reached the wire"
         overlay_frames_keep_changing(fppd, rx, step, f"the {wled[0]} effect")
+
+
+def test_bridge_backup_source_takes_over_across_a_clock_step(fppd):
+    """With BridgeSourcePriority on, when the higher-priority E1.31 source
+    stops, the lower one takes over after the input timeout -- even if the
+    wall clock steps back in between.
+
+    Regression: the active source's age was measured on the packets'
+    wall-clock time, so after a step back the stopped source stayed
+    "active" for an hour and the output froze on its last frame. Fixed by
+    9ad947f0c.
+    """
+    from packets import E131_PORT, Sender, e131
+    from test_bridge_inputs import (E131_SIZE, E131_START, OUT_PORT, Listener, region,
+                                    setup, wait_output)
+    setup(fppd)
+    fppd.settings(BridgeSourcePriority="1")
+    hi = bytes([0xAA]) * E131_SIZE
+    lo = bytes([0x55]) * E131_SIZE
+    with Listener(OUT_PORT) as out:
+        fppd.start(fake_time="2026-12-24 18:00:00")
+        with Sender(lambda n: [(e131(10, lo, seq=n, priority=50, cid=b"source-low"), E131_PORT)]):
+            with Sender(lambda n: [(e131(10, hi, seq=n, priority=150, cid=b"source-high"), E131_PORT)]):
+                wait_output(fppd, out, lambda f: region(f, E131_START, E131_SIZE) == hi,
+                            "the higher-priority source")
+            fppd.set_clock("2026-12-24 17:00:00")
+            wait_output(fppd, out, lambda f: region(f, E131_START, E131_SIZE) == lo,
+                        "the backup source to take over after the clock stepped back", timeout=6)
