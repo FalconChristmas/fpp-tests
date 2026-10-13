@@ -153,3 +153,45 @@ def test_play_media_plays_through_a_clock_step(fppd, audio, step):
     assert last - first >= 4.6, f"heard {last - first:.2f} s of a 5 s file across the clock step"
     fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "idle", timeout=5,
                   what=f"the player to go idle after the media, the clock having stepped {step}")
+
+
+def test_controller_that_returns_after_a_clock_step_gets_the_show(fppd):
+    """A controller that dropped out (and was taken off the output after its
+    pings failed) is put back once it answers again, though the wall clock
+    stepped back in between. (Pings every 15 s: this takes a minute or two.)
+
+    Regression: the ping manager timed its periodic pings and their
+    timeouts on the wall clock, so after a step back it stopped pinging for
+    the size of the step and the returning controller stayed dark. Fixed by
+    0f2c420cd.
+    """
+    import subprocess
+
+    from ddp import DdpReceiver
+    from fseq import unique_frames
+    from show import CHANNELS, ddp_output, install
+
+    address = "10.77.0.2"  # nothing answers here until the test adds it
+
+    def host_warnings():
+        return [w for w in fppd.get("/fppd/status").get("warningInfo", []) if w.get("id") == 27]
+
+    frames = unique_frames(6000, CHANNELS)  # 300 s, longer than the test
+    with DdpReceiver(CHANNELS) as rx:
+        install(fppd, frames)
+        config = ddp_output(CHANNELS, address=address)
+        config["channelOutputs"][0]["universes"][0]["monitor"] = 1
+        fppd.write("config/co-universes.json", config)
+        fppd.start(fake_time="2026-12-24 18:00:00")
+        fppd.command("Start Playlist", "Show", "false", "false")
+        fppd.wait_for(host_warnings, timeout=120, interval=1,
+                      what="fppd to give up on the unreachable controller")
+        fppd.set_clock("2026-12-24 17:00:00")
+        time.sleep(1)
+        try:
+            subprocess.run(["ip", "addr", "add", address + "/32", "dev", "lo"], check=True)
+            up = time.monotonic()
+            assert rx.wait_frames(20, timeout=60, since=up), \
+                "the controller came back after a clock step but fppd never sent it anything"
+        finally:
+            subprocess.run(["ip", "addr", "del", address + "/32", "dev", "lo"])
