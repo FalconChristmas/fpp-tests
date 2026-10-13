@@ -36,6 +36,11 @@ sudo ./run-local.sh                       # tests /opt/fpp/src/fppd; build it fi
 sudo ./run-local.sh --fpp ~/fpp -k presets
 ```
 
+`--host-audio` instead plays media through the device's own PipeWire and sound card,
+and records the card's sink, so a scenario can measure against the card's real clock
+(`test_long_song_stays_locked_to_the_sound_card`, opt-in; `FPP_TESTS_LONG_SONG` sets its
+length). It is audible on the device.
+
 The device's own fppd keeps running. Each test fppd gets private network, /tmp, /run
 and /dev/shm, an overlay over the tree (so its writes to `www/` never reach the real
 one), no sound cards or SPI devices, and a read-only /sys. pytest is installed if
@@ -78,6 +83,7 @@ with "fppd is wedged" on a timeout), `wait_for`, and `log`. Helpers for the show
 | `udp.py` | `Listener` counts what arrives on a UDP port |
 | `capture.py` | `UdpCapture` sees packets fppd sends to a port it also holds (MultiSync), off the loopback interface |
 | `multisync.py` | Parses and builds MultiSync sync packets |
+| `audio.py` | A private PipeWire with a null sink (the `audio` fixture) that fppd plays into and a test records; `write_tone_wav()` |
 
 **Every scenario that guards a fix must be shown to fail without it.** A test that
 passes on both sides of a fix proves nothing. `scripts/verify-fix.sh` checks this:

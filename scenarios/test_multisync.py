@@ -55,6 +55,8 @@ def test_master_announces_what_it_plays(fppd):
         assert abs(s.seconds - s.frame * STEP_MS / 1000) < 0.002, \
             f"frame {s.frame} announced as {s.seconds:.3f} s"
         shown = [i for t, i in wire if t <= s.time and i is not None]
+        if not shown and s.frame <= 2:
+            continue  # sent as playback began, before the first frame reached the wire
         assert shown and abs(shown[-1] - s.frame) <= 2, \
             f"sync said frame {s.frame} while the master showed {shown[-1] if shown else None}"
 

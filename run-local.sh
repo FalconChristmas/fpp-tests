@@ -4,9 +4,14 @@
 # exported or built: run `make` (or `make debug`, `make tsan`) in the tree
 # first, then this.
 #
-#   ./run-local.sh [--fpp DIR] [pytest args...]
+#   ./run-local.sh [--fpp DIR] [--host-audio] [pytest args...]
 #
-# --fpp   the fpp tree whose src/fppd to test (default /opt/fpp)
+# --fpp         the fpp tree whose src/fppd to test (default /opt/fpp)
+# --host-audio  media scenarios play through the device's own PipeWire --
+#               its real sound card -- instead of a private null sink, to
+#               measure against the card's clock. Only the PipeWire socket
+#               directory is shared; the test fppd uses the device's volume
+#               setting so it doesn't change it. Audible on the device.
 #
 # The device's own fppd keeps running. Each test fppd runs in private mount
 # and network namespaces, set up below, so that it cannot reach the device's
@@ -27,6 +32,7 @@ TREE=/opt/fpp
 while [ $# -gt 0 ]; do
     case "$1" in
     --fpp) TREE="$2"; shift 2 ;;
+    --host-audio) export FPP_TESTS_HOST_AUDIO=1; shift ;;
     *) break ;;
     esac
 done
@@ -69,9 +75,19 @@ export FPP_TREE="$TREE" FPP_TESTS_HERE="$HERE" FPP_TESTS_ARTIFACTS="$ARTIFACTS"
 exec unshare --mount --net --fork sh -c '
     set -e
     ip link set lo up
-    for d in /tmp /run /dev/shm; do
+    mount -t tmpfs -o mode=1777 tmpfs /tmp
+    if [ -n "$FPP_TESTS_HOST_AUDIO" ]; then
+        # Keep a handle on the device PipeWire socket dir before /run goes.
+        mkdir /tmp/host-pipewire
+        mount --bind /run/pipewire-fpp /tmp/host-pipewire
+    fi
+    for d in /run /dev/shm; do
         mount -t tmpfs -o mode=1777 tmpfs "$d"
     done
+    if [ -n "$FPP_TESTS_HOST_AUDIO" ]; then
+        mkdir /run/pipewire-fpp
+        mount --bind /tmp/host-pipewire /run/pipewire-fpp
+    fi
     mkdir -p /tmp/overlay/upper /tmp/overlay/work /tmp/home
     mount -t overlay overlay \
         -o "lowerdir=$FPP_TREE,upperdir=/tmp/overlay/upper,workdir=/tmp/overlay/work" "$FPP_TREE"

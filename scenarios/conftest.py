@@ -66,3 +66,24 @@ def pytest_runtest_makereport(item, call):
     rep = yield
     setattr(item, "rep_" + rep.when, rep)
     return rep
+
+
+@pytest.fixture
+def audio(fppd):
+    """A PipeWire null sink for fppd to play into (start it before fppd),
+    and fppd's settings pointed at it."""
+    from audio import SINK, AudioServer, HostAudio
+    if os.environ.get("FPP_TESTS_HOST_AUDIO"):
+        server = HostAudio()
+        fppd.settings(MediaBackend="pipewire-simple", PipeWireSinkName=server.sink,
+                      volume=server.volume)
+        yield server
+        return
+    if not shutil.which("pipewire") or not shutil.which("wireplumber"):
+        pytest.skip("PipeWire and WirePlumber are not installed")
+    server = AudioServer()
+    fppd.settings(MediaBackend="pipewire-simple", PipeWireSinkName=SINK, volume="100")
+    try:
+        yield server
+    finally:
+        server.close()
