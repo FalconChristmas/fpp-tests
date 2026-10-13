@@ -79,3 +79,35 @@ def test_stop_now_skips_the_lead_out(fppd):
         order = [v for v, _, _ in runs(rx) if v]
         assert LEAD_OUT not in order, f"Stop Now played the lead-out: {order}"
         assert not any(rx.last()), "output left lit after Stop Now"
+
+
+def test_stop_now_always_leaves_output_dark(fppd):
+    """However a stop lands, the last thing on the wire after Stop Now is a
+    blank frame -- including a stop on the frame right after one sequence
+    hands over to the next. There the output thread had already spent its
+    one spare pass on the hand-over, went idle without listening for the
+    blanking's wake-up, and the last lit frame stayed on the wire.
+
+    A main section of 2 frames hands over every 100 ms; 80 stops at random
+    points make landing on a hand-over near-certain.
+
+    Regression: 8776aa35a (forced-frame requests are counted, not just
+    notified). Before it, 1-4 of 80 stops left the output lit."""
+    import random
+    with DdpReceiver(CHANNELS) as rx:
+        write_fseq(os.path.join(fppd.media, "sequences", "Short.fseq"), solid_frames(2, CHANNELS, MAIN))
+        fppd.write("playlists/Loop.json", playlist("Loop", [sequence_entry("Short.fseq")], repeat=1))
+        fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+        fppd.settings(DisableFakeNetworkBridges="1")
+        fppd.start()
+        lit = []
+        for n in range(80):
+            fppd.command("Start Playlist", "Loop", "true", "false")
+            time.sleep(0.5 + random.random() * 0.1)
+            asked = time.monotonic()
+            fppd.command("Stop Now")
+            wait_idle(fppd)
+            time.sleep(0.3)
+            if any(rx.last()):
+                lit.append(n)
+        assert not lit, f"{len(lit)} of 80 stops left the output lit (stops {lit})"

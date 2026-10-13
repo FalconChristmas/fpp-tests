@@ -119,6 +119,11 @@ def test_long_song_stays_locked_to_the_sound_card(fppd, audio):
     correction is acting on, and it reaches 100 ms within minutes. Nor may
     it wander by much more than a frame once playback has settled.
 
+    The gap is taken in real time: light frames by the system clock, audio
+    by the recording's sample count scaled by the card's rate (fitted from
+    ALSA's hardware pointer). Before 5c431d7d9 a slow card (Pi 5 I2S, -47
+    ppm) let the sound fall 13 ms behind over 5 minutes; after it, 0 ms.
+
     Only meaningful against a real card: runs with run-local.sh
     --host-audio (FPP_TESTS_HOST_AUDIO). FPP_TESTS_LONG_SONG sets the length
     in seconds (default 300)."""
@@ -147,12 +152,18 @@ def test_long_song_stays_locked_to_the_sound_card(fppd, audio):
         # only good to a period (the pointer moves once per interrupt), so the
         # rate comes from a straight-line fit through all of them.
         from audio import card_position, card_rate
-        readings = []
+        readings, positions = [], []
         end = time.monotonic() + secs + 3
         while time.monotonic() < end:
             p = card_position()
             if p:
                 readings.append(p)
+            # FPP's own idea of the media position, which the lights follow.
+            t0 = time.monotonic()
+            ms = fppd.get("/fppd/status").get("milliseconds_elapsed")
+            t1 = time.monotonic()
+            if isinstance(ms, int) and ms > 0:
+                positions.append(((t0 + t1) / 2, ms / 1000))
             time.sleep(0.5)
         samples = rec.stop()
         received = rx.snapshot()
@@ -191,18 +202,33 @@ def test_long_song_stays_locked_to_the_sound_card(fppd, audio):
         print(f"card runs {card_ppm:+.1f} ppm against the system clock ({same[-1][2]}, "
               f"{len(same)} readings); lights minus audio in real time, every 20 s (ms): "
               f"{[round(d) for d in real[::10]]}")
-    mx, my = statistics.fmean(xs), statistics.fmean(drift)
-    slope = sum((x - mx) * (y - my) for x, y in zip(xs, drift)) / sum((x - mx) ** 2 for x in xs)
-    ppm = slope * 1000  # ms per s -> ppm
+    if len(positions) > 20:
+        settled = positions[len(positions) // 10:-4]
+        mt, mp = statistics.fmean(t for t, _ in settled), statistics.fmean(p for _, p in settled)
+        rate = sum((t - mt) * (p - mp) for t, p in settled) / sum((t - mt) ** 2 for t, _ in settled)
+        print(f"FPP's media position runs {(rate - 1) * 1e6:+.1f} ppm against the system clock")
+    # What is heard against what is seen: both in real time. The recording
+    # only counts the card's samples, so without the card's rate (a null
+    # sink, which runs on the system clock) its count stands in for seconds.
+    gap = real if card_ppm is not None else drift
+    # Drift is continuous; media sync's corrections are steps (a whole-frame
+    # dead band, nudged by ~20 ms when the frame count crosses it). Sum only
+    # the small changes from burst to burst, so a correction isn't read as
+    # drift -- the wander check below is what bounds the steps.
+    creep = sum(b - a for a, b in zip(gap, gap[1:]) if abs(b - a) < 5)
+    ppm = creep / (xs[-1] - xs[0]) * 1000  # ms per s -> ppm
     print(f"lights minus audio over {secs} s, every 20 s (ms): "
-          f"{[round(d) for d in drift[::10]]}; trend {ppm:.0f} ppm")
-    assert abs(ppm) < 50, \
-        f"the lights drift {ppm:.0f} ppm against the sound card ({drift[-1]:.0f} ms by the end): " \
+          f"{[round(d) for d in gap[::10]]}; drift between corrections {ppm:.0f} ppm")
+    # The sum telescopes to about (last - first - corrections), so its noise is
+    # a millisecond or so over the song: a few ppm. A Pi 5's -47 ppm card,
+    # uncompensated, is well clear of this.
+    assert abs(ppm) < 20, \
+        f"the lights drift {ppm:.0f} ppm against the sound ({creep:.0f} ms over the song): " \
         "nothing is keeping them on the card's clock"
     # And no wandering: once playback has settled, the gap stays within about
     # a frame and a half -- FPP corrects in whole frames, so a frame of
     # wander is expected, more is not.
-    settled = [d for x, d in zip(xs, drift) if x >= 20]
+    settled = [d for x, d in zip(xs, gap) if x >= 20]
     wander = max(settled) - min(settled)
     assert wander <= 75, \
         f"after the first 20 s the gap between lights and sound wandered over {wander:.0f} ms"
@@ -271,3 +297,56 @@ def test_offset_does_not_carry_across_songs(fppd, audio):
     assert None not in offs, f"a song's start was not seen on the wire or heard: {offs}"
     assert max(offs) - min(offs) <= 50, \
         f"the offset moved {max(offs) - min(offs)} ms from song to song: {offs}"
+
+
+def test_continuous_tone_has_no_dropouts(fppd, audio):
+    """A song's audio reaches the card whole: no gaps, however far the card's
+    crystal is from the system clock.
+
+    The feed into the persistent PipeWire stream must keep pace with what the
+    card takes. Fed at any other pace, a card that runs fast drains the feed's
+    cushion and plays a quantum of silence each time it runs dry, and one that
+    runs slow builds a queue that delays the sound more and more.
+
+    Plays a continuous 1 kHz tone as a sequence+media song and looks for any
+    2 ms stretch of the recording without it. Real card only (run-local.sh
+    --host-audio); FPP_TESTS_TONE_SECONDS sets the length (default 120).
+
+    Regression: 5c431d7d9 (feed paced by the card's clock). Hardware-verified
+    with run-local.sh: on a +432 ppm AM62x PCM5102A cape, 5 gaps of 10 ms in
+    120 s on the parent, none on the fix. A card near nominal rate (tens of
+    ppm) only drops out every several minutes, so this needs a fast card or a
+    long run to go red."""
+    import pytest
+    if not os.environ.get("FPP_TESTS_HOST_AUDIO"):
+        pytest.skip("needs a real sound card: run-local.sh --host-audio")
+    secs = int(os.environ.get("FPP_TESTS_TONE_SECONDS", "120"))
+    write_fseq(os.path.join(fppd.media, "sequences", "Tone.fseq"), unique_frames(secs * 20, CHANNELS))
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), secs, amplitude=0.3)
+    fppd.write("playlists/Tone.json", playlist("Tone", [{
+        "type": "both", "enabled": 1, "playOnce": 0,
+        "sequenceName": "Tone.fseq", "mediaName": "Tone.wav"}]))
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    rec = audio.record(rate=8000)
+    fppd.command("Start Playlist", "Tone", "false", "false")
+    time.sleep(secs + 3)
+    samples = rec.stop()
+    # 2 ms windows: two periods of the tone, so each holds its peak.
+    win = 16
+    peaks = [max(abs(x) for x in samples[i:i + win]) for i in range(0, len(samples) - win + 1, win)]
+    level = statistics.median(peaks)
+    sounding = [i for i, p in enumerate(peaks) if p > level * 0.5]
+    assert sounding, "never heard the tone"
+    first, last = sounding[0], sounding[-1]
+    gaps, run = [], 0
+    for i in range(first, last + 1):
+        if peaks[i] < level * 0.2:
+            run += 1
+        elif run:
+            gaps.append((i - run, run))
+            run = 0
+    print(f"tone heard for {(last - first) * 2 / 1000:.1f} s; gaps (s into the tone, ms): "
+          f"{[(round((s - first) * 2 / 1000, 2), n * 2) for s, n in gaps]}")
+    assert not gaps, f"{len(gaps)} gaps in the tone, {sum(n for _, n in gaps) * 2} ms in all"
