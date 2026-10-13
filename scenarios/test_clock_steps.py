@@ -195,3 +195,31 @@ def test_controller_that_returns_after_a_clock_step_gets_the_show(fppd):
                 "the controller came back after a clock step but fppd never sent it anything"
         finally:
             subprocess.run(["ip", "addr", "del", address + "/32", "dev", "lo"])
+
+
+def test_lor_heartbeat_keeps_going_across_a_clock_step(fppd):
+    """A LOR output keeps sending its heartbeat (00 FF 81 56) to the
+    controllers when the wall clock steps back; without it they drop out of
+    show mode.
+
+    Regression: the heartbeat thread compared wall-clock microseconds, so a
+    step back stopped it for the size of the step. Fixed by 5bd4425b1.
+    """
+    from serial import PtyReader
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", {"channelOutputs": [{
+            "type": "LOR", "enabled": 1, "startChannel": 1, "channelCount": 16,
+            "device": pty.device, "speed": 19200, "firstControllerId": 1,
+        }]})
+        fppd.start(fake_time="2026-12-24 18:00:00")
+
+        def heartbeats():
+            return sum(1 for m in pty.messages() if m == b"\xff\x81\x56")
+
+        fppd.wait_for(lambda: heartbeats() >= 2, what="the LOR heartbeat")
+        fppd.set_clock("2026-12-24 17:00:00")
+        time.sleep(0.5)
+        before = heartbeats()
+        time.sleep(3)
+        sent = heartbeats() - before
+        assert sent >= 3, f"{sent} LOR heartbeats in the 3 s after the clock stepped back"
