@@ -177,3 +177,41 @@ def test_lor_output_over_its_channel_limit(fppd):
         play(fppd)
         grew = log_growth(fppd)
     assert grew < 2000, f"fppd.log grew {grew} bytes in 5 s with a LOR output over its limit"
+
+
+def test_submodel_outside_its_parent_with_an_effect(fppd):
+    """A submodel that lies outside its parent (the parent was resized after
+    the submodel was saved) is warned about once; running an effect on it
+    does not log "out of bounds" every frame."""
+    from test_overlays import CHANNELS as OCH, effect, matrix, setup, submodel
+    setup(fppd, [matrix(), submodel("Off", "M", 8, 0, 5, 3)])  # M is 10 wide
+    fppd.start()
+    effect(fppd, "Off", "Bars", Direction="Down")
+    time.sleep(1)
+    grew = log_growth(fppd)
+    assert grew < 2000, f"fppd.log grew {grew} bytes in 5 s with an effect on an out-of-bounds submodel"
+
+
+def test_mqtt_output_with_a_wildcard_topic(fppd):
+    """An MQTT channel output whose topic holds a wildcard (+ or #) -- which
+    no broker accepts for a publish -- is refused once at start, not
+    logged on every value it tries to send."""
+    import shutil
+    import subprocess
+    if not shutil.which("mosquitto"):
+        pytest.skip("mosquitto is not installed")
+    port = "18831"
+    broker = subprocess.Popen(["mosquitto", "-p", port], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        time.sleep(0.5)
+        install(fppd, unique_frames(1200, CHANNELS))
+        fppd.write("config/co-other.json", {"channelOutputs": [{
+            "type": "MQTTOutput", "enabled": 1, "startChannel": 1, "channelCount": 3,
+            "topic": "lights/+/set", "payload": "%R%,%G%,%B%", "channelType": "RGB"}]})
+        fppd.settings(MQTTHost="127.0.0.1", MQTTPort=port)
+        fppd.start()
+        play(fppd)
+        grew = log_growth(fppd)
+    finally:
+        broker.terminate()
+    assert grew < 2000, f"fppd.log grew {grew} bytes in 5 s with a wildcard MQTT output topic"
