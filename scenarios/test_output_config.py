@@ -237,3 +237,120 @@ def test_destination_slower_than_the_frame_rate(fppd):
         fppd.request("PUT", f"/overlays/range/1-{count * 510}", {"Value": value})
         time.sleep(2.5)
     fppd.request("PUT", "/overlays/range/1-1", {"deleteAll": True})
+
+
+VD_PORT = 32328
+B64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/"
+
+
+def virtual_display(fppd, map_lines, channels):
+    fppd.write("config/virtualdisplaymap", "\n".join(map_lines) + "\n")
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "HTTPVirtualDisplay", "enabled": 1, "startChannel": 1,
+        "channelCount": channels, "width": -1, "height": -1, "pixelSize": 1,
+        "colorOrder": "RGB", "port": VD_PORT}]})
+
+
+def sse_messages(seconds):
+    """The color:location data lines the display streams in `seconds`."""
+    import socket
+    s = socket.create_connection(("127.0.0.1", VD_PORT), timeout=2)
+    s.settimeout(0.2)
+    data = b""
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        try:
+            chunk = s.recv(65536)
+        except socket.timeout:
+            continue
+        if not chunk:
+            break
+        data += chunk
+    s.close()
+    return [l[len("data: "):] for l in data.decode(errors="replace").splitlines()
+            if l.startswith("data: ") and len(l) > len("data: ")]
+
+
+def wait_for_display(fppd):
+    import socket
+    def up():
+        try:
+            socket.create_connection(("127.0.0.1", VD_PORT), timeout=1).close()
+            return True
+        except OSError:
+            return False
+    fppd.wait_for(up, timeout=10, what="the virtual display's port")
+
+
+def test_virtual_display_shows_rgbw_pixels_with_white_off(fppd):
+    """An RGBW pixel whose white channel is 0 shows its RGB colour on the
+    HTTP virtual display.
+
+    Regression: 10691010c. GetPixelRGB() only decoded the six RGB orders,
+    and xLights writes "RGBW" for every RGBW model, so with W at 0 the pixel
+    got no colour at all (uninitialised, or the previous pixel's).
+    """
+    virtual_display(fppd, ["100,100", "2,2,0,4,RGBW"], 4)
+    fppd.start()
+    wait_for_display(fppd)
+    fppd.request("PUT", "/overlays/range/1-3", {"Value": 200})
+    want = B64[200 >> 2] * 3   # RGB666 in base64, one character a channel
+    msgs = sse_messages(3)
+    assert any(m.startswith(want + ":") for m in msgs), f"no {want!r} pixel in {msgs[-3:]}"
+
+
+def test_virtual_display_pixel_at_x_4095_uses_the_pages_key(fppd):
+    """A pixel at x 4095 is sent with the short location key, the form the
+    page's scaleMap uses below 4096.
+
+    Regression: c34ed8e39. The display switched to the long key at x >= 4095
+    and never for y, while the page switches at x >= 4096 || y >= 4096; the
+    page found no entry for such a pixel and dropped the rest of the frame.
+    """
+    virtual_display(fppd, ["5000,100", "4095,50,0,3,RGB"], 3)
+    fppd.start()
+    wait_for_display(fppd)
+    fppd.request("PUT", "/overlays/range/1-3", {"Value": 200})
+    msgs = [m for m in sse_messages(3) if ":" in m]
+    assert msgs, "no pixel data streamed"
+    loc = msgs[-1].split(":", 1)[1].split(";")[0].split("|")[0]
+    assert len(loc) == 4 and loc[:2] == B64[4095 >> 6] + B64[4095 & 63], \
+        f"x 4095 sent as {loc!r}, want the short key"
+
+
+def test_virtual_display_closes_reset_connections(fppd):
+    """Preview clients that reset their connection don't leave sockets
+    open in fppd.
+
+    Regression: c34ed8e39. A connection whose recv() failed (a client reset)
+    was dropped from the list without being closed, leaking its descriptor
+    and leaving the socket half open, on every reset.
+    """
+    import socket
+    import struct
+    virtual_display(fppd, ["100,100", "2,2,0,3,RGB"], 3)
+    fppd.start()
+    wait_for_display(fppd)
+    fppd.request("PUT", "/overlays/range/1-3", {"Value": 100})
+
+    def sockets():
+        n = 0
+        for fd in os.listdir(f"/proc/{fppd.proc.pid}/fd"):
+            try:
+                if os.readlink(f"/proc/{fppd.proc.pid}/fd/{fd}").startswith("socket:"):
+                    n += 1
+            except OSError:
+                pass
+        return n
+
+    time.sleep(1)
+    before = sockets()
+    for _ in range(5):
+        c = socket.create_connection(("127.0.0.1", VD_PORT), timeout=2)
+        time.sleep(0.3)
+        c.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+        c.close()  # RST
+    time.sleep(2)
+    after = sockets()
+    assert after <= before + 1, f"fppd holds {after - before} more sockets after 5 reset clients"
+
