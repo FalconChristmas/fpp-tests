@@ -66,6 +66,20 @@ race:PixelOverlayModel::setData
 race_top:PixelOverlayModel::overlayBufferIsDirty
 race:PixelOverlayModel::flushOverlayBuffer
 
+# ---- by design: lock order TSan can't see is safe ----------------------------
+
+# Inserting a playlist holds the parent's m_playlistMutex while PlayImpl()
+# takes the child's; later the child's SetIdle() calls the parent's Resume(),
+# taking them the other way round. TSan pairs the locks by address over
+# time, but this cannot deadlock: SwitchToInsertedPlaylist() starts a child
+# it created a moment earlier and has not published yet (SetCurrentPlaylist()
+# runs only after PlayImpl() returns), so no other thread can be holding the
+# child's lock then. Other threads reach playlists only through the Player's
+# current snapshot, m_parent chains or PL_CLEANUPS. Don't rework the insert
+# path to silence this.
+deadlock:Playlist::PlayImpl
+deadlock:Playlist::Resume
+
 # ---- signal handlers ------------------------------------------------------
 
 # The crash handler logs and writes a report, which no handler can do with
@@ -80,6 +94,17 @@ race_top:PingManager::PingInfo::Cleanup
 race_top:Sequence::~Sequence
 
 # ---- uninstrumented libraries ----------------------------------------------
+
+# GStreamerOutput's callback guard is published to the streaming threads by
+# g_signal_connect() and gst_bus_set_sync_handler(), whose locking happens
+# inside GLib/GStreamer where TSan can't see it, so the first read in a pad
+# or bus callback looks unordered.
+race:GStreamerOutput::LockCallbackGuard
+race:GStreamerOutput::BusCallbackScope::BusCallbackScope
+# GLib's own threads hand blocks to each other through GLib's locks; TSan
+# sees only libc allocating on one and freeing on the other.
+race:libc.so.6
+called_from_lib:liborc-0.4.so
 
 # trantor: TcpServer::stop's promise/future (synchronised in libstdc++,
 # which TSan can't see), its teardown, and the eventfd wakeup.
