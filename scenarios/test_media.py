@@ -142,7 +142,18 @@ def test_long_song_stays_locked_to_the_sound_card(fppd, audio):
         # five-minute song quick on a single-core board.
         rec = audio.record(rate=8000)
         fppd.command("Start Playlist", "Song", "false", "false")
-        time.sleep(secs + 3)
+        # The card's real rate against the system clock: ALSA's hardware
+        # pointer, read every half second through the song. Each reading is
+        # only good to a period (the pointer moves once per interrupt), so the
+        # rate comes from a straight-line fit through all of them.
+        from audio import card_position, card_rate
+        readings = []
+        end = time.monotonic() + secs + 3
+        while time.monotonic() < end:
+            p = card_position()
+            if p:
+                readings.append(p)
+            time.sleep(0.5)
         samples = rec.stop()
         received = rx.snapshot()
 
@@ -165,6 +176,21 @@ def test_long_song_stays_locked_to_the_sound_card(fppd, audio):
     a0, l0 = pairs[0]
     xs = [a - a0 for a, _ in pairs]
     drift = [((l - l0) - (a - a0)) * 1000 for a, l in pairs]
+    card_ppm = None
+    same = [r for r in readings if readings and r[2] == readings[-1][2]]
+    nominal = same[-1][3] if len(same) > 20 else None
+    if nominal:
+        ts = [r[1] for r in same]
+        hw = [r[0] for r in same]
+        mt, mh = statistics.fmean(ts), statistics.fmean(hw)
+        rate = sum((t - mt) * (h - mh) for t, h in zip(ts, hw)) / sum((t - mt) ** 2 for t in ts)
+        card_ppm = (rate / nominal - 1) * 1e6
+        # The recording counts the card's samples at the nominal rate; in
+        # real seconds each is (1 + card_ppm) times shorter.
+        real = [((l - l0) - (a - a0) / (1 + card_ppm / 1e6)) * 1000 for a, l in pairs]
+        print(f"card runs {card_ppm:+.1f} ppm against the system clock ({same[-1][2]}, "
+              f"{len(same)} readings); lights minus audio in real time, every 20 s (ms): "
+              f"{[round(d) for d in real[::10]]}")
     mx, my = statistics.fmean(xs), statistics.fmean(drift)
     slope = sum((x - mx) * (y - my) for x, y in zip(xs, drift)) / sum((x - mx) ** 2 for x in xs)
     ppm = slope * 1000  # ms per s -> ppm

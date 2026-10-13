@@ -25,12 +25,13 @@ except ImportError:  # only the zstd variant needs it
 V2_HEADER = 32
 
 
-def unique_frames(count, channels):
+def unique_frames(count, channels, first=0):
     """Frames whose content identifies them: the first three channels carry
     the frame index (plus one, so no frame is all zero) and the rest a fill
-    that changes with it. A frame read back off the wire names its index."""
+    that changes with it. A frame read back off the wire names its index.
+    `first` numbers them from there, to keep several sequences distinct."""
     frames = []
-    for i in range(count):
+    for i in range(first, first + count):
         n = i + 1
         head = bytes([(n >> 16) & 0xFF, (n >> 8) & 0xFF, n & 0xFF])
         fill = bytes([(n * 37 + c) % 251 + 1 for c in range(channels - 3)])

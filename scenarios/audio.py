@@ -164,3 +164,41 @@ def write_tone_wav(path, seconds, freq=1000, amplitude=0.5, bursts=None):
         w.setframerate(RATE)
         w.writeframes(pcm.tobytes())
     return path
+
+
+def card_position():
+    """(hw_ptr, tstamp in s, path, nominal rate) for the running playback stream of the
+    first card that has one, from /proc/asound -- the card's own position
+    in frames and the system time ALSA last updated it. Two of these give
+    the card's real rate against the system clock. None if no card runs."""
+    import glob
+    for path in sorted(glob.glob("/proc/asound/card*/pcm*p/sub*/status")):
+        try:
+            text = open(path).read()
+        except OSError:
+            continue
+        if "state: RUNNING" not in text:
+            continue
+        fields = {}
+        for line in text.splitlines():
+            if ":" in line:
+                k, v = line.split(":", 1)
+                fields[k.strip()] = v.strip()
+        try:
+            hw = int(fields["hw_ptr"])
+            sec, nsec = fields["tstamp"].split(".")
+            return hw, int(sec) + int(nsec) / 1e9, path, card_rate(path)
+        except (KeyError, ValueError):
+            continue
+    return None
+
+
+def card_rate(path):
+    """The card's nominal rate from its hw_params, or None."""
+    try:
+        for line in open(path.replace("/status", "/hw_params")):
+            if line.startswith("rate:"):
+                return int(line.split()[1])
+    except OSError:
+        pass
+    return None

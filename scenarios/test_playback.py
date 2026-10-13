@@ -6,6 +6,7 @@ against the file: drops, repeats, reordering and corruption all show up
 without any timing assumptions (frames.analyze).
 """
 
+import os
 import time
 
 import pytest
@@ -153,3 +154,39 @@ def test_fseq_formats_play_faithfully(fppd, variant, writer):
         wait_idle(fppd, timeout=20)
         time.sleep(0.3)
         assert_faithful(expected, rx.snapshot())
+
+
+def test_frames_keep_time_over_a_minute(fppd):
+    """Over a minute of playback the lights keep the sequence's step time:
+    1199 frames at 50 ms take 59.95 s, within 50 ppm on a device. In a
+    container a sanitizer build measured 56-292 ppm with the fix depending on
+    the host's load, against 1500-1800 without it, so the bound there is 600.
+
+    Regression: fef65433c.
+
+    The output thread used to sleep LightDelay from whenever each pass woke,
+    so every wake-up's lateness was added to every frame: 125 ppm slow on a
+    Pi 5, 1500 ppm under ASan in Docker. Against the sound that is 7-90 ms a
+    minute, and media sync only acts on whole frames."""
+    n = 1200
+    frames = unique_frames(n, CHANNELS)
+    lookup = {f: i for i, f in enumerate(frames)}
+    with DdpReceiver(CHANNELS) as rx:
+        install(fppd, frames, step_ms=STEP_MS)
+        fppd.start()
+        start(fppd)
+        wait_idle(fppd, timeout=n * STEP_MS / 1000 + 30)
+        seen = {}
+        for t, d in rx.snapshot():
+            i = lookup.get(d[:CHANNELS])
+            if i is not None:
+                seen.setdefault(i, t)
+    first, last = min(seen), max(seen)
+    per_frame = (seen[last] - seen[first]) / (last - first) * 1000
+    ppm = (per_frame / STEP_MS - 1) * 1e6
+    print(f"{per_frame:.4f} ms per frame over {last - first} frames: {ppm:+.0f} ppm")
+    # A sanitizer build in a shared container now and then runs a frame more
+    # than a frame late, and the cadence restarts after it; on a device the
+    # lights should be within a few ppm of the step time (a Pi 5: 0 ppm).
+    bound = 600 if os.path.exists("/etc/fpp/container") else 50
+    assert abs(ppm) < bound, f"frames took {per_frame:.4f} ms instead of {STEP_MS}: {ppm:+.0f} ppm"
