@@ -182,7 +182,7 @@ def test_lor_output_over_its_channel_limit(fppd):
 def test_submodel_outside_its_parent_with_an_effect(fppd):
     """A submodel that lies outside its parent (the parent was resized after
     the submodel was saved) is warned about once; running an effect on it
-    does not log "out of bounds" every frame."""
+    does not log "out of bounds" every frame (before 7713c73b1)."""
     from test_overlays import CHANNELS as OCH, effect, matrix, setup, submodel
     setup(fppd, [matrix(), submodel("Off", "M", 8, 0, 5, 3)])  # M is 10 wide
     fppd.start()
@@ -195,7 +195,7 @@ def test_submodel_outside_its_parent_with_an_effect(fppd):
 def test_mqtt_output_with_a_wildcard_topic(fppd):
     """An MQTT channel output whose topic holds a wildcard (+ or #) -- which
     no broker accepts for a publish -- is refused once at start, not
-    logged on every value it tries to send."""
+    logged on every value it tries to send (before e1c2d756b)."""
     import shutil
     import subprocess
     if not shutil.which("mosquitto"):
