@@ -33,14 +33,6 @@ race_top:PixelOverlayManager::doOverlays
 
 # ---- fppd: flags and counters shared across threads (std::atomic) ----------
 
-race:^channelOutputFrame$
-race:^mediaElapsedSeconds$
-race:^hasDMX$
-race:^hasUDP$
-race:^bridgeDataReceived$
-race:wakeUpTime
-race_top:GetPipeWireGraphRate
-race:^mediaOutputStatus$
 # The crash log ring accepts a torn line by design (log.cpp). Permanent.
 race:^s_crashRing$
 

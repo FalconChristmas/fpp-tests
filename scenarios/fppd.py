@@ -201,7 +201,13 @@ class Fppd:
         for name in sorted(os.listdir(logs)):
             if name in (f"asan.{pid}", f"tsan.{pid}"):
                 with open(os.path.join(logs, name), errors="replace") as f:
-                    found.append(f.read())
+                    text = f.read()
+                # TSan's deadlock detector prints this, and nothing else, when
+                # a chain of nested locks is longer than it tracks (a playlist
+                # inserting itself ten deep). It is not a report.
+                if text.strip() == "WARNING: too long mutex cycle found":
+                    continue
+                found.append(text)
         return found
 
     def log(self):
