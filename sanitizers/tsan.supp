@@ -23,9 +23,6 @@
 # use the same buffer.
 race:Sequence::BlankSequenceData
 race:UncompressedFrameData::readFrame
-# ...and the bridge receive path writing and merging input into it.
-race:Sequence::CommitBridgeRanges
-race:Sequence::WriteBridgeData
 # ...and UDP outputs send straight from it (zero copy): a worker still
 # sending frame N to a slow destination reads the buffer while the output
 # thread builds frame N+1 into it. Fix: double-buffer the frame, or wait for
