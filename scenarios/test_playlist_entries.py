@@ -49,7 +49,7 @@ def playlist(name, main=(), lead_in=(), lead_out=(), repeat=0, loop_count=0, **e
 
 
 def trace(fppd):
-    v = fppd.get("/variables", timeout=5).get(TRACE, {}).get("value")
+    v = (fppd.get("/variables", timeout=5) or {}).get(TRACE, {}).get("value")
     if v is None:
         return None
     return str(int(float(v))) if v not in ("", "0") else ""
@@ -190,3 +190,158 @@ def test_pause_entry_takes_its_duration(fppd):
     took = time.monotonic() - t0
     assert trace(fppd) == "12"
     assert 1.8 <= took <= 4, f"a 2 s pause took {took:.1f} s"
+
+
+# --- entry types that reach outside the playlist -----------------------------
+
+import contextlib
+import http.server
+import json
+import os
+import socketserver
+import threading
+
+
+@contextlib.contextmanager
+def http_server(routes):
+    """A local HTTP server answering GETs/POSTs from `routes` (path -> body);
+    yields the list of (method, path, body) requests it got."""
+    got = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def _answer(self, method):
+            n = int(self.headers.get("Content-Length") or 0)
+            got.append((method, self.path, self.rfile.read(n).decode() if n else ""))
+            body = routes.get(self.path.split("?")[0], "ok").encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            self._answer("GET")
+
+        def do_POST(self):
+            self._answer("POST")
+
+        def log_message(self, *a):
+            pass
+
+    srv = socketserver.ThreadingTCPServer(("127.0.0.1", 0), Handler)
+    srv.daemon_threads = True
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        yield srv.server_address[1], got
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def dynamic(sub_type, **kw):
+    e = {"type": "dynamic", "enabled": 1, "playOnce": 0, "subType": sub_type, "drainQueue": 0}
+    e.update(kw)
+    return e
+
+
+def test_dynamic_entry_from_a_file(fppd):
+    """A dynamic entry plays the entries listed in its JSON file, in place."""
+    path = fppd.write("tmp/dyn.json", {"mainPlaylist": [step(5), step(6)]})
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), dynamic("file", dataFile=path), step(2)]))
+    fppd.start()
+    assert run(fppd, "P") == "1562"
+
+
+def test_dynamic_entry_with_a_missing_file(fppd):
+    """A dynamic entry whose file is missing (or not JSON) is skipped with a
+    warning; the playlist carries on."""
+    bad = fppd.write("tmp/bad.json", "this is not json {")
+    fppd.write("playlists/P.json", playlist("P", main=[
+        step(1), dynamic("file", dataFile=os.path.join(fppd.media, "tmp", "nope.json")),
+        dynamic("file", dataFile=bad), step(2)]))
+    fppd.start()
+    assert run(fppd, "P") == "12"
+    warnings = status(fppd).get("warnings", [])
+    assert any("Dynamic playlist" in w for w in warnings), warnings
+
+
+def test_dynamic_entry_from_a_url(fppd):
+    """A dynamic entry of subType url fetches its entries over HTTP."""
+    body = json.dumps({"mainPlaylist": [step(7), step(8)]})
+    with http_server({"/items": body}) as (port, got):
+        fppd.write("playlists/P.json", playlist("P", main=[
+            step(1), dynamic("url", url=f"http://127.0.0.1:{port}/items"), step(2)]))
+        fppd.start()
+        assert run(fppd, "P") == "1782"
+        assert [p for _, p, _ in got] == ["/items"]
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_url_entry_calls_the_url(fppd, method):
+    """A URL entry requests its URL (GET, or POST with its data) and then
+    the playlist carries on."""
+    with http_server({}) as (port, got):
+        fppd.write("playlists/P.json", playlist("P", main=[
+            step(1), {"type": "url", "enabled": 1, "playOnce": 0, "method": method,
+                      "url": f"http://127.0.0.1:{port}/hook?x=1", "data": "payload"},
+            step(2)]))
+        fppd.start()
+        assert run(fppd, "P") == "12"
+        fppd.wait_for(lambda: got, what="the URL to be requested")
+        m, path, body = got[0]
+        assert m == method and path == "/hook?x=1", got
+        if method == "POST":
+            assert body == "payload"
+
+
+def script(fppd, name, text):
+    path = fppd.write(f"scripts/{name}", text)
+    os.chmod(path, 0o755)
+    return path
+
+
+@pytest.mark.parametrize("blocking", [True, False])
+def test_script_entry(fppd, blocking):
+    """A script entry runs the script with its arguments (quoted ones kept
+    whole); a blocking one holds the playlist until it exits, a
+    non-blocking one doesn't."""
+    out = os.path.join(fppd.media, "tmp", "script.out")
+    script(fppd, "rec.sh", f'#!/bin/bash\nsleep 1\nprintf "%s|" "$@" > {out}\n')
+    fppd.write("playlists/P.json", playlist("P", main=[
+        step(1), {"type": "script", "enabled": 1, "playOnce": 0, "scriptName": "rec.sh",
+                  "scriptArgs": "a 'b c' \"d e\"", "blocking": blocking},
+        step(2)]))
+    fppd.start()
+    fppd.command("Start Playlist", "P", "false", "false")
+    fppd.wait_for(lambda: trace(fppd) == "12", timeout=10, what="the playlist to run")
+    ran_before_script_ended = not os.path.exists(out)
+    fppd.wait_for(lambda: os.path.exists(out) and open(out).read(), timeout=10,
+                  what="the script to run")
+    assert open(out).read() == "a|b c|d e|"
+    if blocking:
+        assert not ran_before_script_ended, "the entry after a blocking script ran before it ended"
+    else:
+        assert ran_before_script_ended, "a non-blocking script held the playlist"
+
+
+def test_remap_entry_adds_and_removes_a_remap(fppd):
+    """A remap entry with action "add" copies channels on the wire from then
+    on; one with action "remove" takes that remap away again (4f13d1049
+    stopped repeats leaking and stacking processors)."""
+    from ddp import DdpReceiver
+    from show import CHANNELS, install, sequence_entry
+    frames = [bytes([9] * 6) + bytes(CHANNELS - 6)] * 40  # 2 s
+    remap = {"type": "remap", "enabled": 1, "playOnce": 0, "source": 1, "destination": 101,
+             "count": 6, "loops": 1, "reverse": 0}
+    with DdpReceiver(CHANNELS) as rx:
+        install(fppd, frames)
+        fppd.write("playlists/R.json", playlist("R", main=[
+            dict(remap, action="add"), sequence_entry("Show.fseq"),
+            dict(remap, action="remove"), sequence_entry("Show.fseq")]))
+        fppd.start()
+        fppd.command("Start Playlist", "R", "false", "false")
+        fppd.wait_for(lambda: rx.last() and rx.last()[100:106] == bytes([9] * 6),
+                      what="the remapped channels")
+        fppd.wait_for(lambda: rx.last() and any(rx.last()[:6]) and not any(rx.last()[100:106]),
+                      timeout=6, what="the sequence playing with the remap removed")

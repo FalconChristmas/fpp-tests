@@ -362,3 +362,40 @@ def test_clock_step_back_does_not_freeze_bridged_data(fppd):
         # that packet's expiry was stamped before the step.
         fppd.set_clock("2026-12-24 17:00:00")
         wait_output(fppd, out, lambda f: not any(f), "the bridged data to expire", timeout=5)
+
+
+def test_dmx_serial_input_lands_on_its_channels(fppd):
+    """DMX arriving on a serial input (ci-dmx.json) is bridged to its start
+    address: a frame is a 0 start code and up to 512 slots, told apart by
+    the break before it (here a gap of over 3 ms between writes). Only the
+    configured channel count is used, and the stats count the frames."""
+    import os
+    import threading
+    from serial import PtyReader
+    with PtyReader() as pty, Listener(OUT_PORT) as out:
+        fppd.write("config/co-universes.json", udp_outputs())
+        fppd.write("config/co-other.json", raw_output())
+        fppd.write("config/ci-dmx.json", {"channelInputs": [{
+            "type": "dmx", "enabled": 1, "device": pty.device,
+            "startAddress": 501, "channelCount": 100}]})
+        fppd.start()
+        slots = bytes((i % 200) + 20 for i in range(512))
+        sending = threading.Event()
+        sending.set()
+
+        def sender():
+            while sending.is_set():
+                os.write(pty.master, b"\x00" + slots)
+                time.sleep(0.03)
+
+        t = threading.Thread(target=sender, daemon=True)
+        t.start()
+        try:
+            frame = wait_output(fppd, out, lambda f: region(f, 501, 100) == slots[:100],
+                                "the DMX slots on channels 501-600")
+            assert not any(frame[:500]) and not any(frame[600:]), "DMX data outside its 100 channels"
+            dmx = [u for u in fppd.get("/fppd/e131stats")["universes"] if str(u["id"]) == pty.device]
+            assert dmx and int(dmx[0]["packetsReceived"]) > 0, dmx
+        finally:
+            sending.clear()
+            t.join()
