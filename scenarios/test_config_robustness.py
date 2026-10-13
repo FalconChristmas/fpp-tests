@@ -12,9 +12,8 @@ the saved stream-slot volumes, read as a stream starts, the Play Media that
 started it to succeed rather than fail on the throw. (Output,
 model, preset, playlist and schedule configs are covered elsewhere.)
 
-Regression: c235addbd. Every case but the xlights-* ones terminated fppd
-before it, and the stream-slot ones failed Play Media; the xlights-* ones
-already passed and are kept as coverage.
+Regression: c235addbd. Every case terminated fppd before it, and the
+stream-slot ones failed Play Media.
 """
 
 import os
@@ -59,10 +58,6 @@ CASES = {
     # channeloutputs.json subType, outside the per-output try
     "channeloutputs: subType is a list": ("channeloutputs.json", {"channelOutputs": [
         {"type": "LEDPanelMatrix", "subType": L, "enabled": 1, "startChannel": 1, "channelCount": 3072}]}),
-    # read when a model name isn't found
-    "xlights-submodels: submodels is an object": ("xlights-submodels.json", {"submodels": {"a": 1}}),
-    "xlights-submodels: entry is a string": ("xlights-submodels.json", {"submodels": ["x", {"Name": L}]}),
-    "xlights-modelgroups: entry is a number": ("xlights-modelgroups.json", {"modelgroups": [5]}),
     # read at startup by setVolume() under a PipeWire backend
     "pipewire-audio-groups: root is a list": ("pipewire-audio-groups.json", [1, 2]),
     "pipewire-audio-groups: fields of the wrong type": ("pipewire-audio-groups.json", {"groups": [
@@ -77,14 +72,6 @@ CASES = {
 
 def poke(fppd, name):
     """Run the code that reads `name` if startup doesn't."""
-    def get(path):
-        try:
-            fppd.get(path, timeout=10)
-        except urllib.error.HTTPError:
-            pass
-    if name.startswith("xlights-"):
-        get("/models/NoSuchModel")
-        get("/models?submodels=true")
     if name.startswith("pipewire-"):
         try:
             fppd.post("/fppd/volume/50", timeout=10)
@@ -116,9 +103,79 @@ def test_wrong_typed_config_is_survived(fppd, request, what):
         request.getfixturevalue("audio")
     elif name.startswith("pipewire-"):
         fppd.settings(MediaBackend="pipewire")
-    if name.startswith("xlights-modelgroups"):
-        fppd.write("config/xlights-submodels.json", {"submodels": []})
     fppd.start()
     poke(fppd, name)
     time.sleep(0.5)
+    fppd.get("/fppd/status", timeout=10)
+
+
+GOOD_SUB = {"Name": "Good Sub", "parent": "M", "type": "ranges", "subBuffer": "", "ranges": ["1-3"]}
+
+
+@pytest.mark.parametrize("files", [
+    {"xlights-submodels.json": {"submodels": ["x", 5, {"Name": L}, None, GOOD_SUB]}},
+    {"xlights-submodels.json": {"submodels": [GOOD_SUB]},
+     "xlights-modelgroups.json": {"modelgroups": [5, {"Name": O}, "y"]}},
+], ids=["bad submodels", "bad model groups"])
+def test_submodel_index_skips_bad_entries(fppd, files):
+    """The xLights submodel and model-group index is read on first use, and
+    an entry it can't read is skipped: the good submodels around it are
+    still listed.
+
+    Regression: 919374a85. An entry that wasn't an object, or a Name that
+    wasn't a string, threw -- answered as an empty 500, after the index had
+    been marked loaded, so no submodel was listed again until fppd
+    restarted.
+    """
+    for name, content in files.items():
+        fppd.write(f"config/{name}", content)
+    fppd.start()
+    for _ in range(2):  # the first request loads the index; the second must too
+        names = fppd.get("/models?submodels=true&simple=true", timeout=10)
+        assert "Good Sub" in names, f"submodel list: {names}"
+
+
+def test_plugin_command_descriptions_with_bad_entries(fppd):
+    """A plugin's commands/descriptions.json is read as fppd starts. An
+    entry with no name or script, or with ones that aren't strings, is
+    skipped with a warning; the plugin's good command is still registered
+    and fppd starts.
+
+    Regression: 919374a85. Such an entry threw Json::LogicError at
+    startup, so one plugin's typo stopped fppd starting at all.
+    """
+    import os
+    cmds = os.path.join(fppd.media, "plugins", "fpp-test-plugin", "commands")
+    os.makedirs(cmds)
+    script = os.path.join(cmds, "good.sh")
+    with open(script, "w") as f:
+        f.write("#!/bin/sh\nexit 0\n")
+    os.chmod(script, 0o755)
+    fppd.write("plugins/fpp-test-plugin/commands/descriptions.json", [
+        "x", 5, None, {"name": L, "script": "good.sh"}, {"name": "No Script"},
+        {"name": "Bad Script", "script": O}, {"script": "good.sh"},
+        {"name": "Test Plugin Good", "script": "good.sh", "args": []}])
+    fppd.start()
+    names = [c.get("name") for c in fppd.get("/commands", timeout=10)]
+    assert "Test Plugin Good" in names, "the plugin's good command was not registered"
+    assert "No Script" not in names and "Bad Script" not in names, names
+
+
+def test_cape_sensor_sources_with_bad_entries(fppd):
+    """The cape's sensor sources (tmp/cape-sensors.json, written from the
+    cape's EEPROM config at boot) are read as fppd starts. A source with a
+    value of the wrong JSON type is skipped, as a bad sensor already is.
+
+    Regression: 919374a85. Such a source threw Json::LogicError at
+    startup, and with the file rewritten from the cape on every boot, fppd
+    never started.
+    """
+    fppd.write("tmp/cape-sensors.json", {
+        "sensorSources": [5, "x", {"type": L}, {"type": "ads7828", "id": "a", "i2cBus": "x"},
+                          {"type": "ads7828", "id": "b", "i2cBus": 1, "i2cAddress": "zz"},
+                          {"type": "iio", "id": "c", "devId": O},
+                          {"type": "mux", "id": "d", "source": L, "channels": S},
+                          {"type": "multi", "id": "e", "sources": [5]}],
+        "sensors": []})
+    fppd.start()
     fppd.get("/fppd/status", timeout=10)
