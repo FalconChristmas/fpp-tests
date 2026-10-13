@@ -124,3 +124,32 @@ def test_bridge_backup_source_takes_over_across_a_clock_step(fppd):
             fppd.set_clock("2026-12-24 17:00:00")
             wait_output(fppd, out, lambda f: region(f, E131_START, E131_SIZE) == lo,
                         "the backup source to take over after the clock stepped back", timeout=6)
+
+
+@pytest.mark.parametrize("step", list(STEPS))
+def test_play_media_plays_through_a_clock_step(fppd, audio, step):
+    """Play Media plays the whole file and ends, leaving the player idle,
+    when the wall clock steps part-way through.
+
+    Coverage, not a red-before test: GStreamer's stall and preroll
+    watchdogs and the media slot pump measured on the wall clock (moved to
+    the monotonic one by 800d8a609), but this passes on the earlier code too --
+    the watchdogs only misfire if the step lands while their timer is
+    armed, which this can't arrange.
+    """
+    import os
+    from audio import write_tone_wav
+    from test_media import sounding
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 5, freq=1000, amplitude=0.5)
+    fppd.start(fake_time="2026-12-24 18:00:00")
+    rec = audio.record()
+    fppd.command("Play Media", "Tone.wav", "1", "0", "1")
+    time.sleep(1.5)
+    fppd.set_clock(STEPS[step])
+    time.sleep(5)
+    samples = rec.stop()
+    first, last = sounding(samples)
+    assert first is not None, "nothing was heard"
+    assert last - first >= 4.6, f"heard {last - first:.2f} s of a 5 s file across the clock step"
+    fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "idle", timeout=5,
+                  what=f"the player to go idle after the media, the clock having stepped {step}")
