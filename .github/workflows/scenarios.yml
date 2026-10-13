@@ -36,10 +36,18 @@ permissions:
 jobs:
   scenarios:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # TSan runs fppd several times slower than ASan.
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        # The nightly run checks both memory errors (ASan) and data races
+        # (TSan, with the known races in sanitizers/tsan.supp). Everything
+        # else runs the one flavor it asked for.
+        flavor: ${{ fromJSON(github.event_name == 'schedule' && '["asan","tsan"]' || format('["{0}"]', github.event.inputs.flavor || 'asan')) }}
     env:
       FPP_REF: ${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}
-      FLAVOR: ${{ github.event.inputs.flavor || 'asan' }}
+      FLAVOR: ${{ matrix.flavor }}
     steps:
       - name: Checkout fpp-tests
         uses: actions/checkout@v6

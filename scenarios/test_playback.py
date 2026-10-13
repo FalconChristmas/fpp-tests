@@ -12,6 +12,7 @@ import time
 import pytest
 
 from ddp import DdpReceiver
+from fppd import sanitizer
 from frames import analyze
 from fseq import unique_frames, write_fseq_reference
 from show import CHANNELS, install, status
@@ -185,6 +186,14 @@ def test_frames_keep_time_over_a_minute(fppd):
     per_frame = (seen[last] - seen[first]) / (last - first) * 1000
     ppm = (per_frame / STEP_MS - 1) * 1e6
     print(f"{per_frame:.4f} ms per frame over {last - first} frames: {ppm:+.0f} ppm")
+    if sanitizer() == "tsan":
+        # ThreadSanitizer symbolizes every race where it happens, suppressed
+        # ones included, and the first symbolization stalls that thread for
+        # tens of ms. One such stall on the output thread restarts the
+        # cadence and costs a frame: 800+ ppm over this minute, with fppd
+        # keeping time perfectly once reporting is off. That build is for
+        # races; the timing is checked by the others.
+        return
     # A sanitizer build in a shared container now and then runs a frame more
     # than a frame late, and the cadence restarts after it; on a device the
     # lights should be within a few ppm of the step time (a Pi 5: 0 ppm).

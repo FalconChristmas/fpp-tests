@@ -55,8 +55,14 @@ When a scenario fails, its media directory is copied to `artifacts/<test>/`: `lo
 holds `fppd.log`, fppd's stdout, any sanitizer report, and, if fppd was still running,
 `backtrace.txt` with every thread's stack. For a wedge, read the backtrace first.
 
-The suite runs nightly in CI against fpp master. It can also be started by hand from the
-Actions tab, for any fpp ref and flavor.
+The suite runs nightly in CI against fpp master, once under ASan and once under TSan. It can
+also be started by hand from the Actions tab, for any fpp ref and flavor.
+
+Under TSan, a data race fails the scenario like any other sanitizer report, except for the
+known races listed in `sanitizers/tsan.supp`, each with what it is and how it should be
+fixed. A new race turns the nightly run red. When you fix one of the listed races, delete
+its lines from that file in the same change. Only fppd's own sanitizer log counts: its
+children (scripts, system tools) carry the preloaded runtime but aren't built with it.
 
 ## Writing a scenario
 

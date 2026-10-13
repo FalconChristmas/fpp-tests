@@ -1,0 +1,117 @@
+# ThreadSanitizer suppressions for the scenario suite.
+#
+# Every entry here is a race that is known and understood. The nightly TSan
+# run goes red on anything else, so a new race fails the run while these are
+# worked off. When one is fixed, delete its lines here in the same change
+# (and check the run still passes: a suppression that matches more than its
+# own race hides others).
+#
+# Keep patterns narrow. TSan matches a race: pattern against both access
+# stacks, the stacks that created the threads involved, and global variable
+# names, so a function that starts a thread (OpenSequenceFile, MainLoop,
+# StartChannelOutputThread) would hide every race on that thread. Suppress a
+# global by its exact name (race:^Name$) and anything else with race_top:,
+# which matches only the function making the racy access -- except where that
+# access is a memcpy/memset: the top frame is then TSan's interceptor, so
+# race_top: never matches, and race: on a function that starts no thread is
+# used instead.
+
+# ---- fppd: shared data written outside its owner (fix these first) --------
+
+# m_seqData: blanking and the first-frame read run on the
+# main, HTTP and playlist threads while the output thread and the UDP workers
+# use the same buffer.
+race:Sequence::BlankSequenceData
+race:UncompressedFrameData::readFrame
+# ...and the bridge receive path writing and merging input into it.
+race:Sequence::CommitBridgeRanges
+race:Sequence::WriteBridgeData
+# UDP output: headers, iovecs and the de-duplication copy re-prepared on
+# the output thread while a slow destination's worker is still in sendmmsg
+# on the previous frame.
+race_top:DDPOutputData::PrepareData
+race_top:E131OutputData::PrepareData
+race:UDPOutputData::NeedToOutputFrame
+race:UDPOutput::SendMessages
+
+# ---- fppd: flags and counters shared across threads (std::atomic) ----------
+
+race:^channelOutputFrame$
+race:^mediaElapsedSeconds$
+# Sequence::m_seqMSElapsed / m_seqMSRemaining
+race_top:Sequence::ReadSequenceData
+race:^hasDMX$
+race:^hasUDP$
+race:^bridgeDataReceived$
+race:wakeUpTime
+race_top:GetPipeWireGraphRate
+race_top:Timers::updateTimers
+race_top:CurlManager::processCurls
+race_top:ChannelTester::Testing
+race_top:UDPOutput::SetHostValid
+race:^mediaOutputStatus$
+# The crash log ring accepts a torn line by design (log.cpp). Permanent.
+race:^s_crashRing$
+
+# ---- by design --------------------------------------------------------------
+
+# Overlay model pixel data is shared memory that effects, the HTTP API and
+# programs outside fppd write while the output thread copies it out, with no
+# lock on purpose: the worst case is a pixel from the previous effect frame.
+race:PixelOverlayModel::setPixelValue
+race:PixelOverlayModel::doOverlay
+race:PixelOverlayModel::fillData
+race:PixelOverlayModel::setData
+# ...including the dirty flag in that shared buffer's header.
+race_top:PixelOverlayModel::overlayBufferIsDirty
+race:PixelOverlayModel::flushOverlayBuffer
+
+# ---- signal handlers ------------------------------------------------------
+
+# The crash handler logs and writes a report, which no handler can do with
+# async-signal-safe calls only. It runs once, when fppd has already crashed,
+# and that crash is what fails the scenario.
+signal:handleCrash
+
+# ---- fppd: shutdown only ---------------------------------------------------
+
+race:WLEDAPIResponder::Cleanup
+race_top:PingManager::PingInfo::Cleanup
+race_top:Sequence::~Sequence
+
+# ---- uninstrumented libraries ----------------------------------------------
+
+# trantor: TcpServer::stop's promise/future (synchronised in libstdc++,
+# which TSan can't see), its teardown, and the eventfd wakeup.
+race:trantor::TcpServer::stop
+race:trantor::TcpServer::~TcpServer
+race:trantor::EventLoop::wakeup
+race:trantor::EventLoop::queueInLoop
+# drogon tearing down its router at shutdown while IO threads dispatch.
+race:drogon::HttpControllersRouter::HttpControllerRouterItem
+race:std::__detail::_NFA
+# GStreamer/GLib hand objects between their own threads. called_from_lib
+# drops only interceptor calls made inside the library, so FPP's callbacks
+# on GStreamer threads are still checked. Each name must match exactly one
+# loaded library, or TSan exits at startup.
+called_from_lib:libglib-2.0.so
+called_from_lib:libgstreamer-1.0.so
+called_from_lib:libgstbase-1.0.so
+called_from_lib:libgstapp-1.0.so
+called_from_lib:libgstcoreelements.so
+called_from_lib:libgobject-2.0.so
+called_from_lib:libgstaudio-1.0.so
+called_from_lib:libgstaudioconvert.so
+called_from_lib:libpipewire-0.3.so
+called_from_lib:libgstplayback.so
+called_from_lib:libgstvolume.so
+# PipeWire loads and unloads its modules as it goes, and TSan aborts the
+# process when a called_from_lib library is unloaded, so these match by module
+# in the stack instead.
+race:libpipewire-module-client-node.so
+race:libpipewire-module-protocol-native.so
+race:libspa-support.so
+# libfaketime (the scheduler scenarios' fake clock) takes its own locks.
+deadlock:libfaketimeMT.so.1
+deadlock:gst_pad_pause_task
+deadlock:gst_pad_stop_task

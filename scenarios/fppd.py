@@ -86,7 +86,11 @@ class Fppd:
             "halt_on_error=1:detect_leaks=0:abort_on_error=0:"
             f"log_path={self.media}/logs/asan"
         )
-        env["TSAN_OPTIONS"] = f"halt_on_error=0:log_path={self.media}/logs/tsan"
+        # Known races are listed (and explained) in sanitizers/tsan.supp;
+        # anything else is a report, and fails the scenario.
+        supp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sanitizers", "tsan.supp")
+        env["TSAN_OPTIONS"] = (f"halt_on_error=0:log_path={self.media}/logs/tsan:"
+                               f"suppressions={os.path.normpath(supp)}")
         if tz:
             env["TZ"] = tz
         if fake_time:
@@ -128,8 +132,14 @@ class Fppd:
         import datetime
         target = datetime.datetime.strptime(when, "%Y-%m-%d %H:%M:%S")
         base = target - datetime.timedelta(seconds=time.monotonic() - self.started)
-        with open(self.clock_file, "w") as f:
+        # Replaced in one rename, never rewritten in place: libfaketime reads
+        # the file on every clock call, and a half-written one makes it call
+        # exit() from inside gettimeofday(), whose exit handlers then deadlock
+        # on libfaketime's own lock.
+        tmp = self.clock_file + ".new"
+        with open(tmp, "w") as f:
             f.write("@" + base.strftime("%Y-%m-%d %H:%M:%S") + "\n")
+        os.replace(tmp, self.clock_file)
 
     def check_alive(self):
         if self.proc is None:
@@ -181,10 +191,15 @@ class Fppd:
     # --- reports ---------------------------------------------------------
 
     def sanitizer_reports(self):
+        """fppd's own sanitizer reports. Each process writes <tool>.<pid>;
+        fppd's children (scripts, system tools) inherit the preloaded runtime
+        but are not built with it, and under libfaketime TSan's allocator
+        aborts inside them, so only fppd's pid counts."""
         logs = os.path.join(self.media, "logs")
         found = []
+        pid = str(self.proc.pid) if self.proc is not None else None
         for name in sorted(os.listdir(logs)):
-            if name.startswith(("asan.", "tsan.")):
+            if name in (f"asan.{pid}", f"tsan.{pid}"):
                 with open(os.path.join(logs, name), errors="replace") as f:
                     found.append(f.read())
         return found
@@ -279,9 +294,25 @@ def faketime_env(binary, when):
         "FAKETIME": "@" + when,
         "FAKETIME_DONT_FAKE_MONOTONIC": "1",
         "FAKETIME_NO_CACHE": "1",
+        # File times stay real. libfaketime's stat() interceptor can deadlock
+        # at startup (drogon's createPath -> std::filesystem::status), and no
+        # scenario needs faked file times.
+        "NO_FAKE_STAT": "1",
         # fppd's child processes (scripts, gdb) see the real clock.
         "FAKETIME_SKIP_CMDS": "gdb,sh,bash",
     }
+
+
+def sanitizer(tree=None):
+    """"asan", "tsan", "ubsan" or None: the runtime the fppd under test was
+    built with, read from what libfpp links."""
+    tree = tree or os.environ.get("FPP_TREE", "")
+    out = subprocess.run(["ldd", os.path.join(tree, "src", "libfpp.so")],
+                         capture_output=True, text=True).stdout
+    for name in ("asan", "tsan", "ubsan"):
+        if f"lib{name}.so" in out:
+            return name
+    return None
 
 
 def describe_rc(rc):
