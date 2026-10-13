@@ -118,3 +118,31 @@ def test_remote_follows_its_master(fppd):
         time.sleep(0.5)
         assert not any(rx.last()), "the remote's output was left lit after stop"
     sock.close()
+
+
+def test_sync_destinations_change_without_a_restart(fppd):
+    """Changing the unicast remote list while a sequence plays moves the
+    sync packets to the new remote and away from the old one, without
+    restarting fppd; a remote given by host name is sent to at its
+    address, not broadcast.
+
+    Regression: 3d0f12825 (destinations were built once at startup, and
+    host names became 255.255.255.255). Fails on a tree from before it.
+    """
+    frames = unique_frames(1200, CHANNELS)
+    with UdpCapture(PORT) as cap:
+        install(fppd, frames, step_ms=STEP_MS)
+        fppd.settings(MultiSyncEnabled="1", MultiSyncRemotes="127.0.0.2")
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "false", "false")
+        time.sleep(2)
+        changed = time.monotonic()
+        fppd.settings(MultiSyncRemotes="localhost")
+        time.sleep(3)
+        packets = cap.snapshot()
+    syncs = [(t, dst) for t, _, dst, p in packets if parse_sync(t, p)]
+    before = {dst for t, dst in syncs if t < changed}
+    after = {dst for t, dst in syncs if t > changed + 1.0}
+    assert "127.0.0.2" in before, f"sync went to {before} before the change"
+    assert "127.0.0.1" in after, f"sync went to {after} after the change to localhost"
+    assert "127.0.0.2" not in after, "sync still went to the old remote after the change"
