@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire \
         pipewire pipewire-bin pipewire-pulse wireplumber pulseaudio-utils \
         python3 python3-pytest python3-zstandard faketime tzdata procps iproute2 gdb patch zip \
+        mosquitto mosquitto-clients \
     && rm -rf /var/lib/apt/lists/*
 
 # FPP's makefiles skip the OLED/cape/RTC tools when this marker exists, and
