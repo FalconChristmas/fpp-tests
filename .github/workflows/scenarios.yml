@@ -77,6 +77,12 @@ jobs:
         # PYTEST_ARGS is left unquoted on purpose, to split into arguments.
         run: ./run.sh --fpp fpp --ref HEAD --flavor "$FLAVOR" -v -rA $PYTEST_ARGS
 
+      # The container writes the artifacts as root, some of them unreadable
+      # to the runner user that uploads them.
+      - name: Make the artifacts readable
+        if: failure()
+        run: sudo chown -R "$(id -u):$(id -g)" artifacts && chmod -R u+rwX artifacts
+
       - name: Upload failed scenarios
         if: failure()
         uses: actions/upload-artifact@v7
