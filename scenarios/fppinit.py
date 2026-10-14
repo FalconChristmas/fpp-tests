@@ -122,6 +122,19 @@ class FppinitSandbox:
     def run(self, action, *args, timeout=120):
         """Run `fppinit <action> <args>` in a fresh sandbox. Returns the
         CompletedProcess; output and exit status are the caller's to judge."""
+        return self._run(["/opt/fpp/src/fppinit", action, *args], timeout=timeout)
+
+    def capedetect(self, *args, timeout=120):
+        """Run `fppcapedetect <args>` in a fresh sandbox, as fppinit's
+        detectCape step does. CapeUtils names /home/fpp/media throughout
+        rather than taking FPP_MEDIA_DIR, so for this run the media
+        directory is mounted there as well. The sandbox has no i2c device,
+        so the only cape found is a virtual one in config/cape-eeprom.bin."""
+        if not os.path.exists(os.path.join(self.tree, "src", "fppcapedetect")):
+            pytest.skip("no fppcapedetect in the tree under test (not built in a container)")
+        return self._run(["/opt/fpp/src/fppcapedetect", *args], timeout=timeout, media_home=True)
+
+    def _run(self, argv, timeout=120, media_home=False):
         run_dir = tempfile.mkdtemp(prefix="run-", dir=self.dir)
         self.upper = os.path.join(run_dir, "upper")
         root = os.path.join(run_dir, "root")
@@ -139,6 +152,9 @@ class FppinitSandbox:
             path = shutil.which(name, path="/usr/sbin:/usr/bin:/sbin:/bin")
             if path:
                 stub_lines.append(f"stub {shlex.quote(path)}")
+        home = ""
+        if media_home:
+            home = f'mkdir -p "$R/home/fpp/media"; mount --bind {shlex.quote(self.media)} "$R/home/fpp/media"'
         script = f"""
 set -e
 R={shlex.quote(root)}
@@ -156,6 +172,7 @@ mkdir -p "$R{MEDIA}" "$R/boot/firmware" "$R/opt/fpp"
 mount --bind {shlex.quote(self.media)} "$R{MEDIA}"
 mount --bind {shlex.quote(self.boot)} "$R/boot/firmware"
 mount --bind {shlex.quote(self.tree)} "$R/opt/fpp"
+{home}
 stub() {{ rm -f "$R$1"; printf '%s' {shlex.quote(_stub(log))} > "$R$1"; chmod 755 "$R$1"; }}
 mkdir -p "$R/fppinit-state"; cp -a {shlex.quote(self.state)}/. "$R/fppinit-state/"
 {chr(10).join(stub_lines)}
@@ -164,7 +181,7 @@ rm -f "$R{systemctl}"; printf '%s' {shlex.quote(SYSTEMCTL)} > "$R{systemctl}"; c
 set +e
 chroot "$R" setpriv --bounding-set -sys_module,-sys_boot,-sys_time,-sys_rawio \\
     --inh-caps -sys_module,-sys_boot,-sys_time,-sys_rawio \\
-    /opt/fpp/src/fppinit {' '.join(shlex.quote(a) for a in (action,) + args)}
+    {' '.join(shlex.quote(a) for a in argv)}
 rc=$?
 # This shell is PID 1 here, and its exit kills whatever is left in the
 # namespace -- including fppinit's log writer (teeOutput), still draining.
@@ -207,6 +224,15 @@ exit $rc
     def media_file(self, rel):
         with open(os.path.join(self.media, rel)) as f:
             return f.read()
+
+    def media_exists(self, rel):
+        return os.path.lexists(os.path.join(self.media, rel))
+
+    def write_bytes(self, rel, data):
+        path = os.path.join(self.media, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(data)
 
     def boot_file(self, rel):
         with open(os.path.join(self.boot, rel)) as f:
