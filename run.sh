@@ -11,6 +11,8 @@
 # --flavor  make target to build (default asan); coverage also writes
 #           artifacts/coverage/ (scripts/coverage-report.sh)
 #
+# The results, one entry per test, go to artifacts/junit.xml.
+#
 # Builds are cached per (commit, flavor) in the fpp-tests-work Docker volume
 # and object files in fpp-tests-ccache, so re-runs and nearby commits are fast.
 set -e
@@ -77,6 +79,7 @@ exec $DOCKER $TTY -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" \
     fpp-tests-env sh -c '/tests/scripts/build-fpp.sh "$FPP_TREE" "$FPP_FLAVOR" || exit 1
         cd /tests || exit 1
         if [ $# -eq 0 ]; then set -- scenarios; fi
+        set -- --junitxml=/artifacts/junit.xml "$@"
         if [ "$FPP_FLAVOR" != coverage ]; then exec python3 -m pytest -p no:cacheprovider "$@"; fi
         python3 -m pytest -p no:cacheprovider "$@"; rc=$?
         /tests/scripts/coverage-report.sh "$FPP_TREE" /artifacts/coverage; exit $rc' sh "$@"

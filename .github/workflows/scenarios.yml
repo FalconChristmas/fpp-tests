@@ -12,11 +12,15 @@ on:
       flavor:
         description: Build flavor
         type: choice
-        options: [asan, tsan, debug, optimized]
+        options: [asan, tsan, coverage, debug, optimized]
         default: asan
       pytest_args:
         description: Extra pytest arguments (e.g. -k presets)
         default: ""
+      publish:
+        description: Add this run to the dashboard on GitHub Pages (coverage of fpp master only)
+        type: boolean
+        default: false
   # A pull request to this repo runs the suite against fpp master, so a
   # contributor can add a scenario without Docker or an FPP device.
   pull_request:
@@ -36,15 +40,17 @@ permissions:
 jobs:
   scenarios:
     runs-on: ubuntu-latest
-    # TSan runs fppd several times slower than ASan.
-    timeout-minutes: 90
+    # TSan runs fppd several times slower than ASan, and the coverage build
+    # is unoptimized.
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
         # The nightly run checks both memory errors (ASan) and data races
-        # (TSan, with the known races in sanitizers/tsan.supp). Everything
+        # (TSan, with the known races in sanitizers/tsan.supp), and measures
+        # what the scenarios reach (coverage: -O0, no sanitizer). Everything
         # else runs the one flavor it asked for.
-        flavor: ${{ fromJSON(github.event_name == 'schedule' && '["asan","tsan"]' || format('["{0}"]', github.event.inputs.flavor || 'asan')) }}
+        flavor: ${{ fromJSON(github.event_name == 'schedule' && '["asan","tsan","coverage"]' || format('["{0}"]', github.event.inputs.flavor || 'asan')) }}
     env:
       FPP_REF: ${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}
       FLAVOR: ${{ matrix.flavor }}
@@ -80,8 +86,13 @@ jobs:
       # The container writes the artifacts as root, some of them unreadable
       # to the runner user that uploads them.
       - name: Make the artifacts readable
-        if: failure()
-        run: sudo chown -R "$(id -u):$(id -g)" artifacts && chmod -R u+rwX artifacts
+        if: always()
+        run: |
+          mkdir -p artifacts
+          sudo chown -R "$(id -u):$(id -g)" artifacts && chmod -R u+rwX artifacts
+          version=$(git -C fpp describe --tags --match='[0-9]*' 2>/dev/null || git -C fpp rev-parse --short HEAD)
+          printf '{"flavor":"%s","version":"%s","sha":"%s"}\n' "$FLAVOR" "$version" \
+            "$(git -C fpp rev-parse HEAD)" > artifacts/meta.json
 
       - name: Upload failed scenarios
         if: failure()
@@ -91,3 +102,81 @@ jobs:
           path: artifacts/
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Upload the coverage report
+        id: coverage
+        if: always() && env.FLAVOR == 'coverage'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: artifacts/coverage/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Summarize
+        if: always()
+        run: python3 scripts/ci-summary.py artifacts "${{ steps.coverage.outputs.artifact-url }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: results-${{ env.FLAVOR }}
+          path: |
+            artifacts/meta.json
+            artifacts/junit.xml
+            artifacts/coverage/totals.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The dashboard on GitHub Pages: the test counts and coverage of every run
+  # so far (history.json, carried over from the live site each time) and the
+  # latest coverage report, line by line. Each deploy replaces the whole site,
+  # so only a run with a coverage build publishes by hand.
+  publish:
+    needs: scenarios
+    if: always() && !cancelled() && (github.event_name == 'schedule' || (github.event.inputs.publish == 'true' && github.event.inputs.fpp_ref == 'master' && github.event.inputs.flavor == 'coverage'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Checkout fpp-tests
+        uses: actions/checkout@v6
+
+      - name: Download the results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: results-*
+          path: results
+
+      - name: Download the coverage report
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: coverage-report
+          path: site/coverage
+
+      - name: Build the dashboard
+        run: |
+          curl -fsSL "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/history.json" \
+            -o history.json || echo "no published history yet"
+          python3 scripts/build-site.py results site history.json \
+            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          rm -f site/coverage/coverage.json
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v5

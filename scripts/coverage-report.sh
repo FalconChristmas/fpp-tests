@@ -5,6 +5,8 @@
 #   functions.csv   every function with its call count, for finding the
 #                   ones no scenario reaches
 #   html/           browsable per-line detail
+#   summary.md      totals, each directory and the biggest gaps, in Markdown
+#   totals.json     the same numbers as data, for the CI dashboard
 set -e
 TREE="$1"
 OUT="$2"
@@ -35,6 +37,33 @@ with open(os.path.join(out, "summary.txt"), "w") as s:
         s.write(f"{n:6} {h:6} {100*h/n if n else 100:5.1f}% {fn:6} {fh:5}  {name}\n")
     tl, th = sum(r[1] for r in rows), sum(r[2] for r in rows)
     s.write(f"{tl:6} {th:6} {100*th/tl:5.1f}%  TOTAL\n")
+# The same numbers for a reader: totals, each source directory, and the files
+# with the most lines no scenario reaches (CI puts this in the job summary).
+def pct(h, n):
+    return f"{100 * h / n:.1f}%" if n else "-"
+tf, tfh = sum(r[3] for r in rows), sum(r[4] for r in rows)
+areas = {}
+for name, n, h, fn, fh in rows:
+    a = areas.setdefault(os.path.dirname(name) or "(top level)", [0, 0, 0, 0, 0])
+    a[0] += n; a[1] += h; a[2] += fn; a[3] += fh; a[4] += 1
+with open(os.path.join(out, "totals.json"), "w") as t:
+    json.dump({"lines": tl, "lines_hit": th, "functions": tf, "functions_hit": tfh,
+               "files": len(rows), "files_unreached": sum(1 for r in rows if r[1] and not r[2]),
+               # [lines, hit, functions, hit, files] per directory and per file
+               "areas": areas, "by_file": {r[0]: list(r[1:]) for r in rows}}, t)
+with open(os.path.join(out, "summary.md"), "w") as m:
+    m.write(f"**Lines {pct(th, tl)}** ({th:,} of {tl:,}) · **functions {pct(tfh, tf)}** "
+            f"({tfh:,} of {tf:,}) · {sum(1 for r in rows if r[1] and not r[2])} of {len(rows)} "
+            "files never reached\n\n")
+    m.write("<details><summary>By source directory, most unreached lines first</summary>\n\n")
+    m.write("| directory | files | lines | line % | function % | lines not reached |\n|---|--:|--:|--:|--:|--:|\n")
+    for d, (n, h, fn, fh, files) in sorted(areas.items(), key=lambda kv: kv[1][1] - kv[1][0]):
+        m.write(f"| `{d}` | {files} | {n:,} | {pct(h, n)} | {pct(fh, fn)} | {n - h:,} |\n")
+    m.write("\n</details>\n\n<details><summary>The 30 files with the most unreached lines</summary>\n\n")
+    m.write("| file | lines | line % | function % | lines not reached |\n|---|--:|--:|--:|--:|\n")
+    for name, n, h, fn, fh in sorted(rows, key=lambda r: r[2] - r[1])[:30]:
+        m.write(f"| `{name}` | {n:,} | {pct(h, n)} | {pct(fh, fn)} | {n - h:,} |\n")
+    m.write("\n</details>\n")
 with open(os.path.join(out, "functions.csv"), "w") as c:
     c.write("file,line,calls,function\n")
     for name, line, fn, n in sorted(funcs):

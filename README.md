@@ -62,8 +62,16 @@ When a scenario fails, its media directory is copied to `artifacts/<test>/`: `lo
 holds `fppd.log`, fppd's stdout, any sanitizer report, and, if fppd was still running,
 `backtrace.txt` with every thread's stack. For a wedge, read the backtrace first.
 
-The suite runs nightly in CI against fpp master, once under ASan and once under TSan. It can
-also be started by hand from the Actions tab, for any fpp ref and flavor.
+Every run also writes `artifacts/junit.xml`, one entry per test.
+
+The suite runs nightly in CI against fpp master: once under ASan, once under TSan, and once in
+the coverage build. It can also be started by hand from the Actions tab, for any fpp ref and
+flavor. Each run's page in the Actions tab carries a summary: the test counts, any failures,
+the slowest scenarios and, for the coverage build, coverage by source directory and the files
+with the most unreached lines. The nightly run also publishes the
+[dashboard](https://falconchristmas.github.io/fpp-tests/): pass counts and coverage for every
+night so far, and the latest coverage report line by line. It is the place to look for
+something to test: the directories and files with the most code no scenario reaches.
 
 Under TSan, a data race fails the scenario like any other sanitizer report, except for the
 known races listed in `sanitizers/tsan.supp`, each with what it is and how it should be
