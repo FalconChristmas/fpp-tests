@@ -41,7 +41,10 @@ if [ -n "$FPP_TESTS_CCACHE" ]; then
     mkdir -p "$FPP_TESTS_CCACHE"
     CCACHE_MOUNT="$(cd "$FPP_TESTS_CCACHE" && pwd):/ccache"
 fi
-DOCKER="docker run --rm -v fpp-tests-work:/work -v $CCACHE_MOUNT"
+# fppd's exit path visits every descriptor up to the open-file limit, and
+# some Docker setups (WSL's) default it to 2^30: under TSan that takes longer
+# than any scenario waits for fppd to exit.
+DOCKER="docker run --rm --ulimit nofile=1048576:1048576 -v fpp-tests-work:/work -v $CCACHE_MOUNT"
 
 # A failed scenario's media directory (fppd.log, sanitizer reports, the config
 # it ran with) is copied here.

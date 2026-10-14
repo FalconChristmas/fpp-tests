@@ -100,11 +100,14 @@ class Fppd:
             with open(self.clock_file, "w") as f:
                 f.write(env.pop("FAKETIME") + "\n")
             env["FAKETIME_TIMESTAMP_FILE"] = self.clock_file
-            # ASan's allocator reads the clock (via libfaketime) for its
-            # release-to-OS bookkeeping, and libfaketime's first clock read
-            # allocates: the two deadlock. Turning the release off removes
-            # ASan's clock read from the allocator.
+            # The sanitizer allocators read the clock (via libfaketime) for
+            # their release-to-OS bookkeeping, and libfaketime's one-time
+            # setup allocates (dlvsym): the clock read waits on the setup that
+            # is allocating, and fppd hangs before it prints anything. Turning
+            # the release off removes the allocator's clock read. TSan on
+            # arm64 happened not to read it; on x86_64 it does.
             env["ASAN_OPTIONS"] += ":allocator_release_to_os_interval_ms=-1"
+            env["TSAN_OPTIONS"] += ":allocator_release_to_os_interval_ms=-1"
         self.out = open(os.path.join(self.media, "logs", "fppd.stdout"), "w")
         self.started = time.monotonic()
         self.proc = subprocess.Popen(
@@ -289,13 +292,6 @@ def faketime_env(binary, when):
     libs = glob.glob("/usr/lib/*/faketime/libfaketimeMT.so.1")
     if not libs:
         pytest.skip("libfaketime is not installed (apt-get install faketime)")
-    import platform
-    if sanitizer() == "tsan" and platform.machine() == "x86_64":
-        # fppd under TSan with libfaketime preloaded hangs before it prints
-        # anything on x86_64 (every fake-time scenario timed out on the first
-        # nightly TSan run); the same build runs on arm64. The ASan run still
-        # covers these scenarios on x86_64.
-        pytest.skip("TSan with libfaketime hangs at start-up on x86_64")
     preload = [libs[0]]
     # A sanitizer runtime has to come first in the preload list.
     ldd = subprocess.run(["ldd", binary], capture_output=True, text=True).stdout
