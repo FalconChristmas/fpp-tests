@@ -206,3 +206,51 @@ def test_artnet_deduplicate_keeps_working(fppd):
         with rx.lock:
             sent = sum(1 for t, p in rx.packets if t >= start and parse_artdmx(p))
     assert 2 <= sent <= 10, f"a static ArtNet universe was sent {sent} times in 3 s (keepalive is every 11th frame)"
+
+
+KINET_PORT = 6038
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_kinet_packets(fppd, version):
+    """KiNet v1 (DMXOUT) and v2 (PORTOUT): every packet carries the KiNet
+    magic, version 1 and its message type, the v1 21-byte or v2 24-byte
+    header (v2: universe 0xFFFFFFFF and a sequence number counting up per
+    port), consecutive ports for one entry's universes, and that universe's
+    slice of a frame. (The base port numbering -- FPP sends the id as is,
+    xLights' own output sends it less one -- is not checked here.)
+
+    Regression: 1ab6a39a2. v2 advanced the sequence number when it prepared a
+    packet, so a frame prepared twice at playback start skipped one (1, 3,
+    4, 6, ...), as E1.31, Art-Net and DDP did before 256b0cf8e."""
+    size, base = 170, 4
+    frames = unique_frames(80, 3 * size)
+    with Listener(KINET_PORT) as rx:
+        play(fppd, frames, [output(5 + version, base, 1, size, universes=3)])
+        time.sleep(3)
+        pkts = packets(rx)
+    assert len(pkts) > 30, f"only {len(pkts)} KiNet packets arrived"
+    hlen = 21 if version == 1 else 24
+    by_port = {}
+    for p in pkts:
+        assert p[0:4] == bytes.fromhex("0401dc4a"), p[:8].hex()
+        assert struct.unpack("<H", p[4:6])[0] == 1, p[:8].hex()
+        assert struct.unpack("<H", p[6:8])[0] == (0x0101 if version == 1 else 0x0108), p[:8].hex()
+        assert len(p) == hlen + size, len(p)
+        if version == 1:
+            assert p[16:20] == b"\xff\xff\xff\xff", p[:hlen].hex()
+            port = p[12]
+        else:
+            assert p[12:16] == b"\xff\xff\xff\xff", p[:hlen].hex()
+            port = p[16]
+        by_port.setdefault(port, []).append(p)
+    ports = sorted(by_port)
+    assert len(ports) == 3 and ports == [ports[0], ports[0] + 1, ports[0] + 2], ports
+    for k, port in enumerate(ports):
+        ps = by_port[port]
+        if version == 2:
+            seqs = [struct.unpack("<I", p[8:12])[0] for p in ps]
+            assert all(b == a + 1 for a, b in zip(seqs, seqs[1:])), f"port {port}: {seqs[:10]}"
+        valid = slices(frames, k * size, size)
+        bad = [p for p in ps if any(p[hlen:]) and p[hlen:] not in valid]
+        assert not bad, f"port {port}: {len(bad)} packets whose data is not its slice of a frame"
