@@ -38,15 +38,15 @@ def page(body, status=200, ctype="text/html", headers=None):
 
 
 @contextlib.contextmanager
-def fake_devices(devices):
-    """devices: {address: {path: page(...)}}. Yields once every server
-    answers; removes the namespace (and with it the veth) afterwards."""
+def device_network(addresses):
+    """A network namespace holding `addresses`, joined to fppd's by a veth.
+    Yields a function that starts a command inside it (a Popen); every
+    process started that way is killed, and the namespace removed, on exit."""
     _ip("netns", "del", NETNS)
     r = _ip("netns", "add", NETNS)
     if r.returncode:
         pytest.skip(f"cannot add a network namespace: {r.stderr.strip()}")
-    proc = None
-    cfg = None
+    procs = []
     try:
         for args in (("link", "add", HOST_IF, "type", "veth", "peer", "name", DEV_IF),
                      ("link", "set", DEV_IF, "netns", NETNS),
@@ -55,29 +55,43 @@ def fake_devices(devices):
             r = _ip(*args)
             assert r.returncode == 0, f"ip {' '.join(args)}: {r.stderr}"
         _ip("link", "set", "lo", "up", ns=NETNS)
-        for addr in devices:
+        for addr in addresses:
             _ip("addr", "add", addr + "/24", "dev", DEV_IF, ns=NETNS)
         _ip("link", "set", DEV_IF, "up", ns=NETNS)
 
-        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
-            json.dump(devices, f)
-            cfg = f.name
-        proc = subprocess.Popen(["ip", "netns", "exec", NETNS, sys.executable, "-I", SERVER, cfg],
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        line = proc.stdout.readline()
-        assert line.strip() == "ready", f"fake device server: {line}{proc.stdout.read() if proc.poll() is not None else ''}"
-        # The veth needs a moment before the first packet crosses it.
-        deadline = time.monotonic() + 10
-        first = next(iter(devices))
-        while subprocess.run(["curl", "-s", "-o", "/dev/null", "-m", "1", f"http://{first}/"]).returncode:
-            assert time.monotonic() < deadline, f"{first} never answered"
-            time.sleep(0.2)
-        yield
+        def run(*cmd):
+            p = subprocess.Popen(["ip", "netns", "exec", NETNS, *cmd], stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT, text=True)
+            procs.append(p)
+            return p
+        yield run
     finally:
-        if proc:
-            proc.kill()
-            proc.wait()
-        if cfg:
-            os.unlink(cfg)
+        for p in procs:
+            p.kill()
+            p.wait()
         _ip("netns", "del", NETNS)
         _ip("link", "del", HOST_IF)
+
+
+def wait_ready(proc, address, port=80):
+    """Wait for a server started with device_network()'s run() to print
+    "ready" and for `address` to answer HTTP across the veth."""
+    line = proc.stdout.readline()
+    assert line.strip() == "ready", \
+        f"fake device server: {line}{proc.stdout.read() if proc.poll() is not None else ''}"
+    deadline = time.monotonic() + 10
+    while subprocess.run(["curl", "-s", "-o", "/dev/null", "-m", "1",
+                          f"http://{address}:{port}/"]).returncode:
+        assert time.monotonic() < deadline, f"{address} never answered"
+        time.sleep(0.2)
+
+
+@contextlib.contextmanager
+def fake_devices(devices):
+    """devices: {address: {path: page(...)}}. Yields once every server
+    answers."""
+    with device_network(devices) as run, tempfile.NamedTemporaryFile("w", suffix=".json") as f:
+        json.dump(devices, f)
+        f.flush()
+        wait_ready(run(sys.executable, "-I", SERVER, f.name), next(iter(devices)))
+        yield
