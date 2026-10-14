@@ -63,6 +63,23 @@ def stop_effects(fppd, model, timeout=10):
                         timeout=timeout)
 
 
+def effect_done(fppd, model, timeout=10):
+    """Wait until `model` has no running effect. Stop Effects is itself an
+    effect: it blanks and disables the model a frame or two later, undoing
+    a fill that lands before then."""
+    def done():
+        m = [x for x in fppd.get("/overlays/models") if x.get("Name") == model]
+        return m and not m[0].get("effectRunning")
+    fppd.wait_for(done, timeout=timeout, what=f"{model}'s effect to finish")
+
+
+def a_font(fppd):
+    fonts = fppd.get("/overlays/fonts")
+    if not fonts:
+        pytest.skip("no fonts installed")
+    return fonts[0]
+
+
 def wait_output(fppd, rx, check, what, timeout=10):
     """Wait until the latest frame on the wire satisfies `check`."""
     return fppd.wait_for(lambda: rx.last() is not None and check(rx.last()),
@@ -318,3 +335,274 @@ def test_scrolling_text_date_tokens_late_in_the_month(fppd):
     """
     run_scrolling_text(fppd, "#DAY #DDDD #MON #MMMM #YYYY",
                        fake_time="2026-10-15 12:00:00")
+
+
+def test_effect_with_too_few_arguments_is_refused(fppd):
+    """An effect command naming a model and an effect but none of the
+    effect's arguments is refused, and the model still works.
+
+    Regression: a8fe562b1. Every effect indexes its argument vector
+    positionally, so an empty one segfaulted fppd -- from one well-formed
+    HTTP request."""
+    setup(fppd, [matrix()])
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        for name in ("Bars", "Color Fade", "Text", "WLED - Colorloop"):
+            try:
+                fppd.command("Overlay Model Effect", "M", "Enabled", name)
+            except urllib.error.HTTPError:
+                pass  # refused
+        fill(fppd, "M", [0, 0, 66])
+        wait_output(fppd, rx, lambda f: f[2] == 66, "the model to fill afterwards")
+
+
+def test_custom_model_nodes_past_its_channels_are_disabled(fppd):
+    """A custom model whose layout names a node beyond the model's channel
+    count draws its real nodes and leaves that one out, saying so in the
+    log.
+
+    Regression: 4ef8481e0. channelMap took the node numbers as given while
+    the model's channel data is exactly its channel count, so drawing wrote
+    megabytes past it."""
+    custom = {"Name": "C", "Type": "Channel", "StartChannel": 1, "ChannelCount": 9,
+              "ChannelCountPerNode": 3, "Orientation": "custom", "StartCorner": "TL",
+              "StringCount": 1, "StrandsPerString": 1, "data": "1,2;3,2800000"}
+    setup(fppd, [custom])
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fill(fppd, "C", [0, 0, 55])
+        wait_output(fppd, rx, lambda f: f[:9] == bytes([0, 0, 55] * 3), "the custom model's nodes to fill")
+        keeps_sending(rx)
+    assert "exceed the model's 9 channels and were disabled" in fppd.log()
+
+
+def test_submodel_outside_its_parent_is_skipped(fppd):
+    """A submodel that lies outside its parent (saved before the parent
+    shrank) is skipped, and the parent still draws.
+
+    Regression: 4322cc5d0. The child's rectangle indexed the parent's
+    channel map every frame with no bound, reading far past it and, for an
+    opaque child, writing through what it found."""
+    setup(fppd, [matrix(), submodel("Out", "M", 300, 200, 40, 40)])
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        try:
+            fill(fppd, "Out", [255, 255, 255])
+        except urllib.error.HTTPError:
+            pass
+        time.sleep(0.5)
+        fill(fppd, "M", [0, 0, 44])
+        wait_output(fppd, rx, lambda f: f[2] == 44, "the parent to fill")
+        keeps_sending(rx)
+
+
+def test_unknown_effect_and_font_lookups_add_nothing(fppd):
+    """Asking for an effect or font that doesn't exist doesn't add it: the
+    effect and font lists are what they were, and the full effect list
+    (every effect's description) still builds.
+
+    Regression: 430e5879b. Both lookups used std::map::operator[], which
+    inserted an empty entry for every name not found."""
+    setup(fppd, [matrix()])
+    fppd.start()
+    effects = fppd.get("/overlays/effects")
+    try:
+        fppd.get("/overlays/effects/No%20Such%20Effect")
+    except urllib.error.HTTPError:
+        pass
+    try:
+        effect(fppd, "M", "Text", Font="No-Such-Font", Text="hi", Duration="1")
+    except urllib.error.HTTPError:
+        pass  # refused for want of the font, after looking it up
+    time.sleep(1)
+    assert "No Such Effect" not in fppd.get("/overlays/effects")
+    assert len(fppd.get("/overlays/effects?full=true")) == len(effects)
+    assert "No-Such-Font" not in fppd.get("/overlays/fonts")
+
+
+def test_fonts_in_subdirectories_are_listed(fppd):
+    """The font list includes the TrueType fonts installed in per-family
+    directories (truetype/dejavu and the like), which is where Debian puts
+    every one of them.
+
+    Regression: 2b27ed08a. Entries without a dot in their name were
+    skipped before the directory check, so no family directory was ever
+    searched."""
+    root = "/usr/share/fonts/truetype"
+    nested = set()
+    for d, _, files in os.walk(root):
+        if d != root:
+            nested |= {f[:-4] for f in files if f.lower().endswith(".ttf")}
+    if not nested:
+        pytest.skip("no TrueType fonts in a family directory here")
+    setup(fppd, [matrix()])
+    fppd.start()
+    listed = set(fppd.get("/overlays/fonts"))
+    assert nested & listed, f"none of {sorted(nested)[:5]}... listed"
+
+
+PANEL_CHANNELS = 32 * 16 * 3
+
+
+def colorlight_panel(description="Panel"):
+    """One 32x16 ColorLight panel on lo: an output that creates its own
+    overlay model (named after the description), with no hardware."""
+    return {"channelOutputs": [{
+        "type": "LEDPanelMatrix", "subType": "ColorLight5a75", "enabled": 1,
+        "startChannel": 1, "channelCount": PANEL_CHANNELS, "description": description,
+        "interface": "lo", "linkCheck": False, "panelWidth": 32, "panelHeight": 16,
+        "cfgVersion": 2, "colorOrder": "RGB",
+        "panels": [{"outputNumber": 0, "panelNumber": 0, "xOffset": 0, "yOffset": 0,
+                    "orientation": "N", "colorOrder": "RGB"}]}]}
+
+
+def resave_outputs(fppd):
+    """Save channeloutputs.json as FPP's own writers do (a temporary file
+    renamed over it) and wait for fppd to reload the outputs, which removes
+    the panel's model and creates it again."""
+    marker = "Loading output plugin: type=ColorLight5a75"
+    before = fppd.log().count(marker)
+    time.sleep(1.1)  # a save in a later second
+    path = fppd.write("config/.channeloutputs.json.tmp", colorlight_panel())
+    os.replace(path, os.path.join(fppd.media, "config", "channeloutputs.json"))
+    fppd.wait_for(lambda: fppd.log().count(marker) > before, timeout=15, interval=0.25,
+                  what="the outputs to reload")
+    fppd.wait_for(lambda: "Panel" in [m.get("Name") for m in fppd.get("/models") or []],
+                  what="the panel's model back after the reload")
+
+
+def test_auto_model_in_use_survives_an_output_reload(fppd):
+    """An output's own model, in use from other threads -- an effect
+    running on it, its pixels written through the bulk PUT, the
+    running-effects list read -- survives the outputs being saved under it
+    again and again.
+
+    Regression: 021b1d200. Removal freed the model while those callers
+    still held it after dropping the models lock (and 0a3840413: its effect
+    leaked)."""
+    import http.client
+    import threading
+    from fppd import API
+    fppd.write("config/channeloutputs.json", colorlight_panel())
+    fppd.write("config/co-universes.json", ddp_output(PANEL_CHANNELS))
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": []})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    stop = threading.Event()
+    pixels = bytes(range(256)) * (PANEL_CHANNELS // 256) + bytes(PANEL_CHANNELS % 256)
+
+    def hammer(method, path, body):
+        # One kept-alive connection per thread: a request every few ms, so
+        # one is in flight whenever a reload frees the model.
+        host, port = urllib.parse.urlsplit(API).netloc.split(":")
+        conn = None
+        while not stop.is_set():
+            try:
+                if conn is None:
+                    conn = http.client.HTTPConnection(host, int(port), timeout=5)
+                conn.request(method, path, body=body,
+                             headers={"Content-Type": "application/octet-stream"})
+                conn.getresponse().read()
+            except Exception:
+                conn = None  # a 404 or a dropped connection mid-reload is fine
+                time.sleep(0.01)
+
+    jobs = [("GET", "/overlays/running", None)] * 4 + \
+        [("PUT", "/overlays/model/Panel/data?stopEffect=false&autoEnable=true", pixels)] * 2
+    with DdpReceiver(PANEL_CHANNELS) as rx:
+        fppd.start()
+        fppd.wait_for(lambda: "Panel" in [m.get("Name") for m in fppd.get("/models") or []],
+                      what="the panel's own model")
+        threads = [threading.Thread(target=hammer, args=j, daemon=True) for j in jobs]
+        for t in threads:
+            t.start()
+        try:
+            for _ in range(20):
+                effect(fppd, "Panel", "Bars")
+                resave_outputs(fppd)
+        finally:
+            stop.set()
+            for t in threads:
+                t.join(10)
+        stop_effects(fppd, "Panel")
+        effect_done(fppd, "Panel")
+        fill(fppd, "Panel", [0, 0, 22])
+        wait_output(fppd, rx, lambda f: f[2] == 22, "the panel model to fill afterwards")
+
+
+def test_submodel_of_a_reloaded_auto_model(fppd):
+    """A submodel of an output's own model, enabled and disabled, then the
+    outputs saved (re-creating the parent), then enabled again, draws into
+    the new parent.
+
+    Regression: ef95c5a67. The disabled submodel kept a pointer to the
+    freed parent and drew through it."""
+    fppd.write("config/channeloutputs.json", colorlight_panel())
+    fppd.write("config/co-universes.json", ddp_output(PANEL_CHANNELS))
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": [
+        submodel("Corner", "Panel", 0, 0, 4, 2)]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with DdpReceiver(PANEL_CHANNELS) as rx:
+        fppd.start()
+        fppd.wait_for(lambda: "Panel" in [m.get("Name") for m in fppd.get("/models") or []],
+                      what="the panel's own model")
+        fill(fppd, "Corner", [0, 0, 11])
+        wait_output(fppd, rx, lambda f: f[2] == 11, "the submodel to fill")
+        fppd.command("Overlay Model State", "Corner", "Disabled")
+        resave_outputs(fppd)
+        time.sleep(0.5)
+        fill(fppd, "Corner", [0, 0, 12])
+        wait_output(fppd, rx, lambda f: f[2] == 12, "the submodel to fill again")
+        keeps_sending(rx)
+
+
+@pytest.mark.parametrize("gap", [0, 5])
+def test_stop_effects_on_an_idle_model_is_not_left_pending(fppd, gap):
+    """Stop Effects on a model that is disabled (nothing running, or an
+    effect that already ended) finishes at once, and a fill afterwards --
+    straight away or seconds later -- stays.
+
+    Regression: f815eccb2. The stop was queued to run after the next
+    output pass, which an idle fppd never makes: it sat on the model and
+    blanked and disabled whatever next enabled it."""
+    setup(fppd, [matrix()])
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        stop_effects(fppd, "M")
+        effect_done(fppd, "M", timeout=5)
+        time.sleep(gap)
+        fill(fppd, "M", [0, 0, 77])
+        wait_output(fppd, rx, lambda f: f[2] == 77, "the fill to reach the wire")
+        time.sleep(1)
+        assert rx.last()[2] == 77, "the fill was undone"
+
+
+def test_shutdown_with_an_auto_models_submodel_enabled(fppd):
+    """fppd shuts down cleanly with a submodel of an output's own model
+    enabled, and its channel output thread stays stopped once shutdown
+    has stopped it.
+
+    Regression: ba12850b7. Closing the outputs at shutdown removes the
+    panel's model, which resets its enabled submodel; that state change
+    started the output thread again, and it ran on into the deleted
+    sequence (heap-use-after-free in Sequence::hasBridgeData)."""
+    fppd.write("config/channeloutputs.json", colorlight_panel())
+    fppd.write("config/co-universes.json", ddp_output(PANEL_CHANNELS))
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": [
+        submodel("Corner", "Panel", 0, 0, 4, 2)]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with DdpReceiver(PANEL_CHANNELS) as rx:
+        fppd.start()
+        fppd.wait_for(lambda: "Panel" in [m.get("Name") for m in fppd.get("/models") or []],
+                      what="the panel's own model")
+        fill(fppd, "Corner", [0, 0, 11])
+        wait_output(fppd, rx, lambda f: f[2] == 11, "the submodel to fill")
+        rc = fppd.stop()
+        fppd.exit_expected = True
+    reports = fppd.sanitizer_reports()
+    assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
+    log = fppd.log()
+    stopped = log.rfind("Stopping channel output thread.")
+    assert stopped >= 0, "fppd never got to stopping its output thread"
+    assert "Channel output thread running" not in log[stopped:], \
+        "the channel output thread was started again after shutdown stopped it"
+    assert rc == 0, f"fppd exited {rc}"
