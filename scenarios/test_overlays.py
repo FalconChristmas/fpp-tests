@@ -606,3 +606,61 @@ def test_shutdown_with_an_auto_models_submodel_enabled(fppd):
     assert "Channel output thread running" not in log[stopped:], \
         "the channel output thread was started again after shutdown stopped it"
     assert rc == 0, f"fppd exited {rc}"
+
+
+def running_effect(fppd, model):
+    m = [x for x in fppd.get("/overlays/models") if x.get("Name") == model]
+    return m[0].get("effectName") if m and m[0].get("effectRunning") else None
+
+
+def test_fill_straight_after_stop_effects_stays(fppd):
+    """On a lit model, Stop Effects and then at once a Fill: the fill is
+    the newer instruction, and it stays.
+
+    Regression: b6015c565. The stop blanks and disables the model a
+    frame after it is asked for, and a fill didn't cancel it, so a
+    stop-then-fill in a playlist came out dark."""
+    setup(fppd, [matrix()])
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        effect(fppd, "M", "Bars")
+        wait_output(fppd, rx, lambda f: any(f), "the bars")
+        stop_effects(fppd, "M")
+        fill(fppd, "M", [0, 0, 88])
+        time.sleep(1)
+        assert rx.last()[:6] == bytes([0, 0, 88] * 2), "the fill after Stop Effects was undone"
+        assert running_effect(fppd, "M") is None
+
+
+@pytest.mark.parametrize("how", ["command", "http"])
+def test_fill_ends_a_running_effect(fppd, how):
+    """A fill on a model with an effect running ends the effect, which
+    would otherwise draw over the fill on its next update -- as the bulk
+    pixel PUT already did.
+
+    Regression: b6015c565."""
+    setup(fppd, [matrix()])
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        effect(fppd, "M", "Bars")
+        wait_output(fppd, rx, lambda f: any(f), "the bars")
+        if how == "command":
+            fill(fppd, "M", [0, 0, 99])
+        else:
+            put(fppd, "model/M/fill", {"RGB": [0, 0, 99]})
+        time.sleep(1)
+        assert running_effect(fppd, "M") is None, "the effect kept running"
+        assert rx.last()[:6] == bytes([0, 0, 99] * 2), "the effect drew over the fill"
+
+
+def test_a_state_change_leaves_a_running_effect_running(fppd):
+    """Changing a model's state (say to Transparent) while an effect runs
+    on it doesn't end the effect: only drawing over the model does."""
+    setup(fppd, [matrix()])
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        effect(fppd, "M", "Bars")
+        wait_output(fppd, rx, lambda f: any(f), "the bars")
+        fppd.command("Overlay Model State", "M", "Transparent")
+        time.sleep(1)
+        assert running_effect(fppd, "M") == "Bars"
