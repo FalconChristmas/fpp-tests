@@ -135,8 +135,8 @@ def test_leaving_ap_mode_stops_hostapd_before_the_wifi_client(fppinit):
     "did it stop?" check matched the "active" inside "inactive", so every
     clean stop was followed by a kill. On a system without /etc/wpa_supplicant
     (the container image) setupNetwork aborted before reaching any of this
-    until 1755df250, so there the red check for 8f0eb2b51 needs a base with
-    1755df250 in it.
+    until 57e923023, so there the red check for 8f0eb2b51 needs a base with
+    57e923023 in it.
     """
     fppinit.write("config/interface.wlan0",
                   'INTERFACE="wlan0"\nPROTO="dhcp"\nSSID="TestNet"\nPSK="testpass123"\n')
