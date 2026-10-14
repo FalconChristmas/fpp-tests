@@ -254,3 +254,29 @@ def test_kinet_packets(fppd, version):
         valid = slices(frames, k * size, size)
         bad = [p for p in ps if any(p[hlen:]) and p[hlen:] not in valid]
         assert not bad, f"port {port}: {len(bad)} packets whose data is not its slice of a frame"
+
+
+def test_generic_udp_tokens(fppd):
+    """A Generic UDP output lays its packet out from the Data tokens: hex
+    bytes (0x.. and #..), the channel and pixel counts in one byte and in
+    two bytes of each order ({S2}/{P2} low byte first, {s2}/{p2} high byte
+    first, as they always have been), and the frame's channel data."""
+    size = 300
+    frames = unique_frames(60, size)
+    port = 9123
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "GenericUDP", "enabled": 1, "startChannel": 1, "channelCount": size,
+        "description": "tokens", "address": "127.0.0.1", "port": port,
+        "tokens": "0xAA {S1} {S2} {s2} {P1} {P2} {p2} {data} #BB"}]})
+    with Listener(port) as rx:
+        play(fppd, frames, [output(5, 1, 1, size)])  # GenericUDP sends with the universes output
+        time.sleep(3)
+        pkts = packets(rx)
+    assert pkts, "no Generic UDP packets"
+    head = bytes([0xAA, size & 0xFF, 0x2C, 0x01, 0x01, 0x2C, 100, 100, 0, 0, 100])
+    valid = set(frames)
+    for p in pkts:
+        assert p[:len(head)] == head, p[:len(head)].hex()
+        assert p[-1] == 0xBB and len(p) == len(head) + size + 1, (len(p), p[-4:].hex())
+        data = p[len(head):-1]
+        assert not any(data) or data in valid, data[:8].hex()
