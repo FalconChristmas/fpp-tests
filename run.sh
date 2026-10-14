@@ -74,8 +74,9 @@ exec $DOCKER $TTY -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" \
     -e FPP_TREE="$TREE" -e FPP_FLAVOR="$FLAVOR" -e FPP_TESTS_ARTIFACTS=/artifacts \
     --cap-add SYS_PTRACE --cap-add SYS_NICE --cap-add NET_ADMIN --cap-add SYS_ADMIN \
     --tmpfs /tmp:rw,exec,nosuid,size=4g \
-    fpp-tests-env sh -c '/tests/scripts/build-fpp.sh "$FPP_TREE" "$FPP_FLAVOR" && cd /tests &&
-        if [ $# -eq 0 ]; then set -- scenarios; fi &&
-        if [ "$FPP_FLAVOR" != coverage ]; then exec python3 -m pytest -p no:cacheprovider "$@"; fi;
-        python3 -m pytest -p no:cacheprovider "$@"; rc=$?;
+    fpp-tests-env sh -c '/tests/scripts/build-fpp.sh "$FPP_TREE" "$FPP_FLAVOR" || exit 1
+        cd /tests || exit 1
+        if [ $# -eq 0 ]; then set -- scenarios; fi
+        if [ "$FPP_FLAVOR" != coverage ]; then exec python3 -m pytest -p no:cacheprovider "$@"; fi
+        python3 -m pytest -p no:cacheprovider "$@"; rc=$?
         /tests/scripts/coverage-report.sh "$FPP_TREE" /artifacts/coverage; exit $rc' sh "$@"
