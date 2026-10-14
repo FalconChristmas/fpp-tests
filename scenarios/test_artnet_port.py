@@ -3,8 +3,6 @@
 import os
 import time
 
-import pytest
-
 from fseq import unique_frames, write_fseq
 from packets import ARTNET_PORT, parse_artdmx
 from show import playlist, sequence_entry
@@ -76,18 +74,16 @@ def test_taken_artnet_port_warns_once_and_keeps_the_log_quiet(fppd):
     finally:
         held.close()
 
+    if fallback:
+        # By decision, a socket open on another port is kept: nothing tries
+        # 6454 again, so the warning stays up -- and tells the user to
+        # restart FPPD once the port is free (faacde2f0).
+        assert "Restart FPPD" in warnings[0], warnings[0]
+        return
     # The port is free: within the retry interval fppd takes it and the
     # warning comes down.
-    try:
-        fppd.wait_for(lambda: not artnet_warnings(fppd), timeout=20, interval=0.5,
-                      what="the ArtNet port warning to clear once the port was free")
-    except TimeoutError:
-        if not fallback:
-            raise
-        # Known gap: once the ArtNet socket is open on another port, nothing
-        # tries 6454 again, so ArtNet input stays off (and the warning up)
-        # until fppd restarts or the interface changes.
-        pytest.xfail("ArtNet on a fallback port never goes back to 6454 once it is free")
+    fppd.wait_for(lambda: not artnet_warnings(fppd), timeout=20, interval=0.5,
+                  what="the ArtNet port warning to clear once the port was free")
 
 
 def test_taken_artnet_port_leaks_no_sockets(fppd):
