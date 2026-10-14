@@ -263,3 +263,33 @@ def test_brightness_and_newer_firmware_packets(fppd):
     assert types[i - 1] == 0x01, "firmware 13 sends the display packet twice"
     j = types.index(0x0A)
     assert types[j + 1] == 0x0A, "firmware 13 sends the brightness packet twice"
+
+
+def test_output_specific_test_pattern_cycles(fppd):
+    """Test Start "Output Specific" with no channel range, as the Pixel
+    Count button and the outputs' test dropdowns send it: the panel layout
+    pattern steps through its colours once per cycle, so the left column of
+    a panel shows green, then red, then blue.
+
+    Regression: dbfa6fceb. A test pattern with no channels of its own was no
+    longer cycled, and an Output Specific test never has any: every output's
+    test (and every string tester) saw cycle 0 for as long as it ran, so the
+    left column stayed green."""
+    w, h = 32, 16
+    with captured() as cap:
+        fppd.write("config/channeloutputs.json", panels_output([panel(0, 0, 0, 0)], channels=w * h * 3))
+        fppd.settings(DisableFakeNetworkBridges="1")
+        fppd.start()
+        fppd.command("Test Start", "100", "Output Specific", "--ALL--", "1")
+        seen = set()
+
+        def all_three():
+            for _, rows in cap.frames():
+                if 1 in rows and len(rows[1]) >= 3:
+                    seen.add(rows[1][0:3])
+            return {b"\x00\xff\x00", b"\xff\x00\x00", b"\x00\x00\xff"} <= seen
+        try:
+            fppd.wait_for(all_three, timeout=10, interval=0.2,
+                          what="the left column to show green, red and blue")
+        finally:
+            fppd.command("Test Stop")
