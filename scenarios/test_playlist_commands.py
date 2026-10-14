@@ -53,7 +53,9 @@ def test_start_at_item_then_repeat_plays_the_whole_playlist(fppd):
 def test_insert_after_current(fppd):
     """Insert Playlist After Current waits for the current entry (a pause)
     to finish, plays the inserted playlist, then carries on."""
-    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(2), step(2)]))
+    # The pause runs from when step 1 ran, not from when the test saw it, so
+    # it has to outlast a slow trace poll plus the second checked below.
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(5), step(2)]))
     fppd.write("playlists/Q.json", playlist("Q", main=[step(7), step(8)]))
     fppd.start()
     start(fppd, "P")
