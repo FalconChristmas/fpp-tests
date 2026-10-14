@@ -3,8 +3,9 @@
 
     scripts/build-site.py RESULTS SITE HISTORY RUN_URL
 
-RESULTS holds one directory per flavor of this run (the workflow's
-results-<flavor> artifacts, see ci_results.py). HISTORY is the published
+RESULTS holds this run's results-<flavor> artifacts (see ci_results.py),
+each in a directory of its own, or unpacked into RESULTS itself when there
+was only one. HISTORY is the published
 site's history.json, or a missing file for the first run. Writes
 SITE/index.html and SITE/history.json, with this run added to the history.
 The workflow puts the coverage report's HTML in SITE/coverage/ itself.
@@ -29,13 +30,13 @@ try:
         history = json.load(f)
 except (OSError, ValueError):
     history = []
+history = [h for h in history if h.get("flavors")]
 
 # This run.
 entry = {"date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
          "run": run_url, "flavors": {}}
 cov = None
-for d in sorted(os.listdir(results)):
-    art = os.path.join(results, d)
+for art in sorted(d for d, _, files in os.walk(results) if "meta.json" in files):
     m = ci_results.meta(art)
     if not m:
         continue

@@ -70,11 +70,15 @@ if ! $DOCKER fpp-tests-env test -d "$TREE"; then
             mv '$TREE.tmp' '$TREE'"
 fi
 
+# The scenarios make network and mount namespaces (fake devices, fppinit),
+# which Docker's default AppArmor profile forbids even with SYS_ADMIN: on a
+# host with AppArmor (GitHub's runners) they would all be skipped.
 TTY=""
 [ -t 1 ] && TTY="-t"
 exec $DOCKER $TTY -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" \
     -e FPP_TREE="$TREE" -e FPP_FLAVOR="$FLAVOR" -e FPP_TESTS_ARTIFACTS=/artifacts \
     --cap-add SYS_PTRACE --cap-add SYS_NICE --cap-add NET_ADMIN --cap-add SYS_ADMIN \
+    --security-opt apparmor=unconfined \
     --tmpfs /tmp:rw,exec,nosuid,size=4g \
     fpp-tests-env sh -c '/tests/scripts/build-fpp.sh "$FPP_TREE" "$FPP_FLAVOR" || exit 1
         cd /tests || exit 1
