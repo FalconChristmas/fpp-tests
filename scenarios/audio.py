@@ -47,6 +47,11 @@ class AudioServer:
         os.makedirs(RUNTIME, exist_ok=True)
         self.env = env()
         self.env["XDG_CONFIG_HOME"] = self.dir
+        # WirePlumber saves every node's volume under XDG_STATE_HOME and
+        # restores it when the node reappears: shared (in $HOME), a volume one
+        # scenario set -- POST /fppd/volume/50 leaves the sink at 0.125 -- was
+        # the next scenario's starting level, and it heard nothing.
+        self.env["XDG_STATE_HOME"] = os.path.join(self.dir, "state")
         self.procs = []
         log = open(os.path.join(self.dir, "daemons.log"), "w")
         for cmd in (["pipewire"], ["wireplumber"], ["pipewire-pulse"]):
