@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs inside the container. Builds the exported tree at $1 with make target
-# $2 (asan, tsan, debug or optimized) unless it was already built.
+# $2 (asan, tsan, debug, optimized or coverage) unless it was already built.
 set -e
 TREE="$1"
 FLAVOR="$2"
@@ -26,15 +26,24 @@ export TMPDIR="$TREE/.build-tmp"
 mkdir -p "$TMPDIR"
 export CCACHE_DIR=/ccache
 export CCACHE=ccache
+# The coverage flavor is a -O0 --coverage build of the debug target; each
+# fppd run adds to the .gcda counts next to the objects, and
+# scripts/coverage-report.sh turns them into a report.
+TARGET="$FLAVOR"
+if [ "$FLAVOR" = coverage ]; then
+    TARGET="debug OPTIMIZE_FLAGS=-g\ -O0\ -Wno-psabi\ --coverage"
+    export LDFLAGS=--coverage
+    gcc -shared -fPIC -O2 -o "$TREE/gcov-exit.so" /tests/scripts/gcov-exit.c
+fi
 # DISTRIBUTED_COMPILE=1 turns off the precompiled header, which is built with
 # the release flags whatever the target; it also proves every file includes
 # what it uses. Older commits are not always clean that way (a header the PCH
 # happened to supply), so on failure fall back to a PCH build of the rest --
 # PCH and NOPCH objects link together fine.
-if ! make -j"$(nproc)" DISTRIBUTED_COMPILE=1 "$FLAVOR" > "$TREE/build.log" 2>&1; then
+if ! eval make -j"$(nproc)" DISTRIBUTED_COMPILE=1 $TARGET > "$TREE/build.log" 2>&1; then
     echo "NOPCH build failed, retrying with the precompiled header:" >&2
     grep -E "error:" "$TREE/build.log" | head -5 >&2
-    if ! make -j"$(nproc)" "$FLAVOR" >> "$TREE/build.log" 2>&1; then
+    if ! eval make -j"$(nproc)" $TARGET >> "$TREE/build.log" 2>&1; then
         grep -E "error|Error" "$TREE/build.log" | tail -40
         echo "build failed; full log in $TREE/build.log" >&2
         exit 1

@@ -23,7 +23,7 @@ Requires Docker. From this directory, with fpp checked out next to it (`../fpp`)
 ```sh
 ./run.sh                                  # every scenario, against ../fpp HEAD, ASan build
 ./run.sh --ref v10.x                      # any branch, tag or commit in that checkout
-./run.sh --flavor tsan                    # asan (default), tsan, debug or optimized
+./run.sh --flavor tsan                    # asan (default), tsan, debug, optimized or coverage
 ./run.sh scenarios/test_playlists.py -v   # anything after the options goes to pytest
 ./run.sh --fpp ~/src/fpp -k presets       # a different fpp checkout
 ```
@@ -50,6 +50,13 @@ debug, tsan or ubsan build there.
 The first build of a commit takes a few minutes; ccache makes later builds of nearby
 commits take seconds. Builds are cached per commit and flavor in the `fpp-tests-work`
 Docker volume (`docker volume rm fpp-tests-work fpp-tests-ccache` to clear them).
+
+`--flavor coverage` builds fppd at -O0 with gcc's `--coverage` and, after the run, writes
+`artifacts/coverage/`: `summary.txt` (line and function coverage per source file, least
+covered first), `functions.csv` (every function with how often it was called) and `html/`
+(per-line detail). It covers fppd's own code under `src/`, not the submodules. Use it to
+find what no scenario reaches; it runs no sanitizer, so it is not a substitute for the
+ASan and TSan runs.
 
 When a scenario fails, its media directory is copied to `artifacts/<test>/`: `logs/`
 holds `fppd.log`, fppd's stdout, any sanitizer report, and, if fppd was still running,

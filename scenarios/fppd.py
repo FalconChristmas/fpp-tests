@@ -108,6 +108,10 @@ class Fppd:
             # arm64 happened not to read it; on x86_64 it does.
             env["ASAN_OPTIONS"] += ":allocator_release_to_os_interval_ms=-1"
             env["TSAN_OPTIONS"] += ":allocator_release_to_os_interval_ms=-1"
+        shim = os.path.join(self.tree, "gcov-exit.so")
+        if os.path.exists(shim):
+            # The coverage flavor: write the counts on fppd's _exit().
+            env["LD_PRELOAD"] = " ".join(filter(None, [env.get("LD_PRELOAD"), shim]))
         self.out = open(os.path.join(self.media, "logs", "fppd.stdout"), "w")
         self.started = time.monotonic()
         self.proc = subprocess.Popen(
