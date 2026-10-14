@@ -9,6 +9,8 @@ entries give each command a window to land in, so the order things ran in
 
 import time
 
+import pytest
+
 from test_playlist_entries import pause, playlist, status, step, trace
 
 
@@ -48,6 +50,68 @@ def test_start_at_item_then_repeat_plays_the_whole_playlist(fppd):
     fppd.command("Start Playlist At Item", "P", "4", "true", "false")
     wait_idle(fppd)
     assert trace(fppd) == "34" "1234"
+
+
+def test_start_at_item_keeps_every_entry(fppd):
+    """Start Playlist At Item starts at that item with the whole playlist
+    loaded: status counts every entry and numbers the current one as the
+    playlist file does.
+
+    Regression: 1bd28aebb. The entries before the start item were trimmed
+    out of the loaded playlist, so status showed 1 entry of 5 and called
+    the pause item 1.
+    """
+    # Item 5 is the pause: the lead-in's reset is item 1.
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), step(2), step(3), pause(30)]))
+    fppd.start()
+    fppd.command("Start Playlist At Item", "P", "5", "false", "false")
+    fppd.wait_for(lambda: status_name(fppd) == "playing", what="the playlist to start")
+    cur = status(fppd)["current_playlist"]
+    assert (cur["count"], cur["index"]) == ("5", "5"), cur
+    assert trace(fppd) is None, "entries before the start item ran"
+    fppd.command("Stop Now")
+    wait_idle(fppd)
+
+
+def test_start_at_item_of_a_random_playlist(fppd):
+    """Start Playlist At Item on a random playlist plays that item first,
+    then every other main entry in a shuffle: in a shuffled playlist an
+    item's row says nothing about which of the others have played.
+
+    Regression: 1bd28aebb. Before it the start item was trimmed down to the
+    entries after it and those shuffled, so the requested item rarely
+    played first and the earlier ones never played.
+    """
+    fppd.write("playlists/P.json", playlist("P", main=[step(d) for d in range(1, 6)], random=1))
+    fppd.start()
+    # Starting at an item skips the lead-in's reset.  Five runs, so a
+    # shuffle that merely happened to put 3 first can't pass alone.
+    for _ in range(5):
+        fppd.command("Set Variable", "trace", "Value", "0")
+        fppd.command("Start Playlist At Item", "P", "4", "false", "false")
+        wait_idle(fppd)
+        t = trace(fppd)
+        assert t and t[0] == "3" and sorted(t) == list("12345"), t
+
+
+@pytest.mark.parametrize("command", ["Insert Playlist Immediate", "Insert Playlist After Current"])
+def test_insert_one_item_plays_only_that_item(fppd, command):
+    """An insert whose start and end item are the same plays just that entry
+    of the inserted playlist, then carries on with the first one.  This is
+    how Remote Falcon plays a requested song; the start-part-way change in
+    1bd28aebb must leave it alone.
+    """
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(2), step(2)]))
+    fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                    "mainPlaylist": [step(7), step(8), step(9)], "leadOut": []})
+    fppd.start()
+    start(fppd, "P")
+    wait_in_pause(fppd, "1")
+    fppd.command(command, "Q", "2", "2", "false")
+    wait_idle(fppd)
+    # Immediate plays item 2 inside P's pause, After Current after it; either
+    # way before P's last entry.  A 7 or 9 would mean more of Q played.
+    assert trace(fppd) == "182", trace(fppd)
 
 
 def test_insert_after_current(fppd):
