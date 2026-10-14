@@ -200,6 +200,7 @@ import json
 import os
 import socketserver
 import threading
+import urllib.parse
 
 
 @contextlib.contextmanager
@@ -345,3 +346,110 @@ def test_remap_entry_adds_and_removes_a_remap(fppd):
                       what="the remapped channels")
         fppd.wait_for(lambda: rx.last() and any(rx.last()[:6]) and not any(rx.last()[100:106]),
                       timeout=6, what="the sequence playing with the remap removed")
+
+
+@contextlib.contextmanager
+def fake_plugin(batches):
+    """A plugin's playlistCallback.php: prepNextItem starts a PHP-style
+    session (a cookie), loadNextItem answers the next batch of entries (an
+    empty one when they run out), startedNextItem is a notification. Yields
+    the (command, cookie) of every call."""
+    calls = []
+    left = list(batches)
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            cmd = q.get("command", [""])[0]
+            calls.append((cmd, self.headers.get("Cookie", "")))
+            body = b"ok"
+            if cmd == "loadNextItem":
+                body = json.dumps({"mainPlaylist": left.pop(0) if left else []}).encode()
+            self.send_response(200)
+            if cmd == "prepNextItem":
+                self.send_header("Set-Cookie", "PHPSESSID=plugin-session; Path=/")
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    srv = socketserver.ThreadingTCPServer(("127.0.0.1", 0), Handler)
+    srv.daemon_threads = True
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        yield srv.server_address[1], calls
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_dynamic_entry_from_a_plugin(fppd):
+    """A dynamic entry of subType plugin asks the plugin's playlist
+    callback for its entries -- prepNextItem, then loadNextItem, then
+    startedNextItem once they start, in one cookie session -- and with
+    drainQueue keeps asking until the plugin has nothing more."""
+    with fake_plugin([[step(5), step(6)], [step(7)]]) as (port, calls):
+        fppd.write("playlists/P.json", playlist("P", main=[
+            step(1), dynamic("plugin", pluginName="fake", pluginHost=f"127.0.0.1:{port}",
+                             drainQueue=1),
+            step(2)]))
+        fppd.start()
+        assert run(fppd, "P", timeout=30) == "15672"
+        time.sleep(0.5)
+    cmds = [c for c, _ in calls]
+    assert cmds[:3] == ["prepNextItem", "loadNextItem", "startedNextItem"], cmds
+    assert cmds.count("loadNextItem") == 3, cmds  # two batches, then the empty one
+    assert all("PHPSESSID=plugin-session" in cookie for c, cookie in calls[1:]), calls
+
+
+def mark(name):
+    return {"type": "command", "enabled": 1, "playOnce": 0, "command": "Set Variable",
+            "args": [name, "Value", "1", "1", "0", "100", "", "false"]}
+
+
+def test_a_restart_resumes_the_scheduled_playlist_where_it_was(fppd):
+    """Restarting fppd (the Restart FPPD command) while a scheduled
+    playlist plays brings it back at the entry it was on, not at the top:
+    the entries before it don't run again. (User variables don't survive
+    the restart, so A and B unset afterwards means they weren't re-run.)
+
+    The resume position is the playlist row (e35d8d652, d90b36412)."""
+    import datetime
+    now = datetime.datetime.now().replace(microsecond=0)
+    start, end = now - datetime.timedelta(seconds=60), now + datetime.timedelta(seconds=600)
+    if start.date() != end.date():
+        pytest.skip("too close to midnight for a same-day window")
+    today = start.strftime("%Y-%m-%d")
+    fppd.write("playlists/Res.json", {"name": "Res", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                      "mainPlaylist": [mark("A"), pause(2), mark("B"), pause(15),
+                                                       mark("C")],
+                                      "leadOut": []})
+    fppd.write("config/schedule.json", [{
+        "enabled": 1, "day": 7, "playlist": "Res", "startTime": start.strftime("%H:%M:%S"),
+        "endTime": end.strftime("%H:%M:%S"), "startDate": today, "endDate": today,
+        "repeat": 0, "stopType": 0}])
+    fppd.start()
+    fppd.wait_for(lambda: (fppd.get("/variables") or {}).get("B"), timeout=30, interval=0.25,
+                  what="the scheduled playlist to reach the long pause")
+    time.sleep(1)
+    try:
+        fppd.command("Restart FPPD")
+    except Exception:
+        pass  # the answer may not make it out before the restart
+    time.sleep(3)
+
+    def answers():
+        try:
+            return fppd.get("/fppd/status", timeout=2).get("status_name") == "playing"
+        except Exception:
+            return False
+    fppd.wait_for(answers, timeout=60, interval=0.5, what="fppd to come back playing")
+    fppd.wait_for(lambda: (fppd.get("/variables") or {}).get("C"), timeout=30, interval=0.5,
+                  what="the last entry after the resumed pause")
+    assert "Restart: resuming playlist 'Res' at position 3" in fppd.log(), \
+        [l for l in fppd.log().splitlines() if "Restart:" in l]
+    v = fppd.get("/variables") or {}
+    assert "A" not in v and "B" not in v, f"the playlist started over after the restart: {sorted(v)}"
