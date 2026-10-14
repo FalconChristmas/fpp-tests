@@ -146,13 +146,16 @@ def test_play_media_plays_through_a_clock_step(fppd, audio, step):
     fppd.command("Play Media", "Tone.wav", "1", "0", "1")
     time.sleep(1.5)
     fppd.set_clock(STEPS[step])
-    time.sleep(5)
+    # Recorded until the player is idle, not for a fixed time: under
+    # libfaketime the stream can take a few seconds to start in a container
+    # (measured 3.5 s, against 0.8 s on the real clock -- with no step at all).
+    fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "idle", timeout=15,
+                  what=f"the player to go idle after the media, the clock having stepped {step}")
+    time.sleep(0.5)
     samples = rec.stop()
     first, last = sounding(samples)
     assert first is not None, "nothing was heard"
     assert last - first >= 4.6, f"heard {last - first:.2f} s of a 5 s file across the clock step"
-    fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "idle", timeout=5,
-                  what=f"the player to go idle after the media, the clock having stepped {step}")
 
 
 def test_controller_that_returns_after_a_clock_step_gets_the_show(fppd):

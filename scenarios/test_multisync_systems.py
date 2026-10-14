@@ -114,7 +114,9 @@ def interface(address):
 
 def test_discover_ping_is_answered(fppd):
     """A discover ping makes fppd ping back -- to the address it was sent
-    from -- describing itself."""
+    from -- describing itself, from one of its own addresses. (Where the
+    only interface is loopback, which fppd never announces, a dummy one
+    gives it an address to answer from.)"""
     fppd.settings(HostName="fpp-under-test")
     with contextlib.ExitStack() as stack:
         stack.enter_context(interface("10.77.0.1"))
@@ -124,7 +126,9 @@ def test_discover_ping_is_answered(fppd):
         fppd.wait_for(lambda: [p for _, _, _, p in cap.snapshot() if p[4:5] == b"\x04"],
                       timeout=5, interval=0.1, what="a ping back")
         reply = next(p for _, _, _, p in cap.snapshot() if p[4:5] == b"\x04")
-    assert reply[15:19] == bytes([10, 77, 0, 1]), f"the answer gives address {list(reply[15:19])}"
+        local = {s["address"] for s in fppd.get("/fppd/multiSyncSystems")["systems"] if s.get("local")}
+    said = ".".join(str(b) for b in reply[15:19])
+    assert said in local, f"the answer gives address {said}, not one of this box's: {local}"
     assert reply[8] == 0, "the answer should be a plain ping, not another discover"
     assert reply[19:84].split(b"\0")[0] == b"fpp-under-test", reply[19:84]
 
