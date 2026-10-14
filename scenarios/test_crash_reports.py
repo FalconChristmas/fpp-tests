@@ -88,3 +88,50 @@ def test_crash_report_is_written_in_this_media_folder(fppd):
     zips = [n for n in os.listdir(crashes) if n.endswith(".zip")]
     assert zips, f"no report in {crashes}: {os.listdir(crashes)}"
     assert os.path.getsize(os.path.join(crashes, zips[0])) > 1000, "the report is empty"
+
+
+def report_texts(fppd, crashes):
+    """Every file in the newest report in crashes/, as text."""
+    import zipfile
+    zips = sorted((n for n in os.listdir(crashes) if n.endswith(".zip")),
+                  key=lambda n: os.path.getmtime(os.path.join(crashes, n)))
+    assert zips, f"no report in {crashes}"
+    out = {}
+    with zipfile.ZipFile(os.path.join(crashes, zips[-1])) as z:
+        for name in z.namelist():
+            out[name] = z.read(name).decode("latin-1")
+    return out
+
+
+def test_crash_report_redacts_credentials_and_the_cape_serial(fppd):
+    """Credentials in plugin configs and logs, coordinates written as numbers,
+    and the cape EEPROM (with its serial) when serial sharing is off, stay out
+    of the report.
+
+    Regression: 9e9db1297. The redactor let through a JSON "pw", curl -u
+    user:pass, mosquitto_pub -P, cookies, AWS and sk- API keys and numeric
+    lat/long, and the EEPROM was copied whatever SendVendorSerial said.
+    """
+    crashes = os.path.join(fppd.media, "crashes")
+    os.makedirs(crashes, exist_ok=True)
+    fppd.write("config/plugin.leaky.json", {
+        "broker": "b", "username": "u", "pw": "LEAK-json-pw",
+        "location": {"Latitude": 40.71234, "Longitude": -74.00567}})
+    fppd.write("config/plugin.leaky-cmds",
+               "curl -s -u admin:LEAK-curl http://10.0.0.5/api\n"
+               "mosquitto_pub -h b -u fpp -P LEAK-mosquitto -t a -m b\n"
+               "Cookie: PHPSESSID=LEAK-cookie\n"
+               "aws AKIAIOSFODNN7EXAMPLE openai sk-LEAKopenai1234567890abcdefgh\n"
+               "lat=40.71234&lon=-74.00567\n")
+    with open(os.path.join(fppd.media, "config", "cape-eeprom.bin"), "wb") as f:
+        f.write(b"FPP02" + b"LEAK-cape-serial-0042" + bytes(64))
+    fppd.settings(SendVendorSerial="0")
+    run_crash_handler(fppd, lambda: any(n.endswith(".zip") for n in os.listdir(crashes)),
+                      "the crash handler to write a report")
+    texts = report_texts(fppd, crashes)
+    assert any("plugin.leaky.json" in n for n in texts), \
+        f"the plugin config isn't in the report, so this proves nothing: {sorted(texts)}"
+    leaks = sorted({f"{name}: {tok}" for name, t in texts.items()
+                    for tok in ("LEAK-", "AKIAIOSFODNN7EXAMPLE", "40.71234", "74.00567")
+                    if tok in t})
+    assert not leaks, f"the report carries secrets: {leaks}"
