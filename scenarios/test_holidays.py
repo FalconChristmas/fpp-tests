@@ -4,7 +4,10 @@ holiday editor on the Scheduler page, the Locale setting), and a schedule
 reload after the change has to see them."""
 
 import datetime
+import math
 import time
+
+import pytest
 
 from test_schedule_calendar import YEAR, ZONE, entry
 from test_schedule_config import easter
@@ -75,3 +78,40 @@ def test_locale_changed_while_running_is_used(fppd):
     fppd.settings(Locale="UK")
     days = days_after_reload(fppd, {want})
     assert days == {want}, f"Mothering Sunday {YEAR} is {want}; scheduled on {sorted(days)[:5]}"
+
+
+def islamic_date(hijri_year, month, day=1):
+    """The tabular (arithmetic) Islamic calendar's Gregorian date: the
+    standard civil epoch, 30-year leap cycle. Observed dates can differ by a
+    day, which the check allows."""
+    jdn = day + math.ceil(29.5 * (month - 1)) + (hijri_year - 1) * 354 + \
+        (3 + 11 * hijri_year) // 30 + 1948440 - 1
+    return datetime.date.fromordinal(jdn - 1721425)
+
+
+# (holiday, Hijri year, Islamic month) for the first occurrence in each
+# Gregorian year from 2030: Ramadan 1451 starts in January 2030 and 1452 in
+# December, so 2031's is 1453.
+ISLAMIC = [("Ramadan", 1451, 9), ("Ramadan", 1453, 9), ("Ramadan", 1454, 9),
+           ("Ramadan", 1455, 9), ("Ramadan", 1456, 9), ("Ramadan", 1457, 9),
+           ("EidAlFitr", 1451, 10), ("EidAlFitr", 1452, 10), ("EidAlFitr", 1453, 10),
+           ("EidAlFitr", 1454, 10), ("EidAlFitr", 1456, 10), ("EidAlFitr", 1457, 10)]
+
+
+@pytest.mark.parametrize("name, hijri, month", ISLAMIC,
+                         ids=[f"{n}-{islamic_date(h, m).year}" for n, h, m in ISLAMIC])
+def test_islamic_holidays_fall_on_their_dates(fppd, name, hijri, month):
+    """An entry on Ramadan or Eid al-Fitr runs on that year's date (within
+    a day of the tabular Islamic calendar).
+
+    Regression: 5f90e21ce. The lookup tables from 2031 (Ramadan) and 2034
+    (Eid) on held the previous Gregorian year's date, 11 or 12 days late:
+    Ramadan 2032 on December 15 instead of the 4th."""
+    want = islamic_date(hijri, month)
+    show(fppd)
+    fppd.write("config/schedule.json", [entry(7, "19:00:00", "20:00:00",
+                                              startDate=name, endDate=name)])
+    fppd.start(fake_time=f"{(want - datetime.timedelta(days=5)).isoformat()} 12:00:00", tz=ZONE)
+    days = scheduled_days(fppd)
+    assert len(days) == 1 and abs((next(iter(days)) - want).days) <= 1, \
+        f"{name} {want.year} is about {want}; scheduled on {sorted(days)[:5]}"
