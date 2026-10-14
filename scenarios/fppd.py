@@ -289,6 +289,13 @@ def faketime_env(binary, when):
     libs = glob.glob("/usr/lib/*/faketime/libfaketimeMT.so.1")
     if not libs:
         pytest.skip("libfaketime is not installed (apt-get install faketime)")
+    import platform
+    if sanitizer() == "tsan" and platform.machine() == "x86_64":
+        # fppd under TSan with libfaketime preloaded hangs before it prints
+        # anything on x86_64 (every fake-time scenario timed out on the first
+        # nightly TSan run); the same build runs on arm64. The ASan run still
+        # covers these scenarios on x86_64.
+        pytest.skip("TSan with libfaketime hangs at start-up on x86_64")
     preload = [libs[0]]
     # A sanitizer runtime has to come first in the preload list.
     ldd = subprocess.run(["ldd", binary], capture_output=True, text=True).stdout
