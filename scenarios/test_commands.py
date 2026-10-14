@@ -2,6 +2,7 @@
 places that run commands without an HTTP handler above them."""
 
 import json
+import time
 import urllib.error
 import urllib.parse
 
@@ -137,3 +138,170 @@ def test_variable_with_a_quote_reaches_the_if_commands(fppd):
     fppd.post("/command", cmd)
     fppd.wait_for(lambda: variable(fppd, "Out"), timeout=5, what="the If's command to run")
     assert variable(fppd, "Out") == 'say "hi"'
+
+
+def preset(name, cmd):
+    return {"name": name, "command": cmd["command"], "args": cmd["args"], "presetSlot": 0}
+
+
+def counter(name):
+    return {"command": "Set Variable", "args": [name, "Increment", "", "1", "0", "100", ""]}
+
+
+def count(fppd, name):
+    v = variable(fppd, name)
+    return int(float(v)) if v not in ("", "None") else 0
+
+
+def test_a_future_preset_cannot_take_over_fppds_own_timers(fppd):
+    """"Trigger Command Preset In Future" with an identifier that happens to
+    name one of fppd's own timers ("AudioCardPresence", which repeats every
+    10 s) runs the preset once.
+
+    Regression: 4cc34c8b1. The identifier went straight into the timer id
+    space, and replacing a periodic timer kept its period and swapped in the
+    preset: the preset fired every 10 s for good and fppd's own check never
+    ran again (with "FileMonitor", where inotify is missing, file
+    monitoring stopped)."""
+    fppd.write("config/commandPresets.json", {"commands": [preset("Tick", counter("Ticks"))]})
+    fppd.start()
+    fppd.command("Trigger Command Preset In Future", "AudioCardPresence", "500", "Tick")
+    time.sleep(22)
+    assert count(fppd, "Ticks") == 1, f"the preset fired {count(fppd, 'Ticks')} times"
+
+
+@pytest.mark.parametrize("body", ["[1, 2]", '"Set Variable"', '{"command": 5}',
+                                  '{"command": ["Set Variable"]}', "not json"])
+def test_malformed_bare_command_post_is_a_400(fppd, body):
+    """POST /command with a body that isn't a command object answers 400,
+    saying what it wanted, not an empty 500.
+
+    Regression: 2eed005ef. The handler logged val["command"].asString()
+    before checking the body's shape; the throw came back as an empty 500."""
+    fppd.start()
+    with pytest.raises(urllib.error.HTTPError) as e:
+        fppd.post("/command", body)
+    assert e.value.code == 400, (e.value.code, getattr(e.value, "body", ""))
+
+
+SAFE_PREFIXES = ("Shutdown", "Restart", "Reboot", "Run Script", "URL", "Stop FPPD", "FPPD")
+
+
+def test_commands_called_with_no_arguments_are_refused(fppd):
+    """Every command whose first argument is required, called with none
+    (a bare GET /command/<name>), is refused, and fppd carries on.
+
+    Regression: 8eb7d4198. Eight commands read args[0] without a check:
+    Play Media, Insert Playlist Immediate and others faulted in the field
+    on exactly this call."""
+    fppd.start()
+    refused = []
+    for c in fppd.get("/commands"):
+        name = c.get("name", "")
+        args = c.get("args", [])
+        if not args or args[0].get("optional") or name.startswith(SAFE_PREFIXES):
+            continue
+        try:
+            fppd.get("/command/" + urllib.parse.quote(name))
+        except urllib.error.HTTPError:
+            refused.append(name)
+        fppd.check_alive()
+    for name in ("Play Media", "Insert Playlist Immediate", "Start Playlist At Random Item"):
+        assert name in refused, f"{name} with no arguments wasn't refused"
+
+
+def test_variables_on_the_get_command_route(fppd):
+    """%VAR:name% in a GET /command/<name>/<args...> is replaced with the
+    variable's value, as it is for POSTed commands.
+
+    Regression: a40f343ab."""
+    fppd.start()
+    fppd.command("Set Variable", "Src", "Value", "seven", "1", "0", "100", "")
+    path = "/".join(urllib.parse.quote(p, safe="") for p in
+                    ["Set Variable", "Dst", "Value", "%VAR:Src%", "1", "0", "100", ""])
+    fppd.get("/command/" + path)
+    assert variable(fppd, "Dst") == "seven"
+
+
+def test_a_preset_naming_a_missing_command_raises_a_warning(fppd):
+    """A preset whose command doesn't exist (a removed plugin's) puts up a
+    warning naming it when it runs, instead of failing silently.
+
+    Regression: 611f6dd0c."""
+    fppd.write("config/commandPresets.json", {"commands": [
+        preset("Gone", {"command": "No Such Command", "args": []})]})
+    fppd.start()
+    try:
+        fppd.command("Trigger Command Preset", "Gone")
+    except urllib.error.HTTPError:
+        pass
+    fppd.wait_for(lambda: any('No command found for "No Such Command"' in str(w)
+                              for w in fppd.get("/fppd/status").get("warnings", [])),
+                  timeout=5, what="the missing-command warning")
+
+
+def test_a_preset_of_slow_url_commands_does_not_stall_its_caller(fppd):
+    """A preset of URL commands to a host that never answers returns at
+    once: the transfers carry on in the background.
+
+    Regression: f1ff41e39. The preset dropped each command's result, and
+    the result's destructor waited up to a second for its transfer: three
+    webhooks to a dead host held the caller (usually the main loop) for
+    three seconds."""
+    import socket
+    sink = socket.socket()
+    sink.bind(("127.0.0.1", 0))
+    sink.listen(16)  # accepts the connection, never answers
+    url = f"http://127.0.0.1:{sink.getsockname()[1]}/hook"
+    fppd.write("config/commandPresets.json", {"commands": [
+        preset("Hooks", {"command": "URL", "args": [url, "GET", ""]})] * 3})
+    fppd.start()
+    began = time.monotonic()
+    fppd.command("Trigger Command Preset", "Hooks", timeout=20)
+    took = time.monotonic() - began
+    sink.close()
+    assert took < 1.0, f"triggering the preset took {took:.1f}s"
+
+
+def if_then_else(cond, name):
+    return {"command": "If", "args": [json.dumps(cond), json.dumps([set_variable(name, "yes")]),
+                                      "Sequential", json.dumps([set_variable(name, "no")]),
+                                      "Sequential"]}
+
+
+# Saturday 17 October 2026, 15:06
+WHEN = "2026-10-17 15:06:00"
+CONDITIONS = [
+    ("Time", "between", "00:00,23:59", "yes"),
+    ("Time", "greater than", "9:00", "yes"),
+    ("Time", "less than", "9:00", "no"),
+    ("Time", "between", "14:00,02:00", "yes"),
+    ("Time", "between", "22:00,02:00", "no"),
+    ("Day", "between", "Friday,Sunday", "yes"),
+    ("Day", "between", "Monday,Friday", "no"),
+    ("Day", "greater than", "Monday", "yes"),
+    ("Month", "between", "September,November", "yes"),
+    ("Month", "between", "November,February", "no"),
+    ("Month", "less than", "December", "yes"),
+]
+
+
+def test_if_compares_times_days_and_months_in_order(fppd):
+    """If's Time, Day and Month checks order their values as times and
+    positions in the week and year -- 15:06 is after 9:00, Saturday is
+    between Friday and Sunday, a range that ends before it starts wraps --
+    rather than as numbers or text.
+
+    Regression: 92ddc059f. between needed numbers, so it was false for
+    every time, day and month; text comparison put 15:06 before 9:00 and
+    the days in alphabetical order."""
+    fppd.start(fake_time=WHEN)
+    got = {}
+    for i, (src, cmp_, value, _) in enumerate(CONDITIONS):
+        name = f"C{i}"
+        fppd.post("/command", if_then_else({"source": src, "name": "", "comparator": cmp_,
+                                            "value": value}, name))
+        fppd.wait_for(lambda: variable(fppd, name), timeout=5, what=f"the If for {src} {cmp_} {value}")
+        got[(src, cmp_, value)] = variable(fppd, name)
+    wrong = {k: v for (k, v), (_, _, _, want) in zip(got.items(), CONDITIONS) if v != want}
+    assert not wrong, f"wrong answers: {wrong}"
