@@ -30,8 +30,12 @@ export CCACHE=ccache
 # fppd run adds to the .gcda counts next to the objects, and
 # scripts/coverage-report.sh turns them into a report.
 TARGET="$FLAVOR"
+# The image's /etc/fpp/container makes FPP's makefiles leave out the cape
+# tools, which fppinit's cape detection (and its scenarios) need; build them
+# as on a device. Nothing in them needs a cape to build.
+TARGET="$TARGET BUILD_FPPCAPEDETECT=1"
 if [ "$FLAVOR" = coverage ]; then
-    TARGET="debug OPTIMIZE_FLAGS=-g\ -O0\ -Wno-psabi\ --coverage"
+    TARGET="debug BUILD_FPPCAPEDETECT=1 OPTIMIZE_FLAGS=-g\ -O0\ -Wno-psabi\ --coverage"
     export LDFLAGS=--coverage
     gcc -shared -fPIC -O2 -o "$TREE/gcov-exit.so" /tests/scripts/gcov-exit.c
 fi

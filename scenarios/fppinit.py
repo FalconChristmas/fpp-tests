@@ -172,6 +172,9 @@ mkdir -p "$R{MEDIA}" "$R/boot/firmware" "$R/opt/fpp"
 mount --bind {shlex.quote(self.media)} "$R{MEDIA}"
 mount --bind {shlex.quote(self.boot)} "$R/boot/firmware"
 mount --bind {shlex.quote(self.tree)} "$R/opt/fpp"
+# Also at its own path, which a coverage build writes its .gcda counts to:
+# on the overlay they would be thrown away with the sandbox.
+mkdir -p "$R"{shlex.quote(self.tree)}; mount --bind {shlex.quote(self.tree)} "$R"{shlex.quote(self.tree)}
 {home}
 stub() {{ rm -f "$R$1"; printf '%s' {shlex.quote(_stub(log))} > "$R$1"; chmod 755 "$R$1"; }}
 mkdir -p "$R/fppinit-state"; cp -a {shlex.quote(self.state)}/. "$R/fppinit-state/"
