@@ -35,15 +35,21 @@ if [ "$FLAVOR" = coverage ]; then
     export LDFLAGS=--coverage
     gcc -shared -fPIC -O2 -o "$TREE/gcov-exit.so" /tests/scripts/gcov-exit.c
 fi
+# One job per core, but no more than the memory holds: a sanitizer
+# compile of the bigger files takes over a gigabyte, and 16 jobs in Docker
+# Desktop's 8 GB VM got cc1plus OOM-killed.
+JOBS=$(nproc)
+MEM_JOBS=$(awk '/^MemTotal:/ { j = int($2 / 1200000); print (j < 1 ? 1 : j) }' /proc/meminfo)
+[ "$MEM_JOBS" -lt "$JOBS" ] && JOBS=$MEM_JOBS
 # DISTRIBUTED_COMPILE=1 turns off the precompiled header, which is built with
 # the release flags whatever the target; it also proves every file includes
 # what it uses. Older commits are not always clean that way (a header the PCH
 # happened to supply), so on failure fall back to a PCH build of the rest --
 # PCH and NOPCH objects link together fine.
-if ! eval make -j"$(nproc)" DISTRIBUTED_COMPILE=1 $TARGET > "$TREE/build.log" 2>&1; then
+if ! eval make -j"$JOBS" DISTRIBUTED_COMPILE=1 $TARGET > "$TREE/build.log" 2>&1; then
     echo "NOPCH build failed, retrying with the precompiled header:" >&2
     grep -E "error:" "$TREE/build.log" | head -5 >&2
-    if ! eval make -j"$(nproc)" $TARGET >> "$TREE/build.log" 2>&1; then
+    if ! eval make -j"$JOBS" $TARGET >> "$TREE/build.log" 2>&1; then
         grep -E "error|Error" "$TREE/build.log" | tail -40
         echo "build failed; full log in $TREE/build.log" >&2
         exit 1
