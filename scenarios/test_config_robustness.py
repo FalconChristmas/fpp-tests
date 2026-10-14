@@ -65,6 +65,12 @@ CASES = {
     "pipewire-opus-rtp: root is a list": ("pipewire-opus-rtp-instances.json", [1]),
     "pipewire-opus-rtp: fields of the wrong type": ("pipewire-opus-rtp-instances.json", {"instances": [
         {"id": S, "enabled": "true", "mode": L, "name": O, "port": S}]}),
+    # read at startup under MediaBackend pipewire (7f890cb38)
+    "pipewire-aes67: root is a list": ("pipewire-aes67-instances.json", [1]),
+    "pipewire-aes67: fields of the wrong type": ("pipewire-aes67-instances.json", {
+        "ptpEnabled": "yes", "ptpDomain": L, "instances": [
+            {"id": S, "enabled": "true", "mode": L, "name": O, "port": S, "channels": "2",
+             "multicastIP": 5, "latency": O, "sapEnabled": "no", "ptime": L}]}),
     "pipewire-stream-slots: slots of the wrong type": ("pipewire-stream-slots.json", {"slots": {"1": "75"}}),
     "pipewire-stream-slots: root is a list": ("pipewire-stream-slots.json", [1]),
 }
