@@ -1,6 +1,9 @@
 """Serial channel outputs, written into a pty and decoded."""
 
+import os
 import time
+
+import pytest
 
 from serial import PtyReader, lor_enhanced_state
 
@@ -72,3 +75,40 @@ def test_serial_device_without_a_pin_raises_no_warning(fppd):
         warnings = fppd.get("/fppd/warnings")
         pin = [w for w in warnings if "configure pin" in str(w)]
         assert not pin, f"warning banner for a device with no pin: {pin}"
+
+
+def _serial_console():
+    """The active kernel console if it is a serial tty with a /dev node, else None."""
+    try:
+        with open("/sys/class/tty/console/active") as f:
+            names = f.read().split()
+    except OSError:
+        return None
+    for name in names:
+        if name.startswith("tty") and not name[3:].isdigit() and os.path.exists("/dev/" + name):
+            return name
+    return None
+
+
+@pytest.mark.skipif(_serial_console() is None, reason="the kernel console is not a serial tty here")
+def test_serial_output_refuses_the_console(fppd):
+    """A serial output configured on the kernel console's tty is refused,
+    with a warning, instead of mixing channel data into the console.
+
+    Regression: 854a9dd8d. On a PocketBeagle 2 the console is ttyS2, the
+    name PocketBeagle capes used for DMX, so a carried-over DMX output opened
+    the console and muxed a header pin onto its transmit line.
+
+    Hardware-only: needs a board whose console is a serial UART (the
+    PocketBeagle 2's is). Docker and the Pis skip it. Verified with
+    run-local.sh on a PocketBeagle 2, failing on the fix's parent and passing
+    with the fix.
+    """
+    console = _serial_console()
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "DMX-Open", "enabled": 1, "startChannel": 1, "channelCount": 512,
+        "device": console,
+    }]})
+    fppd.start()
+    fppd.wait_for(lambda: [w for w in fppd.get("/fppd/warnings") if "system console" in str(w)],
+                  what=f"a warning that /dev/{console} is the system console")
