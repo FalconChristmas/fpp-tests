@@ -312,3 +312,83 @@ def test_an_overlay_member_starts_with_the_video_and_playback_ends_on_time(fppd,
                   interval=0.2, what="the video to end")
     took = time.monotonic() - started
     assert took <= 6, f"a 4 s video took {took:.1f} s to end"
+
+
+def play_to_end(fppd, name, what="the video to end"):
+    fppd.command("Play Media", name, "1", "0", "1", "HDMI-A-1")
+    wait_for_bars(fppd)
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=20,
+                  interval=0.2, what=what)
+
+
+def test_back_to_back_videos_reuse_the_overlay_member(fppd, audio):
+    """A video started within a few seconds of the last one ending finds
+    its overlay member already built (parked, PAUSED) and only sets it
+    playing; building one costs about half a second on a BeagleBone. The
+    member hands the model back between the two. (fpp f4a1ed3ec; on the
+    commit before it, this fails.)"""
+    make_video(os.path.join(fppd.media, "videos", "Short.mkv"), seconds=2)
+    setup(fppd, [overlay_consumer()])
+    fppd.start()
+    play_to_end(fppd, "Short.mkv", "the first video to end")
+    fppd.wait_for(lambda: fppd.get(f"/overlays/model/{MODEL}")["isActive"] == 0, timeout=5,
+                  what="the model to be handed back after the first video")
+    log_at = len(fppd.log())
+    play_to_end(fppd, "Short.mkv", "the second video to end")
+    second = fppd.log()[log_at:]
+    assert "(1 already built)" in second, \
+        "the second video built its overlay member again:\n" + \
+        "\n".join(l for l in second.splitlines() if "VideoOutputManager" in l)[-2000:]
+
+
+def test_a_parked_overlay_member_leaves_the_model_alone(fppd, audio):
+    """Between videos the member is parked, not gone: something else can
+    use the model meanwhile (here a fill), and the parked member neither
+    draws over it nor turns it off. After the hold it is torn down."""
+    make_video(os.path.join(fppd.media, "videos", "Short.mkv"), seconds=2)
+    setup(fppd, [overlay_consumer()])
+    fppd.start()
+    play_to_end(fppd, "Short.mkv")
+    fppd.wait_for(lambda: fppd.get(f"/overlays/model/{MODEL}")["isActive"] == 0, timeout=5,
+                  what="the model to be handed back")
+    fppd.command("Overlay Model Fill", MODEL, "Enabled", "#FF0000")
+    deadline = time.monotonic() + 2.5
+    while time.monotonic() < deadline:
+        state = fppd.get(f"/overlays/model/{MODEL}")["isActive"]
+        px = pixels(fppd)[H // 2][W // 2]
+        assert state and px == (255, 0, 0), f"the parked member touched the model: active={state} pixel={px}"
+        time.sleep(0.1)
+    fppd.wait_for(lambda: "Overlay: Vid' idle, tearing it down" in fppd.log(), timeout=10,
+                  what="the parked member to be torn down after its hold")
+
+
+def test_a_parked_rtp_member_stops_sending(fppd, audio):
+    """An RTP member sends while the video plays and nothing once it ends,
+    though it stays built for the next video."""
+    port = free_udp_port()
+    rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    rx.bind(("127.0.0.1", port))
+    rx.settimeout(0.2)
+    try:
+        make_video(os.path.join(fppd.media, "videos", "Short.mkv"), seconds=2)
+        consumer = rtp_consumer(port, "mjpeg", source="")
+        del consumer["sourceNode"]
+        setup(fppd, [consumer])
+        fppd.start()
+        fppd.command("Play Media", "Short.mkv", "1", "0", "1", "HDMI-A-1")
+
+        def received():
+            try:
+                return rx.recv(65536)
+            except socket.timeout:
+                return None
+        fppd.wait_for(received, timeout=10, interval=0, what="RTP while the video plays")
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=20,
+                      interval=0.2, what="the video to end")
+        time.sleep(0.5)
+        while received():  # what was already on its way
+            pass
+        late = [p for p in (received() for _ in range(10)) if p]
+        assert not late, f"{len(late)} RTP packets 2 s after the video ended"
+    finally:
+        rx.close()

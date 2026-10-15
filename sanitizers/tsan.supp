@@ -122,6 +122,7 @@ called_from_lib:libgstudp.so
 called_from_lib:libgstvpx.so
 called_from_lib:libgio-2.0.so
 called_from_lib:libgstdebugutilsbad.so
+called_from_lib:libjpeg.so.62
 # The overlay member's appsink callback reads the state pointer it was given
 # through gst_app_sink_set_callbacks(), whose lock is inside libgstapp and so
 # ignored above: TSan loses that hand-off and reports the read against the
