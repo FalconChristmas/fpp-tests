@@ -37,10 +37,15 @@ def test_restart_resumes_the_whole_playlist(fppd):
         step(1), pause(1), step(2), pause(1), step(3), pause(120)]))
     fppd.write("config/schedule.json", [schedule_entry("P", start, end)])
     fppd.start()
-    fppd.wait_for(lambda: trace(fppd) == "123", timeout=30, interval=0.1,
+    # The trace reads 123 while step(3) is still the current entry (6), so
+    # wait for the pause after it too.
+    def at_last_entry():
+        if trace(fppd) != "123":
+            return None
+        p = status(fppd)["current_playlist"]
+        return p if (p["count"], p["index"]) == ("7", "7") else None
+    fppd.wait_for(at_last_entry, timeout=30, interval=0.1,
                   what="the scheduled playlist to reach its last entry")
-    before = status(fppd)["current_playlist"]
-    assert (before["count"], before["index"]) == ("7", "7"), before
 
     fppd.command("Restart FPPD")
     s = fppd.wait_for(lambda: restarted_and_playing(fppd), timeout=60, interval=0.5,
