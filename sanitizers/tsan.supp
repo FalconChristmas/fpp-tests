@@ -45,6 +45,7 @@ race:PixelOverlayModel::setPixelValue
 race:PixelOverlayModel::doOverlay
 race:PixelOverlayModel::fillData
 race:PixelOverlayModel::setData
+race:PixelOverlayModel::blitData
 # ...including the dirty flag in that shared buffer's header.
 race_top:PixelOverlayModel::overlayBufferIsDirty
 race:PixelOverlayModel::flushOverlayBuffer
@@ -110,6 +111,22 @@ called_from_lib:libgstaudioconvert.so
 called_from_lib:libpipewire-0.3.so
 called_from_lib:libgstplayback.so
 called_from_lib:libgstvolume.so
+# The video paths (test_video.py): demux, decode, the test source, and RTP
+# over UDP.
+called_from_lib:libgstvideo-1.0.so
+called_from_lib:libgstvideotestsrc.so
+called_from_lib:libgstmatroska.so
+called_from_lib:libgstvorbis.so
+called_from_lib:libvorbis.so.0
+called_from_lib:libgstudp.so
+called_from_lib:libgstvpx.so
+called_from_lib:libgio-2.0.so
+called_from_lib:libgstdebugutilsbad.so
+# The overlay member's appsink callback reads the state pointer it was given
+# through gst_app_sink_set_callbacks(), whose lock is inside libgstapp and so
+# ignored above: TSan loses that hand-off and reports the read against the
+# allocation. The state itself is read under its own (visible) mutex.
+race:VideoOutputManager::OnOverlaySample
 # PipeWire loads and unloads its modules as it goes, and TSan aborts the
 # process when a called_from_lib library is unloaded, so these match by module
 # in the stack instead.

@@ -13,7 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgraphicsmagick++1-dev graphicsmagick-libmagick-dev-compat \
         libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libsamplerate0-dev \
         libusb-1.0-0-dev libasound2-dev libpipewire-0.3-dev libsdl2-dev mesa-common-dev \
-        gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire \
+        gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire gstreamer1.0-tools \
+        gstreamer1.0-plugins-bad \
         pipewire pipewire-bin pipewire-pulse wireplumber pulseaudio-utils \
         python3 python3-pytest python3-zstandard faketime tzdata procps iproute2 gdb patch zip \
         mosquitto mosquitto-clients gcovr \
