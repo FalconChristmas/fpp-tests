@@ -51,9 +51,12 @@ DOCKER="docker run --rm --ulimit nofile=1048576:1048576 -v fpp-tests-work:/work 
 
 # A failed scenario's media directory (fppd.log, sanitizer reports, the config
 # it ran with) is copied here.
+# Emptied rather than removed and recreated: Docker Desktop's file sharing
+# can still hold the old directory when the next run mounts the path, and that
+# run's results then go nowhere (seen with back-to-back runs on macOS).
 ARTIFACTS="$HERE/artifacts"
-rm -rf "$ARTIFACTS"
 mkdir -p "$ARTIFACTS"
+find "$ARTIFACTS" -mindepth 1 -delete
 
 # Each built tree is ~500MB; keep the most recently used FPP_TESTS_KEEP_TREES.
 # (touch only an existing tree: on a new one it would create a plain file.)
