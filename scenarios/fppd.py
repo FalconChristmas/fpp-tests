@@ -66,13 +66,16 @@ class Fppd:
 
     # --- lifecycle -------------------------------------------------------
 
-    def start(self, timeout=60, fake_time=None, tz=None):
+    def start(self, timeout=60, fake_time=None, tz=None, preload=(), extra_env=None):
         """Start fppd and wait until its API answers.
 
         fake_time: "YYYY-MM-DD HH:MM:SS" -- fppd's wall clock starts there
                    and runs on in real time (libfaketime; the monotonic
                    clock is left alone, so timers behave).
         tz:        a zone name such as "America/New_York" for fppd's TZ.
+        preload:   shared objects to LD_PRELOAD into fppd (after the
+                   sanitizer runtime, which has to come first).
+        extra_env: more environment for fppd.
         """
         with open(os.path.join(self.tree, "www", "media_root.txt"), "w") as f:
             f.write(self.media)
@@ -108,6 +111,13 @@ class Fppd:
             # arm64 happened not to read it; on x86_64 it does.
             env["ASAN_OPTIONS"] += ":allocator_release_to_os_interval_ms=-1"
             env["TSAN_OPTIONS"] += ":allocator_release_to_os_interval_ms=-1"
+        if preload:
+            have = env.get("LD_PRELOAD", "").split()
+            if not have:
+                have = sanitizer_runtime(os.path.join(src, "fppd"))
+            env["LD_PRELOAD"] = " ".join(have + list(preload))
+        if extra_env:
+            env.update(extra_env)
         shim = os.path.join(self.tree, "gcov-exit.so")
         if os.path.exists(shim):
             # The coverage flavor: write the counts on fppd's _exit().
@@ -289,6 +299,16 @@ class Fppd:
         raise TimeoutError(f"timed out after {timeout}s waiting for {what} (last: {last!r})")
 
 
+def sanitizer_runtime(binary):
+    """The sanitizer runtime `binary` links, as a preload list: it has to
+    come first in LD_PRELOAD, ahead of any other preloaded object."""
+    ldd = subprocess.run(["ldd", binary], capture_output=True, text=True).stdout
+    for line in ldd.splitlines():
+        if any(n in line for n in ("libasan.so", "libtsan.so")) and "=>" in line:
+            return [line.split("=>")[1].split()[0]]
+    return []
+
+
 def faketime_env(binary, when):
     """Environment that starts `binary`'s wall clock at `when`."""
     import glob
@@ -296,12 +316,7 @@ def faketime_env(binary, when):
     libs = glob.glob("/usr/lib/*/faketime/libfaketimeMT.so.1")
     if not libs:
         pytest.skip("libfaketime is not installed (apt-get install faketime)")
-    preload = [libs[0]]
-    # A sanitizer runtime has to come first in the preload list.
-    ldd = subprocess.run(["ldd", binary], capture_output=True, text=True).stdout
-    for line in ldd.splitlines():
-        if any(n in line for n in ("libasan.so", "libtsan.so")) and "=>" in line:
-            preload.insert(0, line.split("=>")[1].split()[0])
+    preload = sanitizer_runtime(binary) + [libs[0]]
     return {
         "LD_PRELOAD": " ".join(preload),
         "FAKETIME": "@" + when,

@@ -1,0 +1,203 @@
+"""Framebuffer outputs on a fake /dev/fbN (framebuffer.py), so the fbdev
+path (FrameBuffer and IOCTLFrameBuffer) runs anywhere: an FB overlay model
+fed through the bulk pixel API, and the Virtual Display output.
+
+What a real display adds -- scanout, vsync timing, a driver's own
+quirks -- is out of reach here; test_framebuffer.py covers fbtft on a Pi.
+The KMS path (KMSFrameBuffer) needs a DRM device and is not reached.
+"""
+
+import pytest
+
+from framebuffer import FakeFb
+
+W, H = 64, 32
+MODEL = "Screen"
+
+
+def image(w, h):
+    """A w x h RGB image whose pixels are all different, and stay different
+    in RGB565: (x mod 32, y, x div 32) in the top bits of each channel."""
+    return [[((x & 31) << 3, (y & 63) << 2, (x >> 5) << 3) for x in range(w)] for y in range(h)]
+
+
+def raw(img):
+    return bytes(c for row in img for px in row for c in px)
+
+
+def fb_model(fppd, width=W, height=H, **extra):
+    m = {"Name": MODEL, "Type": "FB", "Width": width, "Height": height, "Device": "fb1"}
+    m.update(extra)
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [m]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+
+
+def send(fppd, img):
+    fppd.request("PUT", f"/overlays/model/{MODEL}/data?autoEnable=true&stopEffect=false", raw(img))
+
+
+def shows(fb, want):
+    """The page on screen is `want` (rows of (r, g, b)), to the precision
+    of the device's pixel format."""
+    if fb.mode() is None:
+        return False
+    got = fb.pixels()
+    mask = (0xF8, 0xFC, 0xF8) if fb.mode()[4] == 16 else (0xFF, 0xFF, 0xFF)
+    for y, row in enumerate(want):
+        for x, px in enumerate(row):
+            if tuple(a & m for a, m in zip(got[y][x], mask)) != tuple(a & m for a, m in zip(px, mask)):
+                return False
+    return True
+
+
+def scaled(img, n):
+    return [[px for px in row for _ in range(n)] for row in img for _ in range(n)]
+
+
+def test_a_model_is_drawn_on_the_device(fppd):
+    """Pixels sent to an FB model come out on the device where they belong.
+    A driver reporting 32bpp is switched to 24bpp, with pages for page
+    flipping in its video memory."""
+    fb = FakeFb(fppd, width=W, height=H, bpp=32)
+    fb_model(fppd)
+    fb.start()
+    img = image(W, H)
+    send(fppd, img)
+    fppd.wait_for(lambda: shows(fb, img), timeout=10, what="the image on the device")
+    xres, yres, xv, yv, bpp, _ = fb.mode()
+    assert (xres, yres, bpp) == (W, H, 24)
+    assert yv == 2 * H, "two pages for page flipping"
+
+
+def test_a_16bpp_device_gets_rgb565(fppd):
+    """A 16bpp device keeps its depth and gets each pixel as RGB565."""
+    fb = FakeFb(fppd, width=W, height=H, bpp=16)
+    fb_model(fppd)
+    fb.start()
+    img = image(W, H)
+    send(fppd, img)
+    fppd.wait_for(lambda: shows(fb, img), timeout=10, what="the image on the device")
+    assert fb.mode()[4] == 16
+
+
+def test_pixel_size_draws_each_model_pixel_as_a_square(fppd):
+    """PixelSize 2 makes a 32x16 model of the 64x32 device, each model pixel
+    a 2x2 square."""
+    fb = FakeFb(fppd, width=W, height=H, bpp=32)
+    fb_model(fppd, PixelSize=2)
+    fb.start()
+    img = image(W // 2, H // 2)
+    send(fppd, img)
+    fppd.wait_for(lambda: shows(fb, scaled(img, 2)), timeout=10, what="the image doubled on the device")
+
+
+def test_a_small_model_is_scaled_to_the_device(fppd):
+    """A model half the device's size in each direction, with no PixelSize,
+    is scaled up to fill it."""
+    fb = FakeFb(fppd, width=W, height=H, bpp=32)
+    fb_model(fppd, width=W // 2, height=H // 2)
+    fb.start()
+    img = image(W // 2, H // 2)
+    send(fppd, img)
+    fppd.wait_for(lambda: shows(fb, scaled(img, 2)), timeout=10, what="the image doubled on the device")
+
+
+def test_a_model_bigger_than_the_device_is_cropped(fppd):
+    """A model wider and taller than the device shows its top-left corner,
+    with a warning, rather than writing past the page."""
+    fb = FakeFb(fppd, width=W, height=H, bpp=32)
+    fb_model(fppd, width=W + 32, height=H + 16)
+    fb.start()
+    img = image(W + 32, H + 16)
+    send(fppd, img)
+    fppd.wait_for(lambda: shows(fb, [row[:W] for row in img[:H]]), timeout=10,
+                  what="the top-left of the image on the device")
+    assert "does not fit the 64x32 display" in fppd.log()
+
+
+def test_an_fbtft_style_device_with_one_page(fppd):
+    """A driver that ignores mode changes and has one page of memory (fbtft)
+    is drawn single-buffered rather than past its memory.
+
+    Regression: ed301a277 (SIGBUS mapping two pages of a one-page device).
+    """
+    fb = FakeFb(fppd, width=W, height=H, bpp=16, pages=1, fixed=True)
+    fb_model(fppd)
+    fb.start()
+    img = image(W, H)
+    send(fppd, img)
+    fppd.wait_for(lambda: shows(fb, img), timeout=10, what="the image on the device")
+    assert "only has room for 1 of 2 pages" in fppd.log()
+
+
+TRANSITIONS = ["SlideUp", "SlideDown", "SlideLeft", "SlideRight", "WipeUp", "WipeDown", "WipeLeft",
+               "WipeRight", "WipeToHCenter", "WipeFromHCenter", "HorzBlindsOpen", "HorzBlindsClose", "Mosaic"]
+
+
+@pytest.mark.parametrize("size", [(64, 32), (48, 33)], ids=["64x32", "48x33"])
+@pytest.mark.parametrize("transition", range(1, len(TRANSITIONS) + 1), ids=TRANSITIONS)
+def test_a_transition_ends_on_the_new_image(fppd, transition, size):
+    """Each transition from one image to the next ends with the new image
+    on screen, whole, on a screen its steps divide and on one they don't.
+
+    Regressions: 52fca0ec1 -- DrawLoop() cleared its image-ready flag after a
+    transition, so an image that arrived while one was finishing (most sleep
+    after their last step) was never drawn: here the second image, sent as
+    soon as the first is on screen. 4ff96ee6e -- HorzBlindsOpen copied the
+    row past the end of the page, Mosaic drew squares off the right and
+    bottom edges, the wipes overran on odd heights (ASan), and the slides
+    left rows of the old image where their step didn't divide the height.
+    """
+    w, h = size
+    fb = FakeFb(fppd, width=w, height=h, bpp=32)
+    fb_model(fppd, width=w, height=h, TransitionType=str(transition))
+    fb.start()
+    first = image(w, h)
+    send(fppd, first)
+    fppd.wait_for(lambda: shows(fb, first), timeout=10, what="the first image")
+    second = [[(255 - r, 255 - g, 255 - b) for r, g, b in row] for row in first]
+    send(fppd, second)
+    fppd.wait_for(lambda: shows(fb, second), timeout=10, what="the second image after the transition")
+
+
+def test_virtual_display_draws_its_map(fppd):
+    """A Virtual Display on the device draws each mapped pixel at its place
+    in the preview, with y up, in the channel data's colour."""
+    fb = FakeFb(fppd, width=W, height=H, bpp=32)
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "enabled": 1, "type": "VirtualDisplay", "startChannel": 1,
+        "channelCount": 8388608, "modelName": "", "invert": False,
+        "flipHorizontal": False, "device": "fb1",
+        "width": W, "height": H, "pixelSize": 1}]})
+    points = [(10, 5), (40, 20), (63, 0)]
+    lines = [f"{W},{H}"] + [f"{x},{y},{i * 3},3,RGB" for i, (x, y) in enumerate(points)]
+    fppd.write("config/virtualdisplaymap", "\n".join(lines) + "\n")
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fb.start()
+    fppd.command("Test Start", 1000, "RGB Single Color", f"1-{len(points) * 3}", "#FF8001")
+
+    def lit():
+        if fb.mode() is None:
+            return False
+        px = fb.pixels()
+        return [px[H - 1 - y][x] for x, y in points]
+    fppd.wait_for(lambda: lit() and all(p == (255, 128, 1) for p in lit()), timeout=10,
+                  what="the mapped pixels lit")
+    others = [p for row in fb.pixels() for p in row if p != (0, 0, 0)]
+    assert len(others) == len(points), f"{len(others)} lit pixels, expected {len(points)}"
+
+
+def test_a_missing_device_is_reported(fppd):
+    """A model on a framebuffer device that doesn't exist raises the
+    "could not open device" warning, and fppd carries on without it.
+
+    Regression: 8981357ea. open() failing returns -1, the check was for 0,
+    so the failure surfaced as a failed ioctl on fd -1 with no warning.
+    """
+    fb = FakeFb(fppd, width=W, height=H, bpp=32)
+    fb_model(fppd, Device="fb9")
+    fb.start()
+    fppd.wait_for(lambda: any("could not open device" in w for w in
+                              (x if isinstance(x, str) else x.get("message", "") for x in
+                               fppd.get("/fppd/status").get("warnings", []))),
+                  timeout=10, what="the could-not-open warning")
