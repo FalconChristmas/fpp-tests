@@ -255,7 +255,11 @@ def test_rtp_output_sends_the_source(fppd, audio, encoding, payload_type):
         assert p[0] >> 6 == 2, f"not RTP version 2: {p[:12].hex()}"
         assert p[1] & 0x7F == payload_type, f"payload type {p[1] & 0x7F}, expected {payload_type}"
     seqs = [struct.unpack(">H", p[2:4])[0] for p in packets]
-    assert all((b - a) & 0xFFFF == 1 for a, b in zip(seqs, seqs[1:])), f"sequence numbers skip: {seqs}"
+    # Forward only. A gap is this receiver falling behind (a slow runner
+    # drops UDP); a repeat or a step back is a second sender or a restarted one.
+    steps = [(b - a) & 0xFFFF for a, b in zip(seqs, seqs[1:])]
+    assert all(0 < d < 0x8000 for d in steps), \
+        f"sequence numbers go back or repeat: {[(a, b) for a, b in zip(seqs, seqs[1:]) if not 0 < (b - a) & 0xFFFF < 0x8000][:10]}"
     sdp_path = os.path.join(fppd.media, "config", f"rtp_{consumer['pipeWireNodeName']}.sdp")
     with open(sdp_path) as f:
         sdp = f.read()

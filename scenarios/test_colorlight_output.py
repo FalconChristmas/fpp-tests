@@ -12,6 +12,7 @@ first two bytes), so where each one landed can be read back.
 """
 
 import contextlib
+import itertools
 import os
 import socket
 import struct
@@ -258,11 +259,14 @@ def test_brightness_and_newer_firmware_packets(fppd):
     sync = [p for p in pkts if p[12] == 0x01]
     assert brightness and brightness[-1][13:16] == bytes([127] * 3), brightness[-1][13:17].hex()
     assert sync[-1][13 + 22] == 127 and sync[-1][13 + 25:13 + 28] == bytes([127] * 3)
-    types = cap.types()
-    i = len(types) - 1 - types[::-1].index(0x01)
-    assert types[i - 1] == 0x01, "firmware 13 sends the display packet twice"
-    j = types.index(0x0A)
-    assert types[j + 1] == 0x0A, "firmware 13 sends the brightness packet twice"
+    # Runs of one packet type, leaving out the first and last: the snapshot
+    # can start or end half way through a pair. A run of 1 is a packet the
+    # capture dropped; firmware before 13 sends nothing but runs of 1.
+    runs = [(t, len(list(g))) for t, g in itertools.groupby(p[12] for p in pkts)][1:-1]
+    display = [n for t, n in runs if t == 0x01]
+    bright = [n for t, n in runs if t == 0x0A]
+    assert 2 in display and max(display) == 2, f"firmware 13 sends the display packet twice: {display}"
+    assert 2 in bright and max(bright) == 2, f"firmware 13 sends the brightness packet twice: {bright}"
 
 
 def test_output_specific_test_pattern_cycles(fppd):

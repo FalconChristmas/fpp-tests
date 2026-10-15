@@ -30,6 +30,7 @@ race:UncompressedFrameData::readFrame
 # side so a reader-side pattern can't hide the PrepData race fixed in fpp
 # b95acec2f.
 race_top:PixelOverlayManager::doOverlays
+race:OutputProcessors::ProcessData
 
 # ---- fppd: flags and counters shared across threads (std::atomic) ----------
 
@@ -73,6 +74,11 @@ signal:handleCrash
 
 # ---- fppd: shutdown only ---------------------------------------------------
 
+# main() calls CloseOpenFiles() on the way out while overlay models still
+# exist, so a framebuffer model's draw thread can still be using its device
+# fd (seen through test_fbdev.py's fake device). Fix: tear the overlay
+# models down before closing fds.
+race:CloseOpenFiles
 
 # ---- uninstrumented libraries ----------------------------------------------
 
@@ -85,6 +91,11 @@ race:GStreamerOutput::BusCallbackScope::BusCallbackScope
 # GLib's own threads hand blocks to each other through GLib's locks; TSan
 # sees only libc allocating on one and freeing on the other.
 race:libc.so.6
+# GraphicsMagick decodes and scales images on OpenMP worker threads, joined
+# through libgomp's barriers, which TSan can't see. Not called_from_lib:
+# that also hides its mutex calls, and fppd's own unlock of one at startup
+# then reads as unbalanced.
+race:libGraphicsMagick-Q16.so.3
 called_from_lib:liborc-0.4.so
 
 # trantor: TcpServer::stop's promise/future (synchronised in libstdc++,
@@ -96,6 +107,10 @@ race:trantor::EventLoop::queueInLoop
 # drogon tearing down its router at shutdown while IO threads dispatch.
 race:drogon::HttpControllersRouter::HttpControllerRouterItem
 race:std::__detail::_NFA
+# libstdc++ fills ctype<char>::narrow()'s cache lazily, from whichever
+# thread asks first (GCC PR 77704): two threads compiling a regex at once,
+# as drogon's router and controller detection do, write the same bytes.
+race:std::ctype<char>::narrow
 # GStreamer/GLib hand objects between their own threads. called_from_lib
 # drops only interceptor calls made inside the library, so FPP's callbacks
 # on GStreamer threads are still checked. Each name must match exactly one

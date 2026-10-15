@@ -7,7 +7,8 @@ the way the lights do, failures in the body ({"code":1102}) rather than the
 status line, and takes realtime frames on UDP 7777 (v3 packets: 0x03, the
 8-byte token, two zero bytes, the fragment index, then up to 900 channels).
 Every call and every frame is appended to LOGFILE as a JSON line. The first
-REJECT_VERIFIES verify calls are refused, as a light refuses a stale token.
+REJECT_VERIFIES verify calls are refused, as a light refuses a stale token;
+writing a count to LOGFILE.reject refuses that many more, from the next one.
 """
 
 import base64
@@ -53,9 +54,16 @@ class H(http.server.BaseHTTPRequestHandler):
             self.reply({"authentication_token": state["token"], "authentication_token_expires_in": 14400,
                         "challenge-response": "00", "code": 1000})
         elif self.path == "/xled/v1/verify":
+            try:
+                with open(LOG + ".reject") as f:
+                    state["rejects"] += int(f.read())
+                os.unlink(LOG + ".reject")
+            except FileNotFoundError:
+                pass
             if state["rejects"] > 0:
                 state["rejects"] -= 1
                 ok = False
+            log(ev="verify", token=token, ok=ok)
             self.reply({"code": 1000 if ok else 1102})
         elif self.path == "/xled/v1/led/mode":
             self.reply({"code": 1000 if ok else 1102})

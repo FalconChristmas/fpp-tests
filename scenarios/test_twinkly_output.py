@@ -48,6 +48,11 @@ class Twinkly:
         return [(e["path"], e.get("token"), e.get("body")) for e in self.events("http")
                 if e["method"] == "POST"]
 
+    def reject_verifies(self, n):
+        """Refuse the next n verify calls."""
+        with open(self.log + ".reject", "w") as f:
+            f.write(str(n))
+
     def frames(self):
         return self.events("udp")
 
@@ -68,8 +73,9 @@ def lights(rejects=0, started=True):
         try:
             yield t
         finally:
-            if os.path.exists(t.log):
-                os.unlink(t.log)
+            for f in (t.log, t.log + ".reject"):
+                if os.path.exists(f):
+                    os.unlink(f)
 
 
 def setup(fppd, channels):
@@ -123,19 +129,36 @@ def test_more_than_900_channels_go_in_fragments(fppd):
 
 
 def test_a_rejected_token_is_retried(fppd):
-    """Lights that refuse the first verify are not put into realtime mode
-    with the refused token; fppd logs in again and gets there."""
+    """Lights that refuse the token from a login are not put into realtime
+    mode with it; fppd logs in again within seconds and gets there (f96bf3a98).
+    The refusal comes after a restart of the output, on the login that
+    restart makes: on the first start a second login was already on its way
+    for other reasons and hid the bug."""
     setup(fppd, 300)
-    with lights(rejects=1) as tw:
+    with lights() as tw:
         fppd.start()
         show_color(fppd, 300)
-        fppd.wait_for(lambda: tw.realtime_token(), timeout=30, interval=0.5,
-                      what="realtime mode after the rejected token")
-        logins = [c for c in tw.calls() if c[0] == "/xled/v1/login"]
-        assert len(logins) >= 2, tw.calls()
-        refused = tw.calls()[1][1]
-        assert tw.realtime_token() != refused, "realtime mode was set with the refused token"
-        token = tw.realtime_token()
+        # Starting the test restarts the output, which logs in a second time.
+        fppd.wait_for(lambda: tw.realtime_token() and lit_with_token(tw, tw.realtime_token()),
+                      timeout=15, what="frames in realtime mode")
+        fppd.command("Test Stop")
+        fppd.wait_for(lambda: tw.calls()[-1][2] == '{"mode": "off"}', timeout=10, what="the output stopping")
+        n = len(tw.calls())
+        tw.reject_verifies(1)
+        show_color(fppd, 300)
+
+        def refusals():
+            return [e["token"] for e in tw.events("verify") if not e["ok"]]
+        fppd.wait_for(refusals, timeout=15, what="the refused verify")
+        refused = refusals()[0]
+        # PrepareData() logs in again once 5s pass with no token.
+        def realtime_since():
+            return [t for p, t, b in tw.calls()[n:] if p == "/xled/v1/led/mode" and '"rt"' in b]
+        fppd.wait_for(realtime_since, timeout=20, interval=0.5, what="realtime mode after the refusal")
+        assert refused not in realtime_since(), "realtime mode was set with the refused token"
+        logins = [c for c in tw.calls()[n:] if c[0] == "/xled/v1/login"]
+        assert len(logins) >= 2, tw.calls()[n:]
+        token = realtime_since()[-1]
         fppd.wait_for(lambda: lit_with_token(tw, token), timeout=10, what="frames with the new token")
 
 
