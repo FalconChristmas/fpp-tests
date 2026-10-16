@@ -124,3 +124,22 @@ def test_odd_devices_do_not_stop_discovery_of_the_rest(fppd):
     with fake_devices(devices):
         got = discover(fppd, devices, subnets="10.88.0.[9-59]", want=["10.88.0.9"], timeout=60)
     assert got["10.88.0.9"]["hostname"] == "fake-wled"
+
+
+def test_a_hostile_front_page_does_not_crash_the_regex_detectors(fppd):
+    """A device whose front page holds a long run of digits after a prefix
+    one of the detector regexes looks for is listed (as Unknown), and fppd
+    stays up.
+
+    Regression: af04eaead. The detectors ran std::regex_search with unbounded
+    quantifiers ("js/cntrlr_(\\d+).js", "(\\d+) Port ...") on the main loop.
+    GCC 14's libstdc++ regex executor recurses once per repeated character,
+    so ~30KB of digits overflowed the stack: SIGSEGV from one web page.
+    """
+    digits = "7" * 100_000
+    hostile = {"/": page('<html><script src="js/cntrlr_' + digits + '.js"></script>'
+                         + digits + " Port Ethernet to SPI Controller</html>")}
+    with fake_devices({"10.88.0.2": hostile, "10.88.0.3": WLED}):
+        got = discover(fppd, ["10.88.0.2", "10.88.0.3"], timeout=30)
+    assert got["10.88.0.3"]["hostname"] == "fake-wled"
+    assert fppd.get("/fppd/status")["status_name"]

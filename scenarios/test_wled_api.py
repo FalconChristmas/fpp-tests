@@ -237,3 +237,48 @@ def test_a_client_that_stops_reading_does_not_wedge_the_api(fppd):
     fppd.exit_expected = True
     stalled.close()
     assert rc == 0, f"fppd exited {rc}"
+
+
+def _first_line(s, timeout):
+    s.settimeout(timeout)
+    head = b""
+    try:
+        while b"\r\n" not in head:
+            chunk = s.recv(1024)
+            if not chunk:
+                break
+            head += chunk
+    except socket.timeout:
+        pass
+    return head.split(b"\r\n")[0]
+
+
+def test_an_oversized_body_is_refused_not_buffered(fppd):
+    """A POST to the WLED API claiming a huge body is answered 413 at once,
+    and its body is not read; a client asking for "100 Continue" gets it.
+
+    Apache proxies /ws here without the UI password, so this is any LAN peer.
+
+    Regression: 2aa30ea41. The plain-HTTP path read the body up to whatever
+    Content-Length said, with no cap and no timeout: a large enough upload
+    grew fppd until the OOM killer took it. "Expect: 100-continue" (curl's
+    default) was never answered, so such a client and the proxy waited on
+    each other until the proxy timed out."""
+    start(fppd)
+    s = socket.create_connection(("127.0.0.1", PORT), timeout=5)
+    # Only the header: a refusal closes with the body unread, and unread data
+    # would turn that close into a reset that can eat the answer.
+    s.sendall(b"POST /json/state HTTP/1.1\r\nHost: x\r\nContent-Length: 2000000000\r\n\r\n")
+    line = _first_line(s, 5)
+    s.close()
+    assert b" 413 " in line, f"answer to a 2 GB claimed body: {line!r}"
+
+    s = socket.create_connection(("127.0.0.1", PORT), timeout=5)
+    body = json.dumps({"on": True}).encode()
+    s.sendall(f"POST /json/state HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\n"
+              f"Content-Length: {len(body)}\r\n\r\n".encode())
+    line = _first_line(s, 3)
+    assert b" 100 " in line, f"answer to Expect: 100-continue: {line!r}"
+    s.sendall(body)
+    s.close()
+    assert http("GET", "/json/info")[0] == 200

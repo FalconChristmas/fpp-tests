@@ -48,3 +48,38 @@ def test_stop_now_stopped_preset_leaves_the_resumed_parent_playing(fppd):
     wait_idle(fppd)
     fppd.wait_for(lambda: variable(fppd, "stopped") == "seen", timeout=5, interval=0.1,
                   what="PLAYLIST_STOPPED to run when the parent ends")
+
+
+def test_a_hard_stop_whose_stopped_preset_starts_a_playlist_ends(fppd):
+    """A schedule window that ends with a hard stop, and a PLAYLIST_STOPPED
+    preset that starts another playlist ("play something after the show"):
+    the scheduled playlist stops once, the preset's playlist then plays, and
+    fppd keeps answering.
+
+    Regression: 11a12675a. The hard stop looped "while not idle: Stop Now".
+    The preset ran inline as the playlist stopped and started the next one,
+    so the status was playing again and the loop stopped it, which fired the
+    preset again -- forever, on the main loop, until the stall watchdog
+    restarted fppd.
+    """
+    from test_scheduler import STOP_HARD, schedule_entry, window
+    fppd.write("playlists/Show.json", playlist("Show", main=[pause(600)]))
+    fppd.write("playlists/Idle.json", playlist("Idle", main=[pause(600)]))
+    fppd.write("config/commandPresets.json", {"commands": preset(
+        "PLAYLIST_STOPPED",
+        ("Set Variable", "stops", "Expression", "", "1", "0", "100", "=stops+1", "false"),
+        ("Start Playlist", "Idle", "true", "false"))})
+    start_at, end_at = window(-60, 20)
+    fppd.write("config/schedule.json", [schedule_entry("Show", start_at, end_at, stop_type=STOP_HARD)])
+    fppd.start()
+    fppd.command("Set Variable", "stops", "Value", "0", "1", "0", "100", "")
+    status = lambda: fppd.get("/fppd/status", timeout=3)
+    fppd.wait_for(lambda: status().get("current_playlist", {}).get("playlist") == "Show",
+                  timeout=30, interval=0.5, what="the scheduled playlist to start")
+    fppd.wait_for(lambda: status().get("current_playlist", {}).get("playlist") == "Idle",
+                  timeout=30, interval=0.5, what="the preset's playlist to take over after the hard stop")
+    time.sleep(3)
+    s = status()
+    assert s.get("status_name") == "playing" and s["current_playlist"]["playlist"] == "Idle", s
+    assert float(variable(fppd, "stops")) == 1, \
+        f"PLAYLIST_STOPPED ran {variable(fppd, 'stops')} times for one hard stop"
