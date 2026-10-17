@@ -1,14 +1,17 @@
-"""fppd's crash handler, entered without crashing: SIGUSR1 runs it (pruning
-crashes/ and building a report) and fppd carries on. ShareCrashData 0 makes
-the report a local one, never uploaded."""
+"""fppd's crash handler. A SIGABRT sent from outside runs the fatal path
+(pruning crashes/, building a report, then _exit) without a real fault, so
+nothing else is broken when it runs. SIGUSR1 asks for a stack dump only, and
+fppd carries on. ShareCrashData 0 makes the report a local one, never
+uploaded."""
 
 import os
 import signal
+import subprocess
 import time
 
 import pytest
 
-from fppd import sanitizer
+from fppd import describe_rc, sanitizer
 
 # The crash handler is not async-signal-safe and can't be (it logs, lists
 # crashes/ and runs scripts); tsan.supp says so for handleCrash, but here the
@@ -41,16 +44,22 @@ def seed_reports(fppd, newest_age=300):
     return crashes, reports
 
 
-def run_crash_handler(fppd, done, what):
-    """Start fppd, send it SIGUSR1, and wait until `done()`; fppd must still
-    be running and answering afterwards."""
+def run_crash_handler(fppd):
+    """Start fppd, send it SIGABRT, and wait for the crash handler to finish:
+    it exits with _exit(-1) once the report is written."""
     fppd.settings(ShareCrashData="0")
     fppd.start()
-    fppd.proc.send_signal(signal.SIGUSR1)
-    fppd.wait_for(done, timeout=90, interval=0.5, what=what)
-    time.sleep(2)
-    fppd.check_alive()
-    fppd.get("/fppd/status", timeout=10)
+    fppd.proc.send_signal(signal.SIGABRT)
+    try:
+        # The report script is bounded at 300 s inside fppd; a test report
+        # takes well under a minute.
+        rc = fppd.proc.wait(timeout=180)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(f"the crash handler did not finish within 180s\n{fppd.tail()}")
+    fppd.exit_expected = True
+    assert rc == 255, f"fppd exited with {describe_rc(rc)}, not the crash handler's _exit(-1)\n{fppd.tail()}"
+    reports = fppd.sanitizer_reports()
+    assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
 
 
 def test_crash_handler_prunes_the_oldest_reports_by_time(fppd):
@@ -62,9 +71,7 @@ def test_crash_handler_prunes_the_oldest_reports_by_time(fppd):
     "9.x") were the ones deleted.
     """
     crashes, reports = seed_reports(fppd)
-    # Pruning happens before the report is built, so wait for it alone.
-    run_crash_handler(fppd, lambda: len(set(os.listdir(crashes)) & set(reports)) <= 10,
-                      "the crash handler to prune crashes/")
+    run_crash_handler(fppd)
     left = set(os.listdir(crashes))
     by_age = sorted(reports, key=reports.get)
     oldest_two, kept = by_age[:2], by_age[2:]
@@ -83,8 +90,7 @@ def test_crash_report_is_written_in_this_media_folder(fppd):
     """
     crashes = os.path.join(fppd.media, "crashes")
     os.makedirs(crashes, exist_ok=True)
-    run_crash_handler(fppd, lambda: any(n.endswith(".zip") for n in os.listdir(crashes)),
-                      "the crash handler to write a report")
+    run_crash_handler(fppd)
     zips = [n for n in os.listdir(crashes) if n.endswith(".zip")]
     assert zips, f"no report in {crashes}: {os.listdir(crashes)}"
     assert os.path.getsize(os.path.join(crashes, zips[0])) > 1000, "the report is empty"
@@ -126,8 +132,7 @@ def test_crash_report_redacts_credentials_and_the_cape_serial(fppd):
     with open(os.path.join(fppd.media, "config", "cape-eeprom.bin"), "wb") as f:
         f.write(b"FPP02" + b"LEAK-cape-serial-0042" + bytes(64))
     fppd.settings(SendVendorSerial="0")
-    run_crash_handler(fppd, lambda: any(n.endswith(".zip") for n in os.listdir(crashes)),
-                      "the crash handler to write a report")
+    run_crash_handler(fppd)
     texts = report_texts(fppd, crashes)
     assert any("plugin.leaky.json" in n for n in texts), \
         f"the plugin config isn't in the report, so this proves nothing: {sorted(texts)}"
@@ -135,3 +140,25 @@ def test_crash_report_redacts_credentials_and_the_cape_serial(fppd):
                     for tok in ("LEAK-", "AKIAIOSFODNN7EXAMPLE", "40.71234", "74.00567")
                     if tok in t})
     assert not leaks, f"the report carries secrets: {leaks}"
+
+
+def test_requested_stack_dump_writes_no_report_and_fppd_carries_on(fppd):
+    """SIGUSR1 (like SIGQUIT) asks a running fppd for a stack dump: it writes
+    the gdb stack and leaves crashes/ alone, and fppd keeps running.
+
+    Regression: fef9ddcf4. A requested dump ran the whole fatal path: it froze
+    the crash log ring for good and built (and uploaded) a crash report for
+    an fppd that had not crashed.
+    """
+    crashes = os.path.join(fppd.media, "crashes")
+    os.makedirs(crashes, exist_ok=True)
+    fppd.settings(ShareCrashData="0")
+    fppd.start()
+    fppd.proc.send_signal(signal.SIGUSR1)
+    fppd.wait_for(lambda: "[Inferior 1 (process" in fppd.log(), timeout=90,
+                  interval=0.5, what="the requested stack dump")
+    # Long enough for the report script to have left a zip, had it run.
+    time.sleep(10)
+    fppd.check_alive()
+    fppd.get("/fppd/status", timeout=10)
+    assert not os.listdir(crashes), f"a requested dump wrote a report: {os.listdir(crashes)}"
