@@ -30,24 +30,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-SHA=$(git -C "$FPP" rev-parse --verify "$REF^{commit}")
-TREE="/work/$(echo "$SHA" | cut -c1-12)-$FLAVOR"
-DESCRIBE=$(git -C "$FPP" describe --tags --match='[0-9]*' "$SHA" 2>/dev/null || echo "$SHA")
-echo "fpp $REF = $DESCRIBE ($SHA), flavor $FLAVOR"
-
-docker build -q -t fpp-tests-env "$HERE/docker" > /dev/null
-
-# ccache lives in a named volume, or in a host directory when
-# FPP_TESTS_CCACHE is set (CI caches that directory between runs).
-CCACHE_MOUNT="fpp-tests-ccache:/ccache"
-if [ -n "$FPP_TESTS_CCACHE" ]; then
-    mkdir -p "$FPP_TESTS_CCACHE"
-    CCACHE_MOUNT="$(cd "$FPP_TESTS_CCACHE" && pwd):/ccache"
-fi
-# fppd's exit path visits every descriptor up to the open-file limit, and
-# some Docker setups (WSL's) default it to 2^30: under TSan that takes longer
-# than any scenario waits for fppd to exit.
-DOCKER="docker run --rm --ulimit nofile=1048576:1048576 -v fpp-tests-work:/work -v $CCACHE_MOUNT"
+. "$HERE/scripts/prepare-tree.sh"
 
 # A failed scenario's media directory (fppd.log, sanitizer reports, the config
 # it ran with) is copied here.
@@ -57,21 +40,6 @@ DOCKER="docker run --rm --ulimit nofile=1048576:1048576 -v fpp-tests-work:/work 
 ARTIFACTS="$HERE/artifacts"
 mkdir -p "$ARTIFACTS"
 find "$ARTIFACTS" -mindepth 1 -delete
-
-# Each built tree is ~500MB; keep the most recently used FPP_TESTS_KEEP_TREES.
-# (touch only an existing tree: on a new one it would create a plain file.)
-$DOCKER fpp-tests-env sh -c "if [ -d '$TREE' ]; then touch '$TREE'; fi; ls -1dt /work/*/ 2>/dev/null |
-    tail -n +$((${FPP_TESTS_KEEP_TREES:-8} + 1)) | xargs -r rm -rf"
-
-# Export the tree once per commit and flavor; flavors can't share object files.
-# An export has no .git, so fppversion.sh reads the version from
-# src/EXPORTED_VERSION instead of git describe.
-if ! $DOCKER fpp-tests-env test -d "$TREE"; then
-    git -C "$FPP" archive --format=tar "$SHA" |
-        $DOCKER -i fpp-tests-env sh -c "rm -rf '$TREE.tmp' && mkdir -p '$TREE.tmp' && tar -x -C '$TREE.tmp' &&
-            printf 'SOURCE_VERSION=%s\\nBRANCH=fpp-tests\\n' '$DESCRIBE' > '$TREE.tmp/src/EXPORTED_VERSION' &&
-            mv '$TREE.tmp' '$TREE'"
-fi
 
 # The scenarios make network and mount namespaces (fake devices, fppinit),
 # which Docker's default AppArmor profile forbids even with SYS_ADMIN: on a
