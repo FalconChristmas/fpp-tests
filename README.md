@@ -116,8 +116,9 @@ path under `web/` and runs it through `run-web.sh`:
 scripts/verify-fix.sh 6dd0f6f88 web/tests/page-still-loading.spec.ts
 ```
 
-The suite runs nightly against fpp master and on every pull request here (the "Web UI"
-workflow), and can be started by hand from the Actions tab for any fpp ref.
+The suite runs as the `web` job of the scenarios workflow: nightly against fpp master, with
+its counts on the dashboard next to the scenarios', on every pull request here, and by hand
+from the Actions tab for any fpp ref (`suites` picks scenarios, web or both).
 
 ## Writing a scenario
 

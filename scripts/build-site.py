@@ -20,8 +20,8 @@ import sys
 import ci_results
 
 results, site, history_file, run_url = sys.argv[1:5]
-FLAVORS = ["asan", "tsan", "coverage"]
-LABEL = {"asan": "ASan", "tsan": "TSan", "coverage": "coverage build"}
+FLAVORS = ["asan", "tsan", "coverage", "web"]
+LABEL = {"asan": "ASan", "tsan": "TSan", "coverage": "coverage build", "web": "web UI"}
 FPP_COMMIT = "https://github.com/FalconChristmas/fpp/commit/"
 README = "https://github.com/FalconChristmas/fpp-tests#writing-a-scenario"
 
@@ -152,11 +152,15 @@ if covered:
     top = min(100, max(v for v in vals + fvals if v is not None) + 10)
     charts.append("<section><h2>Coverage over time</h2>" + chart(
         [("lines", "--c1", vals), ("functions", "--c2", fvals)], 0, top, "%") + "</section>")
-counts = {fl: [(h["flavors"].get(fl) or {}).get("tests") for h in history] for fl in FLAVORS}
+# The scenario flavors only: the web suite's few dozen tests would sit flat on
+# the floor of an axis sized for the scenarios. Its count is in its card and in
+# the table of runs.
+SCENARIO_FLAVORS = [fl for fl in FLAVORS if fl != "web"]
+counts = {fl: [(h["flavors"].get(fl) or {}).get("tests") for h in history] for fl in SCENARIO_FLAVORS}
 allc = [v for vs in counts.values() for v in vs if v]
 if allc:
-    charts.append("<section><h2>Tests per run</h2>" + chart(
-        [(LABEL[fl], f"--c{i + 1}", counts[fl]) for i, fl in enumerate(FLAVORS) if any(counts[fl])],
+    charts.append("<section><h2>Scenarios per run</h2>" + chart(
+        [(LABEL[fl], f"--c{i + 1}", counts[fl]) for i, fl in enumerate(SCENARIO_FLAVORS) if any(counts[fl])],
         0, max(allc) * 1.15, "") + "</section>")
 
 tables = []
@@ -221,7 +225,7 @@ cov_link = ('<a class="button" href="coverage/html/index.html">Line-by-line cove
 page = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FPP Scenario Tests</title>
+<title>FPP Tests</title>
 <style>
 :root {{ --bg:#fbfbfa; --fg:#1d1f21; --muted:#5f6670; --line:#e2e4e8; --card:#fff;
   --good:#1a7f37; --bad:#c62828; --c1:#2563eb; --c2:#d97706; --c3:#7c3aed; --bar:#dbe4f5; }}
@@ -236,7 +240,7 @@ h1 {{ font-size:1.6rem; margin:0 0 4px; }} h2 {{ font-size:1.15rem; margin:0 0 1
 h3 {{ font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0; }}
 a {{ color:var(--c1); }} code {{ font-size:.88em; }}
 .sub, .note {{ color:var(--muted); margin:0 0 16px; }}
-.cards {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin:20px 0; }}
+.cards {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:20px 0; }}
 .card {{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }}
 .card.good {{ border-top:3px solid var(--good); }} .card.bad {{ border-top:3px solid var(--bad); }}
 .card p {{ margin:4px 0 0; color:var(--muted); font-size:.85rem; }}
@@ -260,10 +264,11 @@ td.good {{ color:var(--good); }} td.bad {{ color:var(--bad); }}
 .button {{ display:inline-block; padding:8px 14px; border:1px solid var(--line); border-radius:8px;
   background:var(--card); text-decoration:none; margin:0 8px 8px 0; }}
 </style></head><body><main>
-<h1>FPP scenario tests</h1>
+<h1>FPP tests</h1>
 <p class="sub">Nightly runs of <a href="https://github.com/FalconChristmas/fpp-tests">fpp-tests</a>
-against fpp master: every scenario under ASan and TSan, and once more in a coverage build to see
-what FPP code the scenarios reach. Last run {e(last["date"].replace("T", " "))},
+against fpp master: every scenario under ASan and TSan, once more in a coverage build to see
+what FPP code the scenarios reach, and the web UI suite in a browser against the pages served
+as on a player, with the ASan fppd behind them. Last run {e(last["date"].replace("T", " "))},
 fpp {e(last.get("fpp", "?"))} (<a href="{e(last["run"])}">run log</a>).</p>
 <div class="cards">{"".join(cards)}</div>
 <p>{cov_link}</p>
