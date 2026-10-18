@@ -523,16 +523,22 @@ test('Reorder mode: drag order survives auto-refresh', async ({ page }) => {
 
     const before = await getRowOrder(page);
 
-    // dragTo() simulates mousedown → mousemove → mouseup, which is exactly what jQuery
-    // UI sortable listens for.  Dragging grip[0] onto grip[1] triggers a row swap
-    // (jQuery UI 'pointer' tolerance fires when the dragged item overlaps the midpoint
-    // of an adjacent sibling).
+    // jQuery UI sortable listens for mousedown → mousemove → mouseup, and only starts
+    // dragging once the pointer has moved past its distance threshold. dragTo() sends a
+    // single move, which a slower machine's sortable can miss, so move in steps: from
+    // grip[0] to just below the middle of grip[1] swaps the two rows ('pointer'
+    // tolerance fires when the dragged item passes the midpoint of its neighbour).
     const grips = page.locator('#fppSystems tr.systemRow .reorder-grip');
-    await grips.nth(0).dragTo(grips.nth(1));
+    const from = (await grips.nth(0).boundingBox())!;
+    const to = (await grips.nth(1).boundingBox())!;
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height * 0.75, { steps: 20 });
+    await page.mouse.up();
 
-    const afterDrag = await getRowOrder(page);
     // Guard: confirm the drag actually changed the order before waiting for the refresh.
-    expect(afterDrag).not.toEqual(before);
+    await expect.poll(() => getRowOrder(page)).not.toEqual(before);
+    const afterDrag = await getRowOrder(page);
 
     // Wait for the next scheduled poll — the tick that previously reset the order.
     const poll2 = nextStatusPoll(page);
@@ -540,6 +546,44 @@ test('Reorder mode: drag order survives auto-refresh', async ({ page }) => {
 
     const afterRefresh = await getRowOrder(page);
     expect(afterRefresh).toEqual(afterDrag);
+});
+
+test('Reorder mode: a refresh while the mouse is down does not break the drag', async ({ page }) => {
+    // A poll that re-rendered the rows between mousedown on a grip and the drag
+    // starting left jQuery UI sortable holding a row that was no longer in the
+    // page: it threw "Cannot read properties of undefined (reading 'appendChild')"
+    // creating its helper, and the row never moved. Seen once in CI as the drag
+    // above doing nothing; fixed in fpp 5cd6430e6. Reorder mode schedules no new
+    // polls, so the one that bites is the poll already queued when the mode was
+    // entered; holding the button until it arrives makes the race certain.
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+
+    await loadMultisync(page);
+    const poll1 = nextStatusPoll(page);
+    await page.locator('#MultiSyncRefreshStatus').check();
+    await poll1;
+    await page.locator('#reorderModeBtn').click();
+    const grips = page.locator('#fppSystems tr.systemRow .reorder-grip');
+    await grips.first().waitFor({ state: 'visible' });
+    const before = await getRowOrder(page);
+
+    const from = (await grips.nth(0).boundingBox())!;
+    const to = (await grips.nth(1).boundingBox())!;
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await nextStatusPoll(page);
+    // Let the poll's re-render run before the drag starts.
+    await page.waitForTimeout(500);
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height * 0.75, { steps: 20 });
+    await page.mouse.up();
+
+    expect(errors).toEqual([]);
+    await expect.poll(() => getRowOrder(page)).not.toEqual(before);
+    // The render the poll was due runs once the button is up; it must keep the drag.
+    const afterDrag = await getRowOrder(page);
+    await page.waitForTimeout(500);
+    expect(await getRowOrder(page)).toEqual(afterDrag);
 });
 
 test('Checked checkbox survives auto-refresh', async ({ page }) => {
