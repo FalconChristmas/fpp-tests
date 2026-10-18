@@ -3,6 +3,9 @@
 # the fix itself. A test that passes on both proves nothing.
 #
 #   scripts/verify-fix.sh [--fpp DIR] [--base REF] [--flavor F] FIX_SHA [pytest args...]
+#   scripts/verify-fix.sh [...] FIX_SHA web/tests/SPEC [playwright args...]
+#
+# A path under web/ runs that web UI test through run-web.sh instead.
 #
 # --base    the "before" tree, when the parent is not it (default FIX_SHA^) --
 #           e.g. when an earlier backstop already masks the bug at the parent.
@@ -27,13 +30,23 @@ FIX="$1"; shift
 [ -n "$FIX" ] || { echo "usage: $0 [--fpp DIR] [--base REF] [--flavor F] FIX_SHA [pytest args...]" >&2; exit 2; }
 [ -n "$BASE" ] || BASE="$FIX^"
 
+RUNNER="$HERE/run.sh"
+QUIET=-q
+case "$1" in
+web/*)
+    RUNNER="$HERE/run-web.sh"
+    QUIET=--quiet
+    # Playwright runs in web/, so the spec's path is relative to it.
+    SPEC="${1#web/}"; shift; set -- "$SPEC" "$@" ;;
+esac
+
 echo "=== before the fix ($BASE): expecting FAIL"
-if "$HERE/run.sh" $FPPARG $FLAVORARG --ref "$BASE" -q "$@"; then
+if "$RUNNER" $FPPARG $FLAVORARG --ref "$BASE" $QUIET "$@"; then
     echo "FAIL: the scenario passes without the fix, so it does not test it" >&2
     exit 1
 fi
 echo "=== with the fix ($FIX): expecting PASS"
-if ! "$HERE/run.sh" $FPPARG $FLAVORARG --ref "$FIX" -q "$@"; then
+if ! "$RUNNER" $FPPARG $FLAVORARG --ref "$FIX" $QUIET "$@"; then
     echo "FAIL: the scenario fails with the fix in place" >&2
     exit 1
 fi

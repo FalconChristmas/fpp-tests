@@ -79,6 +79,46 @@ fixed. A new race turns the nightly run red. When you fix one of the listed race
 its lines from that file in the same change. Only fppd's own sanitizer log counts: its
 children (scripts, system tools) carry the preloaded runtime but aren't built with it.
 
+## The web UI suite
+
+`web/` holds Playwright tests for the pages under fpp's `www/`. `run-web.sh` builds fpp the
+same way `run.sh` does (same options, same cached trees), serves the UI from Docker the way
+a player does -- Apache in front of php-fpm, the tree's own site config and a freshly
+generated CSP, with the build's fppd behind it -- and runs the suite from this machine
+against it:
+
+```sh
+./run-web.sh                                   # every test, ../fpp at HEAD, ASan fppd
+./run-web.sh --ref v10.x tests/fpp.spec.ts     # anything after the options goes to playwright
+./run-web.sh --serve                           # just serve it on 127.0.0.1:8080, until Ctrl-C
+```
+
+It needs Docker and Node.js 20+; the first run installs the suite's packages and Chromium.
+With `--serve` running, `npx playwright test --ui` in `web/` is the quickest way to write a
+test. Any other player works as a target too (`PLAYWRIGHT_BASE_URL=http://<player>`), but the
+tests change its settings, so don't point it at one that matters.
+
+A fresh player sends every page to the setup wizard, so the `setup` project finishes the
+wizard first, as a user would; if it can't be finished, nothing else runs. The fppd behind
+the pages is held to the scenarios' standard: the run fails if it died, wedged, exited non-zero
+on SIGTERM or wrote a sanitizer report, whatever the tests themselves said. Results go to
+`artifacts/web/`: `junit.xml`, the HTML report (`report/`), failed tests' screenshots and
+traces, `fppd.json` with fppd's verdict and, when fppd failed, its media directory and
+Apache's logs.
+
+`FPP_TESTS_THEMES=1` runs every test in both color schemes and writes a side-by-side
+screenshot report (`web/playwright-report/sightline.html`), for reviewing theme work.
+
+A UI fix gets a test that fails without it, like any other: `scripts/verify-fix.sh` takes a
+path under `web/` and runs it through `run-web.sh`:
+
+```sh
+scripts/verify-fix.sh 6dd0f6f88 web/tests/page-still-loading.spec.ts
+```
+
+The suite runs nightly against fpp master and on every pull request here (the "Web UI"
+workflow), and can be started by hand from the Actions tab for any fpp ref.
+
 ## Writing a scenario
 
 Scenarios are plain pytest functions in `scenarios/test_*.py` that take the `fppd`
@@ -135,7 +175,12 @@ these flags (a missing include the precompiled header used to supply, for instan
 | Path | What |
 |---|---|
 | `run.sh` | Export, build and run, all in Docker |
+| `run-web.sh` | Export, build, serve the web UI in Docker and run `web/` against it |
 | `docker/Dockerfile` | The build-and-run image: fppd's build dependencies, no web stack |
+| `docker/web/Dockerfile` | That image plus Apache and php-fpm, set up as on a player |
+| `scripts/prepare-tree.sh` | The export and build-cache steps both runners share |
+| `scripts/web_serve.py` | Serves the UI inside the container and judges fppd afterwards |
+| `web/` | The Playwright suite: `tests/`, its config, and the wizard's `setup` project |
 | `scripts/build-fpp.sh` | Builds an exported tree inside the container |
 | `scripts/verify-fix.sh` | Red-before, green-after check for a fix |
 | `scenarios/fppd.py` | Starts, drives and stops one fppd |

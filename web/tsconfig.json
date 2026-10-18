@@ -1,0 +1,9 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "module": "CommonJS",
+        "types": ["node", "@playwright/test"],
+        "esModuleInterop": true,
+        "skipLibCheck": true
+    }
+}

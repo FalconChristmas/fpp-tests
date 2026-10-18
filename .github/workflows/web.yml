@@ -1,0 +1,98 @@
+name: Web UI
+
+on:
+  schedule:
+    # Alongside the scenarios' nightly run.
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      fpp_ref:
+        description: fpp branch, tag or commit to test
+        default: master
+      flavor:
+        description: Build flavor of the fppd behind the UI
+        type: choice
+        options: [asan, tsan, debug, optimized]
+        default: asan
+      playwright_args:
+        description: Extra playwright arguments (e.g. -g Playlists)
+        default: ""
+  pull_request:
+  repository_dispatch:
+    types: [fpp-push]
+
+concurrency:
+  group: web-${{ github.event.pull_request.number || '' }}-${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}-${{ github.event.inputs.flavor || 'asan' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FPP_REF: ${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}
+      FLAVOR: ${{ github.event.inputs.flavor || 'asan' }}
+    steps:
+      - name: Checkout fpp-tests
+        uses: actions/checkout@v6
+
+      - name: Checkout fpp
+        uses: actions/checkout@v6
+        with:
+          repository: FalconChristmas/fpp
+          ref: ${{ env.FPP_REF }}
+          path: fpp
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Restore ccache
+        uses: actions/cache@v5
+        with:
+          path: .ccache
+          key: ccache-${{ env.FLAVOR }}-${{ github.run_id }}
+          restore-keys: ccache-${{ env.FLAVOR }}-
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install the suite and Chromium
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Build fpp, serve the UI and run the suite
+        env:
+          FPP_TESTS_CCACHE: .ccache
+          PLAYWRIGHT_ARGS: ${{ github.event.inputs.playwright_args }}
+        # PLAYWRIGHT_ARGS is left unquoted on purpose, to split into arguments.
+        run: ./run-web.sh --fpp fpp --ref HEAD --flavor "$FLAVOR" $PLAYWRIGHT_ARGS
+
+      - name: Make the artifacts readable
+        if: always()
+        run: |
+          mkdir -p artifacts/web
+          sudo chown -R "$(id -u):$(id -g)" artifacts && chmod -R u+rwX artifacts
+          version=$(git -C fpp describe --tags --match='[0-9]*' 2>/dev/null || git -C fpp rev-parse --short HEAD)
+          printf '{"flavor":"web, %s fppd","version":"%s","sha":"%s"}\n' "$FLAVOR" "$version" \
+            "$(git -C fpp rev-parse HEAD)" > artifacts/web/meta.json
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-report
+          path: artifacts/web/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Summarize
+        if: always()
+        run: python3 scripts/ci-summary.py artifacts/web >> "$GITHUB_STEP_SUMMARY"
