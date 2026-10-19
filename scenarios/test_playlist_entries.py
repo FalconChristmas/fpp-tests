@@ -278,6 +278,28 @@ def test_dynamic_entry_from_a_url(fppd):
         assert [p for _, p, _ in got] == ["/items"]
 
 
+def test_dynamic_entry_from_a_url_too_large(fppd):
+    """A dynamic entry whose URL answers with more than CurlManager's 16 MB
+    is skipped as a failed request, with that reason, and the playlist
+    carries on.
+
+    Regression: 1ce5a48bf. The 16 MB cap (56d07749e) ended the transfer with
+    a write error, but the HTTP status still read 200: the entry took the
+    first 16 MB as its whole answer, parsed it as JSON ("not valid JSON")
+    and wrote all of it into fppd.log.
+    """
+    body = json.dumps({"mainPlaylist": [step(7), step(8)], "pad": "x" * (20 * 1024 * 1024)})
+    with http_server({"/items": body}) as (port, got):
+        fppd.write("playlists/P.json", playlist("P", main=[
+            step(1), dynamic("url", url=f"http://127.0.0.1:{port}/items"), step(2)]))
+        fppd.start()
+        assert run(fppd, "P") == "12"
+        warnings = status(fppd).get("warnings", [])
+        failed = [w for w in warnings if "Dynamic playlist URL request failed" in w]
+        assert failed and "larger than 16 MB" in failed[0], warnings
+        assert not any("not valid JSON" in w for w in warnings), warnings
+
+
 @pytest.mark.parametrize("method", ["GET", "POST"])
 def test_url_entry_calls_the_url(fppd, method):
     """A URL entry requests its URL (GET, or POST with its data) and then

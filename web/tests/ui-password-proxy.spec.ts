@@ -127,3 +127,59 @@ EOF`);
     await disablePassword(request);
   }
 });
+
+// What the first version of upgrade 155 (fpp 3c0f27b22) left behind on the
+// older shape: its inserted line is a bare alternative, and lets in anyone.
+// That version was published before d163b8045 rewrote it, and a player that
+// ran it is past 155 for good. Upgrade 156 (fpp f1e62402c, "fix(upgrade): 156
+// repairs a password config the first upgrade 155 broke") rewrites it.
+test('upgrade 156 repairs a password config the first upgrade 155 opened up', async ({ request }) => {
+  await enablePassword(request);
+  try {
+    inPlayer('sh', '-c', `cat > ${PWCONF} <<'EOF'
+AuthUserFile /home/fpp/media/config/.htpasswd
+AuthType Basic
+AuthName "Falcon Player"
+<RequireAny>
+  Require local
+  Require expr "%{HTTP:X-FPP-Proxied} == ''"
+  Require valid-user
+</RequireAny>
+
+SetEnvIf Host ^ LOCAL_PROTECT=1
+EOF`);
+    await reloadApache();
+    // The broken config really is open: no password asked.
+    expect(await status('/api/fppd/version')).toBe(200);
+
+    try {
+      inPlayer('bash', '/opt/fpp/upgrade/156/upgrade.sh');
+    } catch {
+      // no upgrade 156 in the tree under test
+    }
+    await reloadApache();
+
+    expect(await status('/api/fppd/version')).toBe(401);
+    expect(await status('/api/fppd/version', AUTH)).toBe(200);
+    expect(statusFromLoopback('/api/fppd/version')).toBe('200');
+    // Run again, it changes nothing.
+    const once = inPlayer('cat', PWCONF);
+    inPlayer('bash', '/opt/fpp/upgrade/156/upgrade.sh');
+    expect(inPlayer('cat', PWCONF)).toBe(once);
+  } finally {
+    await disablePassword(request);
+  }
+});
+
+test('upgrade 156 leaves a player with no UI password open', async () => {
+  const before = inPlayer('cat', PWCONF);
+  expect(before).toContain('Require all granted');
+  try {
+    inPlayer('bash', '/opt/fpp/upgrade/156/upgrade.sh');
+  } catch {
+    // no upgrade 156 in the tree under test
+  }
+  await reloadApache();
+  expect(inPlayer('cat', PWCONF)).toBe(before);
+  expect(await status('/api/fppd/version')).toBe(200);
+});
