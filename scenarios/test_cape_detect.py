@@ -13,6 +13,7 @@ Runs on a device (fppcapedetect isn't built in a container).
 
 import json
 import os
+import subprocess
 
 import pytest
 
@@ -328,3 +329,25 @@ def test_dry_run_reports_and_writes_nothing(fppinit):
         assert ("statsPublish" in res["refused"]) == (not stats_ok), res
     assert fppinit.media_file("settings") == before
     assert not fppinit.media_exists("tmp/cape-info.json")
+
+
+@pytest.mark.skipif(not on_pi(), reason="bootConfig edits config.txt, on a Pi")
+def test_an_empty_boot_config_removal_does_not_hang(fppinit):
+    """An empty string in bootConfig.remove matched at offset 0 forever and
+    erased nothing, so fppcapedetect spun at boot and the box never came up.
+    The empty entry is skipped and the real one beside it still applies.
+
+    Regression: 5e9ee7dcd."""
+    with open(os.path.join(fppinit.boot, "config.txt"), "w") as f:
+        f.write("dtparam=audio=on\ndtoverlay=fpp-test-remove-me\n")
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(bootConfig={
+        "remove": ["", "dtoverlay=fpp-test-remove-me"]})))
+    try:
+        r = fppinit.capedetect("-no-set-permissions", timeout=30)
+    except subprocess.TimeoutExpired:
+        pytest.fail("fppcapedetect hung on an empty bootConfig.remove entry")
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out[-3000:]
+    cfg = fppinit.boot_file("config.txt")
+    assert "fpp-test-remove-me" not in cfg, cfg
+    assert "dtparam=audio=on" in cfg, cfg
