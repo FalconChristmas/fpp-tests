@@ -66,7 +66,7 @@ class Fppd:
 
     # --- lifecycle -------------------------------------------------------
 
-    def start(self, timeout=60, fake_time=None, tz=None, preload=(), extra_env=None):
+    def start(self, timeout=60, fake_time=None, tz=None, preload=(), extra_env=None, argv=None):
         """Start fppd and wait until its API answers.
 
         fake_time: "YYYY-MM-DD HH:MM:SS" -- fppd's wall clock starts there
@@ -76,6 +76,9 @@ class Fppd:
         preload:   shared objects to LD_PRELOAD into fppd (after the
                    sanitizer runtime, which has to come first).
         extra_env: more environment for fppd.
+        argv:      a command line to run instead of "fppd -f" (in the same
+                   directory and environment), for a scenario that needs
+                   fppd's own daemonizing. self.proc is then that command.
         """
         with open(os.path.join(self.tree, "www", "media_root.txt"), "w") as f:
             f.write(self.media)
@@ -125,7 +128,7 @@ class Fppd:
         self.out = open(os.path.join(self.media, "logs", "fppd.stdout"), "w")
         self.started = time.monotonic()
         self.proc = subprocess.Popen(
-            [os.path.join(self.tree, "src", "fppd"), "-f"],
+            argv or [os.path.join(self.tree, "src", "fppd"), "-f"],
             cwd=os.path.join(self.tree, "src"),
             stdout=self.out, stderr=subprocess.STDOUT, env=env,
             start_new_session=True,
