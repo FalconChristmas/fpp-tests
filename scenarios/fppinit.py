@@ -202,7 +202,10 @@ exit $rc
         env.pop("LD_PRELOAD", None)
         env.setdefault("ASAN_OPTIONS", "detect_leaks=0")
         env["FPP_MEDIA_DIR"] = MEDIA
-        return subprocess.run(["unshare", "--mount", "--pid", "--fork", "--mount-proc",
+        # --kill-child: a timeout kills unshare, and only unshare.  Without
+        # it the sandbox's PID 1 and a wedged fppinit/fppcapedetect under it
+        # kept spinning after the test had failed (one ran 8 hours).
+        return subprocess.run(["unshare", "--mount", "--pid", "--kill-child", "--mount-proc",
                                "--propagation", "private",
                                "sh", "-c", script], capture_output=True, text=True,
                               timeout=timeout, env=env)
