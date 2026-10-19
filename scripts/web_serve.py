@@ -50,6 +50,14 @@ def main():
     # to the host's browser coming in through Docker's port mapping.
     f.write("config/ui-password-config.conf",
             "<RequireAny>\n  Require all granted\n</RequireAny>\n\nSetEnvIf Host ^ LOCAL_PROTECT=0\n")
+    # An event file, as a player upgraded from FPP 4 still has one. With no
+    # commandPresets.json yet, fppd's first start turns it into a Command
+    # Preset of the same name, which /api/events/01_01/trigger then fires
+    # (tests/events.spec.ts). Nothing in the API writes the events directory.
+    f.write("events/01_01.fevt", {
+        "majorId": 1, "minorId": 1, "name": "fpp-tests event",
+        "command": "Set Variable", "args": ["fppTestsEvent", "Value", "1", "1", "0", "100", ""],
+    })
     f.start(timeout=120)
 
     # The CSP is generated per device from its settings and cape; the pages
