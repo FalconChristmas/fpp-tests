@@ -67,7 +67,8 @@ $DOCKER $TTY -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" \
     --cap-add SYS_PTRACE --cap-add SYS_NICE --cap-add NET_ADMIN --cap-add SYS_ADMIN \
     --security-opt apparmor=unconfined \
     --tmpfs /tmp:rw,exec,nosuid,size=4g \
-    fpp-tests-env sh -c '/tests/scripts/build-fpp.sh "$FPP_TREE" "$FPP_FLAVOR" || exit 1
+    fpp-tests-env sh -c 'exec 8< "$FPP_TREE" && flock -s 8 || exit 1
+        /tests/scripts/build-fpp.sh "$FPP_TREE" "$FPP_FLAVOR" || exit 1
         cd /tests || exit 1
         if [ $# -eq 0 ]; then set -- scenarios; fi
         set -- --junitxml=/artifacts/junit.xml "$@"

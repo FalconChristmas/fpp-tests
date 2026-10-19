@@ -9,6 +9,7 @@ to $FPP_TESTS_ARTIFACTS/fppd.json, and on failure the media directory (logs,
 backtrace, config) and Apache's logs are copied next to it.
 """
 
+import fcntl
 import json
 import os
 import shutil
@@ -27,6 +28,10 @@ def sh(*cmd):
 
 def main():
     tree = os.environ["FPP_TREE"]
+    # In use while this serves: prepare-tree.sh's eviction skips a tree that
+    # anything holds a shared lock on.
+    tree_lock = os.open(tree, os.O_RDONLY)
+    fcntl.flock(tree_lock, fcntl.LOCK_SH)
     artifacts = os.environ.get("FPP_TESTS_ARTIFACTS", "/artifacts")
     stop = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stop.set())

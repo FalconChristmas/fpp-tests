@@ -6,6 +6,10 @@ set -e
 TREE="$1"
 FLAVOR="$2"
 cd "$TREE/src"
+# A shared lock on the tree marks it in use: prepare-tree.sh's eviction skips
+# it. (run.sh's container holds one for the whole run as well.)
+exec 8< "$TREE"
+flock -s 8
 # Runs from several fpp-tests checkouts share the work volume. Build one tree
 # at a time: two runs of one commit would otherwise build the same tree at
 # once, and each build sizes -j to the whole VM's memory.
