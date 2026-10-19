@@ -747,3 +747,28 @@ def test_submodel_effect_ending_during_output_reloads(fppd):
     finally:
         stop.set()
         t.join(10)
+
+
+def test_text_wider_than_16384_pixels_scrolls(fppd):
+    """A Text effect whose message renders wider than 16384 pixels (a long
+    scrolling banner, well inside the effect's own 4M pixel bound) draws.
+
+    Regression: 3cac81783. e3e4e471a capped every GraphicsMagick image at
+    16384 pixels wide or high, which also applies to the images fppd makes
+    itself: the Text effect draws the whole message as one strip, so the
+    strip failed to allocate, doText() logged "could not render text" and
+    nothing was drawn."""
+    channels = PANEL_W * PANEL_H * 3
+    setup(fppd, [matrix("Panel", width=PANEL_W, height=PANEL_H)], channels=channels)
+    text = "".join(chr(ord("A") + i % 26) for i in range(3000))
+    with DdpReceiver(channels) as rx:
+        fppd.start()
+        effect(fppd, "Panel", "Text", Font=a_font(fppd), FontSize="12", Position="Right to Left",
+               Speed="200", Text=text)
+        try:
+            wait_output(fppd, rx, lambda f: any(f), "the text to draw", timeout=15)
+        finally:
+            errors = [l for l in fppd.log().splitlines() if "Text Overlay Effect" in l]
+        assert not errors, errors
+        keeps_sending(rx, 20, "output while the text scrolled")
+        stop_effects(fppd, "Panel")
