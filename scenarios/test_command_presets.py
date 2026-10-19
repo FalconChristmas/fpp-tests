@@ -106,3 +106,43 @@ def test_keyword_whose_value_contains_itself(fppd):
                   what="the PLAYLIST_STOPPED preset to run")
     assert variable(fppd, "Ran") == "yes"
     assert variable(fppd, "Stopped") == name
+
+
+def rss_mb(pid):
+    with open(f"/proc/{pid}/status") as f:
+        for line in f:
+            if line.startswith("VmRSS:"):
+                return int(line.split()[1]) / 1024
+    return 0
+
+
+def test_fired_preset_timers_leave_nothing_behind(fppd):
+    """Each "Trigger Command Preset In Future" with a new identifier is a
+    new named timer; once it has fired, fppd keeps nothing of it.
+
+    Regression: 0dc15ea9c. bb1e3e3b6 kept an epoch per timer name in a map
+    that every fired timer added to and nothing removed from, so timers
+    that take a fresh name each time (this command's identifiers, a
+    per-play media stop, each pass of looping media) grew fppd for as long
+    as it ran. 1 MB identifiers make that measurable: 50 of them kept
+    51 MB, against under 3 MB with the fix. Repeating one identifier first
+    warms the same paths without growing the map, and ASan's quarantine is
+    off so freed memory leaves the RSS as it would in a normal build."""
+    fppd.start(extra_env={"ASAN_OPTIONS": (
+        "halt_on_error=1:detect_leaks=0:abort_on_error=0:quarantine_size_mb=0:"
+        f"log_path={fppd.media}/logs/asan")})
+    pad = "x" * (1024 * 1024)
+
+    def trigger(ident):
+        fppd.post("/command", {"command": "Trigger Command Preset In Future",
+                               "args": [ident + pad, "0", "no such preset"]}, timeout=30)
+
+    for _ in range(60):
+        trigger("same")
+    time.sleep(1.5)
+    before = rss_mb(fppd.proc.pid)
+    for i in range(50):
+        trigger(f"{i:04d}")
+    time.sleep(1.5)  # every timer has fired
+    grew = rss_mb(fppd.proc.pid) - before
+    assert grew < 20, f"fppd grew {grew:.1f} MB over 50 fired preset timers"
