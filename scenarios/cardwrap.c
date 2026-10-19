@@ -11,6 +11,13 @@
  * CARDWRAP_AT_S (default 5): seconds after that first read.
  * CARDWRAP_DEBUG: print each hw_ptr read, real and rewritten, to stderr.
  */
+/* Both fopen and fopen64 are defined below.  With _FILE_OFFSET_BITS=64,
+ * the default on Debian 13 armhf (and needed by _TIME_BITS=64), <stdio.h>
+ * turns fopen into fopen64 and the two collide; fppd built that way calls
+ * fopen64, the other build fopen, so the shim takes both, each passed on to
+ * its own libc function -- fopen64's large-file support included. */
+#undef _TIME_BITS
+#undef _FILE_OFFSET_BITS
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <stdio.h>
@@ -109,15 +116,24 @@ static FILE* rewrite(const char* path, int is_status) {
     return serve(out);
 }
 
-static FILE* hook(const char* path, const char* mode) {
-    if (!real_fopen) real_fopen = (FILE * (*)(const char*, const char*)) dlsym(RTLD_NEXT, "fopen");
+typedef FILE* (*fopen_fn)(const char*, const char*);
+
+static FILE* hook(const char* path, const char* mode, fopen_fn real) {
+    if (!real_fopen) real_fopen = (fopen_fn)dlsym(RTLD_NEXT, "fopen");
     if (path && mode && mode[0] == 'r' && strncmp(path, "/proc/asound/card", 17) == 0 && strstr(path, "/sub")) {
         const char* base = strrchr(path, '/');
         if (base && strcmp(base, "/status") == 0) return rewrite(path, 1);
         if (base && strcmp(base, "/sw_params") == 0) return rewrite(path, 0);
     }
-    return real_fopen(path, mode);
+    return real(path, mode);
 }
 
-FILE* fopen(const char* path, const char* mode) { return hook(path, mode); }
-FILE* fopen64(const char* path, const char* mode) { return hook(path, mode); }
+FILE* fopen(const char* path, const char* mode) {
+    if (!real_fopen) real_fopen = (fopen_fn)dlsym(RTLD_NEXT, "fopen");
+    return hook(path, mode, real_fopen);
+}
+FILE* fopen64(const char* path, const char* mode) {
+    static fopen_fn real_fopen64;
+    if (!real_fopen64) real_fopen64 = (fopen_fn)dlsym(RTLD_NEXT, "fopen64");
+    return hook(path, mode, real_fopen64);
+}

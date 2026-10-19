@@ -377,6 +377,7 @@ class Daemonized:
         self.fppd = fppd
         self.binary = os.path.realpath(os.path.join(fppd.tree, "src", "fppd"))
         shim = os.path.join(fppd.media, "tmp", "shim")
+        self.shim = shim
         self.calls = os.path.join(shim, "pactl.log")
         self.rc_file = os.path.join(fppd.media, "tmp", "launcher.rc")
         os.makedirs(shim)
@@ -398,22 +399,43 @@ class Daemonized:
                          self.binary, self.rc_file, *args],
                    extra_env={"PATH": shim + ":" + os.environ["PATH"]})
         fppd.exit_expected = True
-        fppd.wait_for(lambda: len(self.daemons()) == 1, timeout=10, what="a single fppd daemon")
+        try:
+            fppd.wait_for(lambda: len(self.daemons()) == 1, timeout=10, what="a single fppd daemon")
+        except BaseException:
+            # Left running, a daemon keeps the API and DDP ports, and every
+            # later scenario in the run fails on them or talks to it.
+            self.kill_daemons()
+            raise
         self.pid = self.daemons()[0]
 
     def daemons(self):
-        """fppd processes other than the one the command started."""
+        """The fppd processes this launch forked away. Told from any other
+        fppd -- under run-local.sh, the device's own, which is the same
+        binary with no launcher for a parent -- by the shim directory on the
+        PATH this launch gave it, which a forked daemon inherits."""
+        marker = ("PATH=" + self.shim + ":").encode()
         pids = []
         for p in os.listdir("/proc"):
             if p.isdigit():
                 try:
                     with open(f"/proc/{p}/status") as f:
                         ppid = int(f.read().split("PPid:")[1].split()[0])
-                    if os.path.realpath(f"/proc/{p}/exe") == self.binary and ppid != self.fppd.proc.pid:
-                        pids.append(int(p))
+                    if os.path.realpath(f"/proc/{p}/exe") != self.binary or ppid == self.fppd.proc.pid:
+                        continue
+                    with open(f"/proc/{p}/environ", "rb") as f:
+                        if any(e.startswith(marker) for e in f.read().split(b"\0")):
+                            pids.append(int(p))
                 except (OSError, IndexError, ValueError):
                     pass
         return pids
+
+    def kill_daemons(self):
+        import signal
+        for pid in self.daemons():
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
 
     def volumes_set(self):
         try:
