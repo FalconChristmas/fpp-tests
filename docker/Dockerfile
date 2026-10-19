@@ -17,10 +17,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgstrtspserver-1.0-dev \
         libusb-1.0-0-dev libasound2-dev libpipewire-0.3-dev libsdl2-dev mesa-common-dev \
         gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire gstreamer1.0-tools \
-        gstreamer1.0-plugins-bad \
+        gstreamer1.0-plugins-bad gstreamer1.0-alsa \
         pipewire pipewire-bin pipewire-pulse wireplumber pulseaudio-utils \
         python3 python3-pytest python3-zstandard faketime tzdata procps iproute2 gdb patch zip \
-        mosquitto mosquitto-clients gcovr \
+        mosquitto mosquitto-clients gcovr qrencode \
         fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 

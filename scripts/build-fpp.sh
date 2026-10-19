@@ -6,6 +6,11 @@ set -e
 TREE="$1"
 FLAVOR="$2"
 cd "$TREE/src"
+# Runs from several fpp-tests checkouts share the work volume. Build one tree
+# at a time: two runs of one commit would otherwise build the same tree at
+# once, and each build sizes -j to the whole VM's memory.
+exec 9> "$(dirname "$TREE")/.build.lock"
+flock 9
 # A tree built in an older image is built again: its makefiles leave out what
 # that image lacked (gst-rtsp-server, say), and fpp's own feature stamp then
 # rebuilds what the new one adds.  Otherwise make finds nothing to do.
@@ -30,6 +35,13 @@ export TMPDIR="$TREE/.build-tmp"
 mkdir -p "$TMPDIR"
 export CCACHE_DIR=/ccache
 export CCACHE=ccache
+# Every commit is exported to its own /work/<sha>-<flavor>, and with -g ccache
+# hashes the compiler's working directory, so no tree ever hit another's
+# objects: verify-fix's two sides were each a full build. Hash paths relative
+# to the tree instead. (Debug info then names the first tree that compiled an
+# object; gdb still has the functions and line numbers.)
+export CCACHE_BASEDIR="$TREE"
+export CCACHE_NOHASHDIR=1
 # The coverage flavor is a -O0 --coverage build of the debug target; each
 # fppd run adds to the .gcda counts next to the objects, and
 # scripts/coverage-report.sh turns them into a report.
@@ -64,3 +76,10 @@ if ! eval make -j"$JOBS" DISTRIBUTED_COMPILE=1 $TARGET > "$TREE/build.log" 2>&1;
     fi
 fi
 printf '%s' "${FPP_TESTS_IMAGE:-}" > .fpp-tests-built
+# A tree is built once and never incrementally: one built in an older image is
+# rebuilt from ccache, which holds every object. Dropping them takes a tree
+# from ~540 MB to ~190 MB, so the work volume keeps more of them. (coverage's
+# report reads the notes files next to the objects; leave that flavor alone.)
+if [ "$FLAVOR" != coverage ]; then
+    find "$TREE" -name '*.o' -delete
+fi

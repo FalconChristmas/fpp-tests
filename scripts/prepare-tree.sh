@@ -25,17 +25,20 @@ fi
 # than any scenario waits for fppd to exit.
 DOCKER="docker run --rm --ulimit nofile=1048576:1048576 -v fpp-tests-work:/work -v $CCACHE_MOUNT -e FPP_TESTS_IMAGE=$IMAGE_ID"
 
-# Each built tree is ~500MB; keep the most recently used FPP_TESTS_KEEP_TREES.
+# Each built tree is ~190MB (build-fpp.sh drops the objects); keep the most
+# recently used FPP_TESTS_KEEP_TREES.
 # (touch only an existing tree: on a new one it would create a plain file.)
 $DOCKER fpp-tests-env sh -c "if [ -d '$TREE' ]; then touch '$TREE'; fi; ls -1dt /work/*/ 2>/dev/null |
-    tail -n +$((${FPP_TESTS_KEEP_TREES:-8} + 1)) | xargs -r rm -rf"
+    tail -n +$((${FPP_TESTS_KEEP_TREES:-16} + 1)) | xargs -r rm -rf"
 
 # Export the tree once per commit and flavor; flavors can't share object files.
 # An export has no .git, so fppversion.sh reads the version from
 # src/EXPORTED_VERSION instead of git describe.
 if ! $DOCKER fpp-tests-env test -d "$TREE"; then
     git -C "$FPP" archive --format=tar "$SHA" |
-        $DOCKER -i fpp-tests-env sh -c "rm -rf '$TREE.tmp' && mkdir -p '$TREE.tmp' && tar -x -C '$TREE.tmp' &&
+        $DOCKER -i fpp-tests-env sh -c "exec 9> /work/.export.lock && flock 9 &&
+            if [ -d '$TREE' ]; then cat > /dev/null; exit 0; fi &&
+            rm -rf '$TREE.tmp' && mkdir -p '$TREE.tmp' && tar -x -C '$TREE.tmp' &&
             printf 'SOURCE_VERSION=%s\\nBRANCH=fpp-tests\\n' '$DESCRIBE' > '$TREE.tmp/src/EXPORTED_VERSION' &&
             mv '$TREE.tmp' '$TREE'"
 fi
