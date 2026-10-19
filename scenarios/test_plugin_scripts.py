@@ -188,3 +188,58 @@ def test_unloading_a_plugin_during_another_plugins_callback(fppd):
             assert r["loaded"] is False, r
             time.sleep(4)  # fpp-test-a's callback returns; the walk goes on to B
             assert fppd.post("/fppd/plugin/fpp-test-b/load", {}, timeout=40)["loaded"] is True
+
+
+def test_unload_mid_walk_waits_only_for_its_own_plugin(fppd):
+    """Unloading a plugin while a playlist callback walk is inside another
+    plugin's slow callback returns at once, and the walk then skips the
+    unloaded plugin instead of calling it.
+
+    Regression: 0bbbe2772. 26915a4d9 counted every plugin in the walk's copy
+    of the list as in flight before calling the first one, so an unload
+    landing mid-walk waited -- on the main loop -- for the whole walk,
+    including the unrelated plugin's slow callback (up to 30 s), and the
+    walk still went on to call the plugin it was unloading. (A script
+    plugin logs "shutdown" from its destructor, which ran only after that
+    call, so what shows is a playlist event logged after the unload was
+    asked for.)
+
+    Regression: e742df13a. 0bbbe2772 took the plugin's Plugin* (a
+    dynamic_cast, which reads the object) before checking it was still
+    listed; with the unload no longer waiting, the unloaded plugin had
+    been freed by then, and the walk crashed in __dynamic_cast."""
+    from test_mqtt_control import HOST, PORT, broker, publish
+    slow = plugin(fppd, name="fpp-test-a")
+    with open(os.path.join(slow, "callbacks.sh"), "w") as f:
+        f.write(CALLBACKS.replace("LIST_DELAY", ":").replace("LIST", "playlist")
+                .replace('echo "$*" >> "$LOG"',
+                         'echo "$*" >> "$LOG"; case "$*" in *\\"stop\\"*) sleep 8;; esac'))
+    other = plugin(fppd, name="fpp-test-b")
+    fppd.write("playlists/P.json", playlist("P", main=[pause(60)]))
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    with broker():
+        fppd.start()
+        time.sleep(2)  # connected and subscribed
+        # Unload and reload first, so B is listed after A whatever order the
+        # plugin directories were read in at startup.
+        assert fppd.post("/fppd/plugin/fpp-test-b/unload", {}, timeout=40)["loaded"] is False
+        assert fppd.post("/fppd/plugin/fpp-test-b/load", {}, timeout=40)["loaded"] is True
+        fppd.command("Start Playlist", "P", "false", "false", timeout=30)
+        fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "playing",
+                      timeout=20, what="the playlist to start")
+        n = len(events(slow))
+        # Off the main loop (mosquitto's thread), so the unload can run there
+        # while the walk is inside fpp-test-a.
+        publish("set/playlist/P/stop/now")
+        fppd.wait_for(lambda: any('"stop"' in l for l in events(slow)[n:]), timeout=10,
+                      what="fpp-test-a's stop callback to start")
+        before = len(events(other))
+        began = time.monotonic()
+        r = fppd.post("/fppd/plugin/fpp-test-b/unload", {}, timeout=40)
+        took = time.monotonic() - began
+        assert r["loaded"] is False, r
+        assert took < 3, f"unloading fpp-test-b waited {took:.1f} s on fpp-test-a's callback"
+        time.sleep(9)  # fpp-test-a's callback returns and the walk finishes
+        after = events(other)[before:]
+        assert after == ["lifecycle shutdown"], \
+            f"fpp-test-b was called after its unload was asked for: {after}"
