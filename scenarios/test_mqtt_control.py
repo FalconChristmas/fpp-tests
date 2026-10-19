@@ -132,3 +132,54 @@ def test_mqtt_cache_has_a_bound(fppd):
                       interval=0.5, what="the last topic to reach the cache")
         cache = [t for t in fppd.get("/fppd/mqtt/cache") if t.startswith("falcon/")]
     assert len(cache) <= 4096, f"{len(cache)} topics cached"
+
+
+def test_shutdown_while_the_broker_drops_connections(fppd):
+    """fppd exits promptly on SIGTERM while its MQTT client is still trying
+    to reach a broker that silently drops the connection attempt.
+
+    Regression: 11a37e5ed. 5cac5ea15 stopped the client with a clean
+    disconnect and an unbounded join of libmosquitto's network thread,
+    which waited on its pending connect until the SYN retries ran out --
+    about a minute here, two on a device -- so shutdown and restart took
+    that long (fppd sat in mosquitto_loop_stop() from ~MosquittoClient).
+    The broker here is a listener whose accept queue is full, so Linux
+    drops every further SYN to it."""
+    import signal
+    import socket
+    import subprocess
+
+    port = 18832
+    lst = socket.socket()
+    lst.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    lst.bind(("127.0.0.1", port))
+    lst.listen(0)  # never accepted: one connection fills the queue
+    fill = []
+    try:
+        for _ in range(3):
+            c = socket.socket()
+            c.setblocking(False)
+            try:
+                c.connect(("127.0.0.1", port))
+            except BlockingIOError:
+                pass
+            fill.append(c)
+            time.sleep(0.2)
+        fppd.settings(MQTTHost="127.0.0.1", MQTTPort=str(port), HostName=HOST)
+        fppd.start()
+        time.sleep(5)  # well into the client's connect
+        began = time.monotonic()
+        fppd.proc.send_signal(signal.SIGTERM)
+        try:
+            rc = fppd.proc.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            raise AssertionError("fppd was still running 15 s after SIGTERM, "
+                                 "waiting on the MQTT network thread") from None
+        fppd.exit_expected = True
+        took = time.monotonic() - began
+        assert rc == 0, f"fppd exited {rc}"
+        print(f"fppd exited {took:.1f} s after SIGTERM")
+    finally:
+        for c in fill:
+            c.close()
+        lst.close()
