@@ -515,12 +515,19 @@ def test_fppd_d_returns_to_its_caller(fppd):
 
 def test_lights_follow_the_media_position(fppd, audio):
     """Each frame goes on the wire close to when the media position reaches
-    it: within 15 ms of it (median), with a 10-90% spread of 15 ms at most.
+    it: within 15 ms of it (median), with a 10-90% spread of 15 ms at most on
+    a real card, 20 ms against the null sink.
 
     Media sync only acted on whole-frame differences, once a second, so the
     frames wandered around the position. A phase servo now closes the timing
     error itself (f2d25dc05). Pi 5 I2S, three songs: 10-90% spread 18-22 ms
     and medians -6..12 ms on the parent; 9-11 ms and -6..-4 ms on the fix.
+
+    Only a real card (run-local.sh --host-audio) tells the fix from its
+    parent: against the null sink in Docker the parent also stays within
+    12-13 ms. There the test only guards against gross breakage, and the
+    spread limit has headroom: under ASan the fix measures 11-14 ms alone and
+    15-16 ms with other scenarios running in the same VM.
 
     Needs no sound reference: fppd's own status reports the media position
     the lights follow (to 10 ms, truncated), so this runs against a null
@@ -577,5 +584,6 @@ def test_lights_follow_the_media_position(fppd, audio):
     assert None not in medians, f"a song was not seen on the wire or in the status: {medians}"
     assert all(abs(m) <= 15 for m in medians), \
         f"the lights sit {medians} ms from where the media position puts them"
-    assert None not in spreads and all(sp <= 15 for sp in spreads), \
+    limit = 15 if os.environ.get("FPP_TESTS_HOST_AUDIO") else 20
+    assert None not in spreads and all(sp <= limit for sp in spreads), \
         f"the lights wander {spreads} ms (10-90%) around where the media position puts them"
