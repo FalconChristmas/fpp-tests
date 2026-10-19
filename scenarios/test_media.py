@@ -375,6 +375,75 @@ def wait_daemon(pid, timeout):
     return False
 
 
+class Daemonized:
+    """fppd started as "fppd -d -v 30", the way an init script would, with
+    a stand-in pactl on PATH recording the volumes fppd applies. The
+    command that launches it records the launching process's exit code and
+    then stays up, so the fixture has something to watch; the daemon itself
+    is found by hand and stopped by stop()."""
+
+    def __init__(self, fppd):
+        self.fppd = fppd
+        self.binary = os.path.realpath(os.path.join(fppd.tree, "src", "fppd"))
+        shim = os.path.join(fppd.media, "tmp", "shim")
+        self.calls = os.path.join(shim, "pactl.log")
+        self.rc_file = os.path.join(fppd.media, "tmp", "launcher.rc")
+        os.makedirs(shim)
+        with open(os.path.join(shim, "pactl"), "w") as f:
+            f.write(f'#!/bin/sh\necho "$*" >> "{self.calls}"\n')
+        os.chmod(os.path.join(shim, "pactl"), 0o755)
+        fppd.start(argv=["sh", "-c", '"$0" -d -v 30; echo $? > "$1"; exec sleep 3600',
+                         self.binary, self.rc_file],
+                   extra_env={"PATH": shim + ":" + os.environ["PATH"]})
+        fppd.exit_expected = True
+        fppd.wait_for(lambda: len(self.daemons()) == 1, timeout=10, what="a single fppd daemon")
+        self.pid = self.daemons()[0]
+
+    def daemons(self):
+        """fppd processes other than the one the command started."""
+        pids = []
+        for p in os.listdir("/proc"):
+            if p.isdigit():
+                try:
+                    with open(f"/proc/{p}/status") as f:
+                        ppid = int(f.read().split("PPid:")[1].split()[0])
+                    if os.path.realpath(f"/proc/{p}/exe") == self.binary and ppid != self.fppd.proc.pid:
+                        pids.append(int(p))
+                except (OSError, IndexError, ValueError):
+                    pass
+        return pids
+
+    def volumes_set(self):
+        try:
+            with open(self.calls) as f:
+                return [l.split()[-1] for l in f if l.startswith("set-sink-volume")]
+        except FileNotFoundError:
+            return []
+
+    def launcher_rc(self):
+        """The launching process's exit code, or None while it runs."""
+        try:
+            with open(self.rc_file) as f:
+                return int(f.read())
+        except (FileNotFoundError, ValueError):
+            return None
+
+    def stop(self):
+        import signal
+        import subprocess
+        os.kill(self.pid, signal.SIGTERM)
+        rc = wait_daemon(self.pid, 30)
+        if rc is False:
+            with open(os.path.join(self.fppd.media, "logs", "daemon-backtrace.txt"), "w") as f:
+                subprocess.run(["gdb", "-p", str(self.pid), "-batch", "-nx", "-ex", "thread apply all bt"],
+                               stdout=f, stderr=subprocess.STDOUT, timeout=120)
+            os.kill(self.pid, signal.SIGKILL)
+            raise AssertionError("the fppd daemon did not exit within 30 s of SIGTERM")
+        assert rc in (0, None), f"the fppd daemon exited {rc}"
+        reports = self.fppd.sanitizer_reports()
+        assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
+
+
 def test_daemonized_fppd_applies_volume_changes(fppd):
     """fppd started in the background with a volume on its command line
     ("fppd -d -v 30", as an init script would) still applies later volume
@@ -386,59 +455,40 @@ def test_daemonized_fppd_applies_volume_changes(fppd):
     background. The daemon inherited the worker's state but not its thread,
     so every later change was recorded (and read back by the API) but never
     applied."""
-    import signal
-    import subprocess
-    binary = os.path.realpath(os.path.join(fppd.tree, "src", "fppd"))
-    shim = os.path.join(fppd.media, "tmp", "shim")
-    calls = os.path.join(shim, "pactl.log")
-    os.makedirs(shim)
-    with open(os.path.join(shim, "pactl"), "w") as f:
-        f.write(f'#!/bin/sh\necho "$*" >> "{calls}"\n')
-    os.chmod(os.path.join(shim, "pactl"), 0o755)
-
-    def volumes_set():
-        try:
-            with open(calls) as f:
-                return [l.split()[-1] for l in f if l.startswith("set-sink-volume")]
-        except FileNotFoundError:
-            return []
-
-    # The command stays up after fppd's own parent exits, so the fixture can
-    # watch it; the daemon is found and stopped by hand.
-    fppd.start(argv=["sh", "-c", 'set -e; "$0" -d -v 30; exec sleep 3600', binary],
-               extra_env={"PATH": shim + ":" + os.environ["PATH"]})
-    fppd.exit_expected = True
-
-    def daemons():
-        """fppd processes other than the one the command started."""
-        pids = []
-        for p in os.listdir("/proc"):
-            if p.isdigit():
-                try:
-                    with open(f"/proc/{p}/status") as f:
-                        ppid = int(f.read().split("PPid:")[1].split()[0])
-                    if os.path.realpath(f"/proc/{p}/exe") == binary and ppid != fppd.proc.pid:
-                        pids.append(int(p))
-                except (OSError, IndexError, ValueError):
-                    pass
-        return pids
-    fppd.wait_for(lambda: len(daemons()) == 1, timeout=10, what="a single fppd daemon")
-    pid = daemons()[0]
+    d = Daemonized(fppd)
     try:
         for level in (50, 40, 60):
             fppd.post(f"/fppd/volume/{level}")
             assert fppd.get("/fppd/volume")["volume"] == level
-            fppd.wait_for(lambda: f"{level}%" in volumes_set(), timeout=10,
-                          what=f"the daemon to set the sink to {level}% (it set {volumes_set()})")
+            fppd.wait_for(lambda: f"{level}%" in d.volumes_set(), timeout=10,
+                          what=f"the daemon to set the sink to {level}% (it set {d.volumes_set()})")
     finally:
-        os.kill(pid, signal.SIGTERM)
-        rc = wait_daemon(pid, 30)
-        if rc is False:
-            with open(os.path.join(fppd.media, "logs", "daemon-backtrace.txt"), "w") as f:
-                subprocess.run(["gdb", "-p", str(pid), "-batch", "-nx", "-ex", "thread apply all bt"],
-                               stdout=f, stderr=subprocess.STDOUT, timeout=120)
-            os.kill(pid, signal.SIGKILL)
-            raise AssertionError("the fppd daemon did not exit within 30 s of SIGTERM")
-    assert rc in (0, None), f"the fppd daemon exited {rc}"
-    reports = fppd.sanitizer_reports()
-    assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
+        d.stop()
+
+
+def test_fppd_d_returns_to_its_caller(fppd):
+    """"fppd -d -v 30" returns 0 to whatever ran it once the daemon is
+    detached, as an init script or a Type=forking unit expects.
+
+    Regression: da854059f. CreateDaemon() left each parent of its two forks
+    with exit(), which ran the static destructors; one of them destroys the
+    condition variable the volume worker ("-v" starts it before the fork)
+    waits on, and glibc's pthread_cond_destroy() waits for its waiters, so
+    the launching process never exited."""
+    import subprocess
+    d = Daemonized(fppd)
+    try:
+        try:
+            fppd.wait_for(lambda: d.launcher_rc() is not None, timeout=10,
+                          what="the process that ran \"fppd -d\" to exit")
+        except TimeoutError:
+            launcher = [p for p in os.listdir("/proc") if p.isdigit() and p != str(d.pid)
+                        and os.path.realpath(f"/proc/{p}/exe") == d.binary]
+            with open(os.path.join(fppd.media, "logs", "launcher-backtrace.txt"), "w") as f:
+                for p in launcher:
+                    subprocess.run(["gdb", "-p", p, "-batch", "-nx", "-ex", "thread apply all bt"],
+                                   stdout=f, stderr=subprocess.STDOUT, timeout=120)
+            raise
+        assert d.launcher_rc() == 0, f"\"fppd -d\" exited {d.launcher_rc()}"
+    finally:
+        d.stop()
