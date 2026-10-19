@@ -8,6 +8,8 @@ import os
 import statistics
 import time
 
+import pytest
+
 from audio import RATE, card_position, rms_windows, write_tone_wav
 from ddp import DdpReceiver
 from fseq import unique_frames, write_fseq
@@ -382,7 +384,8 @@ class Daemonized:
     then stays up, so the fixture has something to watch; the daemon itself
     is found by hand and stopped by stop()."""
 
-    def __init__(self, fppd):
+    def __init__(self, fppd, slow_amixer=False):
+        args = ["-d", "-v", "30"]
         self.fppd = fppd
         self.binary = os.path.realpath(os.path.join(fppd.tree, "src", "fppd"))
         shim = os.path.join(fppd.media, "tmp", "shim")
@@ -392,8 +395,19 @@ class Daemonized:
         with open(os.path.join(shim, "pactl"), "w") as f:
             f.write(f'#!/bin/sh\necho "$*" >> "{self.calls}"\n')
         os.chmod(os.path.join(shim, "pactl"), 0o755)
-        fppd.start(argv=["sh", "-c", '"$0" -d -v 30; echo $? > "$1"; exec sleep 3600',
-                         self.binary, self.rc_file],
+        if slow_amixer:
+            # A card's mixer controls are listed with amixer, under a lock;
+            # on a device that takes a moment, and "-v" makes it happen
+            # just as fppd forks.
+            with open(os.path.join(shim, "amixer"), "w") as f:
+                f.write("#!/bin/sh\nsleep 2\n")
+            os.chmod(os.path.join(shim, "amixer"), 0o755)
+            # And give the worker time to get there before the fork:
+            # "-v" is handled as it is parsed, and each later "-m player"
+            # (the default mode) is a moment more before fppd forks.
+            args += ["-m", "player"] * 20000
+        fppd.start(argv=["sh", "-c", 'rc="$1"; shift; "$0" "$@"; echo $? > "$rc"; exec sleep 3600',
+                         self.binary, self.rc_file, *args],
                    extra_env={"PATH": shim + ":" + os.environ["PATH"]})
         fppd.exit_expected = True
         fppd.wait_for(lambda: len(self.daemons()) == 1, timeout=10, what="a single fppd daemon")
@@ -454,14 +468,31 @@ def test_daemonized_fppd_applies_volume_changes(fppd):
     which starts the volume worker thread -- before fppd forks into the
     background. The daemon inherited the worker's state but not its thread,
     so every later change was recorded (and read back by the API) but never
-    applied."""
-    d = Daemonized(fppd)
+    applied.
+
+    Regression: b72e55376. ec42d3f1e started a new worker in the daemon, but
+    the original's worker could be mid-change when fppd forked, holding the
+    lock around the card's mixer control list (its amixer calls), and the
+    daemon inherited that lock held by a thread it doesn't have: its
+    worker blocked on it at the first change, for good. A slow amixer
+    stand-in holds that lock for 2 s, and padding the command line after
+    "-v" lets the worker take it before fppd forks, every time. Since
+    b72e55376 "-v" only records the level, applied once fppd is the
+    daemon."""
+    import subprocess
+    d = Daemonized(fppd, slow_amixer=True)
     try:
         for level in (50, 40, 60):
             fppd.post(f"/fppd/volume/{level}")
             assert fppd.get("/fppd/volume")["volume"] == level
-            fppd.wait_for(lambda: f"{level}%" in d.volumes_set(), timeout=10,
-                          what=f"the daemon to set the sink to {level}% (it set {d.volumes_set()})")
+            try:
+                fppd.wait_for(lambda: f"{level}%" in d.volumes_set(), timeout=10,
+                              what=f"the daemon to set the sink to {level}% (it set {d.volumes_set()})")
+            except TimeoutError:
+                with open(os.path.join(fppd.media, "logs", "daemon-backtrace.txt"), "w") as f:
+                    subprocess.run(["gdb", "-p", str(d.pid), "-batch", "-nx", "-ex", "thread apply all bt"],
+                                   stdout=f, stderr=subprocess.STDOUT, timeout=120)
+                raise
     finally:
         d.stop()
 
