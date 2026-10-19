@@ -44,6 +44,9 @@ def main():
     if os.path.lexists("/home/fpp/media"):
         os.unlink("/home/fpp/media")
     os.symlink(f.media, "/home/fpp/media")
+    # Apache serves some of it directly (virtualdisplay_assets), as the fpp
+    # user on a device but as www-data here, which a private temp dir shuts out.
+    os.chmod(f.media, 0o755)
     # What `fppinit start` writes at boot on a player with no UI password
     # (setupApache() in src/boot/FPPINIT_Config.cpp): the site config itself
     # admits only local clients, and this include opens it to the LAN -- here,
