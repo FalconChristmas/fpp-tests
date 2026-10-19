@@ -96,7 +96,7 @@ def test_sequence_and_media_play_together(fppd, audio):
     onsets, quiet = [], 0
     for i, x in enumerate(samples):
         if abs(x) > 0.1 and quiet > RATE * 0.5:
-            onsets.append(rec.started + i / RATE)
+            onsets.append(rec.time_of(i))
         quiet = 0 if abs(x) > 0.1 else quiet + 1
     assert len(onsets) == secs - 1, f"heard {len(onsets)} of {secs - 1} audio bursts"
     first_seen = {}
@@ -276,7 +276,7 @@ def test_offset_does_not_carry_across_songs(fppd, audio):
     onsets, quiet = [], 0
     for i, x in enumerate(samples):
         if abs(x) > thr and quiet > rec.rate * 0.5:
-            onsets.append(rec.started + i / rec.rate / (1 + ppm / 1e6))
+            onsets.append(rec.time_of(i, ppm))
         quiet = 0 if abs(x) > thr else quiet + 1
     lights = []
     for n in range(SONGS):

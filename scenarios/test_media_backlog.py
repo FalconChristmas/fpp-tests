@@ -67,7 +67,7 @@ def _song_offsets(fppd, audio, songs, secs, during=None, settings=None):
             light = next((t for t, d in rx.snapshot(seen) if d[:CHANNELS] == bursts[n]), None)
             thr = 0.05 * max(0.01, max(abs(x) for x in samples))
             hit = next((i for i, x in enumerate(samples) if abs(x) > max(thr, 0.02)), None)
-            offs.append(round((light - (rec.started + hit / rec.rate)) * 1000) if light and hit is not None else None)
+            offs.append(round((light - rec.time_of(hit)) * 1000) if light and hit is not None else None)
             print(f"song {n}: lights minus audio {offs[-1]} ms", flush=True)
             since = seen + secs / 2
     print(f"lights minus audio at each song's burst (ms): {offs}")
@@ -192,7 +192,7 @@ def test_graph_stall_mid_song_recovers_in_that_song(fppd, audio):
         quiet, out = rec.rate, []
         for i, x in enumerate(samples):
             if abs(x) > 0.05 and quiet > rec.rate * 0.5:
-                t = rec.started + i / rec.rate
+                t = rec.time_of(i)
                 k = round(t - seen0)  # the burst's second in the song
                 light = next((lt for lt, d in rx.snapshot(seen0) if d[:CHANNELS] == frames[k * 20]), None)
                 if light and k % 2 == 1:

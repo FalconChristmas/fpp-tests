@@ -116,8 +116,14 @@ class HostAudio:
 
 class Recording:
     """Everything played into a sink from now until stop(), as mono float
-    samples, with the monotonic time the capture began. The samples are
-    counted on the sink's clock: for a real card, the card's crystal."""
+    samples. The samples are counted on the sink's clock: for a real card,
+    the card's crystal.
+
+    When a sample was played is counted back from when the recording
+    stopped (time_of()), not forward from when pw-record was launched: its
+    capture starts anywhere from 6 to 50 ms after launch on a Pi 5, by graph
+    cycles, and hundreds of ms on a busy PocketBeagle2, while stopping is
+    prompt. Timed from the launch, every absolute offset carried that."""
 
     def __init__(self, env, sink=SINK, rate=RATE):
         self.rate = rate
@@ -130,13 +136,21 @@ class Recording:
         time.sleep(0.5)
 
     def stop(self):
+        self.ended = time.monotonic()
         self.proc.terminate()
         self.proc.wait(5)
         with wave.open(self.path) as w:
             data = w.readframes(w.getnframes())
         os.unlink(self.path)
         n = len(data) // 2
+        self.count = n
         return [x / 32768 for x in struct.unpack(f"<{n}h", data)]
+
+    def time_of(self, i, ppm=0.0):
+        """The monotonic time sample i was captured (after stop()). ppm is
+        the sink's rate against the system clock, if known: the samples
+        before the end are counted at its pace."""
+        return self.ended - (self.count - i) / self.rate / (1 + ppm / 1e6)
 
 
 def rms_windows(samples, window_s=0.05):
