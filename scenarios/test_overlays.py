@@ -772,3 +772,68 @@ def test_text_wider_than_16384_pixels_scrolls(fppd):
         assert not errors, errors
         keeps_sending(rx, 20, "output while the text scrolled")
         stop_effects(fppd, "Panel")
+
+
+def test_submodel_effect_end_reaches_its_parent_while_models_are_busy(fppd):
+    """A submodel whose Text effect ends (and disables it, having enabled
+    it) while other overlay commands keep modelsLock busy still leaves its
+    parent's child list: the sequence playing underneath shows through the
+    submodel's corner again.
+
+    Regression: cbc2e6b83. 5611e0bae try-locked modelsLock for about 20 ms
+    around a submodel's setState() and, when it stayed busy, changed the
+    submodel's own state but skipped telling its parent. Here a wide Text
+    render on another model holds modelsLock for its whole render, back to
+    back from three HTTP threads, while the submodel's effect ends on the
+    effect thread. The parent kept the disabled submodel as an enabled
+    child, stayed active, and painted the corner black over the sequence."""
+    import threading
+    from fseq import solid_frames
+    from show import install
+    install(fppd, solid_frames(1200, CHANNELS, 33))  # 60 s
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [
+        matrix(), submodel("Corner", "M", 0, 0, 2, 2),
+        matrix("Busy", start=1001, width=PANEL_W, height=PANEL_H)]})
+    corner = list(range(0, 6)) + list(range(30, 36))
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "true", "false")
+        wait_output(fppd, rx, lambda f: f[0] == 33, "the sequence to play")
+        font = a_font(fppd)
+        desc = fppd.get("/overlays/effects/Text")
+
+        def text_args(**overrides):
+            return [overrides.get(a["name"], a.get("default", "")) for a in desc["args"]]
+        wide = text_args(Font=font, FontSize="36", Position="Right to Left", Speed="200",
+                         Text="".join(chr(ord("A") + i % 26) for i in range(2500)))
+        short = text_args(Font=font, FontSize="8", Position="Center", Duration="1", Text="X")
+
+        stuck = []
+        for rnd in range(5):
+            stop = threading.Event()
+
+            def hammer():
+                while not stop.is_set():
+                    fppd.command("Overlay Model Effect", "Busy", "Enabled", "Text", *wide, timeout=60)
+            threads = [threading.Thread(target=hammer, daemon=True) for _ in range(3)]
+            for t in threads:
+                t.start()
+            try:
+                time.sleep(0.5)
+                fppd.command("Overlay Model Effect", "Corner", "Enabled", "Text", *short, timeout=60)
+                fppd.wait_for(lambda: not [m for m in fppd.get("/overlays/models")
+                                           if m.get("Name") == "Corner" and m.get("effectRunning")],
+                              timeout=30, what="the submodel's effect to end")
+                time.sleep(0.5)
+            finally:
+                stop.set()
+                for t in threads:
+                    t.join(timeout=60)
+            time.sleep(0.5)
+            if any(rx.last()[c] != 33 for c in corner):
+                stuck.append(rnd)
+            fppd.command("Overlay Model State", "M", "Disabled")
+            fppd.command("Overlay Model State", "Busy", "Disabled")
+            time.sleep(0.3)
+        assert not stuck, (f"rounds {stuck} of 5: the submodel's corner stayed over the "
+                           "sequence after the submodel's effect disabled it")
