@@ -319,3 +319,22 @@ def test_a_sub_matrix_that_does_not_fit_is_ignored(fppd, sub, what):
         pkts, rows = lit_frame(fppd, cap, h, w * 3)
     for y in range(h):
         assert rows[y] == frame[y * w * 3:(y + 1) * w * 3], f"row {y} with a sub-matrix {what}"
+
+
+def test_a_panel_offset_past_the_channel_buffer_is_refused(fppd):
+    """A panel whose offset would make the matrix need more channels than
+    fppd has is refused, and the matrix shows its other panel as if the bad
+    one weren't there.
+
+    Regression: 901c07c94. Offsets had a lower bound only: one in
+    the millions grew the matrix to match, and its width * height (the
+    outputs' channel count and the size of their buffers) past the channel
+    buffer, or past an int."""
+    w, h = 32, 16
+    frame = unique_frame(w, h)
+    cfg = panels_output([panel(0, 0, 0, 0), panel(0, 1, 2000000, 0)], channels=w * h * 3)
+    with captured() as cap:
+        play(fppd, frame, cfg)
+        pkts, rows = lit_frame(fppd, cap, h, w * 3)
+    for y in range(h):
+        assert rows[y] == frame[y * w * 3:(y + 1) * w * 3], f"row {y}"

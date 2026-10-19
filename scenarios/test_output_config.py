@@ -4,6 +4,8 @@ down with a fix, and serial outputs written into a pty."""
 import os
 import time
 
+import pytest
+
 from ddp import DdpReceiver
 from serial import PtyReader
 from show import ddp_output
@@ -354,3 +356,53 @@ def test_virtual_display_closes_reset_connections(fppd):
     after = sockets()
     assert after <= before + 1, f"fppd holds {after - before} more sockets after 5 reset clients"
 
+
+
+@pytest.mark.parametrize("bad", [
+    {"startChannel": 0, "channelCount": 10, "universeCount": 1},
+    {"startChannel": 1, "channelCount": 1000000, "universeCount": 2200},
+], ids=["start channel 0", "universe count overflows an int"])
+def test_universe_outside_the_channel_buffer_is_refused(fppd, bad):
+    """An E1.31 universe whose channels fall outside the channel buffer is
+    refused with a warning, and the DDP output next to it still sends.
+
+    Regression: 1e3aab7eb. A universe at start channel 0 reported a range
+    starting at -1, which the range check let through (it only looked past
+    the end), and read channelData[-1] each frame.  channelCount *
+    universeCount is worked out in an int, and a large count overflowed it
+    into the inverted "nothing to send" range, also let through.
+    """
+    cfg = ddp_output(CHANNELS)
+    entry = {"active": 1, "description": "bad universe", "id": 1, "type": 1,
+             "address": "127.0.0.2", "priority": 0, "monitor": 0, "deDuplicate": 0}
+    entry.update(bad)
+    cfg["channelOutputs"][0]["universes"].append(entry)
+    fppd.write("config/co-universes.json", cfg)
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fppd.wait_for(lambda: any("bad universe" in w and "Output disabled" in w
+                                  for w in warnings(fppd)),
+                      timeout=10, what="the refused-universe warning")
+        range_on(fppd, 10, 42)
+        fppd.wait_for(lambda: rx.last() is not None and rx.last()[:10] == bytes([42] * 10),
+                      timeout=10, what="the DDP output to keep sending")
+
+
+def test_virtual_display_skips_a_pixel_outside_the_channel_buffer(fppd):
+    """A virtual display map line naming a channel outside the channel
+    buffer is skipped; the display streams its other pixels and fppd lives.
+
+    Regression: c5839dabc. The map's channels were never checked:
+    GetPixelRGB() read channelData[ch] for each, and the range reported for
+    the display lost a pixel whose ch + 3 overflowed an int, so nothing
+    refused it.  Its parent faults on the first frame.
+    """
+    virtual_display(fppd, ["100,100", "2,2,0,3,RGB", "4,4,2147483000,3,RGB"], 3)
+    fppd.start()
+    wait_for_display(fppd)
+    fppd.request("PUT", "/overlays/range/1-3", {"Value": 200})
+    want = B64[200 >> 2] * 3
+    msgs = sse_messages(3)
+    assert any(m.startswith(want + ":") for m in msgs), f"no {want!r} pixel in {msgs[-3:]}"
+    assert fppd.get("/fppd/status")["status_name"]

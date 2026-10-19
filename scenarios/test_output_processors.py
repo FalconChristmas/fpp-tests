@@ -206,10 +206,14 @@ def test_processors_reload_when_the_file_is_saved(fppd):
     proc("Brightness", start="1", count="30", brightness="50", gamma="2.2"),
     proc("Set Value", start=[1], count={"a": 1}, value=None),
     proc("Remap", source="x", destination=31, count=6, loops=1e300, reverse="y"),
+    proc("Set Value", start=2000000000, count=2000000000, value=1),
+    proc("Reorder Colors", start=1, count=800000000, colorOrder=321),
+    proc("Set Value", start=-20, count=5, value=1),
 ], ids=["set past the end", "set far past the end", "remap far past the end", "remap past the end", "remap negative source",
         "negative count", "fold source 0", "fold unknown node", "three-to-four past the end",
         "brightness with no values", "unknown type", "gamma nan", "numbers as strings",
-        "values of the wrong type", "remap junk"])
+        "values of the wrong type", "remap junk", "set range overflows an int",
+        "reorder count overflows an int", "set entirely before channel 1"])
 def test_bad_processor_is_refused_or_survived(fppd, bad):
     """A processor whose channels fall outside channel space, or with a bad
     or missing value, is refused (with a warning) or clamped -- never let
@@ -219,7 +223,10 @@ def test_bad_processor_is_refused_or_survived(fppd, bad):
     the far cases and a negative source crash its parent; ones just past
     the end land in unchecked memory there), 0d9f83978 (values of the wrong
     JSON type terminated fppd at startup), and the Fold and Brightness
-    checks from the same audit."""
+    checks from the same audit), and 7562208f2 (a start or count large
+    enough to overflow the int the range is reported in looked like an
+    empty range, was let through and wrote billions of channels; the
+    overflow cases crash its parent)."""
     with DdpReceiver(CHANNELS) as rx:
         run(fppd, [bad, proc("Set Value", start=150, count=1, value=7)])
         latest(fppd, rx, lambda f: f[149] == 7, "the good processor after the bad one")
