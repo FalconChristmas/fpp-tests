@@ -254,3 +254,62 @@ def test_remote_counts_what_it_receives(fppd):
     assert {k: s[k] for k in want} == want, s
     after = mine(fppd.get("/fppd/multiSyncStats?reset=1"))
     assert after and all(after[0][k] == 0 for k in want), after
+
+
+COUNT_SCRIPT = '#!/bin/sh\necho ran >> "$(dirname "$0")/count.log"\n'
+
+
+def test_broadcast_command_runs_once_with_two_interfaces(fppd):
+    """With MultiSync broadcast on and two interfaces up, a command sent to
+    every host runs exactly once here: the sender runs it directly, and the
+    broadcast copy that comes back on each interface is dropped as its own.
+
+    Regression: af492df86. faa6774ed remembered one entry per sent packet,
+    but a broadcast goes out once per interface and each copy loops back.
+    The first echo used up the entry and the others were dispatched, so on
+    a box with two interfaces (eth0 and wlan0) every all-hosts command ran
+    twice locally. Two dummy interfaces stand in for them here (in Docker
+    the container's eth0 makes a third)."""
+    import os
+    import subprocess
+
+    def ip(*args):
+        return subprocess.run(["ip", *args], capture_output=True, text=True)
+
+    added = []
+    try:
+        for name, addr in (("fpptest0", "10.77.0.1/24"), ("fpptest1", "10.78.0.1/24")):
+            r = ip("link", "add", name, "type", "dummy")
+            if r.returncode:
+                pytest.skip(f"cannot add a dummy interface: {r.stderr.strip()}")
+            added.append(name)
+            ip("addr", "add", addr, "dev", name)
+            ip("link", "set", name, "up")
+        scripts = os.path.join(fppd.media, "scripts")
+        os.makedirs(scripts, exist_ok=True)
+        path = os.path.join(scripts, "count.sh")
+        with open(path, "w") as f:
+            f.write(COUNT_SCRIPT)
+        os.chmod(path, 0o755)
+        log = os.path.join(scripts, "count.log")
+
+        def runs():
+            try:
+                with open(log) as f:
+                    return len(f.read().split())
+            except FileNotFoundError:
+                return 0
+
+        fppd.settings(MultiSyncEnabled="1", MultiSyncBroadcast="1")
+        fppd.start()
+        local = {s["address"] for s in fppd.get("/fppd/multiSyncSystems")["systems"] if s.get("local")}
+        assert {"10.77.0.1", "10.78.0.1"} <= local, f"fppd doesn't list both interfaces: {local}"
+        for i in range(1, 4):
+            fppd.post("/command", {"command": "Run Script", "multisyncCommand": True,
+                                   "multisyncHosts": "", "args": ["count.sh", "", ""]})
+            fppd.wait_for(lambda: runs() >= i, timeout=10, what=f"command {i} to run")
+            time.sleep(1.5)  # every echo has come back and been handled
+            assert runs() == i, f"{i} all-hosts commands ran {runs()} times here"
+    finally:
+        for name in added:
+            ip("link", "del", name)
