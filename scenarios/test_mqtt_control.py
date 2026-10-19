@@ -78,3 +78,57 @@ def test_mqtt_stop_keeps_the_scheduled_playlist_stopped(fppd, topic):
             time.sleep(0.5)
             seen.add(status(fppd).get("status_name"))
     assert seen == {"idle"}, f"the scheduler restarted the playlist after an MQTT stop: {seen}"
+
+
+def _publish_many(topics, payload=b"v"):
+    """Publish each topic once (QoS 0) over one raw MQTT 3.1.1 connection:
+    a mosquitto_pub process per topic would take minutes for thousands."""
+    import socket
+
+    def remaining(n):
+        out = b""
+        while True:
+            b = n % 128
+            n //= 128
+            out += bytes([b | (0x80 if n else 0)])
+            if not n:
+                return out
+
+    def packet(kind, body):
+        return bytes([kind]) + remaining(len(body)) + body
+
+    def s16(b):
+        return len(b).to_bytes(2, "big") + b
+
+    s = socket.create_connection(("127.0.0.1", int(PORT)), timeout=10)
+    s.sendall(packet(0x10, s16(b"MQTT") + b"\x04\x02\x00\x3c" + s16(b"fpp-tests-many")))
+    assert s.recv(4)[:1] == b"\x20", "no CONNACK from the broker"
+    for t in topics:
+        s.sendall(packet(0x30, s16(t.encode()) + payload))
+    s.sendall(b"\xe0\x00")
+    s.close()
+
+
+def test_mqtt_cache_has_a_bound(fppd):
+    """Thousands of distinct topics under the subscribed set/# wildcard
+    don't grow fppd's message cache past its bound, and the newest topic is
+    still in it.
+
+    Regression: da791090a. Every message on a subscribed topic was
+    cached per topic for good, so anyone able to publish under set/# could
+    grow fppd, one topic name after another, until it ran out of memory.
+    """
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    base = f"falcon/player/{HOST}/set/cachetest"
+    with broker():
+        fppd.start()
+        # fppd subscribes once it has connected; publish until it hears
+        fppd.wait_for(lambda: (_publish_many([f"{base}/probe"]) or
+                               f"{base}/probe" in fppd.get("/fppd/mqtt/cache")),
+                      timeout=30, interval=1, what="fppd to subscribe")
+        topics = [f"{base}/{i}" for i in range(6000)]
+        _publish_many(topics)
+        fppd.wait_for(lambda: topics[-1] in fppd.get("/fppd/mqtt/cache"), timeout=30,
+                      interval=0.5, what="the last topic to reach the cache")
+        cache = [t for t in fppd.get("/fppd/mqtt/cache") if t.startswith("falcon/")]
+    assert len(cache) <= 4096, f"{len(cache)} topics cached"
