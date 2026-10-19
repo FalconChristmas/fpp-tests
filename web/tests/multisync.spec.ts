@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
+import { container, inPlayer } from './container';
 
 // ============================================================
 // Mock data — planet-themed synthetic FPP network
@@ -666,4 +667,41 @@ test('Page scroll survives auto-refresh with logs open', async ({ page }) => {
 
     const after = await target.evaluate(el => el.getBoundingClientRect().top);
     expect(Math.abs(after - before)).toBeLessThan(1);
+});
+
+test('Ticking a remote stores the list itself, not a JSON string', async ({ page }) => {
+    // BUG: updateMultiSyncRemotes() PUT the list as JSON.stringify(list).  The
+    // API stores a body as given, so the settings file read
+    //   MultiSyncRemotes = ""192.168.1.128""
+    // and fppd, which strips one pair of quotes, read the first and last
+    // addresses of the list with a quote attached and never synced them.
+    // FIX (95314fd4c): the page PUTs the raw list.
+    test.skip(!container, 'reads the stored setting inside the run-web.sh container');
+    const put = (name: string, value: string) =>
+        page.request.put(`/api/settings/${name}`, { data: value, headers: { 'Content-Type': 'text/plain' } });
+    // The per-remote checkboxes are drawn only with MultiSync on, and hidden
+    // while "send to ALL KNOWN remotes via Unicast" (on by default) is.
+    await put('MultiSyncEnabled', '1');
+    await put('MultiSyncUnicast', '0');
+    await put('MultiSyncRemotes', '');
+    try {
+        // This one save goes through to the player; setupMocks() absorbs the rest.
+        await page.route('**/api/settings/MultiSyncRemotes', route => route.continue());
+        await loadMultisync(page);
+
+        // MARS is the one mock system in remote mode, so the only one with a box.
+        const box = page.locator("input.syncCheckbox[name='192.168.1.128']");
+        await box.waitFor({ state: 'visible' });
+        const saved = page.waitForResponse(r =>
+            r.url().includes('/api/settings/MultiSyncRemotes') && r.request().method() === 'PUT');
+        await box.check();
+        expect((await saved).ok()).toBe(true);
+
+        const line = inPlayer('grep', '^MultiSyncRemotes', '/home/fpp/media/settings').trim();
+        expect(line).toBe('MultiSyncRemotes = "192.168.1.128"');
+    } finally {
+        await put('MultiSyncRemotes', '');
+        await put('MultiSyncUnicast', '1');
+        await put('MultiSyncEnabled', '0');
+    }
 });
