@@ -4,6 +4,8 @@
 FROM debian:trixie
 
 ARG DEBIAN_FRONTEND=noninteractive
+# fonts-dejavu-core: the Text overlay effect draws nothing without a font,
+# and every scenario that renders text skips.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential g++ make pkg-config ccache mold git curl ca-certificates \
         php-cli \
@@ -19,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         pipewire pipewire-bin pipewire-pulse wireplumber pulseaudio-utils \
         python3 python3-pytest python3-zstandard faketime tzdata procps iproute2 gdb patch zip \
         mosquitto mosquitto-clients gcovr \
+        fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # FPP's makefiles skip the OLED/cape/RTC tools when this marker exists, and
