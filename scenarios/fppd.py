@@ -58,6 +58,18 @@ class Fppd:
             f.write(content)
         return path
 
+    def built_with(self, feature):
+        """Whether the tree under test was built with an optional library, as
+        fpp's Makefile records it in src/.build-features ("rtsp-server=1 ...").
+        A tree too old to have the file counts as built with it, so a scenario
+        still runs there rather than skipping unseen."""
+        try:
+            with open(os.path.join(self.tree, "src", ".build-features")) as f:
+                words = f.read().split()
+        except OSError:
+            return True
+        return f"{feature}=1" in words
+
     def settings(self, **kv):
         """Append key = "value" lines to the media settings file."""
         with open(os.path.join(self.media, "settings"), "a") as f:

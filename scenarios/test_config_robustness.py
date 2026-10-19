@@ -106,6 +106,9 @@ def poke(fppd, name):
 @pytest.mark.parametrize("what", list(CASES))
 def test_wrong_typed_config_is_survived(fppd, request, what):
     name, content = CASES[what]
+    if name.startswith("pipewire-rtsp-") and not fppd.built_with("rtsp-server"):
+        # it would pass without reading the file at all
+        pytest.skip("fppd was built without gst-rtsp-server: nothing reads " + name)
     fppd.write(f"config/{name}", content)
     if "stream-slots" in name:
         # the saved slot volume is read once a stream is playing

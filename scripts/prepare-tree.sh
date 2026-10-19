@@ -9,6 +9,9 @@ DESCRIBE=$(git -C "$FPP" describe --tags --match='[0-9]*' "$SHA" 2>/dev/null || 
 echo "fpp $REF = $DESCRIBE ($SHA), flavor $FLAVOR"
 
 docker build -q -t fpp-tests-env "$HERE/docker" > /dev/null
+# build-fpp.sh rebuilds a tree built in another image: what the tree's
+# makefiles found installed (src/.build-features) decides what fppd has in it.
+IMAGE_ID=$(docker image inspect -f '{{.Id}}' fpp-tests-env)
 
 # ccache lives in a named volume, or in a host directory when
 # FPP_TESTS_CCACHE is set (CI caches that directory between runs).
@@ -20,7 +23,7 @@ fi
 # fppd's exit path visits every descriptor up to the open-file limit, and
 # some Docker setups (WSL's) default it to 2^30: under TSan that takes longer
 # than any scenario waits for fppd to exit.
-DOCKER="docker run --rm --ulimit nofile=1048576:1048576 -v fpp-tests-work:/work -v $CCACHE_MOUNT"
+DOCKER="docker run --rm --ulimit nofile=1048576:1048576 -v fpp-tests-work:/work -v $CCACHE_MOUNT -e FPP_TESTS_IMAGE=$IMAGE_ID"
 
 # Each built tree is ~500MB; keep the most recently used FPP_TESTS_KEEP_TREES.
 # (touch only an existing tree: on a new one it would create a plain file.)

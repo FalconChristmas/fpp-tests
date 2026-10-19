@@ -407,6 +407,8 @@ def test_rtsp_port_warning_comes_down_once_the_port_is_free(fppd):
     """
     import socket
     import tempfile
+    if not fppd.built_with("rtsp-server"):
+        pytest.skip("fppd was built without gst-rtsp-server: it has no RTSP output")
     port = 18554
     fppd.write("config/pipewire-rtsp-outputs.json", {"enabled": True, "port": port})
     fppd.write("config/pipewire-video-consumers.json", [

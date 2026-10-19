@@ -1,11 +1,15 @@
 #!/bin/sh
 # Runs inside the container. Builds the exported tree at $1 with make target
-# $2 (asan, tsan, debug, optimized or coverage) unless it was already built.
+# $2 (asan, tsan, debug, optimized or coverage) unless it was already built in
+# this image (FPP_TESTS_IMAGE, set by prepare-tree.sh).
 set -e
 TREE="$1"
 FLAVOR="$2"
 cd "$TREE/src"
-if [ -f .fpp-tests-built ]; then
+# A tree built in an older image is built again: its makefiles leave out what
+# that image lacked (gst-rtsp-server, say), and fpp's own feature stamp then
+# rebuilds what the new one adds.  Otherwise make finds nothing to do.
+if [ -f .fpp-tests-built ] && [ "$(cat .fpp-tests-built)" = "${FPP_TESTS_IMAGE:-}" ]; then
     exit 0
 fi
 # Build-only fixes for old commits that don't compile under these flags. Each
@@ -59,4 +63,4 @@ if ! eval make -j"$JOBS" DISTRIBUTED_COMPILE=1 $TARGET > "$TREE/build.log" 2>&1;
         exit 1
     fi
 fi
-touch .fpp-tests-built
+printf '%s' "${FPP_TESTS_IMAGE:-}" > .fpp-tests-built
