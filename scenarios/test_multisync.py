@@ -11,6 +11,7 @@ from ddp import DdpReceiver
 from fseq import unique_frames, write_fseq
 from multisync import PORT, parse_sync, sync_packet
 from show import CHANNELS, ddp_output, install, status
+from test_multisync_systems import interface
 
 STEP_MS = 50
 REMOTE = "127.0.0.2"
@@ -148,6 +149,93 @@ def test_sync_destinations_change_without_a_restart(fppd):
     assert "127.0.0.2" in before, f"sync went to {before} before the change"
     assert "127.0.0.1" in after, f"sync went to {after} after the change to localhost"
     assert "127.0.0.2" not in after, "sync still went to the old remote after the change"
+
+
+QUOTED_REMOTES = ["127.0.0.2", "127.0.0.3", "127.0.0.4"]
+# As each is stored in the value: the old MultiSync page PUT MultiSyncRemotes as
+# a JSON string (the whole list in quotes), and a list typed with its own quotes
+# has them on every entry.
+QUOTED_LISTS = {
+    "whole_list_quoted": '"127.0.0.2,127.0.0.3,127.0.0.4"',
+    "each_entry_quoted": '"127.0.0.2","127.0.0.3","127.0.0.4"',
+}
+
+
+@pytest.mark.parametrize("setting", ["MultiSyncRemotes", "MultiSyncExtraRemotes"])
+@pytest.mark.parametrize("stored", QUOTED_LISTS.values(), ids=QUOTED_LISTS.keys())
+def test_quoted_remote_list_reaches_every_remote(fppd, setting, stored):
+    """A remote list stored with quotes in its value syncs every remote on
+    it, including the entries the quotes are attached to.
+
+    Regression: 95314fd4c and f34baf9ec. The MultiSync page PUT its list as
+    a JSON string from 2021 until 95314fd4c, and once the settings loader
+    stopped stripping every quote (e4ada58de), fppd read the first entry as
+    "127.0.0.2 and the last as 127.0.0.4" and synced neither. 95314fd4c
+    stripped the outer quotes from the whole list first, which turned a list
+    with quoted entries into 127.0.0.2","127.0.0.3","127.0.0.4: none of
+    those parsed. f34baf9ec strips a quote from each end of each entry.
+    """
+    frames = unique_frames(400, CHANNELS)
+    with UdpCapture(PORT) as cap:
+        install(fppd, frames, step_ms=STEP_MS)
+        fppd.settings(MultiSyncEnabled="1", **{setting: stored})
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "false", "false")
+        time.sleep(3)
+        packets = cap.snapshot()
+    synced = {dst for t, _, dst, p in packets if parse_sync(t, p)}
+    missing = [r for r in QUOTED_REMOTES if r not in synced]
+    assert not missing, f"no sync packets reached {missing}; they went to {sorted(synced)}"
+
+
+@pytest.mark.parametrize("stored", QUOTED_LISTS.values(), ids=QUOTED_LISTS.keys())
+def test_discover_ping_reaches_every_quoted_extra_remote(fppd, stored):
+    """The discover ping fppd sends at startup reaches every host on
+    MultiSyncExtraRemotes, whose quotes are stripped by the same rule as the
+    sync list's above.
+
+    Regression: f34baf9ec. The discover ping split the list without
+    stripping any quotes, so the quoted entries got no discover ping at all,
+    while sync packets reached them. (fppd describes itself from a
+    non-loopback address, so a dummy interface gives it one.)
+    """
+    def discovered():
+        return {dst for _, _, dst, p in cap.snapshot()
+                if len(p) > 8 and p[4] == 0x04 and p[8] == 1}
+
+    with interface("10.77.0.1"), UdpCapture(PORT) as cap:
+        fppd.settings(MultiSyncExtraRemotes=stored)
+        fppd.start()
+        try:
+            fppd.wait_for(lambda: set(QUOTED_REMOTES) <= discovered(), timeout=5,
+                          what="a discover ping to every extra remote")
+        except TimeoutError:
+            pass
+        got = discovered()
+    missing = [r for r in QUOTED_REMOTES if r not in got]
+    assert not missing, f"no discover ping reached {missing}; pings went to {sorted(got)}"
+
+
+def test_empty_list_from_the_old_page_falls_back_to_multicast(fppd):
+    """A master with no send method chosen and no remotes multicasts its
+    sync packets, and an empty list saved by the old MultiSync page (a bare
+    pair of quotes, from PUTting "" as a JSON string) counts as no remotes.
+
+    The quotes counted as a list before 95314fd4c, so that master sent its
+    sync packets nowhere. f34baf9ec moved the check from the joined list to
+    the parsed one and has to keep this. fppd multicasts on its non-loopback
+    interfaces only, so the packets are captured leaving a dummy one.
+    """
+    frames = unique_frames(400, CHANNELS)
+    with interface("10.77.0.1"), UdpCapture(PORT, "239.70.80.80", iface="fpptest0") as cap:
+        install(fppd, frames, step_ms=STEP_MS)
+        # Unicast to every known remote is on by default: off, nothing is chosen
+        fppd.settings(MultiSyncEnabled="1", MultiSyncUnicast="0", MultiSyncRemotes='""')
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "false", "false")
+        time.sleep(3)
+        syncs = [s for s in (parse_sync(t, p) for t, _, _, p in cap.snapshot()) if s]
+    assert syncs, "no sync packets were multicast"
 
 
 def parse_fpp_command(payload):

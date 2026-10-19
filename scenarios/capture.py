@@ -16,6 +16,7 @@ class UdpCapture:
     def __init__(self, dst_port, dst_ip=None, iface="lo"):
         self.dst_port = dst_port
         self.dst_ip = dst_ip
+        self.iface = iface
         self.packets = []  # (monotonic time, src ip, dst ip, payload)
         self.lock = threading.Lock()
         self.sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
@@ -33,8 +34,9 @@ class UdpCapture:
                 continue
             except OSError:
                 break
-            # loopback shows each packet twice, leaving and arriving: keep one
-            if addr[2] == PACKET_OUTGOING:
+            # loopback shows each packet twice, leaving and arriving: keep one.
+            # Elsewhere (a dummy interface) leaving is the only copy there is.
+            if addr[2] == PACKET_OUTGOING and self.iface == "lo":
                 continue
             ip = frame[14:]
             if len(ip) < 28 or ip[0] >> 4 != 4 or ip[9] != 17:
