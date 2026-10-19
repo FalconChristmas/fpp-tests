@@ -218,3 +218,62 @@ def test_graph_stall_mid_song_recovers_in_that_song(fppd, audio):
     shift = statistics.median(after) - statistics.median(before)
     assert abs(shift) <= 50, \
         f"a {stall} ms stall moved the sound {shift:.0f} ms against the lights for the rest of the song"
+
+
+def test_card_position_wrap_is_not_an_xrun(fppd, audio):
+    """The card's hardware pointer wrapping at the ALSA boundary, with the
+    card running on, is not taken for an xrun: the song plays on unflushed.
+    On a 32-bit kernel (a BBB) hw_ptr wraps every 2^30 frames, ~6 h at 48 kHz,
+    which a card kept open across a long show reaches. cardwrap.so makes it
+    wrap 5 s into this song instead; the card's trigger_time is untouched,
+    as a wrap leaves it.
+
+    Regression: 69a734449. 32d77ad7a took any step back in hw_ptr for an xrun
+    and flushed the stream mid-song with nothing primed, an audible drop
+    every ~6 h. The fix tells a restart from a wrap by trigger_time and
+    carries the position across the boundary."""
+    import pytest
+    if not os.environ.get("FPP_TESTS_HOST_AUDIO"):
+        pytest.skip("needs a real sound card: run-local.sh --host-audio")
+    import shims
+    secs = 14
+    write_tone_wav(os.path.join(fppd.media, "music", "Wrap.wav"), secs, amplitude=0.3)
+    fppd.write("playlists/Wrap.json", playlist("Wrap", [{
+        "type": "media", "enabled": 1, "playOnce": 0, "mediaName": "Wrap.wav"}]))
+    fppd.settings(PipeWireKeepOutputOpen="1", LogLevel_MediaOut="debug")
+    fppd.start(preload=[shims.build("cardwrap.c")], extra_env={"CARDWRAP_AT_S": "5", **{k: os.environ[k] for k in ("CARDWRAP_DEBUG",) if k in os.environ}})
+    fppd.command("Start Playlist", "Wrap", "false", "false")
+    time.sleep(secs + 2)
+    log = fppd.log()
+    xruns = [line for line in log.splitlines() if "lost time (xrun)" in line]
+    assert not xruns, "the card's position wrapping was taken for an xrun:\n" + "\n".join(xruns)
+    assert "card position wrapped" in log, "the card's position never wrapped: cardwrap.so did not take"
+
+
+def test_an_xrun_is_flushed_once(fppd, audio):
+    """One xrun partway through a song is flushed, once, and the song then
+    plays on.
+
+    Guards 69a734449's own side effect, so it passes on the parent too: a
+    stop or restart of the card within 1 s of one of fppd's own flushes is
+    put down to that flush, and that window must not swallow a real xrun, nor
+    let one turn into a flush every 250 ms -- which 32d77ad7a did on a card
+    that PipeWire restarts when the stream is flushed (a Pi 4's headphone
+    jack), taking each restart for another xrun. A 300 ms PipeWire stall 5 s
+    into a 14 s song."""
+    import pytest
+    if not os.environ.get("FPP_TESTS_HOST_AUDIO"):
+        pytest.skip("needs a real sound card: run-local.sh --host-audio")
+    secs = 14
+    write_tone_wav(os.path.join(fppd.media, "music", "Once.wav"), secs, amplitude=0.3)
+    fppd.write("playlists/Once.json", playlist("Once", [{
+        "type": "media", "enabled": 1, "playOnce": 0, "mediaName": "Once.wav"}]))
+    fppd.settings(PipeWireKeepOutputOpen="1")
+    fppd.start()
+    fppd.command("Start Playlist", "Once", "false", "false")
+    threading.Thread(target=_stall_pipewire(5, 300), args=(time.monotonic(),), daemon=True).start()
+    time.sleep(secs + 2)
+    xruns = [line for line in fppd.log().splitlines() if "lost time (xrun)" in line]
+    print(f"{len(xruns)} xrun flushes")
+    assert xruns, "a 300 ms graph stall was never flushed"
+    assert len(xruns) <= 2, f"{len(xruns)} xrun flushes for one stall:\n" + "\n".join(xruns[:6])
