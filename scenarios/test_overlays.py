@@ -710,3 +710,40 @@ def test_an_image_claiming_a_huge_size_is_refused_without_the_memory(fppd):
     grew = peak_rss_mb(fppd.proc.pid) - before
     assert grew < 512, f"fppd's peak memory grew {grew} MB decoding a {len(bomb) // 1024} KB image"
     fill(fppd, "M", [1, 2, 3])
+
+
+def test_submodel_effect_ending_during_output_reloads(fppd):
+    """A submodel whose effect ends and disables it (Stop Effects), over and
+    over, while the outputs reload and re-create its parent, never touches
+    the freed parent.
+
+    Regression: 5611e0bae. The submodel's setState() read its cached parent
+    with no lock from the effect and output threads, while the reload freed
+    the parent under modelsLock."""
+    import threading
+    fppd.write("config/channeloutputs.json", colorlight_panel())
+    fppd.write("config/co-universes.json", ddp_output(PANEL_CHANNELS))
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": [
+        submodel("Corner", "Panel", 0, 0, 4, 2)]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: "Panel" in [m.get("Name") for m in fppd.get("/models") or []],
+                  what="the panel's own model")
+    stop = threading.Event()
+
+    def churn():
+        while not stop.is_set():
+            try:
+                fill(fppd, "Corner", [0, 0, 9])
+                stop_effects(fppd, "Corner")
+            except Exception:
+                time.sleep(0.01)  # 404 mid-reload is fine
+
+    t = threading.Thread(target=churn, daemon=True)
+    t.start()
+    try:
+        for _ in range(12):
+            resave_outputs(fppd)
+    finally:
+        stop.set()
+        t.join(10)

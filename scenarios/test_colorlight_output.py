@@ -297,3 +297,25 @@ def test_output_specific_test_pattern_cycles(fppd):
                           what="the left column to show green, red and blue")
         finally:
             fppd.command("Test Stop")
+
+
+@pytest.mark.parametrize("sub, what", [
+    ({"width": 64, "height": 16, "xOffset": 0, "yOffset": 0}, "wider than the matrix"),
+    ({"width": 8, "height": 8, "xOffset": 28, "yOffset": 12}, "hanging off its corner"),
+    ({"width": 8, "height": 8, "xOffset": -4, "yOffset": 0}, "at a negative offset"),
+])
+def test_a_sub_matrix_that_does_not_fit_is_ignored(fppd, sub, what):
+    """A sub-matrix that doesn't fit inside its panel matrix is refused, and
+    the matrix shows its own channels as if it weren't there.
+
+    Regression: 7eef3246a. Its geometry was never checked: every frame
+    copied it row by row into the matrix's buffer, past the end of it."""
+    w, h = 32, 16
+    frame = unique_frame(w, h)
+    cfg = panels_output([panel(0, 0, 0, 0)], channels=w * h * 3,
+                        subMatrices=[dict(sub, enabled=1, startChannel=1)])
+    with captured() as cap:
+        play(fppd, frame, cfg)
+        pkts, rows = lit_frame(fppd, cap, h, w * 3)
+    for y in range(h):
+        assert rows[y] == frame[y * w * 3:(y + 1) * w * 3], f"row {y} with a sub-matrix {what}"

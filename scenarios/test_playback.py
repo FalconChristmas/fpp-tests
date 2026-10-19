@@ -14,7 +14,7 @@ import pytest
 from ddp import DdpReceiver
 from fppd import sanitizer
 from frames import analyze
-from fseq import unique_frames, write_fseq_reference
+from fseq import solid_frames, unique_frames, write_fseq_reference
 from show import CHANNELS, install, status
 
 STEP_MS = 50
@@ -199,3 +199,27 @@ def test_frames_keep_time_over_a_minute(fppd):
     # lights should be within a few ppm of the step time (a Pi 5: 0 ppm).
     bound = 600 if os.path.exists("/etc/fpp/container") else 50
     assert abs(ppm) < bound, f"frames took {per_frame:.4f} ms instead of {STEP_MS}: {ppm:+.0f} ppm"
+
+
+def test_all_lights_off_while_output_is_disabled_and_a_sequence_plays(fppd):
+    """"All Lights Off" with channel output disabled (POST /fppd/outputs
+    {"command": "disable"}) while a sequence plays blanks without racing the
+    output thread.
+
+    Regression: 12257d973. Disabled output only stops the output thread
+    sending; it still prepares every frame. The blank was then sent inline
+    from the caller's thread with only inlineOutputLock held, so two threads
+    ran PrepareChannelData() and every output's PrepData() on the same
+    buffers at once (reported by a TSan build)."""
+    install(fppd, solid_frames(400, CHANNELS, 77))
+    fppd.start()
+    fppd.command("Start Playlist", "Show", "true", "false")
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", timeout=20,
+                  what="the sequence to play")
+    fppd.post("/fppd/outputs", {"command": "disable"})
+    try:
+        for _ in range(100):
+            fppd.command("All Lights Off")
+    finally:
+        fppd.post("/fppd/outputs", {"command": "enable"})
+    assert status(fppd).get("status_name") == "playing"

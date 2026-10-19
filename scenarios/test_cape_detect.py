@@ -351,3 +351,36 @@ def test_an_empty_boot_config_removal_does_not_hang(fppinit):
     cfg = fppinit.boot_file("config.txt")
     assert "fpp-test-remove-me" not in cfg, cfg
     assert "dtparam=audio=on" in cfg, cfg
+
+
+def test_an_unsigned_capes_module_names_are_not_run_as_shell(fppinit):
+    """A module named in an unsigned cape is handed to modprobe as a name, not
+    run by the shell.
+
+    Regression: 2e4ce2aa8. The names went unquoted into system() and popen()
+    command lines, so "x;touch ..." ran as root at boot."""
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(
+        modules=["x;touch /home/fpp/media/pwned-a", "y$(touch /home/fpp/media/pwned-b)"])))
+    detect(fppinit)
+    assert not fppinit.media_exists("pwned-a") and not fppinit.media_exists("pwned-b"), \
+        "a cape's module name was run by the shell"
+
+
+@pytest.mark.skipif(not on_pi(), reason="bootConfig edits config.txt, on a Pi")
+def test_an_unsigned_cape_may_only_add_overlays_to_the_boot_config(fppinit):
+    """An unsigned cape's bootConfig may add device tree overlays and
+    parameters, and nothing else: what the box boots is not its to change.
+
+    Regression: 2e4ce2aa8. Any line was appended to config.txt, kernel= and
+    cmdline= included, from an image as easily uploaded as programmed."""
+    with open(os.path.join(fppinit.boot, "config.txt"), "w") as f:
+        f.write("dtparam=audio=on\n")
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(bootConfig={
+        "append": ["dtoverlay=fpp-test-overlay", "kernel=evil.img", "cmdline=evil.txt"]})))
+    try:
+        fppinit.capedetect("-no-set-permissions", timeout=60)
+    except subprocess.TimeoutExpired:
+        pytest.fail("fppcapedetect hung")
+    cfg = fppinit.boot_file("config.txt")
+    assert "dtoverlay=fpp-test-overlay" in cfg, cfg
+    assert "kernel=evil.img" not in cfg and "cmdline=evil.txt" not in cfg, cfg

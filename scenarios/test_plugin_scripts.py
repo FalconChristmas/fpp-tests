@@ -9,6 +9,7 @@ directory, which the scenario reads back.
 
 import json
 import os
+import time
 
 from test_playlist_entries import pause, playlist, step
 
@@ -146,3 +147,44 @@ def test_a_plugin_that_never_answers_does_not_stop_fppd_starting(fppd):
     fppd.start(timeout=60)
     fppd.wait_for(lambda: "lifecycle startup" in events(d), timeout=10,
                   what="the other plugin to load")
+
+
+def test_unloading_a_plugin_during_another_plugins_callback(fppd):
+    """A plugin unloaded while another plugin's playlist callback is running
+    off the main loop (here a stop that came in over MQTT, on mosquitto's
+    thread) is not called after it is gone.
+
+    Regression: 26915a4d9. Playlist callbacks walked the plugin list on the
+    thread that changed the playlist, with no lock, while unload edited the
+    list on the main loop and deleted the plugin at once. A walk that was
+    inside a slow plugin's callback then called the next plugin out of its
+    stale copy of the list: a freed object."""
+    import threading
+    from test_mqtt_control import HOST, PORT, broker, publish
+    slow = plugin(fppd, name="fpp-test-a")
+    with open(os.path.join(slow, "callbacks.sh"), "w") as f:
+        f.write(CALLBACKS.replace("LIST_DELAY", ":").replace("LIST", "playlist")
+                .replace('echo "$*" >> "$LOG"',
+                         'echo "$*" >> "$LOG"; case "$*" in *\\"stop\\"*) sleep 3;; esac'))
+    plugin(fppd, name="fpp-test-b")
+    fppd.write("playlists/P.json", playlist("P", main=[pause(60)]))
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    with broker():
+        fppd.start()
+        time.sleep(2)  # connected and subscribed
+        for _ in range(3):
+            # Unload and reload first, so B is listed after A whatever order
+            # the plugin directories were read in at startup.
+            assert fppd.post("/fppd/plugin/fpp-test-b/unload", {}, timeout=40)["loaded"] is False
+            assert fppd.post("/fppd/plugin/fpp-test-b/load", {}, timeout=40)["loaded"] is True
+            fppd.command("Start Playlist", "P", "false", "false", timeout=30)
+            fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "playing",
+                          timeout=20, what="the playlist to start")
+            n = len(events(slow))
+            publish("set/playlist/P/stop/now")
+            fppd.wait_for(lambda: any('"stop"' in l for l in events(slow)[n:]), timeout=10,
+                          what="fpp-test-a's stop callback to start")
+            r = fppd.post("/fppd/plugin/fpp-test-b/unload", {}, timeout=40)
+            assert r["loaded"] is False, r
+            time.sleep(4)  # fpp-test-a's callback returns; the walk goes on to B
+            assert fppd.post("/fppd/plugin/fpp-test-b/load", {}, timeout=40)["loaded"] is True
