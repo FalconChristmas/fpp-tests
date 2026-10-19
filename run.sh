@@ -37,9 +37,11 @@ done
 # Emptied rather than removed and recreated: Docker Desktop's file sharing
 # can still hold the old directory when the next run mounts the path, and that
 # run's results then go nowhere (seen with back-to-back runs on macOS).
+# artifacts/web is run-web.sh's, which may be running now: emptying it would
+# leave that run's container writing to a directory no longer there.
 ARTIFACTS="$HERE/artifacts"
 mkdir -p "$ARTIFACTS"
-find "$ARTIFACTS" -mindepth 1 -delete
+find "$ARTIFACTS" -mindepth 1 ! -path "$ARTIFACTS/web" ! -path "$ARTIFACTS/web/*" -delete
 
 # The scenarios make network and mount namespaces (fake devices, fppinit),
 # which Docker's default AppArmor profile forbids even with SYS_ADMIN: on a
