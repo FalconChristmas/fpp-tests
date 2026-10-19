@@ -39,3 +39,27 @@ for (const { name, body } of PAGES) {
     }
   });
 }
+
+// Every type is served with the sandbox, including the ones the server-wide
+// mod_headers rules strip Content-Security-Policy from. A <FilesMatch> merges
+// after a <Directory>, so before fpp d53e40b9f ("fix(apache): every file in
+// virtualdisplay_assets is served sandboxed") an .rss, .atom or .rdf -- which
+// browsers render as XML, script included -- came back without it.
+test('every type served from virtualdisplay_assets carries the sandbox', async ({ request }) => {
+  const exts = ['rss', 'atom', 'rdf', 'txt', 'json', 'md', 'js', 'css', 'png', 'html', 'svg', 'xml', 'obj', 'mtl'];
+  const missing: string[] = [];
+  for (const ext of exts) {
+    const name = `fpp-tests-sandbox-type.${ext}`;
+    const up = await request.post(`/api/file/virtualdisplay_assets/${name}`, { data: 'fpp-tests' });
+    expect(up.ok(), `upload ${name}: ${await up.text()}`).toBe(true);
+    try {
+      const r = await request.get(`/virtualdisplay_assets/${name}`);
+      expect(r.status(), name).toBe(200);
+      const csp = r.headersArray().filter((h) => h.name.toLowerCase() === 'content-security-policy').map((h) => h.value);
+      if (!csp.some((v) => /\bsandbox\b/.test(v))) missing.push(`${ext} (${csp.join(' | ') || 'no CSP'})`);
+    } finally {
+      await request.delete(`/api/file/virtualdisplay_assets/${name}`);
+    }
+  }
+  expect(missing, 'types served without the sandbox').toEqual([]);
+});
