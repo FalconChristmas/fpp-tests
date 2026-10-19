@@ -164,6 +164,25 @@ def test_bad_test_start_arguments_are_survived(fppd, args, what):
         wait_output(fppd, rx, lambda f: f[:3] == b"\x01\x02\x03", f"a good test after {what}")
 
 
+def test_a_start_channel_past_int_max_is_refused(fppd):
+    """A start channel past INT_MAX is refused, not wrapped. atoi() turned
+    4294967295 into -1, so "4294967295-30" became channels 0..29 starting one
+    byte before the channel buffer: a write outside it on every frame, and
+    the pattern landing one byte off on the wire, which is what shows here
+    without a sanitizer.
+
+    Regression: 63be4acc8."""
+    setup(fppd)
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        start_test(fppd, 1000, "RGB Single Color", "4294967295-30", "#010203")
+        time.sleep(1.5)
+        assert not any(last(rx)), f"a wrapped range was tested: {last(rx)[:12].hex()}"
+        fppd.command("Test Stop")
+        start_test(fppd, 1000, "RGB Single Color", "1-3", "#010203")
+        wait_output(fppd, rx, lambda f: f[:3] == b"\x01\x02\x03", "a good test afterwards")
+
+
 def test_testing_api_describes_the_patterns(fppd):
     """GET /fppd/testing/tests lists the patterns; /fppd/testing/tests/<name>
     gives each one's arguments; GET /fppd/testing returns the running

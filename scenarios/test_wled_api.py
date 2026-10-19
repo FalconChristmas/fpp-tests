@@ -282,3 +282,24 @@ def test_an_oversized_body_is_refused_not_buffered(fppd):
     s.sendall(body)
     s.close()
     assert http("GET", "/json/info")[0] == 200
+
+
+def test_audio_input_setting_cannot_add_pipeline_elements(fppd):
+    """WLEDAudioInput names a capture device; it is set on the source as a
+    property, so a value that reads like more pipeline is just a device name
+    that doesn't open.
+
+    Regression: 89cdccb48. The value was pasted into a gst_parse_launch()
+    description, so "null ! fakesink filesrc location=A ! filesink
+    location=B appsrc" opened ALSA's null device and then copied A to B as
+    root. The setting is writable with no authentication through the legacy
+    MultiSync SetSetting packet."""
+    src = os.path.join(fppd.media, "upload", "secret.txt")
+    dst = os.path.join(fppd.media, "upload", "copied.txt")
+    fppd.write("upload/secret.txt", "fpp-tests-secret\n")
+    fppd.settings(MediaBackend="alsa", WLEDAudioSyncMode="send", WLEDAudioSyncDest="127.0.0.1",
+                  WLEDAudioInput=f"null ! fakesink filesrc location={src} ! filesink location={dst} appsrc")
+    fppd.start()
+    time.sleep(5)
+    assert not os.path.exists(dst), "WLEDAudioInput added elements to the capture pipeline"
+    assert fppd.get("/fppd/status").get("status_name") is not None

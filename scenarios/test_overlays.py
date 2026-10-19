@@ -664,3 +664,49 @@ def test_a_state_change_leaves_a_running_effect_running(fppd):
         fppd.command("Overlay Model State", "M", "Transparent")
         time.sleep(1)
         assert running_effect(fppd, "M") == "Bars"
+
+
+def huge_png(width, height):
+    """A tiny grayscale PNG whose header claims width x height: all-zero rows
+    compress to almost nothing."""
+    import struct
+    import zlib
+
+    def chunk(kind, data):
+        return (struct.pack(">I", len(data)) + kind + data
+                + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff))
+    z = zlib.compressobj(9)
+    row = b"\0" * (width + 1)
+    idat = b"".join(z.compress(row) for _ in range(height)) + z.flush()
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0))
+            + chunk(b"IDAT", idat) + chunk(b"IEND", b""))
+
+
+def peak_rss_mb(pid):
+    with open(f"/proc/{pid}/status") as f:
+        for line in f:
+            if line.startswith("VmHWM:"):
+                return int(line.split()[1]) // 1024
+    return 0
+
+
+def test_an_image_claiming_a_huge_size_is_refused_without_the_memory(fppd):
+    """An image PUT to a model whose header claims 30000x30000 is refused
+    without GraphicsMagick allocating for it.
+
+    Regression: e3e4e471a. The ?w=/&h= clamp only bounds the box the image is
+    scaled into after decoding; the decode itself allocated whatever the
+    header asked for, 4+ GB for this ~1 MB file, and on a Pi or BeagleBone
+    the OOM killer took fppd."""
+    setup(fppd, [matrix()])
+    bomb = huge_png(30000, 30000)
+    fppd.start()
+    before = peak_rss_mb(fppd.proc.pid)
+    try:
+        put(fppd, "model/M/data?fmt=image", bomb, timeout=60)
+    except urllib.error.HTTPError:
+        pass  # refused is the point
+    grew = peak_rss_mb(fppd.proc.pid) - before
+    assert grew < 512, f"fppd's peak memory grew {grew} MB decoding a {len(bomb) // 1024} KB image"
+    fill(fppd, "M", [1, 2, 3])

@@ -201,3 +201,26 @@ def test_paused_scheduled_playlist_stops_at_the_end_of_its_window(fppd):
                   what="the playlist to pause")
     fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=40, interval=0.5,
                   what="the paused playlist to stop at the end of its window")
+
+
+def test_a_command_entry_with_an_object_argument_runs(fppd):
+    """A command entry whose args include a JSON object (an If command's
+    condition, or any command given one) counts down and runs, and fppd
+    survives it.
+
+    Regression: c6a5be4ba. The scheduler logged each arg with asString(),
+    which throws on an object; nothing on the main loop caught it, so fppd
+    aborted during the countdown, and again after every restart until the
+    entry's time had passed.
+    """
+    fppd.write("playlists/Show.json", {"name": "Show", "repeat": 1, "loopCount": 0,
+                                       "leadIn": [], "leadOut": [],
+                                       "mainPlaylist": [{"type": "pause", "enabled": 1,
+                                                         "playOnce": 0, "duration": 30}]})
+    start = datetime.datetime(YEAR, 6, 10, 12, 0, 10)
+    e = entry(7, start.strftime("%H:%M:%S"), start.strftime("%H:%M:%S"), playlist="",
+              command="Start Playlist", args=["Show", {"not": "a string"}, "false"])
+    fppd.write("config/schedule.json", [e])
+    fppd.start(fake_time=f"{YEAR}-06-10 12:00:00", tz=ZONE)
+    fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("playlist") == "Show",
+                  timeout=30, interval=0.5, what="the scheduled command with an object arg to run")

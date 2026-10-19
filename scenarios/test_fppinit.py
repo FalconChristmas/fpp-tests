@@ -151,3 +151,22 @@ def test_leaving_ap_mode_stops_hostapd_before_the_wifi_client(fppinit):
     assert client, f"the Wi-Fi client was never started: {calls}"
     assert stop[0] < client[0], f"wpa_supplicant started before hostapd stopped: {calls}"
     assert not [c for c in calls if "kill" in c and "hostapd" in c], f"hostapd was killed: {calls}"
+
+
+@pytest.mark.parametrize("field", ["TetherPSK", "TetherSSID"])
+def test_tether_credentials_are_not_run_as_shell(fppinit, field):
+    """The tethering SSID and PSK reach the Wi-Fi QR code as data: a value
+    with $(...) in it is printed in the code, not run.
+
+    Regression: 626d00a75. Both were pasted inside double quotes into the
+    qrencode command line, so "$(...)" ran as root whenever the hostapd
+    config was written -- and the settings API only refuses CR, LF and NUL
+    in them."""
+    if not os.path.exists("/usr/bin/qrencode"):
+        pytest.skip("no qrencode here")
+    fppinit.settings(EnableTethering="1", TetherInterface="wlan0",
+                     **{field: "a$(touch /fpp-test-media/pwned)b"})
+    r = fppinit.run("setupNetwork")
+    assert_clean(r)
+    assert not fppinit.media_exists("pwned"), f"{field} was run by the shell"
+    assert fppinit.media_exists("tmp/wifi-L.ascii"), "no QR code was written"

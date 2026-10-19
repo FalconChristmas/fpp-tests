@@ -2,6 +2,7 @@
 places that run commands without an HTTP handler above them."""
 
 import json
+import os
 import time
 import urllib.error
 import urllib.parse
@@ -305,3 +306,56 @@ def test_if_compares_times_days_and_months_in_order(fppd):
         got[(src, cmp_, value)] = variable(fppd, name)
     wrong = {k: v for (k, v), (_, _, _, want) in zip(got.items(), CONDITIONS) if v != want}
     assert not wrong, f"wrong answers: {wrong}"
+
+
+def test_listing_fpp_variables_while_a_playlist_runs_if_does_not_deadlock(fppd):
+    """GET /api/variables?fpp=true, polled while a looping playlist runs If
+    entries, keeps answering.
+
+    Regression: caab3dccc. Listing the fpp_* variables held their
+    change-tracking lock while reading the playlist status, which takes the
+    playlist's lock; the main loop holds the playlist's lock while a command
+    entry runs, and an If with an Expression lists the variables, taking the
+    tracking lock. Each waited for the other and fppd hung.
+    """
+    import threading
+    cond = expression_is("1", "1")
+    fppd.write("playlists/Ifs.json", playlist(
+        "Ifs", [command_entry(if_command(cond, [set_variable("Hit", 1)]))] * 20, repeat=1))
+    fppd.start()
+    fppd.command("Start Playlist", "Ifs", "true", "false")
+    stop = time.monotonic() + 15
+    errors = []
+
+    def poll():
+        try:
+            while time.monotonic() < stop and not errors:
+                fppd.get("/variables?fpp=true", timeout=5)
+        except Exception as e:  # noqa: BLE001 -- a wedge is what we look for
+            errors.append(e)
+
+    pollers = [threading.Thread(target=poll) for _ in range(4)]
+    for t in pollers:
+        t.start()
+    for t in pollers:
+        t.join()
+    assert not errors, errors[0]
+    assert variable(fppd, "Hit") == "1"
+
+
+@pytest.mark.parametrize("scheme", ["file", "FILE"])
+def test_url_command_does_not_read_local_files(fppd, scheme):
+    """The URL command fetches http and https only; a file:// URL is refused
+    rather than read (as root) and handed back.
+
+    Regression: be4b5df67. libcurl's default protocol set includes file://,
+    so POST /api/command/URL with "file:///etc/shadow" returned the file."""
+    marker = "fpp-tests-local-file-marker-7f3c"
+    fppd.write("upload/marker.txt", marker)
+    fppd.start()
+    url = f"{scheme}://{os.path.join(fppd.media, 'upload', 'marker.txt')}"
+    try:
+        got = fppd.command("URL", url, "GET", "", timeout=15)
+    except urllib.error.HTTPError as e:
+        got = e.body
+    assert marker not in str(got), f"the URL command read a local file: {got!r}"
