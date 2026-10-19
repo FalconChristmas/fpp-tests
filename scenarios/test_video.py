@@ -396,3 +396,42 @@ def test_a_parked_rtp_member_stops_sending(fppd, audio):
         assert not late, f"{len(late)} RTP packets 2 s after the video ended"
     finally:
         rx.close()
+
+
+def test_rtsp_port_warning_comes_down_once_the_port_is_free(fppd):
+    """An RTSP output whose port is taken says so in a warning, and the
+    warning comes down once the port is free and the outputs are reloaded.
+
+    Regression: 48ed0c577. The "could not bind port" warning had no removal, so
+    it stayed up until fppd restarted, contradicting a working stream.
+    """
+    import socket
+    import tempfile
+    port = 18554
+    fppd.write("config/pipewire-rtsp-outputs.json", {"enabled": True, "port": port})
+    fppd.write("config/pipewire-video-consumers.json", [
+        {"type": "rtsp", "name": "Cam", "sourceNode": "fppd_video_stream_1"}])
+    held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    held.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    held.bind(("0.0.0.0", port))
+    held.listen(1)
+
+    def flagged():
+        return any(f"could not bind port {port}" in w
+                   for w in fppd.get("/fppd/status").get("warnings", []))
+    try:
+        fppd.start()
+        fppd.wait_for(flagged, timeout=20, what="the RTSP port warning")
+    finally:
+        held.close()
+    path = tempfile.mktemp(prefix="fpp-test-client-", dir="/run/fppd")
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    try:
+        s.bind(path)
+        s.settimeout(15)
+        s.sendto(b"reloadRTSPOutputs", "/run/fppd/FPPD")
+        s.recv(4096)
+    finally:
+        s.close()
+        os.unlink(path)
+    fppd.wait_for(lambda: not flagged(), timeout=15, what="the RTSP port warning to come down")
