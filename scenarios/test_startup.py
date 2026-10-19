@@ -1,3 +1,6 @@
+import os
+
+
 def test_starts_and_stops_cleanly(fppd):
     """fppd on an empty media directory comes up, answers, and shuts down
     on SIGTERM with exit 0 and no sanitizer report."""
@@ -35,3 +38,42 @@ def test_failed_startup_exits_cleanly(fppd):
         assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
     finally:
         held.close()
+
+
+def test_failed_startup_after_media_init_exits(fppd):
+    """A startup failure after InitMediaOutput() has started the volume worker
+    still ends fppd. A directory where the command socket goes makes its bind
+    fail, which is after media init and before the HTTP server. slowbind.so
+    holds that bind back 1.5 s, as a device's slower startup does, so the
+    worker has applied the volume and is waiting by then.
+
+    Regression: 5503f89ff. That failure left through exit(), whose static
+    destructors destroyed the condition variable the volume worker
+    (cbf88ae78) was waiting on. glibc's pthread_cond_destroy() waits for its
+    waiters, so fppd hung and never exited -- under systemd it was never
+    restarted either. (Under ASan the same teardown first read a freed
+    settings-listener map; in an optimized build it hangs.)
+    """
+    import shutil
+
+    import shims
+    from fppd import FppdDied
+
+    server = "/run/fppd/FPPD"
+    fppd.settings(volume=50)
+    if os.path.lexists(server) and not os.path.isdir(server):
+        os.unlink(server)
+    os.makedirs(os.path.join(server, "in-the-way"), exist_ok=True)
+    try:
+        try:
+            fppd.start(timeout=30, preload=[shims.build("slowbind.c")])
+        except FppdDied:
+            pass
+        else:
+            raise AssertionError("fppd started although its command socket could not bind")
+        fppd.exit_expected = True
+        assert fppd.proc.returncode == 1, fppd.tail()
+        reports = fppd.sanitizer_reports()
+        assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
+    finally:
+        shutil.rmtree(server, ignore_errors=True)

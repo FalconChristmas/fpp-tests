@@ -6,6 +6,7 @@ keeps channel data flowing at a steady rate while a scenario saves configs.
 
 import time
 
+import shims
 from udp import Listener
 
 GENERIC_PORT = 5000
@@ -120,3 +121,42 @@ def test_controller_that_comes_up_late_gets_the_show(fppd):
             assert latest in frames, "the late controller got data that is not the show"
         finally:
             subprocess.run(["ip", "addr", "del", address + "/32", "dev", "lo"])
+
+
+def test_controllers_that_answer_stay_up_when_the_ping_thread_is_late(fppd):
+    """Controllers that answer their pings stay in the output and raise no
+    unreachable-controller warning, even when fppd's ping thread only gets
+    to their replies after their timeout. slowping.so holds the thread up
+    400 ms after each wake-up, as a name lookup with no reachable DNS
+    (1705b8e89 moved those onto it) or a busy single-core board does, so a
+    burst of replies is always waiting by the time it reads. Four
+    controllers on loopback answer every ping, over the three pings at
+    startup and the first periodic one 15 s later.
+
+    Regression: 32f043984. Each pass of the ping thread read one reply and
+    then timed out every other pending ping (5c1ef6c76): the first host was
+    credited, the rest counted a lost ping, and three in a row took a
+    controller that was up out of the output with warning 27.
+    """
+    addresses = [f"127.0.0.{n}" for n in range(2, 6)]
+    fppd.write("config/co-universes.json", {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1,
+        "channelCount": 3 * len(addresses),
+        "universes": [{"active": 1, "description": f"controller {a}", "id": 64001,
+                       "startChannel": 1 + 3 * i, "channelCount": 3, "type": 5,
+                       "address": a, "priority": 0, "monitor": 1, "deDuplicate": 0}
+                      for i, a in enumerate(addresses)],
+    }]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start(preload=[shims.build("slowping.c")])
+
+    def host_warnings():
+        return [w.get("message", "") for w in fppd.get("/fppd/status").get("warningInfo", [])
+                if w.get("id") == 27]
+
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        assert not host_warnings(), f"controllers that answer were dropped: {host_warnings()}"
+        time.sleep(0.5)
+    lost = [line for line in fppd.log().splitlines() if "Could not ping host" in line]
+    assert not lost, "pings that were answered counted as lost:\n" + "\n".join(lost[:10])
