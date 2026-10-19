@@ -223,3 +223,39 @@ def test_all_lights_off_while_output_is_disabled_and_a_sequence_plays(fppd):
     finally:
         fppd.post("/fppd/outputs", {"command": "enable"})
     assert status(fppd).get("status_name") == "playing"
+
+
+def test_stopping_a_sequence_while_output_is_disabled(fppd):
+    """With channel output disabled (POST /fppd/outputs {"command":
+    "disable"}), stopping a playing sequence doesn't wedge fppd, and the
+    blank that follows still reaches the wire -- the only thing that does
+    while output is disabled.
+
+    Regression: f8c94ec45. 12257d973 made SendBlankingData() take
+    outputThreadLock when it sent the blank itself, which it did whenever
+    output was disabled. Its caller, CloseSequenceFile(), holds
+    m_sequenceLock, and the output thread -- still running and preparing
+    frames while output is disabled -- takes m_sequenceLock in
+    ReadSequenceData() while holding outputThreadLock. A stop that landed
+    while the output thread was awake (the blank sleeps 5 ms under
+    m_sequenceLock first, at 100 fps about half of all stops) deadlocked
+    both threads, then the playlist and HTTP threads behind them. The fix
+    has the output thread send the blank as a forced frame instead."""
+    frames = solid_frames(1000, CHANNELS, 77)  # 10 s at 100 fps
+    with DdpReceiver(CHANNELS) as rx:
+        install(fppd, frames, step_ms=10)
+        fppd.start()
+        fppd.post("/fppd/outputs", {"command": "disable"})
+        for i in range(40):
+            start(fppd)
+            fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", timeout=20,
+                          what=f"the sequence to play (round {i})")
+            time.sleep(0.2)
+            stopped = time.monotonic()
+            fppd.command("Stop Now")
+            wait_idle(fppd, timeout=10)
+            assert rx.wait_frames(1, timeout=5, since=stopped), \
+                f"round {i}: no blank reached the wire after the stop with output disabled"
+        shown = [d for _, d in rx.snapshot() if any(d)]
+        assert not shown, f"{len(shown)} sequence frames were sent while output was disabled"
+        assert not any(rx.last()), "the last frame on the wire is not black"
