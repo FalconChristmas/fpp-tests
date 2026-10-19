@@ -81,14 +81,16 @@ done
 
 if [ -n "$SERVE" ]; then
     echo "serving fpp $DESCRIBE at http://127.0.0.1:$PORT/ until Ctrl-C"
+    echo "(container $NAME: FPP_TESTS_WEB_CONTAINER=$NAME for the tests that need it)"
     trap 'docker stop -t 120 "$NAME" > /dev/null; docker rm -f "$NAME" > /dev/null 2>&1; exit 0' INT TERM
     docker wait "$NAME" > /dev/null
     exit 1
 fi
 
 rc=0
+# FPP_TESTS_WEB_CONTAINER: for the tests that act from inside the player.
 (cd "$HERE/web" && PLAYWRIGHT_BASE_URL="http://127.0.0.1:$PORT" FPP_TESTS_WEB_ARTIFACTS="$ARTIFACTS" \
-    npx playwright test "$@") || rc=$?
+    FPP_TESTS_WEB_CONTAINER="$NAME" npx playwright test "$@") || rc=$?
 
 # SIGTERM: web_serve.py stops fppd and judges it; give an ASan fppd time.
 docker stop -t 120 "$NAME" > /dev/null

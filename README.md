@@ -98,6 +98,11 @@ With `--serve` running, `npx playwright test --ui` in `web/` is the quickest way
 test. Any other player works as a target too (`PLAYWRIGHT_BASE_URL=http://<player>`), but the
 tests change its settings, so don't point it at one that matters.
 
+A test that has to act from inside the player -- a request from its own loopback, a script
+run on it, another host next to it -- uses `web/tests/container.ts`. `run-web.sh` names the
+container in `FPP_TESTS_WEB_CONTAINER` (`--serve` prints it, to export for `npx playwright
+test`); without it, those tests skip.
+
 A fresh player sends every page to the setup wizard, so the `setup` project finishes the
 wizard first, as a user would; if it can't be finished, nothing else runs. The fppd behind
 the pages is held to the scenarios' standard: the run fails if it died, wedged, exited non-zero
