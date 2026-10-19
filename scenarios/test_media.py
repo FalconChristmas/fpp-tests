@@ -56,8 +56,9 @@ def test_sequence_and_media_play_together(fppd, audio):
     for that second without drifting apart.
 
     How closely they hold is only meaningful against a real clock. On a
-    device (run-local.sh) the bound is 75 ms: FPP corrects the lights to
-    whole frames (50 ms), so less than that cannot be corrected. In a
+    device (run-local.sh) the bound is 25 ms: media sync closes the timing
+    error between each frame and the media position continuously, not in
+    whole frames (f2d25dc05; it was 75 ms, a frame and a half, before). In a
     container PipeWire's null sink runs on a VM timer that wanders 100-200
     ms against the monotonic clock on its own, so there the spread is only
     printed; the frame and burst checks still apply. The long-song drift
@@ -107,7 +108,7 @@ def test_sequence_and_media_play_together(fppd, audio):
     spread = max(offsets) - min(offsets)
     print(f"audio minus lights, ms: {[round(o) for o in offsets]}; spread {spread:.0f} ms")
     if not in_container:
-        assert spread < 75, f"media and lights wandered {spread:.0f} ms apart over {secs} s"
+        assert spread < 25, f"media and lights wandered {spread:.0f} ms apart over {secs} s"
 
 
 def test_long_song_stays_locked_to_the_sound_card(fppd, audio):
@@ -115,11 +116,10 @@ def test_long_song_stays_locked_to_the_sound_card(fppd, audio):
     system's.
 
     A card's sample clock is never exactly nominal (tens to hundreds of ppm
-    off the system clock is normal). FPP corrects the lights to the media
-    position in whole frames, so the gap between them may wander by about a
-    frame, but it must not grow steadily with the song: that is drift no
-    correction is acting on, and it reaches 100 ms within minutes. Nor may
-    it wander by much more than a frame once playback has settled.
+    off the system clock is normal). Uncorrected, that is drift that reaches
+    100 ms within minutes. The lights follow the media position, which runs
+    on the card's clock, to a few ms (f2d25dc05), so the gap between them
+    must stay within 25 ms from a few seconds into the song to its end.
 
     The gap is taken in real time: light frames by the system clock, audio
     by the recording's sample count scaled by the card's rate (fitted from
@@ -213,27 +213,15 @@ def test_long_song_stays_locked_to_the_sound_card(fppd, audio):
     # only counts the card's samples, so without the card's rate (a null
     # sink, which runs on the system clock) its count stands in for seconds.
     gap = real if card_ppm is not None else drift
-    # Drift is continuous; media sync's corrections are steps (a whole-frame
-    # dead band, nudged by ~20 ms when the frame count crosses it). Sum only
-    # the small changes from burst to burst, so a correction isn't read as
-    # drift -- the wander check below is what bounds the steps.
-    creep = sum(b - a for a, b in zip(gap, gap[1:]) if abs(b - a) < 5)
-    ppm = creep / (xs[-1] - xs[0]) * 1000  # ms per s -> ppm
-    print(f"lights minus audio over {secs} s, every 20 s (ms): "
-          f"{[round(d) for d in gap[::10]]}; drift between corrections {ppm:.0f} ppm")
-    # The sum telescopes to about (last - first - corrections), so its noise is
-    # a millisecond or so over the song: a few ppm. A Pi 5's -47 ppm card,
-    # uncompensated, is well clear of this.
-    assert abs(ppm) < 20, \
-        f"the lights drift {ppm:.0f} ppm against the sound ({creep:.0f} ms over the song): " \
-        "nothing is keeping them on the card's clock"
-    # And no wandering: once playback has settled, the gap stays within about
-    # a frame and a half -- FPP corrects in whole frames, so a frame of
-    # wander is expected, more is not.
-    settled = [d for x, d in zip(xs, gap) if x >= 20]
+    print(f"lights minus audio over {secs} s, every 20 s (ms): {[round(d) for d in gap[::10]]}")
+    # Media sync used to correct in whole frames, so the gap wandered by up
+    # to a frame and a half and only a separate drift figure could tell a
+    # clock that wasn't followed. With the error closed continuously, any
+    # drift shows as wander.
+    settled = [d for x, d in zip(xs, gap) if x >= 2]
     wander = max(settled) - min(settled)
-    assert wander <= 75, \
-        f"after the first 20 s the gap between lights and sound wandered over {wander:.0f} ms"
+    assert wander <= 25, \
+        f"from 3 s into the song the gap between lights and sound wandered over {wander:.0f} ms"
 
 
 def test_offset_does_not_carry_across_songs(fppd, audio):
@@ -297,7 +285,7 @@ def test_offset_does_not_carry_across_songs(fppd, audio):
     offs = [round((l - a) * 1000) if l and a else None for l, a in zip(lights, onsets)]
     print(f"card {ppm:+.0f} ppm; lights minus audio at each song start (ms): {offs}")
     assert None not in offs, f"a song's start was not seen on the wire or heard: {offs}"
-    assert max(offs) - min(offs) <= 50, \
+    assert max(offs) - min(offs) <= 25, \
         f"the offset moved {max(offs) - min(offs)} ms from song to song: {offs}"
 
 
@@ -523,3 +511,71 @@ def test_fppd_d_returns_to_its_caller(fppd):
         assert d.launcher_rc() == 0, f"\"fppd -d\" exited {d.launcher_rc()}"
     finally:
         d.stop()
+
+
+def test_lights_follow_the_media_position(fppd, audio):
+    """Each frame goes on the wire close to when the media position reaches
+    it: within 15 ms of it (median), with a 10-90% spread of 15 ms at most.
+
+    Media sync only acted on whole-frame differences, once a second, so the
+    frames wandered around the position. A phase servo now closes the timing
+    error itself (f2d25dc05). Pi 5 I2S, three songs: 10-90% spread 18-22 ms
+    and medians -6..12 ms on the parent; 9-11 ms and -6..-4 ms on the fix.
+
+    Needs no sound reference: fppd's own status reports the media position
+    the lights follow (to 10 ms, truncated), so this runs against a null
+    sink as well as a real card. Whether that position is right for the
+    sound is the other tests' business.
+    """
+    secs, songs = 12, 3
+    entries, lookups = [], []
+    for n in range(songs):
+        frames = unique_frames(secs * 20, CHANNELS, first=20000 * n)
+        lookups.append({f: i for i, f in enumerate(frames)})
+        write_fseq(os.path.join(fppd.media, "sequences", f"P{n}.fseq"), frames)
+        write_tone_wav(os.path.join(fppd.media, "music", f"P{n}.wav"), secs, amplitude=0.1,
+                       bursts=[(1, 0.1)])
+        entries.append({"type": "both", "enabled": 1, "playOnce": 0,
+                        "sequenceName": f"P{n}.fseq", "mediaName": f"P{n}.wav"})
+    fppd.write("playlists/Pos.json", playlist("Pos", entries))
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    polls = []
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fppd.command("Start Playlist", "Pos", "false", "false")
+        end = time.monotonic() + songs * secs + 5
+        while time.monotonic() < end:
+            t0 = time.monotonic()
+            s = fppd.get("/fppd/status")
+            t1 = time.monotonic()
+            seq, ms = s.get("current_sequence", ""), s.get("milliseconds_elapsed")
+            if seq.startswith("P") and isinstance(ms, int):
+                polls.append(((t0 + t1) / 2, int(seq[1:].split(".")[0]), ms))
+            time.sleep(0.2)
+        received = rx.snapshot()
+    first_seen = [{} for _ in range(songs)]
+    for t, d in received:
+        for n in range(songs):
+            i = lookups[n].get(d[:CHANNELS])
+            if i is not None:
+                first_seen[n].setdefault(i, t)
+    errs = [[] for _ in range(songs)]
+    for t, n, ms in polls:
+        if not 2000 <= ms <= (secs - 1) * 1000:
+            continue
+        pos = ms + 5  # the report is truncated to 10 ms
+        k = int(pos // 50) + 1  # the next frame due
+        seen = first_seen[n].get(k)
+        if seen is not None:
+            errs[n].append((seen - (t + (k * 50 - pos) / 1000)) * 1000)
+    medians = [round(statistics.median(e)) if e else None for e in errs]
+    spreads = [round(statistics.quantiles(e, n=10)[-1] - statistics.quantiles(e, n=10)[0]) if len(e) > 10 else None
+               for e in errs]
+    print(f"frame on the wire minus when the media position put it, per song: median {medians} ms, "
+          f"10-90% spread {spreads} ms")
+    assert None not in medians, f"a song was not seen on the wire or in the status: {medians}"
+    assert all(abs(m) <= 15 for m in medians), \
+        f"the lights sit {medians} ms from where the media position puts them"
+    assert None not in spreads and all(sp <= 15 for sp in spreads), \
+        f"the lights wander {spreads} ms (10-90%) around where the media position puts them"
