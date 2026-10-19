@@ -105,8 +105,11 @@ test('the state-changing routes take POST', async ({ request }) => {
   const wrong: string[] = [];
   for (const route of routes) {
     const r = await request.post(route, { data: route.startsWith('/api/command/') ? ['0'] : '' });
-    // limonade answers a method it has no route for with 404.
-    if (r.status() === 404 || r.status() === 405 || r.headers()['deprecation']) {
+    // limonade answers a method it has no route for with its own "Page not
+    // found" page (404). A 404 from the route's handler is JSON and means the
+    // route is there: since fpp 9bee8610d a trigger for no such event is one.
+    const unrouted = r.status() === 405 || (r.status() === 404 && (await r.text()).includes('Page not found'));
+    if (unrouted || r.headers()['deprecation']) {
       wrong.push(`POST ${route} -> ${r.status()}${r.headers()['deprecation'] ? ' (Deprecation)' : ''}`);
     }
   }
