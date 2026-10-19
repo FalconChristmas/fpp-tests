@@ -73,6 +73,9 @@ CASES = {
              "multicastIP": 5, "latency": O, "sapEnabled": "no", "ptime": L}]}),
     "pipewire-stream-slots: slots of the wrong type": ("pipewire-stream-slots.json", {"slots": {"1": "75"}}),
     "pipewire-stream-slots: root is a list": ("pipewire-stream-slots.json", [1]),
+    # read at startup by RTSPOutputManager (2e494fd13)
+    "pipewire-rtsp-outputs: fields of the wrong type": ("pipewire-rtsp-outputs.json", {
+        "enabled": "yes", "port": L, "requireGroupSource": O, "latencyMs": S}),
 }
 
 
