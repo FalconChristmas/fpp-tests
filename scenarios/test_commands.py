@@ -359,3 +359,20 @@ def test_url_command_does_not_read_local_files(fppd, scheme):
     except urllib.error.HTTPError as e:
         got = e.body
     assert marker not in str(got), f"the URL command read a local file: {got!r}"
+
+
+def test_running_a_command_by_get_is_marked_deprecated(fppd):
+    """GET /api/command/<name>/... still runs the command, and says it is
+    deprecated: a Deprecation header, and one fppd.log line per command and
+    client however often it is called. FPP 11 will require POST.
+
+    Regression: c5a64f567."""
+    import urllib.request
+    from fppd import API
+    fppd.start()
+    for _ in range(3):
+        with urllib.request.urlopen(API + "/command/Volume%20Set/40", timeout=10) as r:
+            assert r.headers.get("Deprecation") == "true", dict(r.headers)
+    log = open(os.path.join(fppd.media, "logs", "fppd.log")).read()
+    lines = [l for l in log.splitlines() if "Deprecated: GET /api/command/Volume Set" in l]
+    assert len(lines) == 1, lines
