@@ -39,10 +39,8 @@ def test_a_pwm_panel_whose_pru_never_answers_does_not_hang_startup(fppd):
     each register word with no time limit, on the main loop during output
     setup, so fppd never finished starting.
 
-    What happens after startup is the open finding in
-    pending/test_bb_pwm_wedge.py: the output thread then waits forever in
-    PrepData, and fppd can't shut down. This scenario stops at startup and
-    kills fppd itself; drop that once the pending one passes.
+    The output is refused (see the next scenario), so fppd also stops
+    cleanly here.
     """
     fake_pru(fppd)
     fppd.settings(LogLevel_ChannelOut="info")
@@ -50,8 +48,36 @@ def test_a_pwm_panel_whose_pru_never_answers_does_not_hang_startup(fppd):
     fppd.start(timeout=60)
     assert fppd.get("/fppd/status").get("fppd") == "running"
     assert "PWM panel registers were not sent" in fppd.log()
-    fppd.kill()
-    fppd.exit_expected = True
+
+
+FM6363C = 3  # panelType: a PWM panel whose registers go up in one command
+
+
+def test_a_pwm_panel_on_a_pru_that_never_answers_keeps_fppd_responsive(fppd):
+    """A PWM panel (FM6363C) on a PRU that never takes a command is not
+    started, so the output thread, a reload of the outputs and shutdown all
+    carry on.
+
+    Regression: 721882691. c12f35186 let Init() return when the PRU didn't
+    take the registers, but the output was still started; its first
+    PrepData then waited forever for the PRU, holding outputThreadLock, and
+    on SIGTERM fppd never exited (StopChannelOutputThread gave up after
+    5 s).
+    """
+    fake_pru(fppd)
+    fppd.write("config/channeloutputs.json", panel_config(panelType=FM6363C))
+    fppd.start(timeout=60)
+    fppd.command("Test Start", "1000", "RGB Chase", "*", "FF0000-00FF00-0000FF")
+    time.sleep(2)
+    # A reload of the outputs, as an xLights upload does.
+    tmp = fppd.write("config/channeloutputs.json.new", panel_config(panelType=DP3364))
+    os.replace(tmp, os.path.join(fppd.media, "config", "channeloutputs.json"))
+    time.sleep(3)
+    for _ in range(5):
+        fppd.get("/fppd/status", timeout=5)
+        time.sleep(1)
+    fppd.command("Test Stop", timeout=5)
+    # The fixture then checks that fppd exits 0 on SIGTERM.
 
 
 def shift_cape(name):
