@@ -11,7 +11,7 @@ import pytest
 
 from ddp import DdpReceiver
 from fseq import unique_frames
-from show import CHANNELS, install, status
+from show import CHANNELS, install, playlist, status
 
 
 def ramp():
@@ -260,3 +260,27 @@ def test_reload_never_drops_the_chain(fppd):
         time.sleep(1)
         over = [f[0] for _, f in rx.snapshot(since) if f[0] > 26]
         assert not over, f"{len(over)} frames went out without the brightness limit"
+
+
+def test_playlist_remap_remove_then_saving_the_processors(fppd):
+    """A playlist Remap entry with action "remove" that matches a Remap from
+    the Output Processors page switches it off, and saving the Output
+    Processors page afterwards loads the new chain without a double free.
+
+    Regression: 42852d014. removeProcessor() (4f13d1049) deleted the
+    processor it removed, but one loaded from outputprocessors.json was
+    still on fromJsonProcessors (d4011f0ee), and the next loadFromJSON()
+    deleted it again: an ASan double free.
+    """
+    with DdpReceiver(CHANNELS) as rx:
+        frames = run(fppd, [proc("Remap", source=1, destination=31, count=6, loops=1, reverse=0)])
+        latest(fppd, rx, lambda f: f[30:36] == frames[0][0:6], "the remap applied")
+        fppd.write("playlists/Off.json", playlist("Off", [{
+            "type": "remap", "enabled": 1, "playOnce": 0, "action": "remove",
+            "source": 1, "destination": 31, "count": 6, "loops": 1, "reverse": 0}]))
+        fppd.command("Start Playlist", "Off", "false", "false")
+        time.sleep(2)
+        time.sleep(1.1)  # a save in a later second, as a person makes it
+        write_processors(fppd, [proc("Set Value", start=1, count=3, value=22)])
+        fppd.command("Start Playlist", "Show", "false", "false")
+        latest(fppd, rx, lambda f: f[:3] == b"\x16\x16\x16", "the saved chain", timeout=15)
