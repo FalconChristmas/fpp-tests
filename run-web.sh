@@ -25,7 +25,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 FPP="$HERE/../fpp"
 REF=HEAD
 FLAVOR=asan
-PORT=8080
+PORT=${FPP_TESTS_WEB_PORT:-8080}
 SERVE=
 while [ $# -gt 0 ]; do
     case "$1" in

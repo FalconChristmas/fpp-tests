@@ -28,8 +28,7 @@ def sh(*cmd):
 
 def main():
     tree = os.environ["FPP_TREE"]
-    # In use while this serves: prepare-tree.sh's eviction skips a tree that
-    # anything holds a shared lock on.
+    # Held while serving, so tree eviction (prepare-tree.sh) skips this tree.
     tree_lock = os.open(tree, os.O_RDONLY)
     fcntl.flock(tree_lock, fcntl.LOCK_SH)
     artifacts = os.environ.get("FPP_TESTS_ARTIFACTS", "/artifacts")
@@ -37,12 +36,29 @@ def main():
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     signal.signal(signal.SIGINT, lambda *_: stop.set())
 
-    # The site config, the CSP generator and a few pages name /opt/fpp.
+    # The site config, the CSP generator and a few pages name /opt/fpp. The
+    # tree is shared with every other run of the same commit, scenarios
+    # included, and fppd writes into it: www/media_root.txt, which PHP reads
+    # to find the media directory, and www/warnings.json, which it puts next
+    # to the src/ it runs from; the CSP generator below writes etc/. PHP
+    # scripts under scripts/ find the tree from their real path (__DIR__), so
+    # a linked scripts/ would read the shared www/media_root.txt. So this
+    # container serves and runs its own copies of those, and links the rest
+    # of the tree in.
     if os.path.lexists("/opt/fpp"):
-        os.unlink("/opt/fpp")
-    os.symlink(tree, "/opt/fpp")
+        if os.path.islink("/opt/fpp"):
+            os.unlink("/opt/fpp")
+        else:
+            shutil.rmtree("/opt/fpp")
+    os.makedirs("/opt/fpp")
+    for entry in os.listdir(tree):
+        if entry in ("www", "src", "etc", "scripts"):
+            shutil.copytree(os.path.join(tree, entry), os.path.join("/opt/fpp", entry), symlinks=True)
+        else:
+            os.symlink(os.path.join(tree, entry), os.path.join("/opt/fpp", entry))
 
-    f = Fppd(tree)
+    f = Fppd("/opt/fpp")
+
     # The site config and some scripts name the device's media directory
     # rather than reading www/media_root.txt.
     os.makedirs("/home/fpp", exist_ok=True)
@@ -72,14 +88,14 @@ def main():
     # see whatever this tree's generator writes for a fresh player. It ends by
     # reloading Apache through systemd, which fails here (Apache starts below),
     # so judge it by the file it writes rather than by its exit status.
-    csp = os.path.join(tree, "etc", "apache2.csp")
+    csp = "/opt/fpp/etc/apache2.csp"
     if os.path.exists(csp):
         os.unlink(csp)
     subprocess.run(["/opt/fpp/scripts/ManageApacheContentPolicy.sh", "regenerate"])
     if not os.path.exists(csp):
         raise RuntimeError("ManageApacheContentPolicy.sh regenerate wrote no etc/apache2.csp")
-    shutil.copy(os.path.join(tree, "etc", "apache2.site"), "/etc/apache2/sites-enabled/000-default.conf")
-    shutil.copy(os.path.join(tree, "etc", "apache2.status"), "/etc/apache2/mods-enabled/status.conf")
+    shutil.copy("/opt/fpp/etc/apache2.site", "/etc/apache2/sites-enabled/000-default.conf")
+    shutil.copy("/opt/fpp/etc/apache2.status", "/etc/apache2/mods-enabled/status.conf")
     os.makedirs("/run/php", exist_ok=True)
     sh("php-fpm8.4", "-R")
     sh("apache2ctl", "start")

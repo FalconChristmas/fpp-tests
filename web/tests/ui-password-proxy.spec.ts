@@ -183,3 +183,20 @@ test('upgrade 156 leaves a player with no UI password open', async () => {
   expect(inPlayer('cat', PWCONF)).toBe(before);
   expect(await status('/api/fppd/version')).toBe(200);
 });
+
+// The UI password was stored as unsalted SHA-1 ({SHA}), because bcrypt at
+// PHP's default cost made every page take seconds on a single-core BeagleBone.
+// Fixed in fpp 651d8e4e5 ("fix(security): hash the UI password with bcrypt on
+// multi-core boards"): a board with more than one core, as the test player
+// has, gets bcrypt at a cost calibrated to verify in about 10 ms.
+test('the UI password is stored as a bcrypt hash, and Apache checks it', async ({ request }) => {
+  await enablePassword(request);
+  try {
+    expect(inPlayer('cat', '/home/fpp/media/config/.htpasswd')).toMatch(/^admin:\$2y\$/);
+    expect(await status('/api/fppd/version', AUTH)).toBe(200);
+    const wrong = { Authorization: 'Basic ' + Buffer.from('admin:not-the-password').toString('base64') };
+    expect(await status('/api/fppd/version', wrong)).toBe(401);
+  } finally {
+    await disablePassword(request);
+  }
+});

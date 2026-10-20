@@ -8,6 +8,10 @@ import type { Page, Route } from '@playwright/test';
 //
 // The services are mocked, but the page's real CSP still applies, so a service
 // missing from the scoped connect-src fails here the way it would in the field.
+//
+// Regression: f99f0566a.  ipapi.co's rate-limit refusal sent the wizard
+// straight to the time-zone estimate; ipwho.is was neither tried nor allowed
+// by the CSP.
 
 const CORS = { 'Access-Control-Allow-Origin': '*' };
 

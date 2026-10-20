@@ -94,6 +94,7 @@ test('Playlists Add New Playlist', async ({ page }) => {
 
   // Adding a playlist once loaded 'api/playlist/null' before the new one,
   // which became an error dialog when a missing playlist started to 404.
+  // Regression: c4551c9ba.
   const playlistGets: string[] = [];
   page.on('request', (req) => {
     const m = req.url().match(/\/api\/playlist\/([^?]*)/);
@@ -120,6 +121,11 @@ test('Playlists Add New Playlist', async ({ page }) => {
   }
 });
 
+// Leaving the playlist editor by any route but its own back button (the FPP
+// menu, any other link, browser Back) dropped unsaved edits without a word.
+// Fixed in fpp c2ca8ba09 ("feat(playlists): ask to save or discard before
+// leaving unsaved edits"), which routes them all through a Save / Discard /
+// Cancel dialog.
 test('Playlists Unsaved Changes Prompt', async ({ page }) => {
   const name = 'PlaywrightUnsavedPlaylist';
   await page.request.delete(`/api/playlist/${name}`);

@@ -626,7 +626,8 @@ test('Page scroll survives auto-refresh with logs open', async ({ page }) => {
     // replaces every row and so drops the browser's scroll anchor.  When a row
     // above the viewport changed height -- constantly, while a fleet upgrade
     // streams into the log rows -- the log the user had scrolled down to moved.
-    // FIX: the patched initBody() keeps the first row on screen where it was.
+    // FIX (1fcaf1536): the patched initBody() keeps the first row on screen
+    // where it was.
     await page.setViewportSize({ width: 1920, height: 600 });
     await loadMultisync(page);
 
@@ -704,4 +705,68 @@ test('Ticking a remote stores the list itself, not a JSON string', async ({ page
         await put('MultiSyncUnicast', '1');
         await put('MultiSyncEnabled', '0');
     }
+});
+
+async function loadWithSaturnUpgrading(page: Page, stage: string) {
+    const upgrading = JSON.parse(JSON.stringify(MOCK_STATUS));
+    upgrading['192.168.0.14'].updateActivity = { inProgress: true, kind: 'FPP Update', stage };
+    await page.unroute('**/api/system/status**');
+    await page.route('**/api/system/status**', route => route.fulfill({ json: upgrading }));
+    await loadMultisync(page);
+    return page.locator('tr.systemRow', { hasText: 'SATURN' });
+}
+
+test('A remote mid-update shows Upgrading', async ({ page }) => {
+    // BUG: the page never read a remote's updateActivity, so a remote running
+    // an FPP update (fppd keeps running for most of it) read "Idle" throughout.
+    // FIX (e4ec940a3): it shows "Upgrading" with the kind and stage, escaped.
+    const stage = '<img src=x onerror="window.__fppTestsStage=1">';
+    const saturn = await loadWithSaturnUpgrading(page, stage);
+    await expect(saturn).toContainText('Upgrading');
+    await expect(saturn).toContainText(stage);
+    expect(await page.evaluate(() => (window as any).__fppTestsStage)).toBeUndefined();
+});
+
+test('Clicking Upgrading opens the remote\'s update log', async ({ page }) => {
+    // FIX (69e37ac35): the Upgrading status links to the remote's live update
+    // log, fetched through api/remoteAction?action=updateLog.
+    await page.route('**/api/remoteAction?*', route => {
+        if (!route.request().url().includes('action=updateLog')) {
+            return route.fulfill({ status: 400, json: {} });
+        }
+        return route.fulfill({
+            json: { inProgress: true, kind: 'FPP Update', stage: 'Building FPP', logTail: 'fpp-tests update log line\n' },
+        });
+    });
+    const saturn = await loadWithSaturnUpgrading(page, 'Building FPP');
+    await expect(saturn.locator('.msUpdateLogLink')).toHaveCount(1);
+    await saturn.locator('.msUpdateLogLink').first().click();
+    await expect(page.locator('#msRemoteUpdateLogText')).toHaveValue(/fpp-tests update log line/);
+});
+
+test('A failed remote action offers Retry, which re-runs that system alone', async ({ page }) => {
+    // BUG: a batch job that failed left its log open with no buttons at all;
+    // the button row only appeared on success.
+    // FIX (32328dd12): a failed row shows Retry and Close Log, and Retry runs
+    // that system's job again on its own (no longer waiting on an origin).
+    const bodies: any[] = [];
+    await page.route('**/streamRemoteJobs.php', route => {
+        const body = route.request().postDataJSON();
+        bodies.push(body);
+        const lines = body.jobs.map((j: any) => JSON.stringify({ id: j.id, done: true, ok: false })).join('\n') + '\n' +
+            JSON.stringify({ end: true }) + '\n';
+        return route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: lines });
+    });
+    page.on('dialog', d => d.accept());
+    await loadMultisync(page);
+
+    const rowID = await page.locator('tr.systemRow', { hasText: 'SATURN' }).getAttribute('id');
+    await page.evaluate((id) => (window as any).runRemoteJobs(
+        [{ id, type: 'upgrade', ip: '192.168.0.14', after: 'fpp-tests-origin' }],
+        { failMessage: 'fpp-tests: ' }), rowID);
+
+    await expect(page.locator(`#${rowID}_failButtons`)).toBeVisible();
+    await page.locator(`#${rowID}_failButtons input[value="Retry"]`).click();
+    await expect.poll(() => bodies.length).toBe(2);
+    expect(bodies[1].jobs).toEqual([{ id: rowID, type: 'upgrade', ip: '192.168.0.14' }]);
 });
