@@ -54,6 +54,29 @@ def test_upgrade_config_fails_when_a_migration_fails(fppinit):
     assert r.returncode == 1, f"upgrade_config exited {r.returncode} after a failed migration:\n{out[-3000:]}"
 
 
+def test_config_upgrades_finish_without_a_running_apache(fppinit):
+    """From config version 154, upgrade_config reaches the newest version
+    on a system whose Apache is not a running systemd unit (a container,
+    an image build): there is nothing to reload, which is not a failure.
+
+    Regression: 590a7a522. gracefullyReloadApacheConf returned 1 when apache2
+    wasn't active, and upgrade 155 (like 94-143's Apache ones) ends with it,
+    so upgrade_config stopped at 154 and 156 and every later migration
+    never ran.
+    """
+    latest = max(int(d) for d in os.listdir(os.path.join(fppinit.tree, "upgrade")) if d.isdigit())
+    view = fppdir_view(fppinit)
+    fppinit.write("tmp/cv", "154\n")
+    fppinit.service("apache2", active=False)
+    r = fppinit._run(["env", f"FPPDIR={view}", f"CFGVERSIONFILE={view}/../cv",
+                      f"{view}/scripts/upgrade_config", "-notee"])
+    out = r.stdout + r.stderr
+    assert "Upgrading config to version 155" in out, out[-3000:]
+    assert fppinit.media_file("tmp/cv").strip() == str(latest), \
+        f"stopped at config version {fppinit.media_file('tmp/cv').strip()}, not {latest}:\n{out[-3000:]}"
+    assert r.returncode == 0, out[-3000:]
+
+
 def test_upgrade_151_masks_the_user_pipewire_units(fppinit):
     """Upgrade 151 masks every per-user PipeWire unit system-wide
     (systemctl --global mask), filter-chain included.
@@ -73,6 +96,45 @@ def test_upgrade_151_masks_the_user_pipewire_units(fppinit):
     for unit in ("pipewire.socket", "pipewire.service", "pipewire-pulse.socket",
                  "pipewire-pulse.service", "wireplumber.service", "filter-chain.service"):
         assert unit in units, f"{unit} is not masked: {masks}"
+
+
+CHRONY_HOOK = "/etc/networkd-dispatcher/routable.d/chrony"
+
+
+def test_upgrade_159_installs_the_current_chrony_hook(fppinit):
+    """Upgrade 159 replaces an old chrony reconnect hook with the tree's,
+    root-owned and executable as networkd-dispatcher requires, and leaves
+    a player without chrony alone.
+
+    Regression: 38efe6f55. cfa731d71 fixed the hook in the tree, but only an
+    install and upgrade 116 copy it into /etc, so a git-updated player kept
+    the one that left the clock flagged unsynchronized after a reconnect.
+    """
+    with open(os.path.join(fppinit.tree, CHRONY_HOOK.replace("/etc/", "etc/", 1))) as f:
+        current = f.read()
+    fppinit.root_file("/etc/fpp/container", None)  # 159 skips in a container
+    # No "#!", so root_file() leaves it 644: the upgrade must make it executable.
+    fppinit.root_file(CHRONY_HOOK, "/usr/bin/chronyc makestep\n")
+    fppinit.root_file("/usr/bin/chronyc", "#!/bin/sh\nexit 0\n")
+    r = fppinit._run(["/opt/fpp/upgrade/159/upgrade.sh"])
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, f"159 exited {r.returncode}:\n{out[-3000:]}"
+    assert fppinit.written(CHRONY_HOOK) == current, f"the old hook is still in place:\n{out[-3000:]}"
+    st = os.stat(os.path.join(fppinit.upper, CHRONY_HOOK.lstrip("/")))
+    assert st.st_uid == 0 and st.st_mode & 0o777 == 0o755, f"uid {st.st_uid}, mode {oct(st.st_mode)}"
+
+    # Again: already current, nothing to do, still a success.
+    fppinit.root_file(CHRONY_HOOK, current)
+    r = fppinit._run(["/opt/fpp/upgrade/159/upgrade.sh"])
+    assert r.returncode == 0 and "already current" in r.stdout, r.stdout + r.stderr
+
+    # No chrony: no hook installed, and not a failure that would hold back
+    # every later upgrade.
+    fppinit.root_file(CHRONY_HOOK, None)
+    fppinit.root_file("/usr/bin/chronyc", None)
+    r = fppinit._run(["/opt/fpp/upgrade/159/upgrade.sh"])
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert fppinit.written(CHRONY_HOOK) is None, r.stdout
 
 
 def storage_stubs(sb):
