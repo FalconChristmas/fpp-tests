@@ -337,3 +337,63 @@ def test_dead_controller_is_dropped_while_other_icmp_arrives(fppd):
     finally:
         sending.clear()
         t.join()
+
+
+def bad_generic_udp_then_watched_universe(fppd, address):
+    """A GenericUDP output with a wrong-typed field (a hand edit: "port" as
+    a list), loaded while there is no UDP output, then an E1.31 config with
+    one universe whose controller at `address` is monitored and down."""
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "GenericUDP", "enabled": 1, "startChannel": 1, "channelCount": 3,
+        "address": "127.0.0.1", "port": [5000], "tokens": "{data}"}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    time.sleep(1.1)  # a save in a later second, as a person makes it
+    fppd.write("config/co-universes.json", {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 10, "channelCount": 3,
+        "universes": [{"active": 1, "description": "watched", "id": 1, "startChannel": 10,
+                       "channelCount": 3, "type": 1, "address": address,
+                       "priority": 0, "monitor": 1, "deDuplicate": 0}]}]})
+
+    def loaded():
+        w = " ".join(fppd.get("/fppd/status").get("warnings", []))
+        return "Could not initialize output type UDPOutput" in w or "Could not create a network output" in w
+    fppd.wait_for(loaded, timeout=15, what="the E1.31 config to load")
+
+
+def test_a_generic_udp_output_that_throws_leaves_no_ping_behind(fppd):
+    """A UDP output rebuilt with a GenericUDP output whose config can't be
+    read leaves no periodic ping on a freed output: fppd stays clean when
+    the monitored controller comes up and answers the next ping (every
+    15 s).
+
+    Regression: 83127b014. The GenericUDP factory threw from UDPOutput::Init()
+    after the pings were registered; the loader deleted the output without
+    Close(), which was where they were removed, and the next answered ping
+    ran OnPingResult() in the freed output (ASan heap-use-after-free at
+    --failedCount). Proved for the destructor half alone with a revert
+    control: master with only the factory guard reverted passes.
+    """
+    import subprocess
+    address = "10.77.0.3"  # nothing answers here until the test adds it
+    bad_generic_udp_then_watched_universe(fppd, address)
+    try:
+        subprocess.run(["ip", "addr", "add", address + "/32", "dev", "lo"], check=True)
+        time.sleep(20)  # past the next periodic ping, which is now answered
+        fppd.check_alive()
+    finally:
+        subprocess.run(["ip", "addr", "del", address + "/32", "dev", "lo"])
+
+
+def test_a_generic_udp_output_that_throws_leaves_the_universes_running(fppd):
+    """A GenericUDP output whose config can't be read is skipped, with a
+    warning naming why; the E1.31 universes beside it still load.
+
+    Regression: 83127b014. The GenericUDP factory's exception escaped
+    UDPOutput::Init(), so every E1.31/DDP universe failed with it ("Could
+    not initialize output type UDPOutput") at each rebuild.
+    """
+    bad_generic_udp_then_watched_universe(fppd, "10.77.0.4")
+    warnings = fppd.get("/fppd/status").get("warnings", [])
+    assert not any("Could not initialize output type UDPOutput" in w for w in warnings), warnings
+    assert any("Could not create a network output" in w for w in warnings), warnings
