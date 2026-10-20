@@ -91,3 +91,28 @@ test('a same-size rewrite in the same second is not answered 304', async () => {
     inPlayer('rm', '-f', file);
   }
 });
+
+// Regression: 3fabdf63a ("remove `immutable` from Cache-Control for js/css
+// to allow revalidation after upgrades"). Assets were cached for a year with
+// `immutable`, which a browser does not revalidate even on a reload: one
+// script included without a ?ref= buster stayed stale after an upgrade, and
+// the file manager rendered empty until a hard reload.
+test('scripts and stylesheets are not sent as immutable', async () => {
+  for (const asset of ['/js/fpp.js?ref=1', '/css/fpp.css?ref=1']) {
+    const r = await get(asset);
+    expect(r.status, asset).toBe(200);
+    expect(r.headers['cache-control'], asset).toMatch(/max-age=[1-9]/);
+    expect(r.headers['cache-control'], `${asset} is immutable`).not.toContain('immutable');
+  }
+});
+
+// Regression: 75a29a548 (its Apache half): every extensionless route -- all
+// of /api/ -- went out as "max-age=0, immutable", which tells a client never
+// to ask again about something it must always ask about.
+test('API answers are not sent as immutable', async () => {
+  for (const route of ['/api/fppd/version', '/api/overlays/effects?full=true', '/api/settings']) {
+    const r = await get(route);
+    expect(r.status, route).toBe(200);
+    expect(String(r.headers['cache-control'] ?? ''), `${route} is immutable`).not.toContain('immutable');
+  }
+});
