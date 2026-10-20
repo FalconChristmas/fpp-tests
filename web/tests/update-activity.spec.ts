@@ -70,3 +70,44 @@ test('an update in progress is reported from its log, and so is its failure', as
     inPlayer('rm', '-f', LOG);
   }
 });
+
+// The idle payload was cached only when the log had content, so with the log
+// missing (a player never updated from the UI), empty (after logrotate) or
+// holding no START marker, every status poll forked ps for the worker probe:
+// four processes per poll, from every open page and MultiSync peer.
+// Regression: bb8bf8233 ("fix(updates): cache the idle update state when the
+// upgrade log is missing or empty").
+//
+// ps is wrapped, for the length of the test, by a script that counts its
+// calls.
+test('an idle player does not fork ps on every poll', async ({ request }) => {
+  const ps = inPlayer('sh', '-c', 'command -v ps').trim();
+  const count = '/tmp/fpp-tests-ps-count';
+  inPlayer('sh', '-c', `mv ${ps} ${ps}.fpp-tests && printf '#!/bin/sh\\necho >> ${count}\\nexec ${ps}.fpp-tests "$@"\\n' > ${ps} && chmod 755 ${ps}`);
+  const calls = () => parseInt(inPlayer('sh', '-c', `cat ${count} 2>/dev/null | wc -l`).trim(), 10);
+  const states: Record<string, () => void> = {
+    missing: () => inPlayer('rm', '-f', LOG),
+    empty: () => inPlayer('sh', '-c', `mkdir -p ${MEDIA}/logs && : > ${LOG}`),
+    'without a START': () => { inPlayer('rm', '-f', LOG); appendLog(logLine('fpp-tests: not a run')); },
+  };
+  try {
+    for (const [state, stage] of Object.entries(states)) {
+      stage();
+      // The first poll works it out, and may probe; the rest are served from
+      // the cache.
+      expect((await activity(request)).inProgress).toBe(false);
+      const before = calls();
+      for (let i = 0; i < 5; i++) {
+        const a = await activity(request);
+        expect(a.inProgress, `${state}: ${JSON.stringify(a)}`).toBe(false);
+      }
+      expect(calls() - before, `ps calls over 5 more polls, log ${state}`).toBe(0);
+    }
+    // The control: the wrapper counts.
+    const before = calls();
+    inPlayer('ps', 'ax');
+    expect(calls() - before).toBe(1);
+  } finally {
+    inPlayer('sh', '-c', `mv ${ps}.fpp-tests ${ps}; rm -f ${count} ${LOG}`);
+  }
+});

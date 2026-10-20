@@ -35,3 +35,20 @@ test('a settings backup carries a plugin JSON config', async ({ request }) => {
     inPlayer('rm', '-f', `${CONFIG}/plugin.fpp-tests.json`);
   }
 });
+
+// 088ac2e42 then kept one file per plugin: retrievePluginList() keyed both
+// plugin.X and plugin.X.json by X and replaced the entry for each, so a
+// plugin with both had whichever readdir returned last in every backup.
+// Regression: 4e767c951 ("fix(backup): back up both config files of a plugin
+// that has two").
+test('a settings backup carries both config files of a plugin that has two', async ({ request }) => {
+  inPlayer('sh', '-c', `printf 'k = "v"\\n' > ${CONFIG}/plugin.fpp-tests && printf '{"fppTests": 1}\\n' > ${CONFIG}/plugin.fpp-tests.json`);
+  try {
+    const plugin = JSON.parse(await takeBackup(request, 'fpp-tests-plugin-pair')).plugins?.['fpp-tests'] ?? {};
+    expect(Object.keys(plugin).sort(), JSON.stringify(plugin)).toEqual(['plugin.fpp-tests', 'plugin.fpp-tests.json']);
+    expect(JSON.stringify(plugin['plugin.fpp-tests'])).toContain('k = \\"v\\"');
+    expect(JSON.stringify(plugin['plugin.fpp-tests.json'])).toContain('fppTests');
+  } finally {
+    inPlayer('rm', '-f', `${CONFIG}/plugin.fpp-tests`, `${CONFIG}/plugin.fpp-tests.json`);
+  }
+});
