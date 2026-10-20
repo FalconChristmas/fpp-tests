@@ -148,9 +148,9 @@ test('a backup with no consent record keeps its credentials but not its privacy 
   before();
   await restore(request, { settings: { system_settings: [systemSettings({})] } });
   expect(settingInFile('HostDescription')).toBe('fpp-tests-restored');
-  expect(settingInFile('statsPublish')).toBe('Enabled');
   expect(settingInFile('emailtoemail'), 'a backup of unknown origin lost its mail destination').toBe('restored@example.com');
   expect(settingInFile('osPassword'), 'a backup of unknown origin lost its OS password').toBe('fpp-tests-os-pw');
+  expect(settingInFile('statsPublish')).toBe('Enabled');
 });
 
 // Backups made while "Protect Sensitive Data" existed (protected: true) carry
