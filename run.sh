@@ -39,17 +39,31 @@ done
 # run's results then go nowhere (seen with back-to-back runs on macOS).
 # artifacts/web is run-web.sh's, which may be running now: emptying it would
 # leave that run's container writing to a directory no longer there.
+# It is emptied through the container: a run that was killed before handing
+# its files back (below) leaves them owned by the container's root.
 ARTIFACTS="$HERE/artifacts"
 mkdir -p "$ARTIFACTS"
-find "$ARTIFACTS" -mindepth 1 ! -path "$ARTIFACTS/web" ! -path "$ARTIFACTS/web/*" -delete
+$DOCKER -v "$ARTIFACTS:/artifacts" fpp-tests-env \
+    find /artifacts -mindepth 1 ! -path /artifacts/web ! -path "/artifacts/web/*" -delete
+
+# fppd finds its media directory through www/media_root.txt in the tree, and
+# runs of the same commit and flavor share that tree: each run gets its own
+# copy of the file, mounted over the tree's, so one run's fppd can't be handed
+# another's media directory.
+MEDIA_ROOT=$(mktemp "${TMPDIR:-/tmp}/fpp-tests-media-root.XXXXXX")
+trap 'rm -f "$MEDIA_ROOT"' EXIT
 
 # The scenarios make network and mount namespaces (fake devices, fppinit),
 # which Docker's default AppArmor profile forbids even with SYS_ADMIN: on a
 # host with AppArmor (GitHub's runners) they would all be skipped.
 TTY=""
 [ -t 1 ] && TTY="-t"
-exec $DOCKER $TTY -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" \
+# The container runs as root; what it leaves in artifacts/ is handed back to
+# the caller (HOST_OWNER) when it finishes.
+$DOCKER $TTY -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" \
+    -v "$MEDIA_ROOT:$TREE/www/media_root.txt" \
     -e FPP_TREE="$TREE" -e FPP_FLAVOR="$FLAVOR" -e FPP_TESTS_ARTIFACTS=/artifacts \
+    -e HOST_OWNER="$(id -u):$(id -g)" \
     --cap-add SYS_PTRACE --cap-add SYS_NICE --cap-add NET_ADMIN --cap-add SYS_ADMIN \
     --security-opt apparmor=unconfined \
     --tmpfs /tmp:rw,exec,nosuid,size=4g \
@@ -57,6 +71,10 @@ exec $DOCKER $TTY -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" \
         cd /tests || exit 1
         if [ $# -eq 0 ]; then set -- scenarios; fi
         set -- --junitxml=/artifacts/junit.xml "$@"
-        if [ "$FPP_FLAVOR" != coverage ]; then exec python3 -m pytest -p no:cacheprovider "$@"; fi
         python3 -m pytest -p no:cacheprovider "$@"; rc=$?
-        /tests/scripts/coverage-report.sh "$FPP_TREE" /artifacts/coverage; exit $rc' sh "$@"
+        if [ "$FPP_FLAVOR" = coverage ]; then
+            /tests/scripts/coverage-report.sh "$FPP_TREE" /artifacts/coverage
+        fi
+        find /artifacts -mindepth 1 ! -path /artifacts/web ! -path "/artifacts/web/*" \
+            -exec chown -h "$HOST_OWNER" {} +
+        exit $rc' sh "$@" || exit $?
