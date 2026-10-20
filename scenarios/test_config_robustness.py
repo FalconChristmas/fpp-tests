@@ -80,6 +80,11 @@ CASES = {
     # set to read it at all (2e494fd13)
     "pipewire-video-consumers: fields of the wrong type": ("pipewire-video-consumers.json", [
         {"type": "overlay", "id": "1", "pipeWireNodeName": "x"}, {"type": "rtsp", "width": L}, 5]),
+    # read by VideoInputManager on its FPP-VideoInReload worker, which every
+    # start under MediaBackend pipewire asks for (Regression: fb7167e05)
+    "pipewire-video-input-sources-gen: fields of the wrong type": (
+        "pipewire-video-input-sources-gen.json",
+        [{"id": "1", "enabled": "yes", "type": "videotestsrc", "pipeWireNodeName": "x", "width": L}, 5]),
 }
 
 

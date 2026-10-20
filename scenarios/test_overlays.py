@@ -712,6 +712,30 @@ def test_an_image_claiming_a_huge_size_is_refused_without_the_memory(fppd):
     fill(fppd, "M", [1, 2, 3])
 
 
+def test_an_image_under_the_pixel_floor_is_capped_by_a_small_boards_ram(fppd):
+    """On a 512 MB board, a 4 KB PNG of 5792x5792 (33.5M pixels, just under
+    32*1024*1024) is refused, or decoded without the memory for it: fppd's
+    peak memory grows by well under the 256 MB that 33.5M pixels of 8-byte
+    pixel cache take. The shim makes fppd see 512 MB of RAM.
+
+    Regression: eb0986756. The GraphicsMagick pixel cap, meant to be a
+    quarter of RAM in pixel cache (16M pixels at 512 MB), was clamped up to a
+    32M-pixel floor whatever the RAM, so this file took about 300 MB, an OOM
+    kill on a BeagleBone or PocketBeagle 2."""
+    import shims
+    setup(fppd, [matrix()])
+    png = huge_png(5792, 5792)
+    assert 5792 * 5792 < 32 * 1024 * 1024
+    fppd.start(preload=[shims.build("fakemem.c")], extra_env={"FAKEMEM_MB": "512"})
+    before = peak_rss_mb(fppd.proc.pid)
+    try:
+        put(fppd, "model/M/data?fmt=image", png, timeout=60)
+    except urllib.error.HTTPError:
+        pass  # refused is the point
+    grew = peak_rss_mb(fppd.proc.pid) - before
+    assert grew < 150, f"fppd's peak memory grew {grew} MB decoding a {len(png) // 1024} KB image"
+
+
 def test_submodel_effect_ending_during_output_reloads(fppd):
     """A submodel whose effect ends and disables it (Stop Effects), over and
     over, while the outputs reload and re-create its parent, never touches

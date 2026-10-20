@@ -4,9 +4,14 @@ MEDIA_STOPPED) and their replies, heard on a PipeWire null sink."""
 import os
 import threading
 import time
+import urllib.error
 
+import pytest
+
+import shims
 from audio import write_tone_wav
 from show import playlist, status
+from test_commands import variable
 from test_media_commands import slot_status, sounding_seconds
 
 
@@ -127,3 +132,27 @@ def test_two_play_media_on_one_slot_at_once_leave_one_stream(fppd, audio):
         if heard >= 0.1:
             fppd.command("Stop All Media", timeout=10)
         assert heard < 0.1, f"round {rnd}: {heard:.2f} s still sounding after one Stop Media Slot"
+
+
+def test_play_media_whose_pipeline_parses_with_an_error(fppd, audio):
+    """Play Media of a file whose pipeline gst_parse_launch() returns along
+    with an error (an element whose plugin is not installed) fails with an
+    error, fires no MEDIA_STOPPED for media that never started, and frees
+    the output once.
+
+    Regression: 89e51ed21. Start() returned 0 with the pipeline still set,
+    Play Media deleted the output, and ~GStreamerPlayData's Close() -> Stop()
+    -> Stopped() handed the same object to RemoveRunningMedia's deferred
+    delete: a spurious MEDIA_STOPPED, then a double free (ASan; glibc aborts
+    fppd in a normal build)."""
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 2)
+    fppd.write("config/commandPresets.json", {"commands": [
+        preset("MEDIA_STOPPED", "Set Variable", "Stopped", "Value", "yes", "1", "0", "100", "")]})
+    flag = os.path.join(fppd.media, "tmp", "parseerr")
+    fppd.start(preload=[shims.build("parseerr.c")], extra_env={"PARSEERR_FLAG": flag})
+    open(flag, "w").close()
+    with pytest.raises(urllib.error.HTTPError):
+        fppd.command("Play Media", "Tone.wav", "1", "0", "1", timeout=15)
+    time.sleep(1)
+    fppd.check_alive()
+    assert variable(fppd, "Stopped") in ("", "None"), "MEDIA_STOPPED fired for media that never started"
