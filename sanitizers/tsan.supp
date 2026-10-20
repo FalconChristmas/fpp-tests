@@ -112,6 +112,15 @@ race:trantor::TcpServer::~TcpServer
 race:std::__future_base::_State_baseV2::_M_do_set
 race:trantor::EventLoop::wakeup
 race:trantor::EventLoop::queueInLoop
+# A WebSocket frame sent from outside its connection's IO loop -- the status
+# push (StatusWebSocket.cpp) sends from drogon's main-loop timer -- is built
+# on that thread and handed to the IO loop in a queued functor, through
+# trantor's lock-free MpscQueue, whose atomics are in libtrantor where TSan
+# can't see them. The IO thread's write() of the frame and its free of the
+# functor then look unordered against the thread that built them (seen in
+# test_status_websocket.py). Only the string-taking send hands a buffer over.
+race:drogon::WebSocketConnectionImpl::sendWsData
+race:trantor::TcpConnectionImpl::send(std::__cxx11::basic_string
 # drogon tearing down its router at shutdown while IO threads dispatch.
 race:drogon::HttpControllersRouter::HttpControllerRouterItem
 race:std::__detail::_NFA
