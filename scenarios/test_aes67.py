@@ -158,3 +158,39 @@ def test_ptp_that_failed_to_start_is_started_later(fppd):
     finally:
         if made:
             os.unlink("/usr/sbin/ptp4l")
+
+
+@pytest.mark.parametrize("kind", ["aes67", "opus"])
+def test_a_receive_stream_that_failed_to_start_is_started_later(fppd, kind):
+    """An AES67 or Opus receive stream that fails to start because PipeWire
+    isn't up yet (as at boot) raises its "failed to start" warning; once
+    PipeWire is running, the watchdog starts the stream and the warning
+    comes down.
+
+    Regression: 55dfb6c16. A stream whose pipeline failed to build or start
+    was never stored, and the watchdog only looks at stored pipelines, so it
+    stayed down until the config was applied by hand."""
+    import shutil
+    from audio import AudioServer
+    if not shutil.which("pipewire") or not shutil.which("wireplumber"):
+        pytest.skip("PipeWire and WirePlumber are not installed")
+    if kind == "aes67":
+        receive_without_sap(fppd)
+        warning = "AES67: audio receive stream failed to start"
+    else:
+        fppd.settings(MediaBackend="pipewire")
+        fppd.write("config/pipewire-opus-rtp-instances.json", {"instances": [
+            {"id": 1, "name": "orx", "mode": "receive", "enabled": True, "destIP": "127.0.0.1", "port": 5006}]})
+        warning = "Opus RTP: audio receive stream failed to start"
+    fppd.start()
+
+    def warned():
+        return warning in fppd.get("/fppd/status").get("warnings", [])
+    fppd.wait_for(warned, timeout=30, interval=0.5, what="the failed-to-start warning (precondition)")
+    server = AudioServer()
+    try:
+        fppd.wait_for(lambda: not warned(), timeout=75, interval=0.5,
+                      what="the stream to be started and its warning to come down")
+        assert "0 send, 1 receive pipelines" in fppd.log(), "the warning came down, but no stream started"
+    finally:
+        server.close()

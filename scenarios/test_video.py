@@ -882,6 +882,38 @@ def test_an_unreachable_camera_is_retried_with_backoff(fppd, audio):
         server.close()
 
 
+def test_a_youtube_input_whose_first_lookup_fails_is_retried(fppd, audio):
+    """A YouTube video input whose first yt-dlp lookups fail (no network
+    yet at boot) is tried again, and once yt-dlp answers with a stream URL
+    the model shows it.
+
+    Regression: 4aaae514e. StartLoadedSources() ignored StartSource()'s
+    result, and only a source that had started before was rescheduled, so
+    a lookup that failed at startup left the input dark until Apply."""
+    import functools
+    import http.server
+    import threading
+    served = os.path.join(fppd.media, "tmp", "www")
+    os.makedirs(served)
+    make_video(os.path.join(served, "Bars.mkv"), seconds=30)
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=served)
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    count = os.path.join(fppd.media, "tmp", "yt-dlp.count")
+    url = f"http://127.0.0.1:{server.server_address[1]}/Bars.mkv"
+    try:
+        # The first two lookups fail: startup sometimes loads the sources
+        # twice, and a second lookup there would hide the missing retry.
+        env = ytdlp_stand_in(fppd, f'echo x >> "{count}"\n'
+                                   f'if [ "$(wc -l < "{count}")" -le 2 ]; then exit 1; fi\n'
+                                   f'echo "{url}"\necho 10')
+        setup(fppd, [overlay_consumer(SOURCE)],
+              [source("urisrc", uri="https://www.youtube.com/watch?v=x")])
+        fppd.start(extra_env=env)
+        wait_for_bars(fppd, timeout=30)
+    finally:
+        server.shutdown()
+
 def test_an_overlay_member_that_failed_to_start_is_retried(fppd, audio):
     """An overlay member of a video group whose pipeline fails to build the
     first time (a shim makes the first gst_parse_launch() of it fail) is
@@ -1067,6 +1099,38 @@ def test_a_camera_group_stands_aside_for_a_video_and_comes_back(fppd, audio):
     during = [t for t in camera_events("frame") if stopped < t < ended - 0.5]
     assert not during, f"the camera showed {len(during)} frames under the video"
 
+
+def test_a_camera_group_whose_comeback_fails_is_retried(fppd, audio):
+    """A camera group that stood aside for a video, and whose first
+    comeback after it fails (a shim makes that one pipeline fail to build,
+    as a display still off or a parse failure does): it is tried again and
+    the camera comes back.
+
+    Regression: d51eaa14d. StartConsumer() returned before clearing
+    suspendedForMedia, and the retry loop skips a consumer with that flag
+    set, so with no media claim left to clear it the camera stayed dark
+    until Apply."""
+    import shims
+    make_video(os.path.join(fppd.media, "videos", "Four.mkv"), seconds=4)
+    camera = hdmi_consumer(1, connector_id=77, card="/dev/dri/card9", group=3)
+    setup(fppd, [camera, hdmi_consumer(2, source=None, connector_id=77, card="/dev/dri/card9", group=4)],
+          [source("videotestsrc", pattern="smpte")])
+    # The camera's kmssink is "kmssink name=sink"; let its first start
+    # through and fail the next one, the comeback.
+    fppd.start(preload=[shims.build("failparse.c")],
+               extra_env=fake_kms_env(fppd, FAILPARSE_MATCH="kmssink name=sink", FAILPARSE_SKIP=1))
+
+    def camera_events(kind):
+        return [t for e, n, c, t in kms_events(fppd) if e == kind and n == "sink" and c == 77]
+    fppd.wait_for(lambda: camera_events("frame"), timeout=20, what="the camera's first frame")
+    fppd.command("Play Media", "Four.mkv", "1", "0", "1", "HDMI-A-1")
+    fppd.wait_for(lambda: camera_events("stop"), timeout=3, interval=0.05,
+                  what="the camera's sink to stop for the video (precondition)")
+    stopped = max(camera_events("stop"))
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=15, interval=0.1,
+                  what="the video to end")
+    fppd.wait_for(lambda: [t for t in camera_events("start") if t > stopped], timeout=20,
+                  interval=0.2, what="the camera to come back after its failed comeback")
 
 def test_every_kmssink_skips_vsync(fppd, audio):
     """Every kmssink fppd builds -- a camera group's persistent one and a
