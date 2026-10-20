@@ -44,7 +44,10 @@ docker build -q -t fpp-tests-web "$HERE/docker/web" > /dev/null
 
 ARTIFACTS="$HERE/artifacts/web"
 mkdir -p "$ARTIFACTS"
-find "$ARTIFACTS" -mindepth 1 -delete
+# Emptied through a container: the web container runs as root, and a run that
+# stopped before handing its files back (below) leaves them owned by root,
+# e.g. apache2/, which the next run (and verify-fix.sh's second) can't delete.
+$DOCKER -v "$ARTIFACTS:/artifacts" fpp-tests-env find /artifacts -mindepth 1 -delete
 
 $DOCKER -v "$HERE:/tests:ro" fpp-tests-env /tests/scripts/build-fpp.sh "$TREE" "$FLAVOR"
 
@@ -95,6 +98,8 @@ rc=0
 # SIGTERM: web_serve.py stops fppd and judges it; give an ASan fppd time.
 docker stop -t 120 "$NAME" > /dev/null
 fppd_rc=$(docker wait "$NAME")
+# Hand what the container wrote (fppd.json, apache2/, media/) back to the caller.
+$DOCKER -v "$ARTIFACTS:/artifacts" fpp-tests-env chown -hR "$(id -u):$(id -g)" /artifacts
 if [ "$fppd_rc" != 0 ]; then
     docker logs "$NAME" 2>&1 | tail -60
     echo "fppd failed under the web suite (exit $fppd_rc); see artifacts/web/fppd.json" >&2
