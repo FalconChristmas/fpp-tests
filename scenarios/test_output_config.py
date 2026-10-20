@@ -695,3 +695,29 @@ def test_a_pixel_string_with_a_negative_port_number_is_refused(fppd, port):
     else:
         assert not failed, warnings(fppd)
         assert "Configured ModelPixelStrings" in fppd.log(), fppd.log()[-3000:]
+
+
+@pytest.mark.parametrize("kind", ["twinkly", "ddp"])
+def test_a_network_output_ending_on_the_last_channel_keeps_the_udp_outputs(fppd, kind):
+    """A network output whose channels end exactly on the last channel of
+    the buffer (8388608) loads, and the DDP output next to it keeps sending:
+    a Twinkly of 1800 channels, or a DDP output of 150.
+
+    Regression: 6c9e45efa. Every UDPOutputData reported its range with max
+    one past its last channel (startChannel + channelCount - 1 from a 1-based
+    start), and UDPOutput handed that on as the inclusive last channel the
+    loader expects. fppd logged "needs channels 8386809-8388609, outside
+    1-8388608. Output disabled." and every UDP output went dark.
+    """
+    if kind == "twinkly":
+        twinkly_near_the_top(fppd, 8388608)
+    else:
+        cfg = ddp_output(CHANNELS)
+        cfg["channelOutputs"][0]["channelCount"] = 8388608
+        cfg["channelOutputs"][0]["universes"].append({
+            "active": 1, "description": "top", "id": 0, "startChannel": 8388608 - CHANNELS + 1,
+            "channelCount": CHANNELS, "type": 5, "address": "192.0.2.9", "priority": 0,
+            "monitor": 0, "deDuplicate": 0})
+        fppd.write("config/co-universes.json", cfg)
+        fppd.settings(DisableFakeNetworkBridges="1")
+    ddp_still_sends(fppd)

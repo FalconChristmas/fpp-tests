@@ -163,3 +163,51 @@ def test_the_qdisc_is_looked_up_once_per_load(fppd):
         assert fppd.log().count("Calling Init() on UDPOutput output") >= 2, "the save never reloaded"
         assert "pacing enabled at 90 Mbps" in fppd.log(), "the output never took the paced path"
         assert len(lookups()) <= 4, f"{len(lookups())} qdisc lookups:\n" + "".join(lookups()[:30])
+
+
+def test_unpacing_the_controller_takes_its_budget_warning_down(fppd):
+    """Once a controller has raised warning 68, saving its output unpaced
+    takes the warning down.
+
+    Regression: d6bae2f28. 2ac813fce says the warning is "removed when the
+    output set is torn down", but ~UDPOutput cleared it for each destination
+    in messages.sendSockets, which Close(), run first by the loader, had
+    already emptied with clearSockets(). The new output's checks only clear
+    their own (empty) record, so the banner stayed until its 300 s timeout.
+    """
+    with show_interface():
+        fppd.write("config/co-universes.json", e131(200, 4))
+        start(fppd)
+        fppd.command("Test Start", "100", "RGB Cycle", "1-102000", "R-G-B")
+        fppd.wait_for(lambda: [w for w in budget_warnings(fppd) if f"Controller {CONTROLLER}" in w],
+                      timeout=150, interval=2, what="the pacing-budget warning")
+        time.sleep(1.1)  # a save in a later second, as a person makes it
+        fppd.write("config/co-universes.json", e131(200, 0))
+        fppd.wait_for(lambda: not budget_warnings(fppd), timeout=15, interval=0.5,
+                      what="the warning to come down once the output is unpaced")
+
+
+def test_a_controller_moderately_over_its_rate_raises_the_warning(fppd):
+    """A paced controller whose every send takes 75 ms (longer than the
+    50 ms SendData() waits, shorter than the 100 ms send budget) gets at
+    most every other frame at 20 fps, and raises warning 68.
+
+    co_slowsendmmsg.so holds each send worker's sendmmsg() 75 ms; a paced
+    send is one sendmmsg() of the whole frame, so every send completes
+    within its budget.
+
+    Regression: 09cec7f39. b95acec2f made PrepData() skip a destination that
+    still has a send queued or in flight, so its message list was empty that
+    frame and SendData() counted neither a queued nor a late frame for it;
+    the fold path 2ac813fce counted was never reached. Only short sends
+    counted, and here there are none. Green at b95acec2f^.
+    """
+    with show_interface():
+        fppd.write("config/co-universes.json", e131(200, 400))
+        fppd.settings(DisableFakeNetworkBridges="1")
+        fppd.start(preload=[shims.build("co_net_popen.c"), shims.build("co_slowsendmmsg.c")],
+                   extra_env={"CO_FAKEFQ_IFACES": IFACE, "CO_SLOWSENDMMSG_THREAD": "FPP-UDPWork",
+                              "CO_SLOWSENDMMSG_MS": "75"})
+        fppd.command("Test Start", "100", "RGB Cycle", "1-102000", "R-G-B")
+        fppd.wait_for(lambda: [w for w in budget_warnings(fppd) if f"Controller {CONTROLLER}" in w],
+                      timeout=150, interval=2, what="the pacing-budget warning")

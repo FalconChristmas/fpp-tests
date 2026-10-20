@@ -659,3 +659,33 @@ def test_a_generic_udp_output_that_throws_leaves_the_universes_running(fppd):
     warnings = fppd.get("/fppd/status").get("warnings", [])
     assert not any("Could not initialize output type UDPOutput" in w for w in warnings), warnings
     assert any("Could not create a network output" in w for w in warnings), warnings
+
+
+def test_output_comes_back_once_sockets_can_be_opened_again(fppd):
+    """When the output's socket couldn't be opened (EMFILE for two seconds,
+    from co_net_failsock.so), output to that controller comes back once
+    sockets can be opened again.
+
+    Regression: 60c4defff. 43986b412 made createSocket() return -1 instead
+    of exiting, but the -1 was stored in the destination's socket list, which
+    was then non-empty, so findOrCreateSocket() never made another. Every
+    send failed with EBADF, which doesn't trigger the EAGAIN rotation, and
+    the controller stayed dark, with no banner, until a config save.
+    """
+    import os
+    from ddp import DdpReceiver
+
+    flag = os.path.join(fppd.media, "tmp", "failsock")
+    fppd.write("config/co-universes.json", ddp_universes("a"))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    open(flag, "w").close()  # the output thread makes its socket on its first frame
+    with DdpReceiver(150) as rx:
+        fppd.start(preload=[shims.build("co_net_failsock.c")], extra_env={
+            "CO_FAILSOCK_FLAG": flag, "CO_FAILSOCK_THREAD": "FPP-ChannelOut"})
+        fppd.request("PUT", "/overlays/range/1-150", {"Value": 42})
+        time.sleep(2)
+        assert "Error opening datagram socket" in fppd.log(), "the socket() failure was never hit"
+        os.unlink(flag)
+        since = time.monotonic()
+        assert rx.wait_frames(5, timeout=10, since=since), \
+            "no DDP frames within 10 s of sockets becoming available again"
