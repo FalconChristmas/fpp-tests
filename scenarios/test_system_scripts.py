@@ -59,7 +59,7 @@ def test_config_upgrades_finish_without_a_running_apache(fppinit):
     on a system whose Apache is not a running systemd unit (a container,
     an image build): there is nothing to reload, which is not a failure.
 
-    Regression: 590a7a522. gracefullyReloadApacheConf returned 1 when apache2
+    Regression: 1b9619123. gracefullyReloadApacheConf returned 1 when apache2
     wasn't active, and upgrade 155 (like 94-143's Apache ones) ends with it,
     so upgrade_config stopped at 154 and 156 and every later migration
     never ran.
@@ -106,7 +106,7 @@ def test_upgrade_159_installs_the_current_chrony_hook(fppinit):
     root-owned and executable as networkd-dispatcher requires, and leaves
     a player without chrony alone.
 
-    Regression: 38efe6f55. cfa731d71 fixed the hook in the tree, but only an
+    Regression: 91e4b1539. cfa731d71 fixed the hook in the tree, but only an
     install and upgrade 116 copy it into /etc, so a git-updated player kept
     the one that left the clock flagged unsynchronized after a reconnect.
     """
