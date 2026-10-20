@@ -5,6 +5,7 @@ are stubs that record their calls.
 """
 
 import os
+import re
 import signal
 import subprocess
 import time
@@ -12,6 +13,7 @@ import time
 from fppinit import MEDIA, _stub, fppinit  # noqa: F401 -- the fixture
 
 CALLS = "/fppinit-calls.log"
+TREE = os.environ.get("FPP_TREE", "")
 
 
 def fppdir_view(sb):
@@ -259,3 +261,32 @@ def test_upgrade_fpp_keeps_one_safe_directory_line(fppinit):
     assert "directory = /opt/fpp" in lines, f"no safe.directory for /opt/fpp:\n{cfg}\n{(r.stdout + r.stderr)[-2000:]}"
     assert lines.count("directory = /opt/fpp") == 1, f"/etc/gitconfig:\n{cfg}"
     assert lines.count("directory = *") == 1, f"/etc/gitconfig:\n{cfg}"
+
+
+def test_installer_systemctl_wrapper_passes_global_mask(tmp_path):
+    """FPP_Install.sh's systemctl wrapper (used where systemd isn't
+    running: the image builds' chroot) passes `systemctl --global mask`
+    through to systemctl, as it does a plain `mask`.
+
+    Regression: f842a9f0a. The wrapper dispatched on $1, which is
+    "--global" here, so the call fell to "skipping systemctl" and images
+    built since 0efdfecae shipped without the per-user PipeWire masks.
+    """
+    with open(os.path.join(TREE, "SD", "FPP_Install.sh")) as f:
+        src = f.read()
+    m = re.search(r"^if \[ ! -d /run/systemd/system \]; then\n(.*?)^fi$", src, re.M | re.S)
+    assert m and "systemctl()" in m.group(1), "no systemctl wrapper found in FPP_Install.sh"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "calls"
+    (bin_dir / "systemctl").write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log}\n")
+    (bin_dir / "systemctl").chmod(0o755)
+    script = (f"PATH={bin_dir}:$PATH\n{m.group(1)}\n"
+              "systemctl enable fpp-tests.service\n"
+              "systemctl --global mask pipewire.socket pipewire.service\n")
+    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+    calls = log.read_text().splitlines() if log.exists() else []
+    assert any("enable fpp-tests.service" in c for c in calls), \
+        f"the wrapper didn't pass even a plain enable through, so this proves nothing: {calls}\n{r.stdout}"
+    assert any("--global" in c and "mask pipewire.socket pipewire.service" in c for c in calls), \
+        f"`systemctl --global mask` never reached systemctl: {calls}\n{r.stdout}"
