@@ -37,6 +37,19 @@ def page(body, status=200, ctype="text/html", headers=None):
     return {"status": status, "type": ctype, "body": body, "headers": headers or {}}
 
 
+def drop():
+    """A response that is no response: the connection is closed unanswered."""
+    return {"drop": True, "status": 0, "type": "", "body": "", "headers": {}}
+
+
+def requests_seen(address):
+    """The requests a fake device was sent so far, as "GET /path?query"."""
+    out = subprocess.run(["curl", "-s", "-m", "5", f"http://{address}/_requests"],
+                         capture_output=True, text=True)
+    assert out.returncode == 0, f"{address}/_requests: curl exit {out.returncode}"
+    return json.loads(out.stdout)
+
+
 @contextlib.contextmanager
 def device_network(addresses):
     """A network namespace holding `addresses`, joined to fppd's by a veth.

@@ -1,7 +1,12 @@
 """Serves the fake devices described in a JSON file (see fake_devices.py):
 one HTTP server per address, port 80, each answering from its own map of
 path -> response. Prints "ready" once all are listening. Run inside the
-devices' network namespace."""
+devices' network namespace.
+
+Each server keeps a log of the requests it was sent ("GET /path?query"), which
+GET /_requests returns as a JSON list (that request itself is not logged). A
+response with "drop" set closes the connection without answering, so the
+client sees a failed transfer rather than an HTTP error."""
 
 import http.server
 import json
@@ -10,13 +15,24 @@ import threading
 
 
 def handler_for(pages):
+    log, lock = [], threading.Lock()
+
     class H(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
         def answer(self):
             path = self.path.split("?", 1)[0]
-            p = pages.get(self.path) or pages.get(path) or {
-                "status": 404, "type": "text/html", "body": "Not found", "headers": {}}
+            if self.command == "GET" and path == "/_requests":
+                with lock:
+                    p = {"status": 200, "type": "application/json", "body": json.dumps(log)}
+            else:
+                with lock:
+                    log.append(f"{self.command} {self.path}")
+                p = pages.get(self.path) or pages.get(path) or {
+                    "status": 404, "type": "text/html", "body": "Not found", "headers": {}}
+            if p.get("drop"):
+                self.close_connection = True
+                return
             body = p["body"].encode()
             self.send_response(p["status"])
             self.send_header("Content-Type", p["type"])
