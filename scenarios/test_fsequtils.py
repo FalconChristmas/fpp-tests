@@ -161,7 +161,11 @@ def test_convert_round_trips_every_version_and_compression(src, tmp_path):
 
     Regression: da539db66. The zlib writer never ended the deflate stream of
     its last block or freed the stream, so every zlib file written leaked
-    about 260 KB (LeakSanitizer fails the run here)."""
+    about 260 KB (LeakSanitizer fails the run here).
+
+    Also covers be17a58e8: a zlib write with no zstd writer made first in the
+    process (each conversion here is its own fsequtils run) got a 0-byte
+    output buffer, and deflate() spun forever on it."""
     path, frames = src
     for fmt, comp, major, minor, ctype in (("1", "none", 1, 0, 0), ("2", "none", 2, 0, 0),
                                            ("2", "zstd", 2, 0, 1), ("2", "zlib", 2, 0, 2),
