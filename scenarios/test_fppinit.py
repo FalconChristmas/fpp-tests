@@ -350,3 +350,82 @@ def test_os_reflash_survives_a_broken_package_list(fppinit, content):
     assert apt_installs(fppinit) == [], fppinit.calls()
     assert fppinit.written("/fppos_upgraded") is None, "the reflash marker was kept for a retry"
 
+
+def wifi_client_config(sb, **fields):
+    """setupNetwork's wpa_supplicant config for a Wi-Fi client on wlan0 with
+    these interface.wlan0 fields: (global lines, [network block dicts])."""
+    lines = ['INTERFACE="wlan0"', 'PROTO="dhcp"'] + [f'{k}="{v}"' for k, v in fields.items()]
+    sb.write("config/interface.wlan0", "\n".join(lines) + "\n")
+    # setupNetwork listed both directories with the throwing iterator until
+    # 57e923023; the image has neither, so give it both (the names here are
+    # ones it skips). The fixes predate FPP_MEDIA_DIR (e930dec80), so the
+    # media directory is at /home/fpp/media as well.
+    sb.root_file("/etc/wpa_supplicant/fpp-tests", "")
+    sb.root_file("/etc/systemd/network/fpp-tests", "")
+    assert_clean(sb._run(["/opt/fpp/src/fppinit", "setupNetwork"], media_home=True))
+    conf = sb.written("/etc/wpa_supplicant/wpa_supplicant-wlan0.conf")
+    assert conf is not None, f"no wpa_supplicant config was written: {sb.calls()}"
+    globals_, blocks, block = [], [], None
+    for raw in conf.splitlines():
+        line = raw.strip()
+        if line == "network={":
+            block = {}
+        elif line == "}" and block is not None:
+            blocks.append(block)
+            block = None
+        elif line and block is not None:
+            k, _, v = line.partition("=")
+            block[k] = v
+        elif line:
+            globals_.append(line)
+    return globals_, blocks, conf
+
+
+def test_wifi_pmf_is_a_global_option_not_per_network(fppinit):
+    """The Wi-Fi client config asks for Protected Management Frames once,
+    globally ("pmf=1", which wpa_supplicant only applies where the driver
+    supports it), and no network block forces it.
+
+    Regression: f89e89604 (#2953). Every network block carried
+    "ieee80211w=1", which wpa_supplicant honours whatever the driver says:
+    on a Pi Zero W or 3B (no MFP in the firmware) it negotiated PMF with any
+    PMF-capable router and dropped the association in a loop."""
+    g, blocks, conf = wifi_client_config(fppinit, SSID="Main", PSK="mainpass1",
+                                         BACKUPSSID="Spare", BACKUPPSK="sparepass1")
+    assert [b.get("ssid") for b in blocks] == ['"Main"', '"Spare"'], conf
+    assert "pmf=1" in g, conf
+    assert not [b for b in blocks if "ieee80211w" in b], conf
+
+
+@pytest.mark.parametrize("which", ["WPA3", "BACKUPWPA3"])
+def test_wifi_wpa3_allows_hunting_and_pecking(fppinit, which):
+    """With WPA3 ticked for the main or only the backup network, the config
+    sets "sae_pwe=2": SAE with hash-to-element where the router offers it and
+    hunting-and-pecking where it doesn't.
+
+    Regression: 6930ee0ab. It set "sae_pwe=1" (H2E only), so wpa_supplicant
+    skipped every router without H2E -- most WPA2/WPA3 mixed-mode ones -- and
+    never connected; and a WPA3 backup network alone set nothing at all."""
+    g, blocks, conf = wifi_client_config(fppinit, SSID="Main", PSK="mainpass1",
+                                         BACKUPSSID="Spare", BACKUPPSK="sparepass1",
+                                         **{which: "1"})
+    sae = [b for b in blocks if "sae_password" in b]
+    assert len(sae) == 1, f"{which} put SAE on {len(sae)} networks:\n{conf}"
+    assert [l for l in g if l.startswith("sae_pwe")] == ["sae_pwe=2"], conf
+
+
+def test_wifi_wpa3_backup_network_uses_its_own_password(fppinit):
+    """A WPA3 backup network's SAE password is the backup's own (BACKUPPSK),
+    and a WPA3 flag written as "0" leaves the main network on WPA2.
+
+    Regression: 19e5bc3e0. The backup block's sae_password was the main
+    network's PSK, so a WPA3 backup with a password of its own never
+    connected; and any non-empty WPA3 value, "0" too, turned WPA3 on."""
+    g, blocks, conf = wifi_client_config(fppinit, SSID="Main", PSK="mainpass1", WPA3="0",
+                                         BACKUPSSID="Spare", BACKUPPSK="sparepass1",
+                                         BACKUPWPA3="1")
+    main, spare = blocks
+    assert spare.get("ssid") == '"Spare"', conf
+    assert spare.get("sae_password") == '"sparepass1"', conf
+    assert spare.get("key_mgmt") == "SAE WPA-PSK", conf
+    assert main.get("key_mgmt") == "WPA-PSK" and "sae_password" not in main, conf
