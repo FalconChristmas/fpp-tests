@@ -338,3 +338,53 @@ def test_a_panel_offset_past_the_channel_buffer_is_refused(fppd):
         pkts, rows = lit_frame(fppd, cap, h, w * 3)
     for y in range(h):
         assert rows[y] == frame[y * w * 3:(y + 1) * w * 3], f"row {y}"
+
+
+@pytest.mark.parametrize("bad, what", [
+    (panel(3, 0, 0, 16, orientation="X"), "an orientation it doesn't know, on output 3"),
+    (panel(0, 30, 32, 0), "chain position 30, past the 24 an output takes"),
+])
+def test_a_refused_panel_does_not_grow_the_matrix(fppd, bad, what):
+    """A panel the matrix refuses doesn't count toward its outputs or its
+    longest chain: beside one good 32x16 panel, the receiver still gets 16
+    rows of 32 pixels, the good panel's.
+
+    Regression: f11ee60c8. ColorLight ignored AddPanel()'s result and
+    counted every panel's output and chain anyway, so a refused panel on
+    output 3 made every frame 64 rows, and one at chain position 30 (which
+    nothing refused before) made every row 31 panels long.
+    """
+    w, h = 32, 16
+    frame = unique_frame(w, h)
+    cfg = panels_output([panel(0, 0, 0, 0), bad], channels=w * h * 3)
+    with captured() as cap:
+        play(fppd, frame, cfg)
+        try:
+            pkts, rows = lit_frame(fppd, cap, h, w * 3)
+        except TimeoutError:
+            fs = cap.frames()
+            shape = sorted({(r, len(b) // 3) for r, b in fs[-1][1].items()})[-1:] if fs else None
+            raise AssertionError(f"beside {what}: no 16-row, 32-pixel frame; last frame's "
+                                 f"last (row, pixels): {shape}, {len(fs[-1][1]) if fs else 0} rows")
+    for y in range(h):
+        assert rows[y] == frame[y * w * 3:(y + 1) * w * 3], f"row {y} beside {what}"
+
+
+def test_an_overlong_interface_name_is_refused(fppd):
+    """A ColorLight output configured (by hand) with an interface name far
+    longer than an interface name can be fails to start, with a warning,
+    and fppd lives.
+
+    Regression: 799afeec1. Init() strcpy()'d the name into an ifreq member
+    of the output, so 2000 characters wrote far past the end of the object:
+    a heap-buffer-overflow at startup. (A name of 16-40 characters stays
+    inside the object and ASan can't see it, hence the length.)
+    """
+    fppd.write("config/channeloutputs.json",
+               panels_output([panel(0, 0, 0, 0)], channels=32 * 16 * 3, interface="x" * 2000))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: any("ColorLight5a75" in w for w in
+                              fppd.get("/fppd/status").get("warnings", [])),
+                  timeout=10, what="the could-not-initialize warning")
+    time.sleep(1)

@@ -164,7 +164,12 @@ def test_a_rejected_token_is_retried(fppd):
 
 def test_lights_that_come_up_late_are_picked_up(fppd):
     """Lights powered on after the show started still get the handshake
-    and the frames, without restarting fppd."""
+    and the frames, without restarting fppd.
+
+    Regression: fc98627a9. The login failed while the lights were off, and
+    the only retries were the 120 s token check and the re-login after
+    MAXPACKETS, so for up to two minutes they got frames with no token,
+    which they ignore."""
     setup(fppd, 300)
     with lights(started=False) as tw:
         fppd.start()
@@ -191,3 +196,123 @@ def test_stopping_puts_the_lights_back(fppd):
         assert rc == 0, f"fppd exited {rc}"
         last = tw.calls()[-1]
         assert last[0] == "/xled/v1/led/mode" and '"off"' in last[2] and last[1] == token, tw.calls()[-3:]
+
+
+def test_monitored_lights_that_answer_only_after_output_started_get_a_login(fppd):
+    """Monitored lights whose address isn't there when output starts (they
+    fail fppd's pings then) get the login and realtime handshake, and frames
+    carrying its token, once they answer the next periodic ping.
+
+    Regression: 4959c4759. StartingOutput() starts only outputs valid at
+    that moment; one whose pings failed then was never started, so its
+    login never ran (authenticate() returns early until the output has
+    started), yet it got frames, with no token, once it answered.
+    """
+    from fake_devices import NETNS, DEV_IF, _ip
+
+    config = twinkly_output(300)
+    config["channelOutputs"][0]["universes"][0]["monitor"] = 1
+    fppd.write("config/co-universes.json", config)
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with device_network([]) as run:
+        tw = Twinkly(run)
+        try:
+            fppd.start()
+            fppd.wait_for(lambda: [w for w in fppd.get("/fppd/status").get("warningInfo", [])
+                                   if w.get("id") == 27],
+                          timeout=60, interval=1, what="fppd to give up on the lights")
+            show_color(fppd, 300)  # output starts while the lights are down
+            time.sleep(2)
+            _ip("addr", "add", ADDR + "/24", "dev", DEV_IF, ns=NETNS)
+            tw.start()
+            fppd.wait_for(lambda: tw.realtime_token(), timeout=45, interval=0.5,
+                          what="realtime mode once the lights answered")
+            token = tw.realtime_token()
+            fppd.wait_for(lambda: lit_with_token(tw, token), timeout=10, what="frames with the token")
+        finally:
+            for f in (tw.log, tw.log + ".reject"):
+                if os.path.exists(f):
+                    os.unlink(f)
+
+
+HANG_SERVER = ("import socket, sys, time\n"
+               "s = socket.socket()\n"
+               "s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
+               "s.bind((sys.argv[1], 80))\n"
+               "s.listen(64)\n"
+               "print('ready', flush=True)\n"
+               "held = []\n"
+               "while True:\n"
+               "    held.append(s.accept())\n")
+
+
+def test_reload_does_not_wait_for_a_hung_login(fppd):
+    """Saving the E1.31 outputs while a Twinkly's login is hanging (its
+    lights accept the connection and never answer) doesn't stop the other
+    outputs: a DDP output next to it keeps getting frames across two saves.
+
+    Regression: 84bc571e7. ~UDPOutput() spun on processCurls() until every
+    HTTP request in the process had finished, holding outputThreadLock, so
+    output stopped for the rest of the hung login (up to its 10 s timeout).
+    The second save comes 3 s after the first, when the new output's login
+    has just started, so on the parent its gap is about 7 s.
+    """
+    from ddp import DdpReceiver
+    from show import ddp_output
+
+    def config(description):
+        c = ddp_output(150)
+        c["channelOutputs"][0]["channelCount"] = 450
+        c["channelOutputs"][0]["universes"].append(
+            dict(twinkly_output(300)["channelOutputs"][0]["universes"][0],
+                 startChannel=151, description=description))
+        return c
+
+    fppd.write("config/co-universes.json", config("a"))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with device_network([ADDR]) as run, DdpReceiver(150) as rx:
+        srv = run(sys.executable, "-I", "-c", HANG_SERVER, ADDR)
+        assert srv.stdout.readline().strip() == "ready"
+        fppd.start()
+        fppd.request("PUT", "/overlays/range/1-450", {"Value": 42})
+        assert rx.wait_frames(5, timeout=10), "no DDP frames"
+        time.sleep(3)
+        since = time.monotonic()
+        fppd.write("config/co-universes.json", config("b"))
+        time.sleep(3)
+        fppd.write("config/co-universes.json", config("c"))
+        time.sleep(4)
+        # the end of the window counts too: output that stopped and never
+        # came back is the longest gap of all
+        times = [t for t, _ in rx.snapshot(since=since - 0.5)] + [time.monotonic()]
+        gaps = [b - a for a, b in zip(times, times[1:])]
+        assert gaps and max(gaps) < 2.5, \
+            f"DDP stopped {max(gaps):.1f} s across the saves" if gaps else "no DDP frames"
+        assert fppd.log().count("Calling Init() on UDPOutput output") >= 3, "the saves never reloaded"
+
+
+def test_stopping_lights_that_never_logged_in_makes_no_call(fppd):
+    """Stopping the output for lights that refused every login (so never
+    got a token, never went into realtime mode) doesn't try to switch them
+    off: the blocking call would run on the output thread, or under
+    outputThreadLock on a reload, and only time out on a dead device.
+
+    Regression: fc98627a9. StoppingOutput() always posted "mode off" with a
+    blocking curl call (up to 5 s), whether or not the device answered or
+    this output had a token.
+    """
+    setup(fppd, 300)
+    with lights() as tw:
+        open(tw.log + ".refuse-logins", "w").close()
+        try:
+            fppd.start()
+            show_color(fppd, 300)
+            fppd.wait_for(lambda: [c for c in tw.calls() if c[0] == "/xled/v1/login"], timeout=15,
+                          what="a refused login")
+            time.sleep(2)
+            fppd.command("Test Stop")
+            time.sleep(4)
+            offs = [c for c in tw.calls() if c[0] == "/xled/v1/led/mode"]
+            assert not offs, f"led/mode posted to lights that never logged in: {offs}"
+        finally:
+            os.unlink(tw.log + ".refuse-logins")

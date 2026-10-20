@@ -280,3 +280,181 @@ def test_generic_udp_tokens(fppd):
         assert p[-1] == 0xBB and len(p) == len(head) + size + 1, (len(p), p[-4:].hex())
         data = p[len(head):-1]
         assert not any(data) or data in valid, data[:8].hex()
+
+
+ADDR_IFACE = "fpptd0"
+
+
+def ip(*args):
+    import subprocess
+    return subprocess.run(["ip", *args], capture_output=True, text=True)
+
+
+def address_less_interface():
+    """fpptd0: a dummy interface, up, multicast on, with no address yet."""
+    ip("link", "del", ADDR_IFACE)
+    r = ip("link", "add", ADDR_IFACE, "type", "dummy")
+    if r.returncode:
+        pytest.skip(f"cannot add a dummy interface: {r.stderr.strip()}")
+    ip("link", "set", ADDR_IFACE, "multicast", "on", "up")
+
+
+def sources_since(cap, since):
+    return {src for t, src, dst, _ in cap.snapshot() if t >= since}
+
+
+def test_multicast_follows_the_output_interfaces_address(fppd):
+    """E1.31 multicast on an interface that has no address when fppd starts
+    leaves that interface once the address arrives, from that address, and
+    follows the interface to a new address when it changes.
+
+    Regression: 6b40e5c79. Init() marked the address-less interface up and
+    ignored its NEW_ADDR, so the multicast socket stayed bound to 127.0.0.1
+    with IP_MULTICAST_IF loopback and nothing reached the interface until
+    fppd restarted; after a change, InitNetwork() reset the address to
+    loopback before returning early.
+    """
+    from capture import UdpCapture
+
+    address_less_interface()
+    try:
+        fppd.write("config/co-universes.json", {"channelOutputs": [{
+            "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 510,
+            "interface": ADDR_IFACE,
+            "universes": [output(0, 1, 1, 510)]}]})
+        fppd.settings(DisableFakeNetworkBridges="1")
+        with UdpCapture(E131_PORT, dst_ip="239.255.0.1", iface=ADDR_IFACE) as cap:
+            fppd.start()
+            fppd.request("PUT", "/overlays/range/1-510", {"Value": 42})
+            time.sleep(2)
+            ip("addr", "add", "10.66.0.1/24", "dev", ADDR_IFACE)
+            fppd.wait_for(lambda: "10.66.0.1" in sources_since(cap, time.monotonic() - 1),
+                          timeout=10, what="multicast from 10.66.0.1 on the interface")
+            ip("addr", "del", "10.66.0.1/24", "dev", ADDR_IFACE)
+            time.sleep(1)
+            ip("addr", "add", "10.66.0.2/24", "dev", ADDR_IFACE)
+            fppd.wait_for(lambda: sources_since(cap, time.monotonic() - 1) == {"10.66.0.2"},
+                          timeout=10, what="multicast from the new address 10.66.0.2 only")
+    finally:
+        ip("link", "del", ADDR_IFACE)
+
+
+def test_e131_sync_leaves_by_the_output_interface(fppd):
+    """E1.31 sync for unicast universes on a show interface (fpptd0) goes
+    out of that interface to 239.255.<sync universe>, not by the default
+    route (the container's eth0).
+
+    Regression: 56c9a4652. The sync socket was not a multicast one, so it
+    had no IP_MULTICAST_IF and followed the default route: controllers on
+    the show network never saw sync.
+    """
+    from capture import UdpCapture
+
+    address_less_interface()
+    try:
+        ip("addr", "add", "10.66.0.1/24", "dev", ADDR_IFACE)
+        entry = output(1, 1, 1, 510, syncUniverse=7)
+        entry["address"] = "10.66.0.2"
+        fppd.write("config/co-universes.json", {"channelOutputs": [{
+            "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 510,
+            "interface": ADDR_IFACE, "universes": [entry]}]})
+        fppd.settings(DisableFakeNetworkBridges="1")
+        with UdpCapture(E131_PORT, dst_ip="239.255.0.7", iface=ADDR_IFACE) as sync, \
+                UdpCapture(E131_PORT, dst_ip="10.66.0.2", iface=ADDR_IFACE) as data:
+            fppd.start()
+            fppd.command("Test Start", "100", "RGB Cycle", "1-510", "R-G-B")
+            fppd.wait_for(lambda: data.snapshot(), timeout=10, what="E1.31 data on the interface")
+            fppd.wait_for(lambda: sync.snapshot(), timeout=10,
+                          what="E1.31 sync to 239.255.0.7 on the interface")
+    finally:
+        ip("link", "del", ADDR_IFACE)
+
+
+def socket_fds(pid):
+    n = 0
+    for fd in os.listdir(f"/proc/{pid}/fd"):
+        try:
+            n += os.readlink(f"/proc/{pid}/fd/{fd}").startswith("socket:")
+        except OSError:
+            pass
+    return n
+
+
+def test_a_full_artnet_socket_is_waited_on_not_replaced(fppd):
+    """Unicast Art-Net to a controller behind a slow link (a tbf qdisc
+    draining fpptd0 at 100 kbit/s, far below the 20 universes' rate) fills
+    the shared Art-Net socket's send buffer; fppd waits for room on that
+    socket rather than opening more.
+
+    Regression: c2a373924. EAGAIN moved the Art-Net keys on to new
+    ephemeral sockets, without SO_BROADCAST or port 6454, that were never
+    closed: up to four more per destination key, and broadcast Art-Net and
+    sync then failed on them every frame.
+    """
+    address_less_interface()
+    try:
+        ip("addr", "add", "10.66.0.1/24", "dev", ADDR_IFACE)
+        import subprocess
+        r = subprocess.run(["tc", "qdisc", "add", "dev", ADDR_IFACE, "root", "tbf", "rate", "100kbit",
+                            "burst", "2k", "limit", "4mb"], capture_output=True, text=True)
+        if r.returncode:
+            pytest.skip(f"tbf: {r.stderr.strip()}")
+        universes = []
+        for n in range(20):
+            u = output(3, n + 1, 1 + 510 * n, 510)
+            u["address"] = "10.66.0.2"
+            universes.append(u)
+        fppd.write("config/co-universes.json", {"channelOutputs": [{
+            "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 20 * 510,
+            "interface": ADDR_IFACE, "universes": universes}]})
+        fppd.settings(DisableFakeNetworkBridges="1")
+        fppd.start()
+        fppd.command("Test Start", "100", "RGB Cycle", "1-10200", "R-G-B")
+        time.sleep(1)
+        before = socket_fds(fppd.proc.pid)
+        time.sleep(8)
+        after = socket_fds(fppd.proc.pid)
+        assert "Resource temporarily unavailable" in fppd.log() or "exceeded time budget" in fppd.log(), \
+            "the Art-Net socket's buffer never filled"
+        assert after <= before, f"fppd went from {before} to {after} sockets while the link was full"
+    finally:
+        ip("link", "del", ADDR_IFACE)
+
+
+def test_mqtt_output_value_and_intensity_tokens(fppd):
+    """An MQTT output's %V% and %I% payload tokens carry a half-lit RGB
+    pixel's value and intensity: "50 50" for 128, 128, 128.
+
+    Regression: 85f33b352. The channels were divided by 255 as integers
+    before the HSV/intensity conversion, so every token was 0 below full
+    brightness and the payload was "0 0".
+    """
+    import shutil
+    import subprocess
+    if not shutil.which("mosquitto") or not shutil.which("mosquitto_sub"):
+        pytest.skip("mosquitto and mosquitto_sub are not installed")
+    port = "18832"
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "MQTTOutput", "enabled": 1, "startChannel": 1, "channelCount": 3,
+        "topic": "fpptest/out", "payload": "%V% %I%", "channelType": "RGB"}]})
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=port, HostName="mqttout",
+                  DisableFakeNetworkBridges="1")
+    broker = subprocess.Popen(["mosquitto", "-p", port],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    sub = None
+    try:
+        time.sleep(0.5)
+        sub = subprocess.Popen(["mosquitto_sub", "-h", "127.0.0.1", "-p", port, "-v",
+                                "-t", "#", "-W", "20"], stdout=subprocess.PIPE, text=True)
+        fppd.start()
+        time.sleep(2)  # let fppd connect before the channels change
+        fppd.request("PUT", "/overlays/range/1-3", {"Value": 128})
+        out, _ = sub.communicate(timeout=30)
+    finally:
+        if sub and sub.poll() is None:
+            sub.kill()
+        broker.terminate()
+        broker.wait(timeout=5)
+    published = [line for line in out.splitlines() if "fpptest/out" in line]
+    assert published, "the MQTT output published nothing"
+    assert any(line.endswith(" 50 50") for line in published), f"payloads: {published[-5:]}"

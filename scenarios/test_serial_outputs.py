@@ -6,7 +6,13 @@ import time
 
 import pytest
 
+import shims
 from serial import PtyReader, lor_enhanced_state
+
+
+def range_on(fppd, channels, value):
+    """Light channels 1..channels with an overlay range, so outputs send."""
+    fppd.request("PUT", f"/overlays/range/1-{channels}", {"Value": value})
 
 
 def test_lor_enhanced_reaches_every_unit(fppd):
@@ -137,3 +143,246 @@ def test_serial_output_refuses_the_console(fppd):
     fppd.start()
     fppd.wait_for(lambda: [w for w in fppd.get("/fppd/warnings") if "system console" in str(w)],
                   what=f"a warning that /dev/{console} is the system console")
+
+
+def test_reloading_a_slow_serial_output_with_a_frame_pending(fppd):
+    """Saving the Other outputs while a threaded serial output's worker is
+    still busy with a frame, with the next frame already queued, replaces
+    the output cleanly: fppd lives and the new output sends.
+
+    co_slowwrite.so makes every write() to the pty take 120 ms, so at 20
+    frames a second the worker always has the next frame waiting when the
+    reload closes the output.
+
+    Regression: 33017c3ea. GenericSerialOutput::Close() closed the port and
+    deleted its packet buffer before ThreadedChannelOutput::Close() stopped
+    the worker, and the worker flushed the pending frame on its way out:
+    memcpy() into the freed, nulled buffer, a SIGSEGV on the first reload.
+    """
+    def config(description):
+        return {"channelOutputs": [{
+            "type": "GenericSerial", "enabled": 1, "startChannel": 1, "channelCount": 100,
+            "description": description, "device": pty.device, "speed": 115200,
+            "header": "HDR", "footer": ""}]}
+
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", config("a"))
+        fppd.start(preload=[shims.build("co_slowwrite.c")], extra_env={
+            "CO_SLOWWRITE_DEVICE": "/dev/" + pty.device, "CO_SLOWWRITE_MS": "120"})
+        range_on(fppd, 100, 0x40)
+
+        def frames_since(mark):
+            with pty.lock:
+                return pty.data.count(b"HDR" + bytes([0x40]) * 100, mark)
+
+        fppd.wait_for(lambda: frames_since(0) >= 2, what="GenericSerial frames on the pty")
+        for i in range(5):
+            time.sleep(1.1)  # a save in a later second, as a person makes it
+            with pty.lock:
+                mark = len(pty.data)
+            fppd.write("config/co-other.json", config(f"save {i}"))
+            fppd.wait_for(lambda: frames_since(mark) >= 4, timeout=10,
+                          what=f"frames after save {i + 1}")
+
+
+@pytest.mark.parametrize("pixels", [171, 170])
+def test_lor_enhanced_unit_with_a_blank_start_pixel(fppd, pixels):
+    """A LOR Enhanced unit whose LOR Start Pixel was left blank (saved as
+    null) counts from pixel 1: at 171 pixels it is refused as more than 510
+    channels, with a warning, and at 170 (the control) it is sent.
+
+    Regression: c09c7aa03. A blank start pixel read as 0, so the 510-channel
+    check worked out (0 - 1) * 3 + 513 = 510 and let 171 pixels through;
+    the first frame then wrote 3 bytes past the unit's 518-byte packet
+    buffer, a heap-buffer-overflow.
+    """
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", {"channelOutputs": [{
+            "type": "LOREnhanced", "enabled": 1, "startChannel": 1, "channelCount": 513,
+            "device": pty.device, "speed": 1000000,
+            "units": [{"unitId": 1, "numOfPixels": pixels, "lorStartPixel": None,
+                       "fppStartAddr": 1}],
+        }]})
+        fppd.start()
+        fppd.command("Test Start", "100", "RGB Cycle", "1-513", "R-G-B")
+
+        def refused():
+            return [w for w in fppd.get("/fppd/warnings")
+                    if "more than 510 channels" in str(w)]
+
+        if pixels > 170:
+            fppd.wait_for(refused, what="the more-than-510-channels warning")
+            time.sleep(2)
+            assert 1 not in lor_enhanced_state(pty.messages()), "the refused unit was sent"
+        else:
+            fppd.wait_for(lambda: lor_enhanced_state(pty.messages()).get(1), what="unit 1's pixels")
+            assert not refused(), "170 pixels from pixel 1 were refused"
+
+
+def test_usb_pixelnet_with_more_than_one_universe(fppd):
+    """A USB Pixelnet output configured (by hand or through the API) for more
+    channels than one Pixelnet universe holds sends 4096-channel packets and
+    fppd lives.
+
+    Regression: 717c39717. RawSendData() copied all 6000 channels into the
+    4104-byte packet buffer, over the members after it and past the end of
+    the object: a heap-buffer-overflow on the first frame.
+    """
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", {"channelOutputs": [{
+            "type": "Pixelnet-Open", "enabled": 1, "startChannel": 1, "channelCount": 6000,
+            "device": pty.device}]})
+        fppd.start()
+        range_on(fppd, 6000, 0x40)
+        header = bytes([0xAA, 0x55, 0x55, 0xAA, 0x15, 0x5D])
+
+        def packets():
+            with pty.lock:
+                data = bytes(pty.data)
+            return [p for p in data.split(header)[1:-1]]
+
+        fppd.wait_for(lambda: any(p == bytes([0x40]) * 4096 for p in packets()),
+                      what="a full 4096-channel Pixelnet packet")
+        time.sleep(2)
+        bad = [len(p) for p in packets() if len(p) != 4096]
+        assert not bad, f"packets that are not 4096 channels: {bad[:10]}"
+
+
+def set_range(fppd, first, last, value):
+    """Hold channels first..last (1-based) at value with an overlay range."""
+    fppd.request("PUT", f"/overlays/range/{first}-{last}", {"Value": value})
+
+
+def lor_output(pty, channels, first_unit=1):
+    return {"channelOutputs": [{
+        "type": "LOR", "enabled": 1, "startChannel": 1, "channelCount": channels,
+        "device": pty.device, "speed": 19200, "firstControllerId": first_unit}]}
+
+
+def lor_commands(pty):
+    """The LOR intensity commands sent so far, as (unit, level, circuit)."""
+    return [(m[0], m[2], m[3] & 0x0F) for m in pty.messages()
+            if len(m) == 4 and m[1] == 0x03 and m[3] & 0x80]
+
+
+def lor_heartbeats(pty):
+    return sum(1 for m in pty.messages() if m == b"\xff\x81\x56")
+
+
+def test_lor_sends_channels_that_start_off(fppd):
+    """The first frames send every LOR channel, including those that are
+    off: each of 32 channels held at 0 gets the "off" level (0xF0), on both
+    units.
+
+    Regression: 817463732. The last-sent table started at 0 and only
+    changes were sent, so a channel that should be off was never sent, and
+    a unit left on (by an earlier run, or by xLights) stayed on.
+    """
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", lor_output(pty, 32))
+        fppd.start()
+        set_range(fppd, 33, 33, 0)  # keeps the output thread sending; LOR's channels stay 0
+
+        def off():
+            return {(u, c) for u, level, c in lor_commands(pty) if level == 0xF0}
+
+        want = {(u, c) for u in (1, 2) for c in range(16)}
+        deadline = time.monotonic() + 5
+        while not want <= off() and time.monotonic() < deadline:
+            time.sleep(0.2)
+        assert want <= off(), f"channels never sent as off: {sorted(want - off())}"
+
+
+def test_lor_heartbeat_runs_while_idle(fppd):
+    """With nothing playing, the LOR output still sends its heartbeat (about
+    every 300 ms), so units stay connected between sequences.
+
+    Regression: 817463732. The heartbeat was only sent from SendData(),
+    which stops a few seconds after output goes idle; units dropped to "not
+    connected" and missed the first commands of the next sequence.
+    """
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", lor_output(pty, 16))
+        fppd.start()
+        time.sleep(6)  # well past the output thread winding down
+        before = lor_heartbeats(pty)
+        time.sleep(2)
+        sent = lor_heartbeats(pty) - before
+    assert sent >= 4, f"{sent} heartbeats in 2 s of idle"
+
+
+def test_lor_keeps_to_the_line_rate(fppd):
+    """512 LOR channels that all change every frame are sent no faster than
+    a 19200 baud line carries them (1920 bytes a second), instead of
+    building a backlog behind the music.
+
+    Regression: 817463732. Every changed channel was written every frame,
+    six bytes each: about 30 KB a second here, sixteen times the line.
+    """
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", lor_output(pty, 512))
+        fppd.start()
+        fppd.command("Test Start", "50", "RGB Cycle", "1-512", "R-G-B")
+        time.sleep(2)
+        with pty.lock:
+            start = len(pty.data)
+        t0 = time.monotonic()
+        time.sleep(3)
+        with pty.lock:
+            sent = len(pty.data) - start
+        rate = sent / (time.monotonic() - t0)
+    assert lor_commands(pty), "no LOR commands at all"
+    assert rate <= 1.3 * 1920, f"{rate:.0f} bytes/s on a 1920 bytes/s line"
+
+
+def test_lor_channels_past_unit_f0_are_dropped(fppd):
+    """Channels that would need a LOR unit ID above 0xF0 (the last one a
+    unit can have) are not sent; they don't overwrite unit 0xF0's circuits.
+    Unit 240 has channels 1-16 at 0, and channels 17-32 at full would be
+    unit 241.
+
+    Regression: 817463732. Unit IDs were capped at 0xF0, so channels 17-32
+    went to unit 0xF0 as well, and its circuits showed them (level 0x01).
+    """
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", lor_output(pty, 32, first_unit=240))
+        fppd.start()
+        set_range(fppd, 17, 32, 255)
+        fppd.wait_for(lambda: [c for c in lor_commands(pty) if c[0] == 0xF0],
+                      what="commands for unit 0xF0")
+        time.sleep(2)
+        cmds = lor_commands(pty)
+    full = sorted({c for u, level, c in cmds if u == 0xF0 and level == 0x01})
+    assert not full, f"unit 0xF0 circuits set to full by channels past it: {full}"
+    beyond = sorted({u for u, _, _ in cmds if u > 0xF0})
+    assert not beyond, f"commands for unit IDs past 0xF0: {beyond}"
+
+
+def test_lor_intensity_is_a_whole_percent(fppd):
+    """LOR intensity goes out as a whole percent, 228 - 2 * percent, with
+    0xF0 for off and 0x01 for full: channel values 1, 64, 128 and 254 are
+    levels 0xF0, 0xB2, 0x80 and 0x01.
+
+    Regression: 891455ae7 (the table 817463732 had replaced with a linear
+    map over 0xF0..0x01, which put 64 at 0xB4 and 128 at 0x78).
+    """
+    values = [1, 64, 128, 254]
+    want = [0xF0, 0xB2, 0x80, 0x01]
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", lor_output(pty, 16))
+        fppd.start()
+        for ch, v in enumerate(values, 1):
+            set_range(fppd, ch, ch, v)
+
+        def latest():
+            last = {}
+            for u, level, c in lor_commands(pty):
+                if u == 1:
+                    last[c] = level
+            return [last.get(c) for c in range(len(values))]
+
+        deadline = time.monotonic() + 5
+        while latest() != want and time.monotonic() < deadline:
+            time.sleep(0.2)
+        got = latest()
+    assert got == want, f"levels {[hex(v) if v is not None else None for v in got]}"

@@ -99,6 +99,11 @@ def test_generic_serial_sends_whole_frames_to_a_slow_reader(fppd):
     write(); once the tty buffer had less room than a frame, the tail was
     dropped and the next frame's header followed a truncated one, which a
     receiver can't resynchronise from.
+
+    Regression: 01b575503 (verify with --flavor tsan). StartOutputThread()
+    polled m_threadIsRunning and m_runThread with no lock while the new
+    worker set them under m_sendLock; TSan reported it as the output
+    started.
     """
     # 2000 channels at 20 fps is about 40 KB/s and the reader takes 20 KB/s:
     # the pty's buffer fills, but a frame's worth of room comes free well
@@ -224,7 +229,7 @@ def test_destination_slower_than_the_frame_rate(fppd):
     (here 1500 universes of E1.31, which a sanitizer build sends slowly) keeps
     getting whole frames, and the rest of the show keeps running.
 
-    Regression: b95acec2f. When SendData() stopped
+    Regression: b95acec2f (verify with --flavor tsan). When SendData() stopped
     waiting for a slow destination after 50 ms, the next frame's PrepData()
     rewrote that destination's headers, iovecs and dedup copy while the
     worker was still sending them. On the wire that is packets carrying half
@@ -253,10 +258,10 @@ def virtual_display(fppd, map_lines, channels):
         "colorOrder": "RGB", "port": VD_PORT}]})
 
 
-def sse_messages(seconds):
+def sse_messages(seconds, port=VD_PORT):
     """The color:location data lines the display streams in `seconds`."""
     import socket
-    s = socket.create_connection(("127.0.0.1", VD_PORT), timeout=2)
+    s = socket.create_connection(("127.0.0.1", port), timeout=2)
     s.settimeout(0.2)
     data = b""
     end = time.monotonic() + seconds
@@ -273,11 +278,11 @@ def sse_messages(seconds):
             if l.startswith("data: ") and len(l) > len("data: ")]
 
 
-def wait_for_display(fppd):
+def wait_for_display(fppd, port=VD_PORT):
     import socket
     def up():
         try:
-            socket.create_connection(("127.0.0.1", VD_PORT), timeout=1).close()
+            socket.create_connection(("127.0.0.1", port), timeout=1).close()
             return True
         except OSError:
             return False
@@ -326,7 +331,9 @@ def test_virtual_display_closes_reset_connections(fppd):
 
     Regression: c34ed8e39. A connection whose recv() failed (a client reset)
     was dropped from the list without being closed, leaking its descriptor
-    and leaving the socket half open, on every reset.
+    and leaving the socket half open, on every reset. Only the select
+    thread's recv() leaked, and it watches a client only once its 1 s
+    select timeout has rebuilt the fd set, so each client is held 1.2 s.
     """
     import socket
     import struct
@@ -349,7 +356,9 @@ def test_virtual_display_closes_reset_connections(fppd):
     before = sockets()
     for _ in range(5):
         c = socket.create_connection(("127.0.0.1", VD_PORT), timeout=2)
-        time.sleep(0.3)
+        # Longer than the select thread's 1 s timeout, so it has rebuilt its
+        # fd set with this client and sees the reset arrive.
+        time.sleep(1.2)
         c.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
         c.close()  # RST
     time.sleep(2)
@@ -406,6 +415,244 @@ def test_virtual_display_skips_a_pixel_outside_the_channel_buffer(fppd):
     msgs = sse_messages(3)
     assert any(m.startswith(want + ":") for m in msgs), f"no {want!r} pixel in {msgs[-3:]}"
     assert fppd.get("/fppd/status")["status_name"]
+
+
+def test_virtual_display_with_an_empty_map_is_refused(fppd):
+    """An HTTP virtual display whose map file holds no header line (only a
+    comment) is refused with a warning, and fppd starts and stays up.
+
+    Regression: 8b6b4e36f. InitializePixelMap() succeeded without
+    allocating anything, the screen size came out as (-1) * (-1) * 3, and
+    Init() then zeroed 3 bytes at a null buffer: fppd died at startup, and
+    again at every start after, since the config stays.
+    """
+    fppd.write("config/virtualdisplaymap", "# nothing mapped yet\n")
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "HTTPVirtualDisplay", "enabled": 1, "startChannel": 1,
+        "channelCount": 3, "width": -1, "height": -1, "pixelSize": 1,
+        "colorOrder": "RGB", "port": VD_PORT}]})
+    fppd.start()
+    fppd.wait_for(lambda: any("could not initialize pixel map" in w for w in warnings(fppd)),
+                  timeout=10, what="the could-not-initialize warning")
+    range_on(fppd, 3, 200)
+    time.sleep(2)
+
+
+def test_virtual_display_skips_a_short_custom_colour(fppd):
+    """A map line whose custom colour is not a whole "#RRGGBB" is skipped;
+    the display opens its port and streams the other pixels.
+
+    Regression: 8b6b4e36f. std::stoi() of the short colour threw out of
+    Init(); the loader caught it, so fppd lived, but the display never
+    opened its port.
+    """
+    virtual_display(fppd, ["100,100", "2,2,0,3,RGB", "4,4,3,3,#12"], 6)
+    fppd.start()
+    wait_for_display(fppd)
+    fppd.request("PUT", "/overlays/range/1-3", {"Value": 200})
+    want = B64[200 >> 2] * 3
+    msgs = sse_messages(3)
+    assert any(m.startswith(want + ":") for m in msgs), f"no {want!r} pixel in {msgs[-3:]}"
+
+
+def ddp_and_preview(fppd, pixels=50):
+    """A DDP output to a DdpReceiver and an HTTP virtual display of
+    `pixels` pixels over the same channels."""
+    fppd.write("config/co-universes.json", ddp_output(pixels * 3))
+    virtual_display(fppd, ["100,100"] + [f"{i % 10 * 10},{i // 10 * 10},{i * 3},3,RGB"
+                                         for i in range(pixels)], pixels * 3)
+    fppd.settings(DisableFakeNetworkBridges="1")
+
+
+def test_a_trickling_preview_client_does_not_hold_up_output(fppd):
+    """A virtual display preview client that takes a frame a few bytes at a
+    time doesn't hold up the other outputs: DDP keeps its frame rate.
+
+    co_sseclient.so makes every write to the preview client take at most
+    16 bytes, with an EAGAIN and a 50 ms poll between, which a real slow
+    reader never produces (its frames are skipped whole).
+
+    Regression: 2504cf877. A client part way through a chunk was waited for
+    with poll(250 ms) for as long as each poll made progress, on the output
+    thread with outputThreadLock held: about a second a frame here, and
+    every output stopped with it.
+    """
+    import socket
+    import shims
+    ddp_and_preview(fppd)
+    with DdpReceiver(150) as rx:
+        fppd.start(preload=[shims.build("co_sseclient.c")],
+                   extra_env={"CO_SSE_PORT": str(VD_PORT), "CO_SSE_MODE": "trickle"})
+        wait_for_display(fppd)
+        fppd.command("Test Start", "100", "RGB Cycle", "1-150", "R-G-B")
+        assert rx.wait_frames(10, timeout=10), "no DDP frames"
+        client = socket.create_connection(("127.0.0.1", VD_PORT), timeout=2)
+        try:
+            time.sleep(1)
+            since = time.monotonic()
+            time.sleep(5)
+            times = [t for t, _ in rx.snapshot(since)]
+        finally:
+            client.close()
+    gaps = [b - a for a, b in zip(times, times[1:])]
+    assert gaps and max(gaps) < 0.3, \
+        f"DDP stalled {max(gaps) * 1000:.0f} ms behind the slow client" if gaps else "no DDP frames"
+
+
+def test_a_preview_client_that_takes_nothing_is_dropped(fppd):
+    """A virtual display preview client that never takes a byte is closed
+    after a few seconds, instead of being kept, and resynced, forever.
+
+    Regression: 2504cf877. A client whose every write failed with EAGAIN at
+    byte 0 had each frame dropped and was never closed.
+    """
+    import socket
+    import shims
+    ddp_and_preview(fppd)
+    with DdpReceiver(150):
+        fppd.start(preload=[shims.build("co_sseclient.c")],
+                   extra_env={"CO_SSE_PORT": str(VD_PORT), "CO_SSE_MODE": "stall"})
+        wait_for_display(fppd)
+        fppd.command("Test Start", "100", "RGB Cycle", "1-150", "R-G-B")
+        client = socket.create_connection(("127.0.0.1", VD_PORT), timeout=2)
+        client.settimeout(1)
+        closed = False
+        deadline = time.monotonic() + 20
+        try:
+            while time.monotonic() < deadline and not closed:
+                try:
+                    closed = client.recv(65536) == b""
+                except socket.timeout:
+                    pass
+                except ConnectionError:
+                    closed = True
+        finally:
+            client.close()
+    assert closed, "fppd kept a client that took nothing for 20 s"
+
+
+def twinkly_near_the_top(fppd, last):
+    """co-universes.json: a DDP output to the receiver, and a Twinkly of
+    1800 channels (two 900-channel ports) whose last channel is `last`."""
+    cfg = ddp_output(CHANNELS)
+    cfg["channelOutputs"][0]["channelCount"] = 8388608
+    cfg["channelOutputs"][0]["universes"].append({
+        "active": 1, "description": "twinkly", "id": 0, "startChannel": last - 1800 + 1,
+        "channelCount": 1800, "type": 8, "address": "192.0.2.8", "priority": 0,
+        "monitor": 0, "deDuplicate": 0})
+    fppd.write("config/co-universes.json", cfg)
+    fppd.settings(DisableFakeNetworkBridges="1")
+
+
+def ddp_still_sends(fppd):
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        range_on(fppd, 10, 42)
+        fppd.wait_for(lambda: rx.last() is not None and rx.last()[:10] == bytes([42] * 10),
+                      timeout=10, what="the DDP output to send")
+    disabled = [w for w in warnings(fppd) if "Output disabled" in w]
+    assert not disabled, f"outputs disabled: {disabled}"
+
+
+def test_twinkly_near_the_top_of_the_channel_buffer_keeps_the_udp_outputs(fppd):
+    """A Twinkly whose 1800 channels (two 900-channel ports) end one
+    channel below the top of the channel buffer loads, and the DDP output
+    next to it keeps sending, with no output-disabled warning.
+
+    Regression: 346a43e7e. Twinkly reported its range as its channel count
+    times its port count (1800 x 2 here), so the loader's range check failed
+    the whole UDP output and the DDP controller went dark.
+    """
+    twinkly_near_the_top(fppd, 8388607)
+    ddp_still_sends(fppd)
+
+
+def warning_ids(fppd, wid):
+    return [w.get("message", "") for w in fppd.get("/fppd/status").get("warningInfo", [])
+            if w.get("id") == wid]
+
+
+def test_removing_an_unreachable_controller_takes_its_warning_down(fppd):
+    """A controller that never answers raises the unreachable-controller
+    warning (27); saving the outputs without it takes the warning down.
+
+    Regression: a45599933. Close() never removed warning 27, and the
+    replacement output, which no longer pings that controller, never would:
+    the banner for a controller no longer in the config stayed until fppd
+    restarted.
+    """
+    cfg = ddp_output(CHANNELS, address="10.77.0.2")   # nothing answers here
+    cfg["channelOutputs"][0]["universes"][0]["monitor"] = 1
+    fppd.write("config/co-universes.json", cfg)
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: warning_ids(fppd, 27), timeout=120, interval=1,
+                  what="the unreachable-controller warning")
+    time.sleep(1.1)  # a save in a later second, as a person makes it
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS, address="127.0.0.2"))
+    fppd.wait_for(lambda: not warning_ids(fppd, 27), timeout=15, interval=0.5,
+                  what="the warning to come down once the controller is gone")
+
+
+def test_fixing_the_output_takes_the_local_drop_warning_down(fppd):
+    """An output whose interface drops packets in its qdisc (ethfpp0, a
+    dummy with a tbf qdisc too small for a frame) raises the local-drop
+    warning (69) at the second stats check; saving the outputs to send
+    elsewhere takes it down.
+
+    Regression: a45599933. The warning was removed only by a later clean
+    check of the same output instance; a reload replaced it with one that
+    starts out not knowing the warning is up, so the banner stayed until
+    fppd restarted.
+    """
+    import subprocess
+
+    def run(*cmd):
+        return subprocess.run(cmd, capture_output=True, text=True)
+
+    run("ip", "link", "del", "ethfpp0")
+    if run("ip", "link", "add", "ethfpp0", "type", "dummy").returncode:
+        pytest.skip("cannot add a dummy interface")
+    try:
+        run("ip", "addr", "add", "10.66.0.1/24", "dev", "ethfpp0")
+        run("ip", "link", "set", "ethfpp0", "up")
+        r = run("tc", "qdisc", "add", "dev", "ethfpp0", "root", "tbf", "rate", "1mbit",
+                "burst", "2kb", "limit", "3kb")
+        if r.returncode:
+            pytest.skip(f"tbf: {r.stderr.strip()}")
+        cfg = e131_universes(20, address="10.66.0.2", type=1)
+        cfg["channelOutputs"][0].update({"interface": "ethfpp0", "pacingRate": 0})
+        fppd.write("config/co-universes.json", cfg)
+        fppd.settings(DisableFakeNetworkBridges="1")
+        fppd.start()
+        fppd.command("Test Start", "100", "RGB Cycle", "1-10200", "R-G-B")
+        fppd.wait_for(lambda: warning_ids(fppd, 69), timeout=240, interval=2,
+                      what="the local-drop warning")
+        time.sleep(1.1)  # a save in a later second, as a person makes it
+        fppd.write("config/co-universes.json", ddp_output(CHANNELS, address="127.0.0.2"))
+        fppd.wait_for(lambda: not warning_ids(fppd, 69), timeout=15, interval=0.5,
+                      what="the local-drop warning to come down after the save")
+    finally:
+        run("ip", "link", "del", "ethfpp0")
+
+
+def test_an_output_type_with_a_percent_is_logged_as_it_is(fppd):
+    """An output type fppd has no plugin for is logged by name, '%'
+    characters and all.
+
+    Regression: 152d19dc9. The loader passed the warning it had built as
+    the printf format of LogErr(), so "%d%d%x" in a type name was replaced
+    by whatever the missing arguments' registers held. (%d rather than %s,
+    so the parent prints garbage instead of faulting: the red is the
+    assertion.)
+    """
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "Bogus%d%d%x", "enabled": 1, "startChannel": 1, "channelCount": 3}]})
+    fppd.start()
+    fppd.wait_for(lambda: "Bogus" in fppd.log(), timeout=10, what="the loader to log the type")
+    line = [l for l in fppd.log().splitlines() if "Could not create output type" in l]
+    assert line, "no could-not-create line logged"
+    assert "Could not create output type Bogus%d%d%x" in line[0], line[0]
 
 
 def model_pixel_strings(port):

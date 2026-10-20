@@ -4,7 +4,10 @@ Outputs point at 127.0.0.1 and a udp.Listener counts what arrives. Test mode
 keeps channel data flowing at a steady rate while a scenario saves configs.
 """
 
+import os
 import time
+
+import pytest
 
 import shims
 from udp import Listener
@@ -87,7 +90,12 @@ def test_controller_that_comes_up_late_gets_the_show(fppd):
     output with a warning once its pings fail, and picked back up -- data
     flowing, warning gone -- once it answers again, without any reload.
     (fppd pings every 15 s and drops a host after two failed pings and a
-    failed HTTP probe, so this takes a minute or so.)"""
+    failed HTTP probe, so this takes a minute or so.)
+
+    Regression: bc0747e90 (verify with --flavor tsan). The ping thread
+    flipped each output's plain bool `valid` in SetHostValid() while the
+    output thread read it in PrepData(): a data race TSan reports when the
+    controller comes back."""
     import subprocess
 
     from ddp import DdpReceiver
@@ -160,6 +168,223 @@ def test_controllers_that_answer_stay_up_when_the_ping_thread_is_late(fppd):
         time.sleep(0.5)
     lost = [line for line in fppd.log().splitlines() if "Could not ping host" in line]
     assert not lost, "pings that were answered counted as lost:\n" + "\n".join(lost[:10])
+
+
+def ddp_universes(description, threaded=None, channels=150):
+    """co-universes.json: one DDP output to a DdpReceiver on this machine;
+    "threaded" is the output's send style (0: sent inline, not by workers)."""
+    from show import ddp_output
+    config = ddp_output(channels)
+    config["channelOutputs"][0]["universes"][0]["description"] = description
+    if threaded is not None:
+        config["channelOutputs"][0]["threaded"] = threaded
+    return config
+
+
+def reloads(fppd):
+    """How many times fppd has loaded the UDP output, startup included (a
+    save can reload it more than once)."""
+    return fppd.log().count("Calling Init() on UDPOutput output")
+
+
+def test_reload_waits_for_an_inline_blank(fppd):
+    """Saving the E1.31 outputs while another thread sends a blank inline
+    (the output thread has gone idle, so "All Lights Off" drives the outputs
+    itself) neither frees the output under that send nor wedges.
+
+    The DDP output is unthreaded, so the blank's sendmmsg() runs on the HTTP
+    thread, and co_slowsendmmsg.so holds it there 40 ms on every thread but
+    the output thread's. Two threads post blanks back to back across 15
+    saves.
+
+    Regression: f7aa76e0a. SendBlankingData() sent inline holding no output
+    lock, and the reload, which excluded only the output thread, deleted the
+    UDPOutput while the blank was inside its SendMessages(): a
+    heap-use-after-free.
+    """
+    import threading
+
+    from ddp import DdpReceiver
+
+    fppd.write("config/co-universes.json", ddp_universes("a", threaded=0))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with DdpReceiver(150):
+        fppd.start(preload=[shims.build("co_slowsendmmsg.c")], extra_env={
+            "CO_SLOWSENDMMSG_THREAD": "!FPP-ChannelOut", "CO_SLOWSENDMMSG_MS": "40"})
+        time.sleep(4)  # nothing is lit: the output thread winds down and exits
+        stop = threading.Event()
+        errors = []
+
+        def blank():
+            while not stop.is_set():
+                try:
+                    fppd.command("All Lights Off", timeout=20)
+                except Exception as e:  # noqa: BLE001 -- reported below
+                    errors.append(e)
+                    return
+
+        threads = [threading.Thread(target=blank, daemon=True) for _ in range(2)]
+        for t in threads:
+            t.start()
+        try:
+            for i in range(15):
+                time.sleep(1.1)  # a save in a later second, as a person makes it
+                fppd.check_alive()
+                fppd.write("config/co-universes.json", ddp_universes(f"save {i}", threaded=0))
+        finally:
+            stop.set()
+            for t in threads:
+                t.join(30)
+        fppd.check_alive()
+        assert not errors, f"All Lights Off failed: {errors[0]}"
+    assert reloads(fppd) >= 16, f"only {reloads(fppd) - 1} reloads for 15 saves"
+
+
+def test_reload_does_not_lose_a_send_workers_shutdown(fppd):
+    """Saving the E1.31 outputs replaces a threaded output whose send worker
+    is just about to wait for work, and output carries on after every save.
+
+    co_slowcondwait.so holds a send worker 25 ms between finishing a send
+    and waiting for the next, with the work mutex held: the window a worker
+    finishing a slow send to a dead controller sits in, and the moment a
+    reload gets outputThreadLock. Ten saves, each followed by frames.
+
+    Regression: e354df642. ~UDPOutput cleared runWorkThreads and notified
+    without workMutex, and the worker waited with no predicate: a worker in
+    that window missed the notify and slept forever, while the destructor
+    spun on it holding outputThreadLock. The reload wedged and no frame was
+    sent again.
+    """
+    from ddp import DdpReceiver
+
+    fppd.write("config/co-universes.json", ddp_universes("a"))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with DdpReceiver(150) as rx:
+        fppd.start(preload=[shims.build("co_slowcondwait.c")], extra_env={
+            "CO_SLOWCONDWAIT_THREAD": "FPP-UDPWork", "CO_SLOWCONDWAIT_MS": "25"})
+        fppd.request("PUT", "/overlays/range/1-150", {"Value": 42})
+        assert rx.wait_frames(5, timeout=10), "no DDP frames before the first save"
+        for i in range(10):
+            time.sleep(1.1)  # a save in a later second, as a person makes it
+            fppd.write("config/co-universes.json", ddp_universes(f"save {i}"))
+            time.sleep(0.5)
+            since = time.monotonic()
+            assert rx.wait_frames(5, timeout=5, since=since), \
+                f"no DDP frames within 5 s of save {i + 1}: the reload wedged"
+    assert reloads(fppd) >= 11, f"only {reloads(fppd) - 1} reloads for 10 saves"
+
+
+def test_a_controller_that_stops_answering_loses_all_its_universes(fppd):
+    """A controller configured as three single-universe E1.31 entries that
+    never answers a ping (co_net_noecho.so hides its replies; nothing
+    answers its HTTP probe either) is dropped from the output for all three
+    universes, not just the first. A fourth universe, to a controller that
+    answers, keeps sending (and shows the listeners hear fppd).
+
+    Regression: 16a12ff2f. PingManager keeps one callback per host, and
+    UDPOutput registered one per entry, so only the first entry's universe
+    was ever marked down: universes 2 and 3 kept sending to the dead
+    controller.
+    """
+    from packets import E131_PORT, parse_e131
+
+    dead, alive = "127.0.0.7", "127.0.0.8"
+    entries = [(u, dead) for u in (1, 2, 3)] + [(4, alive)]
+    fppd.write("config/co-universes.json", {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 2040,
+        "universes": [{"active": 1, "description": f"universe {u}", "id": u,
+                       "startChannel": 1 + 510 * (u - 1), "channelCount": 510, "type": 1,
+                       "address": a, "priority": 0, "monitor": 1, "deDuplicate": 0}
+                      for u, a in entries],
+    }]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+
+    def universes(listener, since):
+        with listener.lock:
+            sent = [parse_e131(p) for t, p in listener.packets if t >= since]
+        return sorted({p["universe"] for p in sent if p})
+
+    with Listener(E131_PORT, host=dead) as to_dead, Listener(E131_PORT, host=alive) as to_alive:
+        fppd.start(preload=[shims.build("co_net_noecho.c")], extra_env={"CO_NOECHO_ADDR": dead})
+        fppd.command("Test Start", "100", "RGB Cycle", "1-2040", "R-G-B")
+        fppd.wait_for(lambda: "removing from output" in fppd.log(), timeout=60, interval=0.5,
+                      what="fppd to drop the controller")
+        time.sleep(1)
+        since = time.monotonic()
+        time.sleep(3)
+        assert universes(to_alive, since) == [4], "the controller that answers stopped getting data"
+        assert not universes(to_dead, since), \
+            f"universes {universes(to_dead, since)} still sent to the dropped controller"
+
+
+def test_running_out_of_sockets_does_not_end_fppd(fppd):
+    """When fppd can't open a socket for an output (out of descriptors:
+    co_net_failsock.so fails the output thread's UDP socket() calls with
+    EMFILE for two seconds), it logs the failure and carries on.
+
+    Regression: 43986b412. UDPOutput::createSocket() called exit(1) when
+    socket() failed, and the whole show stopped.
+    """
+    from ddp import DdpReceiver
+
+    flag = os.path.join(fppd.media, "tmp", "failsock")
+    fppd.write("config/co-universes.json", ddp_universes("a"))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    open(flag, "w").close()  # the output thread makes its socket on its first frame
+    with DdpReceiver(150):
+        fppd.start(preload=[shims.build("co_net_failsock.c")], extra_env={
+            "CO_FAILSOCK_FLAG": flag, "CO_FAILSOCK_THREAD": "FPP-ChannelOut"})
+        fppd.request("PUT", "/overlays/range/1-150", {"Value": 42})
+        time.sleep(2)
+        os.unlink(flag)
+        time.sleep(1)
+        assert fppd.get("/fppd/status")["status_name"]
+        assert "Error opening datagram socket" in fppd.log(), "the socket() failure was never hit"
+
+
+def test_a_udp_output_that_fails_to_load_leaves_multisync_watching_addresses(fppd):
+    """A UDP output whose config can't be read (a universe type that isn't
+    a number) fails to load without taking MultiSync's network callback
+    with it: an address added afterwards still shows up as this player's in
+    /api/fppd/multiSyncSystems.
+
+    Regression: e354df642. networkCallbackId started at 0, which is a real
+    id (the first callback registered, MultiSync's); Init() threw before
+    registering its own, and the destructor removed MultiSync's.
+    """
+    import subprocess
+
+    def ip(*args):
+        return subprocess.run(["ip", *args], capture_output=True, text=True)
+
+    fppd.write("config/co-universes.json", {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 510,
+        "universes": [{"active": 1, "description": "bad", "id": 1, "startChannel": 1,
+                       "channelCount": 510, "type": "x", "address": "127.0.0.2",
+                       "priority": 0, "monitor": 0, "deDuplicate": 0}]}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    ip("link", "del", "fpptd3")
+    if ip("link", "add", "fpptd3", "type", "dummy").returncode:
+        pytest.skip("cannot add a dummy interface")
+    try:
+        ip("link", "set", "fpptd3", "up")
+        fppd.start()
+
+        def addresses():
+            out = []
+            for s in fppd.get("/fppd/multiSyncSystems").get("systems", []):
+                if s.get("local"):
+                    out.append(s.get("address"))
+            return out
+
+        time.sleep(2)
+        assert "Could not initialize output type UDPOutput" in fppd.log(), "the output's Init() didn't fail"
+        assert "10.68.0.1" not in addresses()
+        ip("addr", "add", "10.68.0.1/24", "dev", "fpptd3")
+        fppd.wait_for(lambda: "10.68.0.1" in addresses(), timeout=10, interval=0.5,
+                      what="the new address among this player's systems")
+    finally:
+        ip("link", "del", "fpptd3")
 
 
 class EchoRequests:

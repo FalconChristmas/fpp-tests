@@ -9,6 +9,7 @@ status line, and takes realtime frames on UDP 7777 (v3 packets: 0x03, the
 Every call and every frame is appended to LOGFILE as a JSON line. The first
 REJECT_VERIFIES verify calls are refused, as a light refuses a stale token;
 writing a count to LOGFILE.reject refuses that many more, from the next one.
+While LOGFILE.refuse-logins exists, logins fail with HTTP 500.
 """
 
 import base64
@@ -49,7 +50,9 @@ class H(http.server.BaseHTTPRequestHandler):
         token = self.headers.get("X-Auth-Token")
         log(ev="http", method="POST", path=self.path, token=token, body=body)
         ok = token is not None and token == state["token"]
-        if self.path == "/xled/v1/login":
+        if self.path == "/xled/v1/login" and os.path.exists(LOG + ".refuse-logins"):
+            self.reply({"code": 1105}, 500)
+        elif self.path == "/xled/v1/login":
             state["token"] = base64.b64encode(os.urandom(8)).decode()
             self.reply({"authentication_token": state["token"], "authentication_token_expires_in": 14400,
                         "challenge-response": "00", "code": 1000})

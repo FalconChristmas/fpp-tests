@@ -7,6 +7,7 @@ quirks -- is out of reach here; test_framebuffer.py covers fbtft on a Pi.
 The KMS path (KMSFrameBuffer) needs a DRM device and is not reached.
 """
 
+import os
 import time
 
 import pytest
@@ -257,3 +258,105 @@ def test_a_missing_device_is_reported(fppd):
                               (x if isinstance(x, str) else x.get("message", "") for x in
                                fppd.get("/fppd/status").get("warnings", []))),
                   timeout=10, what="the could-not-open warning")
+
+
+def virtual_display(device="fb1", model="", description=""):
+    """A Virtual Display output: on `device` (auto-creating the "FB - fb1"
+    model) when `model` is empty, otherwise drawing into that model."""
+    return {"channelOutputs": [{
+        "enabled": 1, "type": "VirtualDisplay", "startChannel": 1,
+        "channelCount": 8388608, "modelName": model, "invert": False,
+        "flipHorizontal": False, "device": device, "description": description,
+        "width": W, "height": H, "pixelSize": 1}]}
+
+
+def rgbw_model(fppd, name="W", width=16, height=8):
+    """A Channel model with four channels a node, as an RGBW model is."""
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [{
+        "Name": name, "Type": "Channel", "StartChannel": 1,
+        "ChannelCount": width * height * 4, "ChannelCountPerNode": 4,
+        "Orientation": "horizontal", "StartCorner": "TL",
+        "StringCount": height, "StrandsPerString": 1}]})
+
+
+def warned(fppd, text):
+    return any(text in w for w in fppd.get("/fppd/status").get("warnings", []))
+
+
+def test_virtual_display_follows_a_model_another_output_recreates(fppd):
+    """A Virtual Display drawing into a model another output auto-creates
+    survives that output's config being saved, which removes the model and
+    creates a new one, and the device shows the map again afterwards.
+
+    Here a Virtual Display on fb1 (co-other.json) creates "FB - fb1", and a
+    second one (co-pwm.json, loaded after it) draws into that model by name.
+    Each save of co-other.json removes and re-creates "FB - fb1". (Both
+    displays draw the same map, so the pixels after the saves don't tell
+    which one drew them.)
+
+    Regression: a9720138d. The second display kept a bare pointer to the
+    model, and its next frame drew into the freed one: a
+    heap-use-after-free on the first frame after the first save.
+    """
+    fb = FakeFb(fppd, width=W, height=H, bpp=32)
+    fppd.write("config/co-other.json", virtual_display(description="a"))
+    fppd.write("config/co-pwm.json", virtual_display(device="", model="FB - fb1"))
+    points = [(10, 5), (40, 20), (63, 0)]
+    lines = [f"{W},{H}"] + [f"{x},{y},{i * 3},3,RGB" for i, (x, y) in enumerate(points)]
+    fppd.write("config/virtualdisplaymap", "\n".join(lines) + "\n")
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fb.start()
+    fppd.command("Test Start", 1000, "RGB Single Color", f"1-{len(points) * 3}", "#FF8001")
+
+    def lit():
+        if fb.mode() is None:
+            return False
+        px = fb.pixels()
+        return all(px[H - 1 - y][x] == (255, 128, 1) for x, y in points)
+
+    fppd.wait_for(lit, timeout=10, what="the mapped pixels lit")
+    for i in range(5):
+        time.sleep(1.1)  # a save in a later second, as a person makes it
+        fppd.write("config/co-other.json", virtual_display(description=f"save {i}"))
+    time.sleep(2)
+    fppd.check_alive()
+    with open(fb.path, "r+b") as f:  # wipe the screen: what is lit next is new
+        f.write(bytes(os.path.getsize(fb.path)))
+    fppd.wait_for(lit, timeout=10, what="the mapped pixels lit after the saves")
+
+
+def test_virtual_display_refuses_a_model_that_is_not_rgb(fppd):
+    """A Virtual Display pointed at a model with four channels a node is
+    refused with a warning, and fppd carries on.
+
+    Regression: a9720138d. Init() handed the model its RGB buffer, and
+    setData() read the model's own 4 bytes a pixel from it: a
+    heap-buffer-overflow at startup.
+    """
+    rgbw_model(fppd)
+    fppd.write("config/co-other.json", virtual_display(device="", model="W"))
+    fppd.write("config/virtualdisplaymap", f"{W},{H}\n2,2,0,3,RGB\n")
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: warned(fppd, "is not an RGB model"), timeout=10,
+                  what="the not-an-RGB-model warning")
+
+
+def test_virtual_matrix_refuses_a_model_that_is_not_rgb(fppd):
+    """A Virtual Matrix (FBMatrix) on a model with four channels a node is
+    refused with a warning, and fppd lives through test mode over it.
+
+    Regression: 965b29b0f. SendData() copied width x height x 4 bytes out
+    of its width x height x 3 buffer into the model every frame: a
+    heap-buffer-overflow on the first frame.
+    """
+    rgbw_model(fppd)
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "enabled": 1, "type": "VirtualMatrix", "startChannel": 1, "channelCount": 16 * 8 * 3,
+        "modelName": "W", "width": 16, "height": 8}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.command("Test Start", 1000, "RGB Cycle", "1-512", "R-G-B")
+    fppd.wait_for(lambda: warned(fppd, "is not an RGB model"), timeout=10,
+                  what="the not-an-RGB-model warning")
+    time.sleep(2)
