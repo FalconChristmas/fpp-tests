@@ -1,4 +1,11 @@
 import os
+import re
+
+
+def only_thread_leaks(report):
+    """A TSan log whose every warning is a thread leak."""
+    kinds = re.findall(r"WARNING: ThreadSanitizer: (.+?) \(", report)
+    return bool(kinds) and all(k == "thread leak" for k in kinds)
 
 
 def test_starts_and_stops_cleanly(fppd):
@@ -73,7 +80,11 @@ def test_failed_startup_after_media_init_exits(fppd):
             raise AssertionError("fppd started although its command socket could not bind")
         fppd.exit_expected = True
         assert fppd.proc.returncode == 1, fppd.tail()
-        reports = fppd.sanitizer_reports()
+        # It leaves through _exit() with no teardown, on purpose, so a worker
+        # that has finished but was never joined (the video input reload
+        # worker) is reported as a thread leak. That is the exit this scenario
+        # asks for, not a defect; a race still fails it.
+        reports = [r for r in fppd.sanitizer_reports() if not only_thread_leaks(r)]
         assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
     finally:
         shutil.rmtree(server, ignore_errors=True)

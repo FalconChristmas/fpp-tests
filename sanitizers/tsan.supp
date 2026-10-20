@@ -160,6 +160,19 @@ called_from_lib:libgstvpx.so
 called_from_lib:libgio-2.0.so
 called_from_lib:libgstdebugutilsbad.so
 called_from_lib:libjpeg.so.62
+# kmssink (the HDMI groups), rtspsrc (cameras) and the RTSP server (playback
+# slots served over RTSP): GRecMutex unlocks attributed to the plugin, as with
+# pipewiresink above, and blocks handed between their own threads and the
+# FPP thread tearing them down, under GLib locks TSan can't see.
+called_from_lib:libgstkms.so
+called_from_lib:libgstrtsp.so
+called_from_lib:libgstrtspserver-1.0.so
+# MP3 parse and decode: mpegaudioparse's and mpg123dec's state is used on the
+# streaming thread and freed by the pipeline teardown (FPP-GstReaper), ordered
+# by GStreamer's stream lock.
+called_from_lib:libgstaudioparsers.so
+called_from_lib:libgstmpg123.so
+called_from_lib:libmpg123.so.0
 # The overlay member's appsink callback reads the state pointer it was given
 # through gst_app_sink_set_callbacks(), whose lock is inside libgstapp and so
 # ignored above: TSan loses that hand-off and reports the read against the
@@ -171,6 +184,11 @@ race:VideoOutputManager::OnOverlaySample
 race:libpipewire-module-client-node.so
 race:libpipewire-module-protocol-native.so
 race:libspa-support.so
+# libproxy, which rtspsrc reaches through GIO's proxy resolver module: the
+# same GRecMutex unlock as above. Loaded with a GIO module, which GIO can
+# unload, so by module too.
+mutex:libpxbackend-1.0.so
+race:libpxbackend-1.0.so
 # libfaketime (the scheduler scenarios' fake clock) takes its own locks.
 deadlock:libfaketimeMT.so.1
 deadlock:gst_pad_pause_task
