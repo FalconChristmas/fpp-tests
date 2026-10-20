@@ -7,6 +7,7 @@ import os
 import signal
 import subprocess
 import threading
+import time
 import zipfile
 
 import pytest
@@ -197,3 +198,40 @@ def _ignore(fn):
         fn()
     except Exception:
         pass
+
+
+def set_setting(fppd, key, value):
+    """Rewrite one key's line in the settings file, as the UI does; fppd
+    watches the file and reloads it."""
+    path = os.path.join(fppd.media, "settings")
+    with open(path) as f:
+        lines = [l for l in f if not l.startswith(f"{key} ")]
+    lines.append(f'{key} = "{value}"\n')
+    with open(path, "w") as f:
+        f.writelines(lines)
+
+
+def test_turning_statistics_on_publishes_after_a_grace_period_once(fppd):
+    """Turning statistics on publishes them about two minutes later, rather
+    than at fppd's next daily ask; a change of mind inside those two minutes
+    supersedes the pending publish, so toggling on, off and on publishes
+    once.
+
+    Feature/regression: b29bd7a62. A player that booted with statistics off
+    had already spent its daily ask, so opting in during setup published
+    nothing for up to a day.
+    """
+    fppd.settings(statsPublish="Disabled")
+    fppd.start()
+    time.sleep(1)
+    for value in ("Enabled", "Disabled", "Enabled"):
+        set_setting(fppd, "statsPublish", value)
+        time.sleep(2)
+    published = 'Publishing statistics because of "Statistics enabled"'
+    fppd.wait_for(lambda: published in fppd.log(), timeout=150, interval=1,
+                  what="the opt-in publish")
+    time.sleep(3)
+    log = fppd.log()
+    assert log.count(published) == 1, f"published {log.count(published)} times"
+    assert log.count("Statistics opt-in superseded by a later change") == 1, \
+        "the first, superseded opt-in was not cancelled"
