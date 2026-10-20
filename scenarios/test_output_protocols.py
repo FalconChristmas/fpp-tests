@@ -371,12 +371,24 @@ def test_e131_sync_leaves_by_the_output_interface(fppd):
 
 
 def socket_fds(pid):
+    """fppd's UDP sockets. TCP is left out: MultiSync discovery opens HTTP
+    connections to any other player it finds on the network, another test
+    run's container included, which says nothing about Art-Net's sockets."""
+    udp = set()
+    for table in ("udp", "udp6"):
+        try:
+            with open(f"/proc/{pid}/net/{table}") as f:
+                next(f)
+                udp.update(line.split()[9] for line in f)
+        except OSError:
+            pass
     n = 0
     for fd in os.listdir(f"/proc/{pid}/fd"):
         try:
-            n += os.readlink(f"/proc/{pid}/fd/{fd}").startswith("socket:")
+            link = os.readlink(f"/proc/{pid}/fd/{fd}")
         except OSError:
-            pass
+            continue
+        n += link.startswith("socket:") and link[8:-1] in udp
     return n
 
 
@@ -458,3 +470,78 @@ def test_mqtt_output_value_and_intensity_tokens(fppd):
     published = [line for line in out.splitlines() if "fpptest/out" in line]
     assert published, "the MQTT output published nothing"
     assert any(line.endswith(" 50 50") for line in published), f"payloads: {published[-5:]}"
+
+
+def test_multicast_follows_a_new_address_that_arrives_before_the_old_goes(fppd):
+    """When the output interface gets its new address before losing the old
+    one (a DHCP lease replacing a fallback address), multicast carries on
+    from the new address. The new address is on another subnet, as a lease
+    replacing a 169.254 address is: one on the same subnet would be a
+    secondary, which the kernel deletes with the primary unless
+    promote_secondaries is set (it isn't in the container).
+
+    Regression: 530aa8813. 6b40e5c79 handled an address arriving, not this
+    order. NEW_ADDR was ignored because the interface was up, and DEL_ADDR
+    marked it down and dropped the sockets without re-reading the address,
+    so the frame thread rebuilt them bound to, and with IP_MULTICAST_IF on,
+    the deleted address. Both failed (bind errno 99), the packets followed
+    the routing table out of another interface, and nothing reached fpptd0
+    until some later NEW_ADDR.
+    """
+    from capture import UdpCapture
+
+    address_less_interface()
+    try:
+        ip("addr", "add", "10.66.0.1/24", "dev", ADDR_IFACE)
+        fppd.write("config/co-universes.json", {"channelOutputs": [{
+            "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 510,
+            "interface": ADDR_IFACE, "universes": [output(0, 1, 1, 510)]}]})
+        fppd.settings(DisableFakeNetworkBridges="1")
+        with UdpCapture(E131_PORT, dst_ip="239.255.0.1", iface=ADDR_IFACE) as cap:
+            fppd.start()
+            fppd.request("PUT", "/overlays/range/1-510", {"Value": 42})
+            fppd.wait_for(lambda: "10.66.0.1" in sources_since(cap, time.monotonic() - 1),
+                          timeout=10, what="multicast from 10.66.0.1")
+            ip("addr", "add", "10.66.1.2/24", "dev", ADDR_IFACE)
+            time.sleep(1)
+            ip("addr", "del", "10.66.0.1/24", "dev", ADDR_IFACE)
+            fppd.wait_for(lambda: sources_since(cap, time.monotonic() - 1) == {"10.66.1.2"},
+                          timeout=10, what="multicast from 10.66.1.2 on the interface")
+    finally:
+        ip("link", "del", ADDR_IFACE)
+
+
+def test_invalid_interface_warning_comes_down_when_the_address_arrives(fppd):
+    """An output interface with no address yet raises "Invalid interface for
+    UDP broadcast/multicast"; once its address arrives and multicast flows
+    from it, the warning comes down.
+
+    Regression: 1de28213c. The NEW_ADDR recovery 6b40e5c79 added brought the
+    output up but never removed warning 22; it came down only at the next
+    co-universes.json load, and where the interface fell back to a default
+    it stayed for the life of the process.
+    """
+    from capture import UdpCapture
+
+    address_less_interface()
+    try:
+        fppd.write("config/co-universes.json", {"channelOutputs": [{
+            "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 510,
+            "interface": ADDR_IFACE, "universes": [output(0, 1, 1, 510)]}]})
+        fppd.settings(DisableFakeNetworkBridges="1")
+
+        def warned():
+            return [w for w in fppd.get("/fppd/status").get("warnings", [])
+                    if "Invalid interface for UDP broadcast/multicast" in w]
+
+        with UdpCapture(E131_PORT, dst_ip="239.255.0.1", iface=ADDR_IFACE) as cap:
+            fppd.start()
+            fppd.request("PUT", "/overlays/range/1-510", {"Value": 42})
+            fppd.wait_for(warned, timeout=10, what="the invalid-interface warning")
+            ip("addr", "add", "10.66.0.1/24", "dev", ADDR_IFACE)
+            fppd.wait_for(lambda: "10.66.0.1" in sources_since(cap, time.monotonic() - 1),
+                          timeout=10, what="multicast from 10.66.0.1")
+            fppd.wait_for(lambda: not warned(), timeout=15, interval=0.5,
+                          what="the invalid-interface warning to come down")
+    finally:
+        ip("link", "del", ADDR_IFACE)
