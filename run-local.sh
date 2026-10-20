@@ -22,7 +22,8 @@
 #     writes there (media_root.txt, www/warnings*.json) lands in a scratch
 #     layer, so the device's fppd and web UI never see it;
 #   - no sound cards, SPI devices as /dev/null (fppd probes SPI0 for a GPIO
-#     expander at startup), read-only /sys, and a scratch HOME;
+#     expander at startup), a read-only /sys of its own (its /sys/class/net
+#     lists the namespace's interfaces), and a scratch HOME;
 #   - when the tree under test is not /opt/fpp, an overlay over /opt/fpp as
 #     well: cape configs are read from /opt/fpp/capes whatever the tree, so
 #     a scenario writes its own there;
@@ -151,7 +152,11 @@ exec unshare --mount --net --fork sh -c '
     for f in /dev/spidev*; do
         if [ -e "$f" ]; then mount --bind /dev/null "$f"; fi
     done
-    mount --bind /sys /sys
+    # A sysfs of our own, not a bind of the host one: /sys/class/net lists
+    # the network namespace sysfs was mounted in, so the bound one showed the
+    # host interfaces and none of a scenario dummy ones (fppd counts qdisc
+    # drops only on the interfaces it finds there).
+    mount -t sysfs sysfs /sys
     if [ -n "$FPP_TESTS_BEAGLE" ]; then
         if [ -d /sys/class/remoteproc ]; then
             mount -t tmpfs -o mode=755 tmpfs /sys/class/remoteproc
