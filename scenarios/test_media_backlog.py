@@ -241,13 +241,22 @@ def test_card_position_wrap_is_not_an_xrun(fppd, audio):
     fppd.write("playlists/Wrap.json", playlist("Wrap", [{
         "type": "media", "enabled": 1, "playOnce": 0, "mediaName": "Wrap.wav"}]))
     fppd.settings(PipeWireKeepOutputOpen="1", LogLevel_MediaOut="debug")
-    fppd.start(preload=[shims.build("cardwrap.c")], extra_env={"CARDWRAP_AT_S": "5", **{k: os.environ[k] for k in ("CARDWRAP_DEBUG",) if k in os.environ}})
+    fppd.start(preload=[shims.build("cardwrap.c")], extra_env={"CARDWRAP_AT_S": "5", "CARDWRAP_DEBUG": "1"})
     fppd.command("Start Playlist", "Wrap", "false", "false")
     time.sleep(secs + 2)
+    # The shim's own record of each hw_ptr it served (on fppd's stderr): the
+    # wrap must show there, whatever fppd made of it. fppd's "card position
+    # wrapped" line is the fix's own, so without this a shim that never took
+    # would read red on the parent too.
+    with open(os.path.join(fppd.media, "logs", "fppd.stdout"), errors="replace") as f:
+        served = [int(line.split()[-1]) for line in f if line.startswith("cardwrap: ") and " fake " in line]
+    half = 1 << 29
+    assert any(a > half and b < half for a, b in zip(served, served[1:])), \
+        f"cardwrap.so never served a wrapped hw_ptr ({len(served)} reads)"
     log = fppd.log()
     xruns = [line for line in log.splitlines() if "lost time (xrun)" in line]
     assert not xruns, "the card's position wrapping was taken for an xrun:\n" + "\n".join(xruns)
-    assert "card position wrapped" in log, "the card's position never wrapped: cardwrap.so did not take"
+    assert "card position wrapped" in log, "fppd did not carry the position across the wrap"
 
 
 def test_an_xrun_is_flushed_once(fppd, audio):

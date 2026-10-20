@@ -76,6 +76,10 @@ CASES = {
     # read at startup by RTSPOutputManager (2e494fd13)
     "pipewire-rtsp-outputs: fields of the wrong type": ("pipewire-rtsp-outputs.json", {
         "enabled": "yes", "port": L, "requireGroupSource": O, "latencyMs": S}),
+    # read at startup by VideoOutputManager, which needs PipeWireVideoSinkName
+    # set to read it at all (2e494fd13)
+    "pipewire-video-consumers: fields of the wrong type": ("pipewire-video-consumers.json", [
+        {"type": "overlay", "id": "1", "pipeWireNodeName": "x"}, {"type": "rtsp", "width": L}, 5]),
 }
 
 
@@ -115,6 +119,8 @@ def test_wrong_typed_config_is_survived(fppd, request, what):
         request.getfixturevalue("audio")
     elif name.startswith("pipewire-"):
         fppd.settings(MediaBackend="pipewire")
+    if "video-consumers" in name:
+        fppd.settings(PipeWireVideoSinkName="fpp_video_bus")
     fppd.start()
     poke(fppd, name)
     time.sleep(0.5)

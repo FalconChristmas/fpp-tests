@@ -7,6 +7,7 @@ fppd plays into it exactly as it plays into a sound card on a device.
 import os
 import statistics
 import time
+import urllib.error
 
 import pytest
 
@@ -62,7 +63,11 @@ def test_sequence_and_media_play_together(fppd, audio):
     container PipeWire's null sink runs on a VM timer that wanders 100-200
     ms against the monotonic clock on its own, so there the spread is only
     printed; the frame and burst checks still apply. The long-song drift
-    against real sound cards is measured with run-local.sh --host-audio."""
+    against real sound cards is measured with run-local.sh --host-audio.
+
+    Regression: 240c53472 (run with --flavor tsan). The media status was a
+    plain int, set from GStreamer's bus thread as the media ended and read
+    by the playlist on the main loop: a data race TSan reports here."""
     secs = 10
     frames = unique_frames(secs * 20, CHANNELS)
     lookup = {f: i for i, f in enumerate(frames)}
@@ -683,3 +688,124 @@ def test_lights_follow_the_media_position(fppd, audio):
     limit = 15 if os.environ.get("FPP_TESTS_HOST_AUDIO") else 20
     assert None not in spreads and all(sp <= limit for sp in spreads), \
         f"the lights wander {spreads} ms (10-90%) around where the media position puts them"
+
+
+def write_wav_at(path, seconds, rate, freq=1000, amplitude=0.5):
+    """A mono 16-bit tone at `rate` Hz (write_tone_wav is 48 kHz only)."""
+    import array
+    import math
+    import wave
+    n = int(seconds * rate)
+    pcm = array.array("h", (int(amplitude * 32767 * math.sin(2 * math.pi * freq * i / rate))
+                            for i in range(n)))
+    if array.array("h", [1]).tobytes() != b"\x01\x00":
+        pcm.byteswap()
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm.tobytes())
+    return path
+
+
+def test_play_media_answers_while_pipewire_is_frozen(fppd, audio):
+    """With the PipeWire daemon up but not answering (stopped), Play Media
+    of a 96 kHz file still answers within seconds, and once PipeWire runs
+    again media plays.
+
+    Regression: ede0b7eaf. Above 48 kHz Start() asks PipeWire for the
+    graph rate with pw-metadata, which had no timeout, and Start() runs
+    under mediaOutputLock: the command never answered, and nothing else
+    could start media. (The rate is cached, so this has to be the run's
+    first media.)"""
+    import signal
+    write_wav_at(os.path.join(fppd.media, "music", "Hi.wav"), 2, 96000)
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 2)
+    fppd.start()
+    daemon = audio.procs[0]
+    os.kill(daemon.pid, signal.SIGSTOP)
+    try:
+        started = time.monotonic()
+        try:
+            fppd.command("Play Media", "Hi.wav", "1", "0", "1", timeout=20)
+        except urllib.error.HTTPError:
+            pass  # refused is fine; not answering is the bug
+        took = time.monotonic() - started
+    finally:
+        os.kill(daemon.pid, signal.SIGCONT)
+    assert took < 10, f"Play Media took {took:.1f} s to answer with PipeWire stopped"
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=20,
+                  what="the first media to end")
+    rec = audio.record()
+    fppd.command("Play Media", "Tone.wav", "1", "0", "1")
+    time.sleep(3)
+    samples = rec.stop()
+    first, last = sounding(samples)
+    assert first is not None and last - first > 1.5, "nothing played once PipeWire ran again"
+
+
+def test_missing_audio_card_warning_comes_down(fppd):
+    """A configured audio output card that isn't present raises a warning,
+    and the warning comes down once the setting no longer names it.
+
+    Regression: 680451806. The warning names the card, but it was removed
+    with the text "Audio output card is not present", which RemoveWarning()
+    never matched: the banner stayed until fppd restarted."""
+    from test_command_socket import send
+    fppd.settings(AudioOutput="FakeCard")
+    fppd.start()
+
+    def warned():
+        return any("Audio output card 'FakeCard'" in w
+                   for w in fppd.get("/fppd/status").get("warnings", []))
+    fppd.wait_for(warned, timeout=45, interval=1, what="the missing-card warning")
+    send("SetSetting,AudioOutput,,")
+    fppd.wait_for(lambda: not warned(), timeout=15, interval=1,
+                  what="the missing-card warning to come down")
+
+
+def test_a_wedged_audio_teardown_does_not_restart_fppd(fppd, audio):
+    """A pipeline with no hardware video decoder whose teardown wedges (a
+    shim holds its NULL transition past fppd's 10 s deadline) is abandoned
+    and logged, and does not count toward the wedge restart: fppd keeps
+    running, with the restart limit at 1.
+
+    Regression: 84e1122ae. Every abandoned teardown counted toward
+    restarting fppd (and then rebooting), a ladder that exists only for a
+    wedged hardware decoder: an audio track on a BeagleBone walked a show
+    controller up to a restart. (The reboot rung is off here, so a device
+    run of the parent can't reboot the box.)"""
+    import shims
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 1)
+    fppd.settings(GStreamerWedgeRestartLimit="1", GStreamerWedgeRebootLimit="0")
+    fppd.start(preload=[shims.build("slownull.c")])
+    fppd.command("Play Media", "Tone.wav", "1", "0", "1")
+    fppd.wait_for(lambda: "teardown wedged" in fppd.log() or "restarting fppd" in fppd.log(),
+                  timeout=30, interval=0.5, what="the teardown to be abandoned")
+    time.sleep(3)
+    log = fppd.log()
+    assert "restarting fppd" not in log, "an audio-only teardown wedge restarted fppd"
+    assert "not counted toward a restart" in log
+    fppd.get("/fppd/status", timeout=10)
+
+
+def test_volume_answers_while_pactl_is_slow(fppd):
+    """With pactl slow to answer (a stand-in that takes 5 s, as a wedged
+    PipeWire makes it), a volume change still answers at once and reads
+    back the new level.
+
+    Regression: cbf88ae78. setVolume() ran pactl, once per output sink, on
+    the thread that asked -- an HTTP thread here, the main loop for the UI
+    slider's command -- so the request waited out every call."""
+    bindir = os.path.join(fppd.media, "tmp", "bin")
+    os.makedirs(bindir)
+    with open(os.path.join(bindir, "pactl"), "w") as f:
+        f.write("#!/bin/sh\nsleep 5\n")
+    os.chmod(os.path.join(bindir, "pactl"), 0o755)
+    fppd.settings(MediaBackend="pipewire-simple", volume="70")
+    fppd.start(extra_env={"PATH": bindir + ":" + os.environ["PATH"]})
+    started = time.monotonic()
+    fppd.post("/fppd/volume/50", timeout=3)
+    took = time.monotonic() - started
+    assert took < 2, f"the volume change took {took:.1f} s to answer"
+    assert fppd.get("/fppd/volume", timeout=3)["volume"] == 50

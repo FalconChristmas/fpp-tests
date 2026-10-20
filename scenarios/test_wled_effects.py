@@ -79,3 +79,40 @@ def test_every_wled_effect_with_its_sliders_at_the_ends(fppd, level):
         time.sleep(0.2)
         fppd.check_alive()
     stop_effects(fppd, "M")
+
+
+def test_audio_sync_packet_with_an_infinite_peak(fppd):
+    """In WLED audio-sync receive mode, packets from the network whose
+    major peak is +Inf are dropped: an audio-reactive effect keeps
+    rendering, and stopping it and starting another each answer.
+
+    Regression: 1d1a04bf7. The value went straight to the effects, and
+    Rocktaves' "while (f > 249) f /= 2" never ends for +Inf; it spun holding
+    the model's effect lock and the global WLED lock, so the effect API
+    stopped answering."""
+    import socket
+    import struct
+    w, h = 32, 16
+    setup(fppd, [matrix("M", width=w, height=h)], channels=w * h * 3)
+    fppd.settings(WLEDAudioSyncMode="receive", WLEDAudioSyncPort="11988")
+    pkt = struct.pack("<6s2xffBB16sHff", b"00002\0", 100, 100, 1, 0, bytes(16), 0, 1000,
+                      float("inf"))
+    with DdpReceiver(w * h * 3) as rx:
+        fppd.start()
+        effect(fppd, "M", "WLED♪ - Rocktaves")
+        # From an address that isn't one of fppd's own: those are ignored.
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.bind(("127.0.0.2", 0))
+        try:
+            end = time.monotonic() + 3
+            while time.monotonic() < end:
+                s.sendto(pkt, ("127.0.0.1", 11988))
+                time.sleep(0.02)
+        finally:
+            s.close()
+        stop_effects(fppd, "M", timeout=5)
+        effect(fppd, "M", "WLED - Colorloop")
+        since = time.monotonic()
+        time.sleep(1)
+        assert rx.count(since) > 5, "output stopped"
+        stop_effects(fppd, "M", timeout=5)

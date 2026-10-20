@@ -89,3 +89,31 @@ def test_volume_pins_db_controls_at_0db_not_100_percent(fppd, monkeypatch):
         f"a dB-scaled control must be pinned at 0dB, never 100% (+24 dB here): {w}"
     assert w.get("Plain") and w["Plain"][-1] == "100%", \
         f"a control with no dB scale should end at 100%: {w}"
+
+
+def test_mixer_control_name_cannot_run_a_command(fppd, monkeypatch):
+    """Under the ALSA backend a mixer control name holding a single quote
+    is not handed to the shell: hardware volume is skipped, as for a
+    missing control.
+
+    Regression: 94cceb218 (as repaired by 937540369). The name was pasted
+    between single quotes into an "amixer set" command run by system(), so
+    "x'; touch FILE; echo '" ran the touch as root."""
+    import time
+    bindir = tempfile.mkdtemp(prefix="fakebin-")
+    amixer = os.path.join(bindir, "amixer")
+    with open(amixer, "w") as f:
+        f.write(FAKE_AMIXER)
+    os.chmod(amixer, os.stat(amixer).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    monkeypatch.setenv("FAKE_AMIXER_LOG", os.path.join(fppd.media, "tmp", "amixer.log"))
+    monkeypatch.setenv("PATH", bindir + os.pathsep + os.environ.get("PATH", ""))
+    pwned = os.path.join(fppd.media, "tmp", "pwned")
+    fppd.settings(MediaBackend="alsa", AudioMixerDevice=f"x'; touch {pwned}; echo '",
+                  LogLevel_MediaOut="debug")
+    fppd.start()
+    fppd.post("/fppd/volume/50")
+    fppd.wait_for(lambda: "contains a quote" in fppd.log() or "Setting ALSA hardware volume" in fppd.log(),
+                  timeout=10, interval=0.25, what="fppd to apply the volume")
+    time.sleep(1)
+    assert not os.path.exists(pwned), "the mixer control name ran a shell command"
+    assert "contains a quote; skipping" in fppd.log()

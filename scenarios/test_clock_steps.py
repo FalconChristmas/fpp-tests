@@ -158,6 +158,59 @@ def test_play_media_plays_through_a_clock_step(fppd, audio, step):
     assert last - first >= 4.6, f"heard {last - first:.2f} s of a 5 s file across the clock step"
 
 
+def test_a_stalled_track_survives_a_clock_step_back(fppd, audio):
+    """Play Media whose position has stopped moving (PipeWire stopped for a
+    moment, which arms GStreamer's stall watchdog), and the wall clock steps
+    back an hour while it is armed: once PipeWire runs again the track plays
+    on to its end; it is not stopped as stalled. (A video, to a video group
+    with an overlay member: its sound has a pipewiresink of its own, which
+    stops with PipeWire, where an audio file's goes through the slot's
+    shared output stream.)
+
+    Regression: 800d8a609. The stall watchdog and the stream slot pump that
+    runs it measured on the wall clock, in unsigned arithmetic. Before it,
+    the track never ended: after the step back the pump waited out the hour,
+    and had it run, the armed watchdog's "now - start" wrapped to a huge
+    value and stopped the track as stalled."""
+    import os
+    import re
+    import signal
+    from test_media import sounding
+    from test_video import MODEL, make_video, overlay_consumer, setup
+    make_video(os.path.join(fppd.media, "videos", "Eight.mkv"), seconds=8)
+    setup(fppd, [overlay_consumer()])
+    fppd.settings(LogLevel_MediaOut="debug")
+    fppd.start(fake_time="2026-12-24 18:00:00")
+    fppd.command("Play Media", "Eight.mkv", "1", "0", "1", "HDMI-A-1")
+    fppd.wait_for(lambda: fppd.get(f"/overlays/model/{MODEL}")["isActive"], timeout=15,
+                  interval=0.1, what="the video to be playing")
+    time.sleep(1.5)
+    rec = audio.record()
+    daemon = audio.procs[0]
+    seen = len(fppd.log())
+
+    def armed():
+        return [float(m) for m in re.findall(r"position stalled at ([0-9.]+)s, starting watchdog",
+                                             fppd.log()[seen:]) if float(m) > 0.5]
+    os.kill(daemon.pid, signal.SIGSTOP)
+    try:
+        fppd.wait_for(armed, timeout=4, interval=0.05,
+                      what="the stall watchdog to arm mid-track (precondition: the position stops with PipeWire)")
+        fppd.set_clock("2026-12-24 17:00:01")
+        time.sleep(0.5)
+    finally:
+        os.kill(daemon.pid, signal.SIGCONT)
+    fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "idle", timeout=20,
+                  what="the player to go idle after the media")
+    time.sleep(0.5)
+    samples = rec.stop()
+    stalled = [l for l in fppd.log().splitlines() if "Stopping playback" in l]
+    assert not stalled, "the clock step stopped the track as stalled:\n" + "\n".join(stalled)
+    first, last = sounding(samples, threshold=0.03)  # the video's tone is quiet
+    assert first is not None and last - first >= 4, \
+        f"heard {0 if first is None else last - first:.1f} s of the last 6 s of the track"
+
+
 def test_controller_that_returns_after_a_clock_step_gets_the_show(fppd):
     """A controller that dropped out (and was taken off the output after its
     pings failed) is put back once it answers again, though the wall clock

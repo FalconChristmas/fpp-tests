@@ -307,3 +307,139 @@ def test_random_media_picks_only_media_files(fppd, audio):
                   what="the playlist to finish")
     heard = sounding_seconds(rec.stop())
     assert heard >= 3.0, f"heard {heard:.2f} s of six 0.6 s random picks"
+
+
+def test_remote_finds_its_own_video_for_the_masters_audio(fppd, audio):
+    """A remote told by MultiSync to play Song.mp3, which it doesn't have,
+    plays its own per-host video for it, videos/Song-<HostName>.mkv.
+
+    Regression: 680451806. The per-host path was built from "videos/Song."
+    less two characters, so it looked for Son-<host>.mkv, found nothing, and
+    the remote played nothing."""
+    from test_video import make_video
+    make_video(os.path.join(fppd.media, "videos", "Song-box1.mkv"), seconds=6)
+    fppd.settings(fppMode="remote", HostName="box1", LogLevel_MediaOut="debug")
+    fppd.start()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    rec = audio.record()
+    name = "Song.mp3"
+    sock.sendto(sync_packet("open", "media", 0, 0, name), ("127.0.0.1", MULTISYNC_PORT))
+    sock.sendto(sync_packet("start", "media", 0, 0, name), ("127.0.0.1", MULTISYNC_PORT))
+    began = time.monotonic()
+    while time.monotonic() - began < 3:
+        sock.sendto(sync_packet("sync", "media", 0, time.monotonic() - began, name),
+                    ("127.0.0.1", MULTISYNC_PORT))
+        time.sleep(0.25)
+    heard = sounding_seconds(rec.stop(), threshold=0.03)
+    sock.sendto(sync_packet("stop", "media", 0, 3, name), ("127.0.0.1", MULTISYNC_PORT))
+    assert "remote will try Song-box1.mkv" in fppd.log(), \
+        "the remote did not pick its per-host video for Song.mp3"
+    assert heard >= 1.0, f"the remote's video for Song.mp3 played {heard:.2f} s of sound"
+
+
+def test_wled_audio_sync_follows_one_slot(fppd, audio):
+    """WLED audio sync in send mode, with a 440 Hz tone on slot 1 and a
+    louder 1 kHz one on slot 2: the packets' major peak follows slot 1.
+
+    Regression: 1b9fa77b8. Every playing slot's sample tap wrote the one
+    ring the WLED analysis reads, so the two streams interleaved in it and
+    the peak landed near neither (the commit measured 764 Hz)."""
+    import struct
+    from udp import Listener
+    from test_video import free_udp_port
+    port = free_udp_port()
+    write_tone_wav(os.path.join(fppd.media, "music", "A440.wav"), 8, freq=440, amplitude=0.3)
+    write_tone_wav(os.path.join(fppd.media, "music", "B1000.wav"), 8, freq=1000, amplitude=0.9)
+    fppd.settings(WLEDAudioSyncMode="send", WLEDAudioSyncDest="127.0.0.1", WLEDAudioSyncPort=str(port))
+    rx = Listener(port)
+    try:
+        fppd.start()
+        fppd.command("Play Media", "A440.wav", "1", "0", "1")
+        time.sleep(0.5)
+        fppd.command("Play Media", "B1000.wav", "1", "0", "2")
+        time.sleep(1.5)
+        since = time.monotonic()
+        time.sleep(3)
+        with rx.lock:
+            got = [d for t, d in rx.packets if t >= since and len(d) == 44]
+    finally:
+        rx.close()
+    assert len(got) > 50, f"only {len(got)} audio-sync packets in 3 s"
+    peaks = [struct.unpack_from("<f", d, 40)[0] for d in got]
+    near = sum(1 for p in peaks if abs(p - 445) <= 50)
+    assert near >= 0.9 * len(peaks), \
+        f"{near} of {len(peaks)} major peaks near 440 Hz; some: {[round(p) for p in peaks[::max(1, len(peaks) // 15)]]}"
+
+
+def write_noise_then_bursts_mp3(path, noise_s=15, total_s=30):
+    """A VBR MP3 with no table of contents: white noise for noise_s (dense
+    frames), then silence with a 50 ms 1 kHz burst on each whole second
+    (sparse frames). A seek estimated from the bitrate lands far from the
+    time it asked for."""
+    import array
+    import math
+    import subprocess
+    import wave
+    import pytest
+    rnd = random.Random(7)
+    pcm = array.array("h", bytes(2 * RATE * total_s))
+    for i in range(RATE * noise_s):
+        pcm[i] = int(rnd.uniform(-0.5, 0.5) * 32767)
+    for k in range(noise_s + 1, total_s):
+        for i in range(k * RATE, k * RATE + RATE // 20):
+            pcm[i] = int(0.3 * 32767 * math.sin(2 * math.pi * 1000 * i / RATE))
+    if array.array("h", [1]).tobytes() != b"\x01\x00":
+        pcm.byteswap()
+    wav = path + ".wav"
+    with wave.open(wav, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(RATE)
+        w.writeframes(pcm.tobytes())
+    r = subprocess.run(["gst-launch-1.0", "-q", "filesrc", f"location={wav}", "!", "wavparse", "!",
+                        "audioconvert", "!", "lamemp3enc", "target=quality", "quality=2", "!",
+                        "filesink", f"location={path}"], capture_output=True, text=True, timeout=120)
+    os.unlink(wav)
+    if r.returncode:
+        pytest.skip(f"cannot make a test MP3 (lamemp3enc): {r.stderr.strip()[-300:]}")
+
+
+def test_a_resumed_vbr_mp3_comes_back_where_it_left_off(fppd, audio):
+    """A VBR MP3 entry (no table of contents) interrupted by Insert
+    Playlist Immediate 20 s in, in its quiet second half, resumes there:
+    after the break come the once-a-second bursts, and none of the noise of
+    its first 15 s.
+
+    Regression: 755ca659b. The resume seek was KEY_UNIT, which in an MP3
+    with no table of contents lands at a byte offset estimated from the
+    bitrate while the position reads as asked, so the sound comes back away
+    from the entry's position. Estimated from this file's dense first half,
+    20 s lay past its end: the resumed entry ended at once, and nothing
+    more played."""
+    from audio import rms_windows
+    write_noise_then_bursts_mp3(os.path.join(fppd.media, "music", "Song.mp3"))
+    write_tone_wav(os.path.join(fppd.media, "music", "Break.wav"), 1.5, freq=800, amplitude=0.3)
+    fppd.write("playlists/Song.json", playlist("Song", [{
+        "type": "media", "enabled": 1, "playOnce": 0, "mediaName": "Song.mp3"}]))
+    fppd.write("playlists/Break.json", playlist("Break", [{
+        "type": "media", "enabled": 1, "playOnce": 0, "mediaName": "Break.wav"}]))
+    fppd.start()
+    fppd.command("Start Playlist", "Song", "false", "false")
+    fppd.wait_for(lambda: ((slot_status(fppd, 1) or {}).get("secondsElapsed") or 0) >= 20,
+                  timeout=30, interval=0.1, what="the entry to be 20 s in")
+    fppd.command("Insert Playlist Immediate", "Break", "0", "0", "false")
+    fppd.wait_for(lambda: (slot_status(fppd, 1) or {}).get("mediaFilename") == "Break.wav",
+                  timeout=5, interval=0.05, what="the inserted playlist to play")
+    fppd.wait_for(lambda: (slot_status(fppd, 1) or {}).get("mediaFilename") == "Song.mp3",
+                  timeout=10, interval=0.05, what="the entry to resume")
+    rec = audio.record()
+    time.sleep(6)
+    samples = rec.stop()
+    noisy = [round(t, 1) for t, r in rms_windows(samples, 0.5) if r > 0.15]
+    assert not noisy, f"the resumed entry played its noise (from {noisy[0]} s after the resume)"
+    bursts, quiet = 0, 0
+    for x in samples:
+        if abs(x) > 0.1 and quiet > RATE * 0.5:
+            bursts += 1
+        quiet = 0 if abs(x) > 0.1 else quiet + 1
+    assert bursts >= 4, f"heard {bursts} bursts in the 6 s after the resume"
