@@ -2,11 +2,13 @@
 case that broke: Dancing Shadows with its particle pool used up, and Stream
 once its iteration counter has passed 16 bits."""
 
+import os
 import time
 import urllib.parse
 
 import pytest
 
+import shims
 from ddp import DdpReceiver
 from test_overlays import effect, matrix, setup, stop_effects
 
@@ -44,37 +46,34 @@ def test_dancing_shadows_with_no_free_particle(fppd, speed, intensity):
 
 
 def test_stream_holds_still_between_steps_past_16_bits(fppd):
-    """Stream with a zone size of one pixel moves on once per step of its
-    speed and sends the same frame between steps -- also once the step
-    count (milliseconds of uptime / step) no longer fits 16 bits.
+    """Stream at its slowest (a step every 790 ms) with a zone size of one
+    pixel moves on once per step and sends the same frame between steps --
+    also on a player up long enough (14 days here) that the step count,
+    WLED's millis() / 790, no longer fits 16 bits.
 
     Regression: 5fba4142c. The last step was kept in a 16-bit field and
     compared with the full count, which never matched past 65535: every
     frame was a new zone, so the stream flickered at the frame rate instead
-    of stepping. WLED's millis() is the monotonic clock, which can't be
-    faked here, so the step (25 to 790 ms, set by the speed) is chosen to
-    put the count past 16 bits on this host; on a host up less than about
-    two hours (a fresh CI runner) no step slow enough to tell apart is,
-    and the test skips."""
-    step = min(790, int(time.monotonic() * 1000 / 70000))
-    if step < 100:
-        pytest.skip(f"up {time.monotonic() / 3600:.1f} h: too short for a step count past 16 bits")
-    speed = 255 - (step - 25 + 2) // 3
-    step = 25 + 3 * (255 - speed)  # what fppd will use
-    assert time.monotonic() * 1000 / step > 65536
+    of stepping. WLED's millis() is fppd's monotonic clock, which
+    monoshift.so moves 14 days ahead (the kernel's is left alone)."""
+    log = os.path.join(fppd.media, "tmp", "monoshift.log")
+    step = 790  # speed 0: 25 + 3 * 255 ms
     w, h = 50, 1
     setup(fppd, [matrix("M", width=w, height=h)], channels=w * h * 3)
     with DdpReceiver(w * h * 3) as rx:
-        fppd.start()
+        fppd.start(preload=[shims.build("monoshift.c")],
+                   extra_env={"MONOSHIFT_DAYS": "14", "MONOSHIFT_LOG": log})
         name = "WLED - Stream"
         speed_arg, zone = sliders(fppd, name)[:2]
         # "Zone size" 255: a zone of one pixel
-        effect(fppd, "M", name, **{speed_arg: str(speed), zone: "255"})
+        effect(fppd, "M", name, **{speed_arg: "0", zone: "255"})
         time.sleep(1)
         since = time.monotonic()
         time.sleep(4)
         frames = [f for _, f in rx.snapshot(since)]
         stop_effects(fppd, "M")
+    with open(log) as f:
+        assert f.read().strip(), "the shifted clock never reached the WLED code; this proves nothing"
     steps = 4000 / step
     changes = sum(1 for a, b in zip(frames, frames[1:]) if a != b)
     assert len(frames) > 3 * steps + 10, f"{len(frames)} frames in 4 s: too few to tell"
