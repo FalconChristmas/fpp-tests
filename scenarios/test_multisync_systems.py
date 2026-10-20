@@ -180,6 +180,9 @@ def test_remote_info_of_the_wrong_shape_is_survived(fppd):
     Regression: c8ccf32a0. The fields were read with asString() and
     friends: Json::LogicError on the first one with the wrong type reached
     the event loop and std::terminate ended fppd.
+
+    Also covers 6158df3fb: fppd fetches a remote's system info and cape and
+    lists them with the remote.
     """
     from fake_devices import fake_devices, page
     remote = "10.88.0.2"

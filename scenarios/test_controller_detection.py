@@ -69,6 +69,13 @@ def discover(fppd, devices, subnets=None, timeout=30, want=None):
 
 
 def test_each_vendor_is_recognised(fppd):
+    """One device of each vendor is listed with its name, type, version and
+    identity: an FPP's own UUID, a Falcon's and a WLED's MAC from their APIs
+    (dfa5b5b7a), a Twinkly from its gestalt (2babf4d5c), a SanDevices' MAC
+    from its page (38cfc76e9), and anything else as Unknown.
+
+    Feature: 2babf4d5c, 38cfc76e9, dfa5b5b7a.
+    """
     with fake_devices(DEVICES):
         got = discover(fppd, DEVICES)
     def row(a):
@@ -230,6 +237,9 @@ def test_baldrick_boards_are_read_from_system_state_and_settings(fppd):
     - a board whose /system_state cannot be fetched at all is not a
       Baldrick: it falls through every other detector and is listed as
       Unknown, with nothing of the Baldrick guess left on it.
+
+    Feature: f6a283460 (the board's own id), dfa5b5b7a (buddies). Regression:
+    f921827d9 (version from ota.updatable, hostname from /settings).
     """
     old = {
         "/": page("<html><title>Baldrick Board</title></html>"),
@@ -300,6 +310,12 @@ def test_hinkspix_versions_come_from_the_board_info_cgi(fppd):
     prefix is kept whole; a part of the wrong JSON type is left out; and
     without an MCPU (or without the CGI at all) the controller is still a
     HinksPix, with no version.
+
+    Feature: 4e24b6dd1. Regression: 107d8efe8 -- the parts were read with
+    asString(), which throws on the object and the list at 10.88.0.5; checked
+    by restoring those reads on the current tree, where (since 9c5cd05f9
+    CurlManager catches the throw) that board is listed as Unknown instead of
+    fppd dying.
     """
     devices = {
         "10.88.0.2": hinkspix(page({"MCPU": "MS_123", "PCPU": "PS_45", "ECPU": "EZ_6", "WEB": "WF_78"})),
@@ -363,6 +379,9 @@ def test_experience_controllers_are_read_from_their_api(fppd):
     - no firmware string at all leaves the version Unknown.
 
     Only the controller with nothing better asks /api/current_state.
+
+    Feature: c95af2370 (detection), b322335a7 (MAC over HTTP). Regression:
+    928d686cd (the 2.x version string).
 
     Not checked: fppModeString. The detector never sets bridge mode, so an
     Experience controller found only over HTTP is listed as "player" (see
@@ -466,6 +485,9 @@ def test_twinkly_discovery_replies_are_bounded(fppd):
     set, the pending set and the HTTP probe queue, and got a probe, with no
     bound. A flood of them pushed the periodic re-probes of real remotes
     behind thousands of fake ones.
+
+    Also covers 2babf4d5c: the discovery broadcast itself, and a probe for
+    the lights that answer it.
     """
     import os
     import subprocess
