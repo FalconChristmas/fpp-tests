@@ -203,3 +203,69 @@ def test_a_task_cannot_take_over_a_future_preset(fppd, endpoint):
     fppd.post("/fppd/recurringtasks", {"command": "reload"})
     fppd.wait_for(lambda: variable(fppd, "Fired") == "yes", timeout=6,
                   what="the future preset to fire")
+
+
+def test_regex_over_a_result_past_its_limit_is_reported(fppd, endpoint):
+    """A regex filter over a result longer than it searches (16 KB) is
+    reported as a failed run that says why, and the variable keeps its
+    value; a result just under the limit is searched to its end.
+
+    Regression: 4c1d47ea4. 522c7b196 searched only the first 16 KB, so a
+    value past it (a weather service's JSON with the field near the end)
+    came back empty while the task's Status said the run succeeded."""
+    big = endpoint("x" * 20000 + '"temp": 21.5')
+    small = endpoint("x" * 16000 + '"temp": 19.5')
+    fppd.start()
+    pattern = r'"temp": ([0-9.]+)'
+    r = fppd.post("/fppd/recurringtasks", {"command": "test", "task": url_task(
+        "t", small.url, filterType="regex", filterRegex=pattern)}, timeout=30)
+    assert r["ok"] is True and r["filtered"] == "19.5", {k: str(v)[:80] for k, v in r.items()}
+    r = fppd.post("/fppd/recurringtasks", {"command": "test", "task": url_task(
+        "t", big.url, filterType="regex", filterRegex=pattern)}, timeout=30)
+    assert r["ok"] is False and "16 KB" in r["error"], {k: str(v)[:80] for k, v in r.items()}
+    assert variable(fppd, "t") == "19.5"
+    fppd.write("config/recurringtasks.json", [url_task(
+        "t", big.url, filterType="regex", filterRegex=pattern)])
+    fppd.post("/fppd/recurringtasks", {"command": "reload"})
+    fppd.wait_for(lambda: big.hits >= 2, timeout=10, what="the saved task to run")
+    s = fppd.wait_for(lambda: (task_status(fppd, "t") or {}).get("lastError") and task_status(fppd, "t"),
+                      timeout=5, what="the saved task's status")
+    assert s["lastOk"] is False and "16 KB" in s["lastError"], s
+
+
+def test_regex_over_a_long_run_does_not_overflow_the_stack(fppd, endpoint):
+    """A regex filter whose repeat runs over most of a result within the
+    limit (12,000 digits for "temp:(\\d+)") is answered with the whole run,
+    and fppd carries on.
+
+    Regression: 4c1d47ea4. libstdc++'s backtracking std::regex recursed
+    once per repeated character, and 522c7b196's 16 KB cap was not enough:
+    under ASan 12 KB of digits overflowed a drogon thread's stack
+    (SIGSEGV), and 16 KB of "(.|\\n)*" overflows an 8 MB stack in an
+    optimized build, on the main loop for a saved task, every interval."""
+    ep = endpoint("temp:" + "1" * 12000)
+    fppd.start()
+    r = fppd.post("/fppd/recurringtasks", {"command": "test", "task": url_task(
+        "t", ep.url, filterType="regex", filterRegex=r"temp:(\d+)")}, timeout=30)
+    fppd.check_alive()
+    assert r["ok"] is True and r["filtered"] == "1" * 12000, {k: str(v)[:80] for k, v in r.items()}
+
+
+@pytest.mark.parametrize("pattern,body,expected", [
+    # ECMAScript takes the first alternative that matches, not the longest
+    (r"(foo|foobar)", "foobar", "foo"),
+    (r"(\w)\1", "abccd", "c"),
+    (r"<b>(.*?)</b>", "<b>one</b><b>two</b>", "one"),
+], ids=["first-alternative", "backreference", "lazy"])
+def test_regex_filter_keeps_ecmascript_semantics(fppd, endpoint, pattern, body, expected):
+    """A regex filter matches the way ECMAScript (std::regex's default) says:
+    the first alternative that matches wins, backreferences work, and a lazy
+    repeat stops at the first chance. Saved filters rely on it, so
+    4c1d47ea4 fixed the stack overflow by giving the backtracking engine a
+    bigger stack, not by switching to a leftmost-longest engine (libstdc++'s
+    __polynomial), which gives "foobar" and refuses backreferences."""
+    ep = endpoint(body)
+    fppd.start()
+    r = fppd.post("/fppd/recurringtasks", {"command": "test", "task": url_task(
+        "t", ep.url, filterType="regex", filterRegex=pattern)}, timeout=30)
+    assert r["ok"] is True and r["filtered"] == expected, r

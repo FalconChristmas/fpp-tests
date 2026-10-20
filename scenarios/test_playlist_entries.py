@@ -304,6 +304,70 @@ def test_dynamic_entry_from_a_url_too_large(fppd):
         assert not any("not valid JSON" in w for w in warnings), warnings
 
 
+@contextlib.contextmanager
+def cut_short_server(body, claimed):
+    """A local HTTP server that answers every request with 200, a
+    Content-Length of `claimed`, the first len(body) bytes, and then closes
+    the connection: a reply that fails after its status line."""
+    import socket
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(8)
+    srv.settimeout(0.2)
+    running = True
+
+    def serve():
+        while running:
+            try:
+                c, _ = srv.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            with c:
+                c.settimeout(2)
+                try:
+                    c.recv(65536)
+                    c.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                              b"Content-Length: %d\r\n\r\n" % claimed + body)
+                except OSError:
+                    pass
+    t = threading.Thread(target=serve, daemon=True)
+    t.start()
+    try:
+        yield srv.getsockname()[1]
+    finally:
+        running = False
+        t.join()
+        srv.close()
+
+
+def test_dynamic_entry_from_a_url_cut_off_mid_body(fppd):
+    """A dynamic entry whose URL answers 200 but closes the connection
+    before the body it announced is complete is skipped as a failed
+    request, not parsed as the partial body it got.
+
+    Regression: bd1946499. 1ce5a48bf made the transfer's result visible to
+    the completions but acted only on the 16 MB cap's write error. A
+    transfer that failed after the status line (closed early, reset, timed
+    out mid-body) still read as rc 200 with whatever part of the body
+    arrived, and the entry warned "not valid JSON" instead of "request
+    failed". MultiSync's remote info fetches, the detection probes and
+    plugin doGet() callers saw the same partial 200.
+    """
+    entries = json.dumps({"mainPlaylist": [step(7), step(8)]})
+    body = entries[:-2].encode() + b" " * 1000
+    with cut_short_server(body, 1000000) as port:
+        fppd.write("playlists/P.json", playlist("P", main=[
+            step(1), dynamic("url", url=f"http://127.0.0.1:{port}/items"), step(2)]))
+        fppd.start()
+        assert run(fppd, "P") == "12"
+        warnings = status(fppd).get("warnings", [])
+    assert any("Dynamic playlist URL request failed" in w for w in warnings), warnings
+    assert not any("not valid JSON" in w for w in warnings), warnings
+
+
 @pytest.mark.parametrize("method", ["GET", "POST"])
 def test_url_entry_calls_the_url(fppd, method):
     """A URL entry requests its URL (GET, or POST with its data) and then

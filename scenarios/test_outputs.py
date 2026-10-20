@@ -387,6 +387,43 @@ def test_a_udp_output_that_fails_to_load_leaves_multisync_watching_addresses(fpp
         ip("link", "del", "fpptd3")
 
 
+def test_a_name_lookup_does_not_hold_up_the_ping_thread(fppd):
+    """A controller whose name stops resolving after the output starts has
+    its name looked up again once a ping period, and a lookup that stalls
+    (no reachable DNS server: slowgai.so holds it 40 s) holds up neither the
+    other pings nor fppd's stop: SIGTERM during the retry lookup exits in a
+    few seconds.
+
+    Regression: 31dddee59. 1705b8e89 kept such a target and retried its
+    lookup inline on the ping thread, at the top of each pass: while it
+    stalled no ping was sent, answered or timed out, and Cleanup()'s join of
+    the ping thread waited for the lookup to finish.
+    """
+    import os
+    marker = os.path.join(fppd.media, "tmp", "slowgai.log")
+    fppd.write("config/co-universes.json", {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 3,
+        "universes": [{"active": 1, "description": "controller by name", "id": 1,
+                       "startChannel": 1, "channelCount": 3, "type": 5,
+                       "address": "slow.invalid", "priority": 0, "monitor": 1, "deDuplicate": 0}],
+    }]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start(preload=[shims.build("slowgai.c")],
+               extra_env={"SLOWGAI_NAME": "slow.invalid", "SLOWGAI_FIRST": "127.0.0.2",
+                          "SLOWGAI_FILE": marker, "SLOWGAI_MS": "40000"})
+    # the first retry is a ping period (15 s) after the output started
+    fppd.wait_for(lambda: os.path.exists(marker), timeout=30, interval=0.2,
+                  what="the ping retry's lookup of slow.invalid")
+    began = time.monotonic()
+    rc = fppd.stop(timeout=60)
+    took = time.monotonic() - began
+    fppd.exit_expected = True
+    assert took < 10, f"fppd took {took:.1f} s to stop: it waited for the stalled lookup"
+    assert rc == 0, f"fppd exited {rc}\n{fppd.tail()}"
+    reports = fppd.sanitizer_reports()
+    assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
+
+
 class EchoRequests:
     """Counts the ICMP echo requests (pings) that reach `address` on this
     machine, from a raw socket that sees every ICMP packet received."""

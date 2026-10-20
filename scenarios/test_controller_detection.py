@@ -451,3 +451,58 @@ def test_a_new_vendor_reply_of_the_wrong_shape_is_no_match(fppd):
     for a in devices:
         assert fields(got[a], "hostname", "type", "version") == (
             a, "Unknown System Type", "Unknown"), got[a]
+
+
+def test_twinkly_discovery_replies_are_bounded(fppd):
+    """Replies to fppd's Twinkly discovery broadcast are taken only for a
+    few seconds after it, and from at most 128 addresses: 300 hosts that
+    answer at once get at most 128 HTTP probes between them, and 20 that
+    answer 8 s later get none.
+
+    Regression: 039dec22b. 4be58fb6a put the replies' probes under the
+    in-flight cap, but the discovery socket stays open for the life of
+    fppd, and its port is in every broadcast: each new source address that
+    sent a 7-byte "OK" datagram, at any time, added an entry to the seen
+    set, the pending set and the HTTP probe queue, and got a probe, with no
+    bound. A flood of them pushed the periodic re-probes of real remotes
+    behind thousands of fake ones.
+    """
+    import os
+    import subprocess
+    import sys
+    import threading
+    from fake_devices import DEV_IF, HOST_ADDR, HOST_IF, NETNS, _ip, device_network
+
+    first = [f"10.89.{i // 200}.{i % 200 + 1}" for i in range(300)]
+    second = [f"10.89.3.{i + 1}" for i in range(20)]
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "twinkly_replies.py")
+    with device_network(["10.88.0.2"]) as run:
+        # fppd sends its discovery to each interface's broadcast address
+        for args, ns in ((("addr", "del", HOST_ADDR + "/24", "dev", HOST_IF), None),
+                         (("addr", "add", HOST_ADDR + "/24", "brd", "+", "dev", HOST_IF), None),
+                         (("route", "add", "10.89.0.0/16", "dev", HOST_IF), None),
+                         (("addr", "add", "10.88.0.3/24", "brd", "+", "dev", DEV_IF), NETNS)):
+            r = _ip(*args, ns=ns)
+            assert r.returncode == 0, f"ip {' '.join(args)}: {r.stderr}"
+        batch = "".join(f"addr add {a}/16 dev {DEV_IF}\n" for a in first + second)
+        r = subprocess.run(["ip", "-n", NETNS, "-batch", "-"], input=batch, capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        proc = run(sys.executable, "-I", script, ",".join(first), ",".join(second), "8")
+        lines = []
+
+        def read():
+            for line in proc.stdout:
+                lines.append(line)
+        threading.Thread(target=read, daemon=True).start()
+        fppd.wait_for(lambda: "ready\n" in lines, what="the fake lights to listen")
+        fppd.start()
+        fppd.wait_for(lambda: any(line.startswith("port") for line in lines), timeout=30,
+                      what="fppd's Twinkly discovery broadcast")
+        fppd.wait_for(lambda: "sent\n" in lines, timeout=20, what="the late replies")
+        time.sleep(8)
+    probed = {line.split()[1] for line in lines if line.startswith("probe ")}
+    early = probed & set(first)
+    late = probed & set(second)
+    assert early, "no reply got a probe: the discovery replies never reached fppd"
+    assert len(early) <= 128, f"{len(early)} of {len(first)} replying hosts were probed"
+    assert not late, f"{len(late)} hosts that replied 8 s after the broadcast were probed"

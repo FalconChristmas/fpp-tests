@@ -277,17 +277,42 @@ def unload_during_command(fppd, d):
     t.start()
     fppd.wait_for(lambda: os.path.exists(os.path.join(d, "commands", "started")), timeout=10,
                   what="the command's script to start")
+    conn = free_http_connection(fppd)
     began = time.monotonic()
-    r = fppd.post("/fppd/plugin/fpp-test/unload", {}, timeout=40)
+    conn.request("POST", "/fppd/plugin/fpp-test/unload", body="{}",
+                 headers={"Content-Type": "application/json"})
+    conn.sock.settimeout(40)
+    r = json.loads(conn.getresponse().read())
     took = time.monotonic() - began
+    conn.close()
     t.join(45)
     return r, took, got.get("r")
 
 
+def free_http_connection(fppd):
+    """A kept-alive connection to fppd on an HTTP thread that is not busy.
+    drogon spreads connections over its threads, and a request that lands on
+    the thread already blocked in a long command waits for that command to
+    end first, which is not what a test of overlapping requests means."""
+    import http.client
+    import socket
+    import urllib.parse
+    from fppd import API
+    host, port = urllib.parse.urlsplit(API).netloc.split(":")
+    for _ in range(40):
+        conn = http.client.HTTPConnection(host, int(port), timeout=1)
+        try:
+            conn.request("GET", "/fppd/status")
+            conn.getresponse().read()
+            return conn
+        except (socket.timeout, TimeoutError):
+            conn.close()
+    raise AssertionError("every HTTP connection to fppd landed on a busy thread")
+
+
 def test_unloading_a_plugin_waits_for_its_running_command(fppd):
-    """Unloading a script plugin while one of its commands is running waits
-    for that run to end before freeing the command, and both requests are
-    answered.
+    """Unloading a script plugin while one of its commands is running does
+    not free the command under that run, and both requests are answered.
 
     Regression: 34e2a2efa. Unload deleted the plugin's commands at once, so
     a command still running on an HTTP thread came back from waiting on its
@@ -298,8 +323,27 @@ def test_unloading_a_plugin_waits_for_its_running_command(fppd):
     r, took, result = unload_during_command(fppd, d)
     assert r["loaded"] is False, r
     assert not isinstance(result, Exception), result
+    assert "Test Plugin Slow complete" in str(result), result
     fppd.check_alive()
-    assert took >= 2, f"the unload returned after {took:.1f} s, before the 3 s command ended"
+
+
+def test_unloading_a_plugin_during_a_command_longer_than_the_wait(fppd):
+    """Unloading a script plugin while one of its commands runs for longer
+    than 10 s neither stalls the unload nor frees the command under the run:
+    the command is deleted when its run returns.
+
+    Regression: 2cb6cfc0c. 34e2a2efa made unload wait for the run, but only
+    for 10 s, holding the main loop that long; it then deleted the command
+    anyway, and the run came back from its 15 s script and built its reply
+    from the freed name (an ASan heap-use-after-free)."""
+    d = slow_command_plugin(fppd, 15)
+    fppd.start()
+    r, took, result = unload_during_command(fppd, d)
+    assert r["loaded"] is False, r
+    assert not isinstance(result, Exception), result
+    assert "Test Plugin Slow complete" in str(result), result
+    fppd.check_alive()
+    assert took < 5, f"the unload took {took:.1f} s: it waited on the running command"
 
 
 NATIVE_PROBE = r"""
