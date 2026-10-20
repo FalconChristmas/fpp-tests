@@ -75,7 +75,11 @@ def test_lifecycle_and_playlist_events(fppd):
     each entry it plays and its stop, and "shutdown" when fppd exits.
 
     Also covers 00b23cca5: a fresh start was announced as "playing", never
-    "start", because the status was set to playing before Start() read it."""
+    "start", because the status was set to playing before Start() read it.
+
+    Also covers ad520d0b3: the plugin's directory, "fpp-test", has no dot in
+    its name, and the startup scan skipped every such directory, so no user
+    plugin loaded and the startup event never came."""
     d = plugin(fppd)
     fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(1), step(2)]))
     fppd.start()
