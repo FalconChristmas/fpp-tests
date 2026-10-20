@@ -14,7 +14,7 @@ import pytest
 
 from fseq import solid_frames, write_fseq
 from packets import (ARTNET_PORT, DDP_PORT, E131_PORT, Sender, artdmx, ddp, e131, send)
-from show import playlist, sequence_entry
+from show import ddp_output, playlist, sequence_entry
 from udp import Listener
 
 OUT_PORT = 5000
@@ -554,3 +554,64 @@ def test_a_flood_of_input_does_not_hold_the_main_loop(fppd, port):
             finally:
                 flooding.clear()
                 t.join()
+
+
+def ddp_drops():
+    """Datagrams the kernel dropped on the DDP port's socket: the last field
+    of its /proc/net/udp line, in this network namespace."""
+    with open("/proc/net/udp") as f:
+        next(f)
+        for line in f:
+            fields = line.split()
+            if int(fields[1].split(":")[1], 16) == DDP_PORT:
+                return int(fields[-1])
+    raise AssertionError(f"no socket on UDP port {DDP_PORT}")
+
+
+def ddp_rcvbuf():
+    """The DDP socket's receive buffer, as ss reports it (skmem rb)."""
+    import re
+    import subprocess
+    out = subprocess.run(["ss", "-u", "-a", "-n", "-m", "sport", "=", f":{DDP_PORT}"],
+                         capture_output=True, text=True, check=True).stdout
+    m = re.search(r"\brb(\d+)", out)
+    assert m, out
+    return int(m.group(1))
+
+
+@pytest.mark.parametrize("when", ["at_start", "after_a_reload"])
+def test_ddp_frames_wait_out_a_stalled_main_loop(fppd, when):
+    """Two full frames of DDP that arrive while the main loop is stalled
+    (fppd stopped here) are all still there when it gets back: 1440000
+    channels of outputs make a DDP frame 1000 full packets, and the
+    socket's buffer holds both frames -- sized when it is opened, or when
+    an output save adds channels.
+
+    Regression: 1e08a64b5. The DDP socket was sized by the number of E1.31 and Art-Net
+    input universes, which DDP has none of, so it got the 512 KB floor:
+    about 450 full packets. The kernel dropped the rest of the burst.
+    """
+    import signal
+    top = 1440000
+    big = ddp_output(top, address="192.0.2.9")
+    big["channelOutputs"][0]["universes"][0]["deDuplicate"] = 1
+    fppd.write("config/ci-universes.json", inputs())
+    fppd.write("config/co-universes.json", big if when == "at_start" else udp_outputs())
+    fppd.start()
+    small = ddp_rcvbuf()
+    if when == "after_a_reload":
+        fppd.write("config/co-universes.json", big)
+        fppd.wait_for(lambda: ddp_rcvbuf() > small, timeout=10,
+                      what="the DDP buffer to grow with the outputs' channels")
+    payload = bytes([0x5A]) * 1440
+    burst = [ddp(off, payload, push=off + 1440 >= top, seq=f % 15 + 1)
+             for f in range(2) for off in range(0, top, 1440)]
+    before = ddp_drops()
+    os.kill(fppd.proc.pid, signal.SIGSTOP)
+    try:
+        send(burst, DDP_PORT)
+        dropped = ddp_drops() - before
+    finally:
+        os.kill(fppd.proc.pid, signal.SIGCONT)
+    assert dropped == 0, \
+        f"{dropped} of {len(burst)} DDP packets dropped (receive buffer {ddp_rcvbuf()} bytes)"
