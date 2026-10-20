@@ -4,3 +4,5 @@ __pycache__/
 # CI checks fpp out here and keeps ccache here
 fpp/
 .ccache/
+# editor workspace files
+*.code-workspace
