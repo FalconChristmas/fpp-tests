@@ -102,6 +102,14 @@ called_from_lib:liborc-0.4.so
 # which TSan can't see), its teardown, and the eventfd wakeup.
 race:trantor::TcpServer::stop
 race:trantor::TcpServer::~TcpServer
+# The same promise, once libfpp has a std::promise<void> of its own (mqtt.cpp,
+# since fpp 11a37e5ed): libtrantor's set_value() then binds to libfpp's
+# instrumented copy of the shared state's setter, so TSan sees each IO loop
+# write the promise that TcpServer::stop() reuses on its stack for the next,
+# but not the future.get() wait between them. The frame below the setter is a
+# lambda in stop() that libtrantor doesn't export, so the line above can't
+# match it. Only a promise's own set path runs _M_do_set.
+race:std::__future_base::_State_baseV2::_M_do_set
 race:trantor::EventLoop::wakeup
 race:trantor::EventLoop::queueInLoop
 # drogon tearing down its router at shutdown while IO threads dispatch.
@@ -124,6 +132,11 @@ called_from_lib:libgobject-2.0.so
 called_from_lib:libgstaudio-1.0.so
 called_from_lib:libgstaudioconvert.so
 called_from_lib:libpipewire-0.3.so
+# pipewiresink. GLib's g_rec_mutex_unlock() tail-calls pthread_mutex_unlock(),
+# so an unlock of a GRecMutex that GLib locked (unseen, above) is attributed
+# to this plugin, and reads as an unlock of an unlocked mutex: seen from
+# PipeWireOutputStream::WaitDrained()'s flush.
+called_from_lib:libgstpipewire.so
 called_from_lib:libgstplayback.so
 called_from_lib:libgstvolume.so
 # The video paths (test_video.py): demux, decode, the test source, and RTP
