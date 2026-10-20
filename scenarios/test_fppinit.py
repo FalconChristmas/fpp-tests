@@ -290,3 +290,63 @@ def test_os_reflash_keeps_plugin_clone_credentials_out_of_settings(fppinit):
     v = media_settings(fppinit).get("PluginUnverifiedRepos")
     assert v == "fpp-third|https://github.com/someone/fpp-third.git", \
         f"PluginUnverifiedRepos is {v!r}: a token, the official plugin, or no third-party plugin"
+
+
+
+# apt-cache as a new OS that knows these packages: "pkgnames PREFIX" lists the
+# known names starting with PREFIX, one per line, as the real one does.
+APT_CACHE = """#!/bin/sh
+printf '%s\\n' "apt-cache $*" >> /fppinit-calls.log
+for a in "$@"; do prefix=$a; done
+for n in vim htop libvimextra1.2; do
+    case "$n" in "$prefix"*) echo "$n" ;; esac
+done
+"""
+
+
+def apt_installs(sb):
+    """The package each stubbed "apt-get ... install -y PKG" was given."""
+    return [c.split()[-1] for c in sb.calls() if c.startswith("apt-get ") and " install " in c]
+
+
+def test_os_reflash_replays_only_the_packages_the_user_asked_for(fppinit):
+    """After an FPPOS reflash, the user package list is replayed with one
+    apt-get install per package the user asked for: not the dependencies
+    recorded with "via" (the parent's install pulls them in under whatever
+    the new OS calls them), not names the new OS doesn't know, not names
+    apt would take as an option, and each only once.
+
+    Regression: 4f62c876f. Every entry was installed by name, so a
+    versioned dependency renamed in the new release failed on every boot
+    (and kept the whole replay coming back), and a "-..." name reached
+    root's apt-get as an option."""
+    fppinit.write("config/userpackages.json", [
+        {"package": "vim", "requestedBy": ["fpp-tests"]},
+        {"package": "libvimextra1.2", "requestedBy": ["fpp-tests"], "via": ["vim"]},
+        "htop",
+        {"package": "gone-in-new-os", "requestedBy": ["fpp-tests"]},
+        "--allow-unauthenticated",
+        "htop",
+    ])
+    fppinit.root_file("/usr/bin/apt-cache", APT_CACHE)
+    assert_clean(reflash_boot(fppinit))
+    assert apt_installs(fppinit) == ["vim", "htop"], fppinit.calls()
+    assert fppinit.written("/fppos_upgraded") is None, "the reflash marker was kept for a retry"
+
+
+@pytest.mark.parametrize("content", ["[" * 3000, '[{"package": ', "\x00\x01binary"],
+                         ids=["deeply-nested", "truncated", "binary"])
+def test_os_reflash_survives_a_broken_package_list(fppinit, content):
+    """A user package list that can't be read (nested past the JSON
+    parser's limit, cut short, binary) is skipped: fppinit carries on, and
+    the reflash marker is consumed, as nothing a retry does will fix it.
+
+    Regression: 4f62c876f. jsoncpp throws on input nested deeper than its
+    stack limit, and nothing caught it: fppinit, which no one restarts,
+    ended there on every boot after the reflash."""
+    fppinit.write("config/userpackages.json", content)
+    fppinit.root_file("/usr/bin/apt-cache", APT_CACHE)
+    assert_clean(reflash_boot(fppinit))
+    assert apt_installs(fppinit) == [], fppinit.calls()
+    assert fppinit.written("/fppos_upgraded") is None, "the reflash marker was kept for a retry"
+
