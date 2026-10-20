@@ -562,3 +562,68 @@ def test_persisted_variable_saves_land_in_order(fppd):
     with open(os.path.join(fppd.media, "config", "variables.json")) as f:
         saved = json.load(f)
     assert saved["X"]["value"] == "new", saved
+
+
+def flock_waiting_behind(holder_fd):
+    """Whether some other process's flock(LOCK_EX) is queued on the file
+    `holder_fd` (ours, holding LOCK_SH) is open on: /proc/locks lists a
+    blocked request as "-> FLOCK ... WRITE" on the same dev:inode as the
+    lock it waits for."""
+    st = os.fstat(holder_fd)
+    node = f"{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino} "
+    with open("/proc/locks") as f:
+        lines = f.read().splitlines()
+    return any("->" in l and "FLOCK" in l and "WRITE" in l and node in l for l in lines)
+
+
+def test_a_file_save_never_shows_a_locked_reader_an_empty_file(fppd):
+    """While a reader holds a shared flock on a file fppd saves through
+    PutFileContents() (here a persisted Set Variable rewriting
+    config/variables.json), the file keeps its old contents: fppd's save
+    waits at the lock and only then truncates and writes it.
+
+    Regression: 8ffe7f0b1. PutFileContents() opened the file with
+    fopen("w"), which empties it, and only then asked for LOCK_EX, so a
+    reader holding LOCK_SH -- PHP's settings reads, for the settings file
+    -- read it empty: every setting missing, and the UI sent to the setup
+    wizard."""
+    import fcntl
+    import threading
+    fppd.start()
+
+    def persist(value):
+        fppd.command("Set Variable", "X", "Value", value, "1", "0", "100", "", "true", timeout=20)
+
+    path = os.path.join(fppd.media, "config", "variables.json")
+    persist("old")
+    with open(path) as f:
+        before = f.read()
+    assert json.loads(before)["X"]["value"] == "old", before
+
+    fd = os.open(path, os.O_RDONLY)
+    errors = []
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH)
+
+        def save():
+            try:
+                persist("new")
+            except Exception as e:  # reported below, after the lock is let go
+                errors.append(e)
+
+        saver = threading.Thread(target=save)
+        saver.start()
+        # The control: fppd's save has reached the file and is waiting for
+        # our lock, so whatever it does to the file before locking is done.
+        fppd.wait_for(lambda: flock_waiting_behind(fd), timeout=10,
+                      what="fppd's save to wait for the file lock")
+        with open(path) as f:
+            during = f.read()
+    finally:
+        os.close(fd)  # drops the lock
+    saver.join(20)
+    assert not saver.is_alive(), "the save never finished after the lock was released"
+    assert not errors, errors
+    assert during == before, f"while the reader held its lock the file read {during!r}"
+    with open(path) as f:
+        assert json.load(f)["X"]["value"] == "new"
