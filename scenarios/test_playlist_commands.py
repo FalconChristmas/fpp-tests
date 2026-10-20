@@ -285,7 +285,9 @@ def test_toggle_playlist(fppd):
 
 def test_set_playlist_repeat_while_running(fppd):
     """Set Playlist Repeat turns repeat on for the running playlist: when
-    the main section ends it plays again instead of stopping."""
+    the main section ends it plays again instead of stopping.
+
+    Feature: 483874dd5."""
     fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(1)]))
     fppd.start()
     start(fppd, "P")

@@ -31,6 +31,8 @@ def test_restart_resumes_the_whole_playlist(fppd):
     before the resume point trimmed off, so a show whose fppd restarted
     (a model upload from xLights asks for one) came back with part of its
     playlist missing: here, one entry of seven.
+
+    Also covers 0aae67041: the "Restart FPPD" command it restarts with.
     """
     start, end = window(-60, 600)
     # Lead-in reset, then main: 1, 2, 3 and a long pause to restart in.

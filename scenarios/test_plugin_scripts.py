@@ -72,7 +72,10 @@ def playlist_actions(d):
 
 def test_lifecycle_and_playlist_events(fppd):
     """A plugin hears "startup" when fppd loads it, the playlist's start,
-    each entry it plays and its stop, and "shutdown" when fppd exits."""
+    each entry it plays and its stop, and "shutdown" when fppd exits.
+
+    Also covers 00b23cca5: a fresh start was announced as "playing", never
+    "start", because the status was set to playing before Start() read it."""
     d = plugin(fppd)
     fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(1), step(2)]))
     fppd.start()
