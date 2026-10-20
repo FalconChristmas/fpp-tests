@@ -6,6 +6,7 @@ Each frame it sends is every lit pixel, grouped by colour:
 the pixel's line number in config/virtualdisplaymap (after the header).
 """
 
+import os
 import socket
 import time
 
@@ -17,14 +18,20 @@ PORT = 32339
 def display(fppd, pixels, description="3D", **extra):
     """co-other.json with a 3D display, and a map of `pixels`: (x, y, z,
     first channel 0-based), each one RGB. A pixel given as (x, y, ch) is
-    written in the map's short form, with no z."""
+    written in the map's short form, with no z.
+
+    co-other.json is written to a temp file and renamed into place, as the
+    UI's save (WriteFileAtomic) does: one reload per save. Written in place,
+    the truncate and the write are two inotify events, and on a Pi 5 the
+    second reload landed after the test had moved on."""
     lines = ["100,100"]
     for p in pixels:
         lines.append(",".join(map(str, p)) + ",3,RGB")
     fppd.write("config/virtualdisplaymap", "\n".join(lines) + "\n")
-    fppd.write("config/co-other.json", {"channelOutputs": [dict({
+    tmp = fppd.write("config/.co-other.json.tmp", {"channelOutputs": [dict({
         "type": "HTTPVirtualDisplay3D", "enabled": 1, "startChannel": 1,
         "channelCount": 3, "port": PORT, "description": description}, **extra)]})
+    os.rename(tmp, os.path.join(fppd.media, "config", "co-other.json"))
 
 
 def connect(timeout=2):
