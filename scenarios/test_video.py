@@ -1066,3 +1066,32 @@ def test_a_camera_group_stands_aside_for_a_video_and_comes_back(fppd, audio):
                   interval=0.1, what="the camera to start again after the video")
     during = [t for t in camera_events("frame") if stopped < t < ended - 0.5]
     assert not during, f"the camera showed {len(during)} frames under the video"
+
+
+def test_every_kmssink_skips_vsync(fppd, audio):
+    """Every kmssink fppd builds -- a camera group's persistent one and a
+    video's -- is started with skip-vsync, so none of them waits for a
+    page-flip event on its DRM fd.
+
+    Regression: 081ff8d9e. The camera group's kmssink was built without it.
+    When its connector can't be leased (a restart while the old pipeline
+    still holds it) it gets the card's shared fd, whose events the
+    framebuffer outputs drain: it stalled 3 s on an event they took, or ran
+    its handler on one of theirs (SIGSEGV). Only the flag is checked here;
+    the crossing needs a real card.
+    """
+    make_video(os.path.join(fppd.media, "videos", "Two.mkv"), seconds=2)
+    camera = hdmi_consumer(1, connector_id=77, card="/dev/dri/card9", group=3)
+    setup(fppd, [camera, hdmi_consumer(2, source=None, connector_id=77, card="/dev/dri/card9", group=4)],
+          [source("videotestsrc", pattern="smpte")])
+    fppd.start(extra_env=fake_kms_env(fppd))
+    fppd.wait_for(lambda: [e for e in kms_events(fppd) if e[0] == "frame" and e[2] == 77],
+                  timeout=20, what="the camera's first frame")
+    fppd.command("Play Media", "Two.mkv", "1", "0", "1", "HDMI-A-1")
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=15, interval=0.1,
+                  what="the video to end")
+    events = kms_events(fppd)
+    starts = [e for e in events if e[0] == "start"]
+    waiting = [e for e in events if e[0] == "waitvsync"]
+    assert len(starts) >= 2, f"expected the camera's and the video's sinks to start: {events}"
+    assert not waiting, f"kmssinks started without skip-vsync: {waiting}"

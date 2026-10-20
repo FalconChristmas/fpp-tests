@@ -74,6 +74,8 @@ static gboolean gst_fake_kms_start(GstBaseSink* sink) {
     GstFakeKms* self = GST_FAKE_KMS(sink);
     self->frames = 0;
     record(self, "start");
+    // a real kmssink without skip-vsync reads page-flip events off its fd
+    record(self, self->skip_vsync ? "skipvsync" : "waitvsync");
     return TRUE;
 }
 
