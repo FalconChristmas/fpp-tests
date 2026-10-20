@@ -449,3 +449,208 @@ def test_an_unsigned_boot_config_removal_takes_whole_lines(fppinit):
     assert "dtparam=audio=on" in lines and "dtparam=i2c_arm=on" in lines, cfg
     assert "audio=on" not in lines and "i2c_arm=on" not in lines, cfg
     assert "dtoverlay=fpp-test-remove-me" not in lines, cfg
+
+
+@pytest.mark.parametrize("jurisdiction,applied", [("EU", False), (None, False), ("US", True)],
+                         ids=["EU", "unknown", "US"])
+def test_a_cape_cannot_switch_on_vendor_logos_where_consent_is_needed(fppinit, jurisdiction, applied):
+    """FetchVendorLogos is held like the telemetry settings: a cape's
+    default of 1 is refused where the jurisdiction needs prior opt-in or
+    isn't known, and applied elsewhere.
+
+    Regression: e88c318bb. It was the one privacy key with no transmitRank,
+    so a cape switched it on everywhere, and the setup wizard showed it as
+    if the user had answered."""
+    if jurisdiction:
+        fppinit.settings(LegalJurisdiction=jurisdiction)
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(defaultSettings={
+        "FetchVendorLogos": "1", "CapeTestUnset": "cape"})))
+    out = detect(fppinit)
+    s = settings_of(fppinit)
+    assert s.get("CapeTestUnset") == "cape", f"the control: a plain default is applied\n{out}"
+    if applied:
+        assert s.get("FetchVendorLogos") == "1", out
+    else:
+        assert "FetchVendorLogos" not in s, f"FetchVendorLogos set to {s['FetchVendorLogos']!r}:\n{out}"
+        assert "prior opt-in" in out, out
+
+
+# The cape overlay files on a Pi, in the sandbox's /boot/firmware.
+OVERLAYS = "overlays"
+BASE = "fpp-cape-overlay.dtbo"
+DEFAULT = "fpp-cape-overlay-default.dtbo"
+VARIANT_BEGIN = "# FPP Cape Overlay Variants - BEGIN (managed by fppcapedetect, do not edit)"
+VARIANT_END = "# FPP Cape Overlay Variants - END"
+
+
+def boot_write(sb, rel, content):
+    path = os.path.join(sb.boot, rel)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb" if isinstance(content, bytes) else "w") as f:
+        f.write(content)
+
+
+def boot_read(sb, rel):
+    path = os.path.join(sb.boot, rel)
+    if not os.path.exists(path):
+        return None
+    with open(path, "rb") as f:
+        return f.read()
+
+
+def overlay_files(sb):
+    return set(os.listdir(os.path.join(sb.boot, OVERLAYS)))
+
+
+def asked_to_reboot(sb):
+    """Cape detection reboots through reboot(2), which the sandbox refuses;
+    the marker it writes first is what shows it tried."""
+    return sb.written("/.fppcapereboot") is not None
+
+
+# Run fppcapedetect with /proc/device-tree/chosen/overlays empty, as on a box
+# where no cape overlay resolved at boot. The sandbox stubs mount(8), so the
+# tmpfs goes on with mount(2).
+HIDE_RESOLVED = r"""
+import ctypes, os, sys
+libc = ctypes.CDLL(None, use_errno=True)
+d = os.path.realpath("/proc/device-tree") + "/chosen/overlays"
+if os.path.isdir(d) and libc.mount(b"tmpfs", d.encode(), b"tmpfs", 0, None) != 0:
+    sys.exit("mount over %s: %s" % (d, os.strerror(ctypes.get_errno())))
+os.execv("/opt/fpp/src/fppcapedetect", ["fppcapedetect"] + sys.argv[1:])
+"""
+
+
+def detect_unresolved(sb, *args):
+    """detect(), on a box whose cape overlay did not resolve at boot."""
+    if not os.path.exists(os.path.join(sb.tree, "src", "fppcapedetect")):
+        pytest.skip("no fppcapedetect in the tree under test")
+    r = sb._run(["/usr/bin/python3", "-I", "-c", HIDE_RESOLVED, "-no-set-permissions", *args],
+                media_home=True)
+    out = r.stdout + r.stderr
+    assert "AddressSanitizer" not in out and "terminate called" not in out, out[-3000:]
+    assert r.returncode == 0, f"fppcapedetect exited {r.returncode}:\n{out[-3000:]}"
+    return out
+
+
+pi_only = pytest.mark.skipif(not on_pi(), reason="the cape overlay is a Pi config.txt one")
+
+
+@pi_only
+def test_a_cape_overlay_variant_comes_and_goes_with_its_cape(fppinit):
+    """A cape shipping fpp-cape-overlay-rpi-pi5.dtb beside its base overlay
+    gets it installed as overlays/fpp-cape-overlay-pi5.dtbo and named in a
+    marked block, "[pi5]" to "[all]". A variant whose filter name is not a
+    plain config.txt filter (a space, a newline carrying another line, the
+    reserved "default") is refused. The base overlay line goes in as a line
+    of its own under "[all]", though config.txt already names the variant.
+    Re-detecting a cape without the variant removes both the .dtbo and the
+    block.
+
+    Feature: 6bdebe83d (board specific overlay variants), including its two
+    fixes: "dtoverlay=fpp-cape-overlay" was found as a substring of the
+    variant's line, so the base line was never written, and when it was it
+    was appended under whatever filter config.txt ended in."""
+    boot_write(fppinit, f"{OVERLAYS}/{DEFAULT}", b"default overlay")
+    boot_write(fppinit, f"{OVERLAYS}/{BASE}", b"default overlay")
+    original = "dtparam=audio=on\n[pi4]\ndtoverlay=fpp-cape-overlay-pi5\n"
+    boot_write(fppinit, "config.txt", original)
+    files = {
+        "fpp-cape-overlay-rpi.dtb": "base overlay",
+        "fpp-cape-overlay-rpi-pi5.dtb": "pi5 overlay",
+        "fpp-cape-overlay-rpi-pi4 x.dtb": "spaced",
+        "fpp-cape-overlay-rpi-pi4\n[all]\nkernel=evil.img\n.dtb": "carrier",
+        "fpp-cape-overlay-rpi-default.dtb": "reserved",
+    }
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(), files=files))
+    out = detect(fppinit)
+    assert boot_read(fppinit, f"{OVERLAYS}/{BASE}") == b"base overlay", out
+    assert boot_read(fppinit, f"{OVERLAYS}/fpp-cape-overlay-pi5.dtbo") == b"pi5 overlay", out
+    assert overlay_files(fppinit) == {BASE, DEFAULT, "fpp-cape-overlay-pi5.dtbo"}, out
+    assert boot_read(fppinit, f"{OVERLAYS}/{DEFAULT}") == b"default overlay"
+    cfg = fppinit.boot_file("config.txt")
+    lines = [l.strip() for l in cfg.splitlines()]
+    assert "kernel=evil.img" not in lines, cfg
+    assert "dtoverlay=fpp-cape-overlay" in lines, f"the base overlay line is missing:\n{cfg}"
+    base_at = lines.index("dtoverlay=fpp-cape-overlay")
+    assert lines[base_at - 1] == "[all]", f"the base overlay line inherits a filter:\n{cfg}"
+    block = f"{VARIANT_BEGIN}\n[pi5]\ndtoverlay=fpp-cape-overlay-pi5\n[all]\n{VARIANT_END}\n"
+    assert cfg.count(VARIANT_BEGIN) == 1 and block in cfg, cfg
+    assert asked_to_reboot(fppinit), f"the overlays changed, which needs a reboot\n{out}"
+
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(), files={
+        "fpp-cape-overlay-rpi.dtb": "base overlay"}))
+    out = detect(fppinit)
+    assert overlay_files(fppinit) == {BASE, DEFAULT}, out
+    cfg = fppinit.boot_file("config.txt")
+    assert VARIANT_BEGIN not in cfg and "[pi5]" not in cfg, cfg
+    assert "dtoverlay=fpp-cape-overlay" in [l.strip() for l in cfg.splitlines()], cfg
+    assert asked_to_reboot(fppinit), out
+
+
+@pi_only
+def test_a_cape_without_variants_leaves_config_txt_alone(fppinit):
+    """A cape whose base overlay is already installed and which ships no
+    variants changes nothing, byte for byte, on a config.txt that ends in a
+    blank line (the shape of a stock one), and asks for no reboot.
+
+    Regression: 1369fd71a. The variant block writer trimmed trailing
+    newlines before comparing, so the file was rewritten for the
+    whitespace, and every Pi with a cape rebooted once on upgrade."""
+    boot_write(fppinit, f"{OVERLAYS}/{DEFAULT}", b"default overlay")
+    boot_write(fppinit, f"{OVERLAYS}/{BASE}", b"base overlay")
+    original = "dtparam=audio=on\n[all]\ndtoverlay=fpp-cape-overlay\n\n"
+    boot_write(fppinit, "config.txt", original)
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(), files={
+        "fpp-cape-overlay-rpi.dtb": "base overlay"}))
+    out = detect(fppinit)
+    assert fppinit.boot_file("config.txt") == original, fppinit.boot_file("config.txt")
+    assert not asked_to_reboot(fppinit), out
+    assert not fppinit.media_exists("tmp/reboot"), out
+
+
+@pi_only
+def test_no_cape_puts_the_default_overlay_back_over_one_that_never_resolved(fppinit):
+    """With no cape, an installed overlay that is not the shipped default
+    -- one left by a previous cape -- is replaced by the default and a
+    reboot is asked for, even though no cape overlay resolved at boot (the
+    firmware drops an overlay that references a symbol the board lacks).
+    Once it is the default, detecting again is a no-op.
+
+    Regression: 0eb78b87f. The restore was gated on
+    /proc/device-tree/chosen/overlays/fpp-cape-overlay, which exists only
+    for an overlay that resolved, so the broken overlay stayed installed on
+    every boot. (On a box whose node names a non-default overlay, the old
+    check also restored on every run, and asked for a reboot each time.)"""
+    boot_write(fppinit, f"{OVERLAYS}/{DEFAULT}", b"default overlay")
+    boot_write(fppinit, f"{OVERLAYS}/{BASE}", b"previous cape's overlay")
+    boot_write(fppinit, "config.txt", "dtparam=audio=on\n[all]\ndtoverlay=fpp-cape-overlay\n")
+    out = detect_unresolved(fppinit)
+    assert "Could not detect any cape" in out, out
+    assert boot_read(fppinit, f"{OVERLAYS}/{BASE}") == b"default overlay", out
+    assert asked_to_reboot(fppinit), out
+
+    for run in (detect_unresolved, detect):
+        out = run(fppinit)
+        assert boot_read(fppinit, f"{OVERLAYS}/{BASE}") == b"default overlay", out
+        assert not asked_to_reboot(fppinit), f"{run.__name__}: a no-op asked for a reboot\n{out}"
+
+
+@pi_only
+def test_an_eeprom_with_a_bad_header_puts_the_default_overlay_back(fppinit):
+    """An EEPROM that is present but whose header is not an FPP one (here
+    the vendor fallback, zeroed) is no cape: the previous cape's overlay is
+    replaced by the shipped default and a reboot asked for, as when there
+    is no EEPROM at all.
+
+    Regression: 080988700. That path returned without touching the
+    overlay, so the old one stayed applied, its i2c devices holding the
+    bus that rewriting the EEPROM needs."""
+    boot_write(fppinit, f"{OVERLAYS}/{DEFAULT}", b"default overlay")
+    boot_write(fppinit, f"{OVERLAYS}/{BASE}", b"previous cape's overlay")
+    boot_write(fppinit, "config.txt", "dtparam=audio=on\n[all]\ndtoverlay=fpp-cape-overlay\n")
+    fppinit.root_file("/opt/fpp-vendor/cape-eeprom.bin", "\0" * 128)
+    out = detect(fppinit)
+    assert "EEPROM header miss-match" in out, out
+    assert boot_read(fppinit, f"{OVERLAYS}/{BASE}") == b"default overlay", out
+    assert asked_to_reboot(fppinit), out
