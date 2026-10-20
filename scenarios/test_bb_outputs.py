@@ -167,6 +167,61 @@ def test_more_than_48_outputs_on_one_pru_is_refused(fppd):
     assert any("more than 48 outputs on one PRU" in w for w in status.get("warnings", [])), status
 
 
+
+def save_strings(fppd, cfg):
+    """Save co-bbbStrings.json the way the UI does, in one rename, so fppd
+    reloads it once."""
+    tmp = fppd.write("config/co-bbbStrings.json.new", cfg)
+    os.replace(tmp, os.path.join(fppd.media, "config", "co-bbbStrings.json"))
+
+
+def warnings_of(fppd):
+    return fppd.get("/fppd/status").get("warnings", [])
+
+
+def test_a_bbb48string_config_warning_comes_down_when_the_config_is_fixed(fppd):
+    """The "more than 48 outputs" refusal is up while the config asks for
+    49, and comes down when a config that fits is saved -- with no restart.
+
+    Regression: dbc4a571c. BBB48String raised its config warnings with a
+    plain AddWarning(), which an output reload never retracts, so the
+    banner stayed over the working output until fppd restarted.
+    """
+    fake_pru(fppd)
+    write_string_cape("Test49", {"driver": "BBB48String",
+                                 "outputs": [{"pin": "P2-02"} for _ in range(49)]})
+    fppd.write("config/co-bbbStrings.json", strings_config(
+        "BBB48String", "Test49", [pixel_output(n, 1, n * 3) for n in range(49)]))
+    fppd.start(timeout=60)
+    assert any("more than 48 outputs" in w for w in warnings_of(fppd)), warnings_of(fppd)
+    save_strings(fppd, strings_config("BBB48String", "Test49", [pixel_output(0, 10, 0)]))
+    fppd.wait_for(lambda: not any("more than 48 outputs" in w for w in warnings_of(fppd)),
+                  timeout=30, what="the warning to come down")
+
+
+def test_a_bbshiftstring_config_warning_comes_down_when_the_config_is_fixed(fppd):
+    """A BBShiftString config with a port past the cape's pinout warns, and
+    the warning comes down when a config within the pinout is saved.
+
+    Regression: dbc4a571c. BBShiftString raised its config warnings with a
+    plain AddWarning(), which an output reload never retracts.
+    """
+    fake_pru(fppd)
+    write_string_cape("TestShift2", {"driver": "BBShiftString", "outputs": [
+        {"pru": 1, "pin": 0, "index": i} for i in range(2)]})
+    fppd.write("config/co-bbbStrings.json", strings_config(
+        "BBShiftString", "TestShift2", [pixel_output(n, 5, n * 15) for n in range(3)]))
+    fppd.start(timeout=60)
+
+    def past():
+        return [w for w in warnings_of(fppd) if "past the end of the cape's pinout" in w]
+
+    assert past(), warnings_of(fppd)
+    save_strings(fppd, strings_config("BBShiftString", "TestShift2",
+                                      [pixel_output(n, 5, n * 15) for n in range(2)]))
+    fppd.wait_for(lambda: not past(), timeout=30, what="the warning to come down")
+
+
 def test_the_frame_rate_ceiling_without_a_receiver(fppd):
     """Without a Falcon receiver, BBShiftString's frame time estimate is the
     string data plus the firmware's 300 us reset: 20 px (60 bytes) at
