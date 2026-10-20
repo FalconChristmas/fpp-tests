@@ -123,6 +123,29 @@ def test_unregistering_a_variable_listener_waits_for_its_run(fppd):
     assert r == "waited", f"unregisterListener returned while the listener was still running ({r})"
 
 
+
+def test_unregistering_a_settings_listener_waits_for_its_run(fppd):
+    """unregisterSettingsListener() called while the listener is running on
+    another thread returns only after that run ends, so its owner can free
+    what the listener captured (DPIPixels' listener writes into the output
+    an output reload deletes).
+
+    Regression: b868864d3. Since e1bee3f47 listeners are called from a copy
+    with no settings lock held, and nothing counted the calls, so the
+    unregister returned while the listener was still running."""
+    install(fppd, features=["NATIVE_SETTINGS"])
+    fppd.start()
+    time.sleep(1.1)  # the edit lands in a later second than fppd's own writes
+    # A settings file edit is reloaded on the main loop, which calls the
+    # listener there; the unregister below runs on an HTTP thread.
+    fppd.settings(fpptestWatched="1")
+    fppd.wait_for(lambda: str(fppd.command("Native Test In Setting Listener")) == "yes",
+                  timeout=10, interval=0.05, what="the plugin's settings listener to start")
+    r = str(fppd.command("Native Test Unregister Setting", timeout=15))
+    time.sleep(2.5)
+    assert r == "waited", \
+        f"unregisterSettingsListener returned while the listener was still running ({r})"
+
 VERSIONED = r"""
 #include <stdio.h>
 #include <stdlib.h>

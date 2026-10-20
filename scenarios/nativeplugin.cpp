@@ -14,6 +14,8 @@
 //                          the removal waited for a run in progress, "early" if not
 //   NATIVE_VARIABLES       a 2 s listener on variable Watched; "Native Test
 //                          Unregister" likewise
+//   NATIVE_SETTINGS        a 2 s listener on setting fpptestWatched; "Native
+//                          Test Unregister Setting" likewise
 
 #include <atomic>
 #include <chrono>
@@ -34,6 +36,9 @@
 #endif
 #if defined(NATIVE_VARIABLES)
 #include "Variables.h"
+#endif
+#if defined(NATIVE_SETTINGS)
+#include "settings.h"
 #endif
 
 #ifdef FPP_PLUGIN_SUPPORTS_UNLOAD
@@ -123,6 +128,20 @@ public:
             return std::string(inListener ? "yes" : "no");
         });
 #endif
+#if defined(NATIVE_SETTINGS)
+        registerSettingsListener("fpptest", "fpptestWatched", [this](const std::string&) {
+            inSettingListener = true;
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            inSettingListener = false;
+        });
+        add("Native Test Unregister Setting", [this](const std::vector<std::string>&) {
+            unregisterSettingsListener("fpptest", "fpptestWatched");
+            return std::string(inSettingListener ? "early" : "waited");
+        });
+        add("Native Test In Setting Listener", [this](const std::vector<std::string>&) {
+            return std::string(inSettingListener ? "yes" : "no");
+        });
+#endif
     }
     virtual ~NativeTestPlugin() {
 #if defined(NATIVE_TIMERS)
@@ -165,6 +184,9 @@ private:
 #endif
 #if defined(NATIVE_VARIABLES)
     std::atomic<bool> inListener{ false };
+#endif
+#if defined(NATIVE_SETTINGS)
+    std::atomic<bool> inSettingListener{ false };
 #endif
 };
 

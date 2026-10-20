@@ -555,6 +555,61 @@ def test_submodel_of_a_reloaded_auto_model(fppd):
         keeps_sending(rx)
 
 
+def test_retired_auto_model_freed_late_leaves_its_replacement_alone(fppd):
+    """An output's own model kept alive past an output reload (a playlist
+    image entry holds it until its next draw) is freed without touching
+    the model that replaced it: the replacement's shared memory stays
+    linked, and its submodel, enabled again after the reload, stays
+    enabled. Two rounds.
+
+    Regression: fbd28f211. The retired model's destructor acted on its
+    name: it shm_unlink()ed /FPP-Model-Data-Panel, which the replacement
+    had attached to, and reset every submodel in its child list by name,
+    so the replacement's submodel was disabled. That reset also took
+    modelsLock, which a submodel's setState() on the effect thread reaches
+    holding the submodel's effectLock (the reverse lock order)."""
+    hold = 3
+    fppd.write("config/channeloutputs.json", colorlight_panel())
+    fppd.write("config/co-universes.json", ddp_output(PANEL_CHANNELS))
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": [
+        submodel("Corner", "Panel", 0, 0, 4, 2)]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    os.makedirs(os.path.join(fppd.media, "images"), exist_ok=True)
+    with open(os.path.join(fppd.media, "images", "Panel.ppm"), "wb") as f:
+        f.write(b"P6\n32 16\n255\n" + bytes((0, 5, 0)) * (32 * 16))
+    fppd.write("playlists/Img.json", {
+        "name": "Img", "repeat": 1, "loopCount": 0, "leadIn": [], "leadOut": [],
+        "mainPlaylist": [
+            {"type": "image", "enabled": 1, "playOnce": 0, "modelName": "Panel",
+             "imagePath": "Panel.ppm"},
+            {"type": "pause", "enabled": 1, "playOnce": 0, "duration": hold}]})
+    shm = "/dev/shm/FPP-Model-Data-Panel"
+
+    def corner_state():
+        m = [x for x in fppd.get("/overlays/models") if x.get("Name") == "Corner"]
+        return m[0].get("isActive") if m else None
+
+    with DdpReceiver(PANEL_CHANNELS):
+        fppd.start()
+        fppd.wait_for(lambda: "Panel" in [m.get("Name") for m in fppd.get("/models") or []],
+                      what="the panel's own model")
+        fill(fppd, "Corner", [0, 0, 11])  # Corner is in the panel's child list
+        fppd.command("Start Playlist", "Img", "true", "false")
+        time.sleep(1)  # the image is drawn; the entry holds the panel model
+        for round in range(2):
+            resave_outputs(fppd)  # retires the panel model and resets Corner
+            fill(fppd, "Corner", [0, 0, 12 + round])  # into the new panel model
+            fppd.wait_for(lambda: corner_state() == 1, what="Corner enabled again")
+            assert os.path.exists(shm), f"round {round + 1}: no {shm} after the reload"
+            # The entry draws again and drops the retired model.
+            time.sleep(hold + 1.5)
+            assert corner_state() == 1, \
+                f"round {round + 1}: freeing the retired model disabled the new model's submodel"
+            assert os.path.exists(shm), \
+                f"round {round + 1}: freeing the retired model unlinked the new model's {shm}"
+            fill(fppd, "Corner", [0, 0, 11])  # back in the new panel's child list
+
+
 @pytest.mark.parametrize("gap", [0, 5])
 def test_stop_effects_on_an_idle_model_is_not_left_pending(fppd, gap):
     """Stop Effects on a model that is disabled (nothing running, or an
