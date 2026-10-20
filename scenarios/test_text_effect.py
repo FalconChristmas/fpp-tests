@@ -6,6 +6,8 @@ Every colour mode draws the text white and paints that coverage mask, so a
 Single white render of the same text is the mask itself. The still modes are
 checked pixel for pixel against it: a gradient's colour at each pixel is
 known from where the pixel sits in the ink, scaled by its coverage.
+
+Feature: a49b990df (TextColorizer, the colour modes).
 """
 
 import time
