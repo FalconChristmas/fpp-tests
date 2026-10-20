@@ -85,7 +85,10 @@ def test_link_local_entry_gives_way_to_the_routable_one(fppd):
 
 def test_ping_uuid_is_kept_only_when_printable(fppd):
     """A v4 ping's UUID identifies the device; one with control characters
-    in it is dropped rather than stored."""
+    in it is dropped rather than stored.
+
+    Regression: 561b26716, which added the UUID to ping v4. On its parent a
+    remote's UUID was never read from the packet."""
     fppd.start()
     send(ping_packet("10.20.30.43", "peer-d", uuid="abcd-1234"))
     send(ping_packet("10.20.30.44", "peer-e", uuid=b"ab\x01\x02cd"))

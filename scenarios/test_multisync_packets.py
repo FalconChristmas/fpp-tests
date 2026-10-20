@@ -94,7 +94,9 @@ def test_hostile_control_packets_are_survived(fppd, mode):
     sender wrote; on its parent a burst of short packets misaligned the
     skip-stale-sync indexes with the receive buffers, a heap-use-after-free)
     and bcc9fda5f (ping fields strcpy()'d into a stack buffer: with that
-    copy put back, a stack-buffer-overflow).
+    copy put back, a stack-buffer-overflow) and cf9df1173 (the error paths
+    hex-dumped the stack slot holding the packet pointer for the packet's
+    length: on its parent, a stack-buffer-overflow in HexDump()).
     """
     write_fseq(f"{fppd.media}/sequences/Show.fseq", unique_frames(400, CHANNELS), step_ms=STEP_MS)
     fppd.write("config/co-universes.json", ddp_output(CHANNELS))

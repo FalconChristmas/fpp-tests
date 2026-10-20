@@ -298,6 +298,43 @@ def test_master_sends_multisync_commands(fppd):
     assert variable(fppd, "Everyone") == "all", "a command for every host didn't run here"
 
 
+def test_a_multisync_command_too_big_for_a_packet_is_neither_sent_nor_run(fppd):
+    """A MultiSync command whose arguments don't fit one packet is refused
+    as a whole: no packet goes out, and it doesn't run here either, so this
+    host and its remotes can't disagree about what ran. Neither does one
+    with more than 255 arguments, whose count doesn't fit its byte.
+
+    Regression: 8b8332e51 (MS-8). The packet was built in a 2048-byte
+    buffer, but receivers read 1500 bytes and drop a truncated datagram, so
+    the command ran here and nowhere else; past 2048 its arguments were cut
+    short; and 300 arguments went out with a count of 44.
+    """
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(MultiSyncEnabled="1", MultiSyncRemotes=REMOTE, DisableFakeNetworkBridges="1")
+    with UdpCapture(PORT, REMOTE) as cap:
+        fppd.start()
+        fppd.post("/command", {"command": "Set Variable", "multisyncCommand": True,
+                               "multisyncHosts": "",
+                               "args": ["Big", "Value", "x" * 1600, "1", "0", "100", ""]})
+        fppd.post("/command", {"command": "Set Variable", "multisyncCommand": True,
+                               "multisyncHosts": "",
+                               "args": ["Many", "Value", "y", "1", "0", "100", ""] + ["z"] * 293})
+        # The control: one that fits still goes out and runs.
+        fppd.post("/command", {"command": "Set Variable", "multisyncCommand": True,
+                               "multisyncHosts": "",
+                               "args": ["Small", "Value", "s", "1", "0", "100", ""]})
+        time.sleep(1)
+        packets = [p for _, _, _, p in cap.snapshot()]
+    sent = [c for c in (parse_fpp_command(p) for p in packets) if c]
+    assert ("", "Set Variable", ["Small", "Value", "s", "1", "0", "100", ""]) in sent, sent
+    assert variable(fppd, "Small") == "s"
+    oversized = [len(p) for p in packets if len(p) > 1500]
+    assert not oversized, f"datagrams longer than a receiver reads: {oversized}"
+    assert not [c for c in sent if c[2][:1] in (["Big"], ["Many"])], sent
+    assert variable(fppd, "Big") is None, "a command too big to send ran here"
+    assert variable(fppd, "Many") is None, "a command with too many arguments ran here"
+
+
 @pytest.mark.parametrize("entry_type", ["both", "media"])
 def test_master_announces_its_media(fppd, audio, entry_type):
     """A master playing media tells its remotes about the media as well:

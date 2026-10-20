@@ -173,7 +173,10 @@ def test_quiet_clients_hear_changes_and_a_keepalive_only(fppd):
     hears nothing while a plain client hears the clock tick, then gets a keepalive about 30 s after its last
     snapshot (with the clock moved on and nothing else different). A new
     warning (an unknown command) reaches both clients, and so does a playlist
-    starting."""
+    starting.
+
+    Regression: 6160f962f, which added ?quiet=1. On its parent every client
+    gets the clock tick, so the quiet one hears it too."""
     show(fppd)
     fppd.start()
     # Without an avahi-daemon (as in Docker), fppd adds a warning about it

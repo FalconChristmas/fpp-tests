@@ -281,6 +281,70 @@ def test_polar_mapping_without_the_geometry_behaves_as_horizontal(fppd):
                                f"{mapping} on {name}", first=first)
 
 
+def test_model_preview_numbers_points_by_node(fppd):
+    """GET /overlays/model/<m>/preview lists the model's points in node
+    order, each as [x, y, z, node], with the node number taken from the
+    point's channel, however the layout file orders them.
+
+    Regression: 7c6a64c98. xLights writes a model's points in spatial
+    order, and the preview listed them in file order as [x, y, z]; the
+    page took a point's position in the list as its node number, so a
+    submodel's highlighted nodes landed on the wrong pixels.
+    """
+    setup(fppd, [matrix("M", start=31, width=4, height=1)])
+    # Channels 30, 33, 36, 39 are nodes 1-4; written right to left.
+    lines = ["400,400", "# Model: 'M'"]
+    for node in (4, 2, 3, 1):
+        lines.append(f"{node * 10},5,0,{30 + 3 * (node - 1)},3,RGB")
+    fppd.write("config/virtualdisplaymap", "\n".join(lines) + "\n")
+    fppd.start()
+    pixels = fppd.get("/overlays/model/M/preview")["pixels"]
+    assert pixels == [[10, 5, 0, 1], [20, 5, 0, 2], [30, 5, 0, 3], [40, 5, 0, 4]], pixels
+
+
+def test_a_large_model_preview_does_not_stall_its_effect(fppd):
+    """Fetching the preview of a model with a very large layout doesn't
+    freeze the effect running on it.
+
+    Regression: 427c43e76. The preview parsed config/virtualdisplaymap,
+    sorted it and built the reply under the model list's lock and the
+    model's effect lock, so the effect thread (and the output thread, when
+    the effect updates after output) waited out the whole parse: here
+    about as long as the request took.
+    """
+    import threading
+    from test_overlays import effect, wait_output
+    width, height = 32, 16
+    channels = width * height * 3
+    setup(fppd, [matrix("M", width=width, height=height)], channels=channels)
+    points = 300000
+    lines = ["400,400", "# Model: 'M'"]
+    lines += [f"{i % 400},{i // 400 % 400},0,{3 * (i % (width * height))},3,RGB" for i in range(points)]
+    fppd.write("config/virtualdisplaymap", "\n".join(lines) + "\n")
+    with DdpReceiver(channels) as rx:
+        fppd.start()
+        effect(fppd, "M", "WLED - Rainbow")
+        wait_output(fppd, rx, lambda f: any(f), "the effect to draw")
+        took = []
+
+        def preview():
+            t = time.monotonic()
+            fppd.get("/overlays/model/M/preview", timeout=60)
+            took.append(time.monotonic() - t)
+        since = time.monotonic()
+        threads = [threading.Thread(target=preview) for _ in range(2)]
+        for t in threads:
+            t.start()
+            t.join()
+        frames = rx.snapshot(since)
+    # The control: the parse is long enough that a stall behind it shows.
+    assert min(took) > 0.5, f"the preview took only {took}"
+    changes = [t for (t, f), (_, prev) in zip(frames[1:], frames) if f != prev]
+    marks = [since] + changes + [frames[-1][0]]
+    frozen = max(b - a for a, b in zip(marks, marks[1:]))
+    assert frozen < 0.4, f"the effect froze for {frozen:.2f} s while the preview took {took}"
+
+
 def test_polar_mapping_on_a_rectangle_submodel_joins_through_its_parent(fppd):
     """A rectangle submodel's cells are placed in the layout by the parent's
     channels they draw on. The parent is 26 x 2 nodes from channel 1; the
