@@ -10,6 +10,11 @@ setup('finish the initial setup wizard', async ({ page }) => {
   // always has one; the container has none, so it waits out the whole time.
   setup.setTimeout(120_000);
   await page.goto('/initialSetup.php');
+  // Step 1 can't be left until the jurisdiction is answered (0e5557818).
+  page.once('dialog', (d) => d.accept());
+  await page.click('#setupNextBtn');
+  await expect(page.locator('.setupStep[data-step="1"]')).toBeVisible();
+  await expect(page.locator('.setupStep[data-step="2"]')).toBeHidden();
   await page.selectOption('#LegalJurisdiction', 'US');
   for (const step of [2, 3, 4]) {
     await page.click('#setupNextBtn');
