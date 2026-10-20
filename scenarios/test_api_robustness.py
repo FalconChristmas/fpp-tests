@@ -215,3 +215,20 @@ def test_overlay_range_put_validates_before_changing_anything(fppd):
         time.sleep(0.5)
         assert rx.last()[:3] == bytes([200] * 3), "a refused request changed the range"
         assert not any(rx.last()[3:6]), "a refused request applied a range before the bad one"
+
+
+def test_a_body_that_does_not_parse_is_not_logged_whole(fppd):
+    """A command POST whose JSON body doesn't parse is refused, and the log
+    shows only the start of the body, not all of it: bodies carry
+    credentials and other configuration, and every logged line reaches the
+    crash report's log ring.
+
+    Regression: b3c330134. LoadJsonFromString() logged the whole of any
+    input it could not parse, and the whole of every input it could."""
+    fppd.start()
+    body = '["' + "x" * 1000 + "LEAK-MARKER"
+    assert code_of(fppd, "POST", "/command/Set%20Variable", body.encode()) == 400
+    time.sleep(0.5)
+    log = fppd.log()
+    assert "x" * 100 in log, "the parse error was not logged at all, so this proves nothing"
+    assert "LEAK-MARKER" not in log, "the whole unparsed body went to the log"

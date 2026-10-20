@@ -139,3 +139,21 @@ def test_the_schedulers_plan_matches_the_calendar(fppd):
     assert planned == shown, (f"planned only: {sorted(planned - shown)[:5]}, "
                               f"shown only: {sorted(shown - planned)[:5]}")
     assert len(planned) > 10, planned
+
+
+@pytest.mark.parametrize("start", [100000000000000000, 400000000000000000])
+def test_calendar_range_past_any_year_answers(fppd, start):
+    """A range whose start is too far out for a calendar date answers at
+    once, with nothing in it, and fppd goes on answering.
+
+    Regression: 698a3e910. The date conversion of such a start failed,
+    and the day-by-day walk began from an uninitialized date that came out
+    near the epoch: about 10^12 steps holding an API thread, so the request
+    never answered.
+    """
+    show(fppd)
+    fppd.write("config/schedule.json", entries())
+    fppd.start()
+    got = fppd.get(f"/fppd/schedule/range?start={start}&end={start + 86400}", timeout=10)
+    assert got["schedule"]["items"] == [], got
+    fppd.get("/fppd/status", timeout=5)

@@ -399,3 +399,158 @@ def test_dmx_serial_input_lands_on_its_channels(fppd):
         finally:
             sending.clear()
             t.join()
+
+
+def warnings(fppd):
+    return fppd.get("/fppd/status").get("warnings", [])
+
+
+def test_artnet_input_starts_once_its_port_is_free(fppd):
+    """ArtNet input configured while another program holds UDP 6454 starts
+    working once the port is free, with no config save to prompt it.
+
+    Regression: c972d01ba (BR-4). The ArtNet input handlers were added only
+    if the port opened as the input config loaded, and nothing tried again:
+    ArtNet input stayed dead until fppd restarted.
+    """
+    setup(fppd)
+    data = bytes([0x5A]) * ARTNET_SIZE
+    held = Listener(ARTNET_PORT, host="0.0.0.0")
+    try:
+        with Listener(OUT_PORT) as out:
+            fppd.start()
+            time.sleep(1)
+            held.close()
+            held = None
+            with Sender(lambda n: [(artdmx(ARTNET_UNIVERSE, data, seq=n), ARTNET_PORT)]):
+                wait_output(fppd, out, lambda f: region(f, ARTNET_START, ARTNET_SIZE) == data,
+                            "ArtNet input once its port was free", timeout=20)
+    finally:
+        if held:
+            held.close()
+
+
+def test_artnet_and_e131_universes_of_one_number_stay_apart(fppd):
+    """ArtNet universe 10 is not E1.31 universe 10: ArtNet data for a
+    universe number only E1.31 is configured for lands nowhere.
+
+    Regression: c972d01ba (BR-5). The input lookup matched the universe
+    number alone, so the ArtNet packets wrote E1.31 universe 10's channels.
+    """
+    setup(fppd)
+    control = bytes([0x5A]) * ARTNET_SIZE
+    stray = bytes([0xAB]) * E131_SIZE
+    with Listener(OUT_PORT) as out:
+        fppd.start()
+        with Sender(lambda n: [(artdmx(10, stray, seq=n), ARTNET_PORT),
+                               (artdmx(ARTNET_UNIVERSE, control, seq=n), ARTNET_PORT)]):
+            wait_output(fppd, out, lambda f: region(f, ARTNET_START, ARTNET_SIZE) == control,
+                        "the ArtNet universe that is configured")
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:
+                got = region(last(out), E131_START, E131_SIZE)
+                assert not any(got), "ArtNet universe 10 landed on E1.31 universe 10's channels"
+                time.sleep(0.05)
+
+
+def test_unconfigured_e131_from_many_sources_raises_a_few_warnings(fppd):
+    """E1.31 arriving with no input configured raises a warning naming its
+    source, for the first eight sources; the rest share one. Forty sources
+    (the source address is whatever a packet says) raise nine.
+
+    Regression: c972d01ba (BR-8). Every new source added its own warning,
+    without limit: forty here.
+    """
+    import socket
+    fppd.start()
+    for n in range(2, 42):
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.bind((f"127.0.0.{n}", 0))
+            s.sendto(e131(10, bytes(10)), ("127.0.0.1", E131_PORT))
+    fppd.wait_for(lambda: [w for w in warnings(fppd) if w.startswith("Received E1.31 data from")],
+                  timeout=5, what="a warning about the E1.31 data")
+    time.sleep(1)
+    raised = [w for w in warnings(fppd) if w.startswith("Received E1.31 data from")]
+    assert len(raised) <= 9, f"{len(raised)} warnings about E1.31 sources"
+
+
+def test_dmx_input_device_warning_clears_when_the_input_goes(fppd):
+    """A DMX input whose device can't be opened raises a warning, and
+    saving the DMX input config without it takes the warning down.
+
+    Regression: c972d01ba (BR-7). The warning was never removed.
+    """
+    def dmx(enabled):
+        return {"channelInputs": [{"type": "dmx", "enabled": enabled, "device": "ttyNOPE",
+                                   "startAddress": 1, "channelCount": 10}]}
+    fppd.write("config/ci-dmx.json", dmx(1))
+    fppd.start()
+    fppd.wait_for(lambda: [w for w in warnings(fppd) if "Could not open DMX input device" in w],
+                  timeout=10, what="the DMX device warning")
+    fppd.write("config/ci-dmx.json", dmx(0))
+    fppd.wait_for(lambda: not [w for w in warnings(fppd) if "Could not open DMX input device" in w],
+                  timeout=10, what="the DMX device warning to clear")
+
+
+def test_input_universes_are_capped_in_total(fppd):
+    """Input rows are capped at 65536 universes in total, not only each:
+    three rows of 65536 keep the first 65536, with a warning saying so.
+
+    Regression: c972d01ba (BR-9). There was no cap across rows and no
+    warning: a hundred such rows built millions of entries.
+    """
+    row = {"active": 1, "id": 1, "universeCount": 65536, "startChannel": 1,
+           "channelCount": 512, "type": 1, "priority": 0, "address": ""}
+    fppd.write("config/ci-universes.json", {"channelInputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 512,
+        "universes": [dict(row) for _ in range(3)]}]})
+    fppd.start()
+    fppd.wait_for(lambda: [w for w in warnings(fppd) if "only the first 65536" in w],
+                  timeout=10, what="the universe cap warning")
+
+
+@pytest.mark.parametrize("port", [E131_PORT, 32320], ids=["e131", "multisync"])
+def test_a_flood_of_input_does_not_hold_the_main_loop(fppd, port):
+    """While packets arrive faster than fppd reads them, its main loop
+    still gets to its other work: a save of the input config made during
+    the flood takes effect. slowrecv.so makes each read on the main loop
+    take 10 ms, so a sender in a loop here outruns it. The flood is E1.31
+    input itself, or junk on the MultiSync port with E1.31 streaming
+    alongside at a normal rate.
+
+    Regression: 097a2c743. Each input handler (and MultiSync's) read its
+    socket until it was empty, so a sender faster than fppd kept the main
+    loop inside it for as long as the flood lasted: the config save was
+    never picked up.
+    """
+    import socket
+    import threading
+
+    import shims
+    setup(fppd)
+    data = bytes([0xA5]) * E131_SIZE
+    flood_packet = e131(10, data) if port == E131_PORT else b"FPPD\x01\x00\x00"
+    flooding = threading.Event()
+
+    def flood():
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            while flooding.is_set():
+                for _ in range(100):
+                    s.sendto(flood_packet, ("127.0.0.1", port))
+
+    with Listener(OUT_PORT) as out:
+        fppd.start(preload=[shims.build("slowrecv.c")], extra_env={"SLOWRECV_MS": "10"})
+        with Sender(lambda n: [(e131(10, data, seq=n), E131_PORT)]):
+            wait_output(fppd, out, lambda f: region(f, E131_START, E131_SIZE) == data,
+                        "the E1.31 data before the flood")
+            flooding.set()
+            t = threading.Thread(target=flood, daemon=True)
+            t.start()
+            try:
+                time.sleep(1)
+                fppd.write("config/ci-universes.json", inputs(e131_start=301))
+                wait_output(fppd, out, lambda f: region(f, 301, E131_SIZE) == data,
+                            "the input config saved during the flood to take effect", timeout=6)
+            finally:
+                flooding.clear()
+                t.join()

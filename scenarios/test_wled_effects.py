@@ -116,3 +116,57 @@ def test_audio_sync_packet_with_an_infinite_peak(fppd):
         time.sleep(1)
         assert rx.count(since) > 5, "output stopped"
         stop_effects(fppd, "M", timeout=5)
+
+
+def test_audio_sync_sender_survives_media(fppd, audio):
+    """With WLED Audio Sync sending and media playing, the sender analyses
+    every audio frame and sends it, and fppd stays up.
+
+    Regression: bcf77f734. computeAudioFrame() binned the spectrum into a
+    17-entry array, but its loop fills bucket 17 as well: at 44.1 or 48 kHz
+    the top bins land there, so every frame wrote one float past the array
+    on the sender's thread (an ASan stack-buffer-overflow on the first)."""
+    import os
+    from audio import write_tone_wav
+    from udp import Listener
+    port = 21988
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 10, freq=1000)
+    fppd.settings(WLEDAudioSyncMode="send", WLEDAudioSyncDest="127.0.0.1",
+                  WLEDAudioSyncPort=str(port))
+    with Listener(port) as rx:
+        fppd.start()
+        fppd.command("Play Media", "Tone.wav", "1", "0", "1")
+        fppd.wait_for(lambda: rx.count_since(0) >= 50, timeout=15,
+                      what="the sender to analyse and send the playing media")
+        time.sleep(2)
+        fppd.check_alive()
+
+
+def test_effects_on_two_differently_shaped_models(fppd):
+    """A WLED effect keeps drawing all of its 32x16 model after another
+    WLED effect starts on a 64x8 one: every row of the first keeps
+    changing.
+
+    Regression: d01c005e8. WLED keeps the matrix geometry in statics, and
+    building the second model's effect reset them to 64x8 under the first:
+    its pixels were then indexed 64 to a row, so its top 8 rows landed on
+    every other row and the rest of the model froze."""
+    from test_overlays import wait_output
+    channels = 32 * 16 * 3 + 64 * 8 * 3
+    setup(fppd, [matrix("A", width=32, height=16), matrix("B", start=1537, width=64, height=8)],
+          channels=channels)
+    with DdpReceiver(channels) as rx:
+        fppd.start()
+        effect(fppd, "A", "WLED - Rainbow")
+        wait_output(fppd, rx, lambda f: any(f[:1536]), "A's effect to draw")
+        effect(fppd, "B", "WLED - Rainbow")
+        wait_output(fppd, rx, lambda f: any(f[1536:]), "B's effect to draw")
+        time.sleep(0.5)
+        first = rx.last()
+        time.sleep(1.5)
+        last = rx.last()
+
+    def row(f, r):
+        return f[r * 96:(r + 1) * 96]
+    frozen = [r for r in range(16) if row(first, r) == row(last, r)]
+    assert not frozen, f"rows {frozen} of the 32x16 model stopped changing once the 64x8 effect started"

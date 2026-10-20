@@ -185,11 +185,53 @@ def test_fpp_cli_log_level(fppd):
     assert "Error Updating Log Level" in out and "(null)" not in out, out
 
 
-def test_fpp_cli_quit_stops_fppd_cleanly(fppd):
-    """`fpp -q` (scripts/fppd_stop) shuts fppd down, and fppd exits 0."""
+def test_log_level_changes_while_the_output_thread_logs(fppd):
+    """`fpp --log-level ChannelOut ...` again and again while a sequence
+    plays, and the channel output thread checks that logger's level on each
+    of its log calls. Only a TSan build can tell: it reports the race.
+
+    Regression: 4922bd311. A logger's level was a plain member, written on
+    the main loop and read on every thread that logs."""
+    write_fseq(os.path.join(fppd.media, "sequences", "Solo.fseq"), unique_frames(400, 30))
     fppd.start()
+    send("StartSequence,Solo.fseq,0")
+    fppd.wait_for(lambda: status(fppd).get("current_sequence") == "Solo.fseq", timeout=10,
+                  what="the sequence to start")
+    for level in ("excess", "info") * 5:
+        rc, out = fpp(fppd, "--log-level", "ChannelOut", level)
+        assert "Log Level Updated" in out, out
+        time.sleep(0.5)
+    send("StopSequence")
+
+
+def test_fpp_cli_prints_a_reply_longer_than_256_bytes(fppd):
+    """A reply longer than 256 bytes (fppd's go up to 1500) comes back from
+    `fpp` whole: here the refusal of a 300-character logger name.
+
+    Regression: e2ba86d09. The CLI read at most 256 bytes into a 256-byte
+    buffer and wrote its terminating NUL one past the end: a long reply was
+    cut short, and in a sanitizer build the CLI died on the overflow."""
+    fppd.start()
+    name = "L" * 300
+    r = subprocess.run([os.path.join(fppd.tree, "src", "fpp"), "--log-level", name, "debug"],
+                       capture_output=True, text=True, timeout=15,
+                       env=dict(os.environ, LD_LIBRARY_PATH=os.path.join(fppd.tree, "src")))
+    assert r.returncode == 0, f"fpp exited {r.returncode}:\n{r.stderr[-3000:]}"
+    assert "Error Updating Log Level," + name + ",debug" in r.stdout, r.stdout
+
+
+def test_fpp_cli_quit_stops_fppd_cleanly(fppd):
+    """`fpp -q` (scripts/fppd_stop) shuts fppd down at once, and fppd exits 0.
+
+    Regression: 401b593f0. "q" was answered with an empty datagram, which
+    `fpp` doesn't take as a reply: it sat out its ~2 s timeout on every stop
+    and printed "false"."""
+    fppd.start()
+    t0 = time.monotonic()
     rc, out = fpp(fppd, "-q")
+    took = time.monotonic() - t0
     assert "Shutting Down" in out, out
+    assert took < 1.5, f"fpp -q took {took:.1f} s to return"
     rc = fppd.proc.wait(timeout=30)
     assert rc == 0, f"fppd exited {rc} after fpp -q"
     fppd.exit_expected = True
@@ -202,3 +244,96 @@ def test_fpp_cli_without_fppd_gives_up(fppd):
     rc, out = fpp(fppd, "-R", timeout=20)
     assert out.strip().endswith("false"), out
     assert time.monotonic() - t0 < 10
+
+
+def test_replies_reach_each_sender_of_one_batch(fppd):
+    """Two clients whose datagrams fppd reads in one go -- a short socket
+    path, then a long one -- each get their own reply.
+
+    Regression: d5587f547. recvfrom() shrinks the address length to the
+    sender's, and it was set only once for the loop, so the second datagram's
+    reply address was cut to the first sender's length: the reply went to a
+    path that doesn't exist and the long-path client (PHP's SendCommand,
+    say) waited out its timeout."""
+    import signal
+    paths = ["/run/fppd/s", "/run/fppd/" + "l" * 80]
+    fppd.start()
+    socks = []
+    for p in paths:
+        if os.path.exists(p):
+            os.unlink(p)
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        s.bind(p)
+        s.settimeout(5)
+        socks.append(s)
+    try:
+        for rnd in range(5):
+            # Stopped, so both datagrams are waiting when fppd next reads.
+            os.kill(fppd.proc.pid, signal.SIGSTOP)
+            try:
+                for i, s in enumerate(socks):
+                    s.sendto(f"v,{50 + i},".encode(), SERVER)
+            finally:
+                os.kill(fppd.proc.pid, signal.SIGCONT)
+            for p, s in zip(paths, socks):
+                try:
+                    reply = s.recv(4096).decode(errors="replace")
+                except socket.timeout:
+                    pytest.fail(f"round {rnd}: no reply to the client at {p[:20]}... ({len(p)} bytes)")
+                assert "Setting Volume" in reply, reply
+    finally:
+        for p, s in zip(paths, socks):
+            s.close()
+            os.unlink(p)
+
+
+# A script plugin whose shutdown callback takes a second, as one stopping a
+# daemon of its own does: part of fppd's orderly exit.
+SLOW_SHUTDOWN_PLUGIN = """#!/bin/bash
+case "$1" in
+    --list) echo lifecycle ;;
+    --type)
+        if [ "$3" = shutdown ]; then
+            sleep 1
+            echo shutdown-done >> "$(dirname "$0")/events.log"
+        fi ;;
+esac
+"""
+
+
+@pytest.mark.skipif(not os.path.exists("/etc/fpp/container"),
+                    reason="fppd_stop kills every fppd by name: the device's own under run-local.sh")
+def test_fppd_stop_waits_for_a_playing_fppd_to_finish(fppd):
+    """scripts/fppd_stop, with a playlist playing, gives fppd the time its
+    orderly shutdown takes (stopping the playlist, then its teardown: here a
+    plugin's one-second shutdown callback) instead of killing it partway,
+    and fppd exits 0.
+
+    Regression: 30c7ef54a. fppd_stop sent SIGBUS about a second after
+    `fpp -q` gave up waiting, while stopping the playlist alone held fppd's
+    main loop for ~3 s: that left ~250 ms for the teardown, so on a device
+    the kill landed before the outputs were closed and pixel strings kept
+    showing whatever they last had through the reboot.
+    """
+    import show
+    from test_crash_reports import private_fppdir
+    show.install(fppd, unique_frames(1200, 30))
+    fppd.write("plugins/fpp-tests-slow-stop/callbacks.sh", SLOW_SHUTDOWN_PLUGIN)
+    os.chmod(os.path.join(fppd.media, "plugins", "fpp-tests-slow-stop", "callbacks.sh"), 0o755)
+    fppd.start()
+    fppd.command("Start Playlist", "Show", "true", "false")
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", timeout=10, what="playing")
+    view = private_fppdir(fppd.tree, fppd.media)
+    r = subprocess.run(["bash", os.path.join(view, "scripts", "fppd_stop")], capture_output=True,
+                       text=True, timeout=60,
+                       env=dict(os.environ, LD_LIBRARY_PATH=os.path.join(fppd.tree, "src")))
+    try:
+        rc = fppd.proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        raise AssertionError(f"fppd still running after fppd_stop:\n{r.stdout}\n{fppd.tail()}")
+    fppd.exit_expected = True
+    assert rc == 0, f"fppd exited {rc} under fppd_stop, not on its own:\n{r.stdout}\n{fppd.tail()}"
+    with open(os.path.join(fppd.media, "plugins", "fpp-tests-slow-stop", "events.log")) as f:
+        assert "shutdown-done" in f.read(), "the plugin's shutdown callback didn't finish"
+    reports = fppd.sanitizer_reports()
+    assert not reports, "sanitizer report:\n" + "\n".join(x[:8000] for x in reports)

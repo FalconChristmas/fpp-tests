@@ -205,15 +205,19 @@ import urllib.parse
 
 @contextlib.contextmanager
 def http_server(routes):
-    """A local HTTP server answering GETs/POSTs from `routes` (path -> body);
-    yields the list of (method, path, body) requests it got."""
+    """A local HTTP server answering GETs/POSTs from `routes` (path -> body,
+    or a function returning it); yields the list of (method, path, body)
+    requests it got."""
     got = []
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def _answer(self, method):
             n = int(self.headers.get("Content-Length") or 0)
             got.append((method, self.path, self.rfile.read(n).decode() if n else ""))
-            body = routes.get(self.path.split("?")[0], "ok").encode()
+            body = routes.get(self.path.split("?")[0], "ok")
+            if callable(body):  # a route that does something first (sleeps)
+                body = body()
+            body = body.encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -350,8 +354,9 @@ def test_script_entry(fppd, blocking):
 
 def test_remap_entry_adds_and_removes_a_remap(fppd):
     """A remap entry with action "add" copies channels on the wire from then
-    on; one with action "remove" takes that remap away again (4f13d1049
-    stopped repeats leaking and stacking processors)."""
+    on; one with action "remove" takes that remap away again. (Coverage:
+    the stacking that 4f13d1049 fixed needs a repeat, see
+    test_repeated_remap_entry_applies_once.)"""
     from ddp import DdpReceiver
     from show import CHANNELS, install, sequence_entry
     frames = [bytes([9] * 6) + bytes(CHANNELS - 6)] * 40  # 2 s
@@ -475,3 +480,274 @@ def test_a_restart_resumes_the_scheduled_playlist_where_it_was(fppd):
         [l for l in fppd.log().splitlines() if "Restart:" in l]
     v = fppd.get("/variables") or {}
     assert "A" not in v and "B" not in v, f"the playlist started over after the restart: {sorted(v)}"
+
+
+# --- playlist data fppd can only partly read ---------------------------------
+
+
+def test_reload_with_a_wrong_typed_value_keeps_playing(fppd):
+    """A playing playlist whose file is rewritten with a value of the wrong
+    type ("repeat": "1") keeps its running copy at the end of the pass,
+    with a warning, and plays on.
+
+    Regression: 5ea9e9db4. The end-of-pass reload read the new file with
+    asInt(), which throws on a string, and nothing above Process() caught
+    it: fppd terminated mid-show.
+    """
+    p = playlist("P", main=[step(1), pause(3)])
+    path = fppd.write("playlists/P.json", p)
+    fppd.start()
+    fppd.command("Start Playlist", "P", "true", "false")
+    fppd.wait_for(lambda: trace(fppd) == "1", what="the first pass")
+    fppd.write("playlists/P.json", dict(p, repeat="1"))
+    t = time.time() + 5
+    os.utime(path, (t, t))  # past the copy fppd loaded, whatever the clock's resolution
+    fppd.wait_for(lambda: trace(fppd) == "11", timeout=10, what="the second pass")
+    warnings = status(fppd).get("warnings", [])
+    assert any("Playlist P is invalid" in w for w in warnings), warnings
+    fppd.command("Stop Now")
+
+
+def test_wrong_typed_entry_is_skipped(fppd):
+    """An entry with a value of the wrong type ("enabled": "1") is skipped
+    with a warning; the entries after it still load and play.
+
+    Regression: 5ea9e9db4. The entry's Init() threw out of the section
+    being loaded, the load stopped there, and only the entries before it
+    played.
+    """
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), step(2, enabled="1"), step(3)]))
+    fppd.start()
+    assert run(fppd, "P") == "13"
+    warnings = status(fppd).get("warnings", [])
+    assert any("Invalid playlist entry skipped" in w for w in warnings), warnings
+
+
+@pytest.mark.parametrize("bad", [{"enabled": "1"}, {"type": {"x": 1}}], ids=["enabled", "type"])
+def test_dynamic_entry_with_wrong_typed_data(fppd, bad):
+    """A dynamic entry whose data has a value of the wrong type is skipped
+    with a warning; the playlist carries on.
+
+    Regression: 5ea9e9db4. jsoncpp threw from the entry's Init() (or from
+    reading "type") out of StartPlaying(), on the main loop, and nothing
+    caught it: fppd terminated.
+    """
+    path = fppd.write("tmp/dyn.json", {"mainPlaylist": [step(5, **bad)]})
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), dynamic("file", dataFile=path), step(2)]))
+    fppd.start()
+    assert run(fppd, "P") == "12"
+    warnings = status(fppd).get("warnings", [])
+    assert any("Dynamic playlist entry is invalid" in w for w in warnings), warnings
+
+
+def test_dynamic_entry_with_a_disabled_entry(fppd):
+    """A disabled entry in a dynamic entry's data is skipped and the next
+    one plays.
+
+    Regression: 72a3cb39c. The disabled command finished inside
+    StartPlaying() without the command result it would have made, and the
+    dynamic entry still called its Process(), which read that null result:
+    fppd crashed on the main thread.
+    """
+    path = fppd.write("tmp/dyn.json", {"mainPlaylist": [step(5, enabled=0), step(6)]})
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), dynamic("file", dataFile=path), step(2)]))
+    fppd.start()
+    assert run(fppd, "P") == "162"
+
+
+def test_entry_that_neither_starts_nor_finishes_is_skipped(fppd):
+    """A random audio entry whose music folder has emptied by the time it
+    starts is skipped with a log line, and the playlist carries on.
+
+    Regression: 8aff2cf96. The entry's start returned early without
+    finishing it (no file to pick), so it was neither playing nor finished,
+    and the playlist stalled on it for good. The one file present at load
+    is the one the entry picked then, so at start it looks again and finds
+    the folder empty.
+    """
+    from audio import write_tone_wav
+    tone = os.path.join(fppd.media, "music", "Tone.wav")
+    write_tone_wav(tone, 1)
+    fppd.write("playlists/P.json", playlist("P", main=[
+        step(1), pause(2),
+        {"type": "media", "enabled": 1, "playOnce": 0, "fileMode": "randomAudio",
+         "videoOut": "--Default--"},
+        step(2)]))
+    fppd.start()
+    fppd.command("Start Playlist", "P", "false", "false")
+    fppd.wait_for(lambda: trace(fppd) == "1", what="the first entry")
+    os.remove(tone)
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=15,
+                  what="the playlist to get past the media entry")
+    assert trace(fppd) == "12"
+    assert "entry did not start; skipping it" in fppd.log()
+
+
+def test_index_branch_counts_rows_not_loaded_entries(fppd):
+    """A branch to item 4 lands on the 4th row of the section as the editor
+    numbers it, also when an earlier row is a sub-playlist that loads as
+    several entries.
+
+    Regression: d90b36412. The item was taken as a position among the
+    loaded entries, where the sub-playlist's two entries come first, so the
+    branch landed one row short, on step 9.
+    """
+    fppd.write("playlists/Sub.json", {"name": "Sub", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                      "mainPlaylist": [step(5), step(6)], "leadOut": []})
+    # rows: 1 Sub (5, 6), 2 branch to row 4, 3 step 9, 4 step 2
+    fppd.write("playlists/P.json", playlist("P", main=[
+        {"type": "playlist", "enabled": 1, "playOnce": 0, "name": "Sub"},
+        branch("Loop", true_type="Index", trueNextSection="main", trueNextItem=4,
+               iterationStart=1, iterationCount=1),
+        step(9), step(2)]))
+    fppd.start()
+    assert run(fppd, "P") == "562"
+
+
+def test_script_entry_that_fails_to_start_signals_nothing(fppd):
+    """Stopping a playlist whose blocking script entry failed to start (a
+    script path fppd refuses) sends no signal at all.
+
+    Regression: a00a041d6. The entry kept RunScript's -1 as its child and
+    stayed playing until the next tick; a stop in that window called
+    kill(-1, SIGTERM), which as root ends every process on the box but
+    init and fppd. Here kill() goes through killguard.so, which blocks and
+    logs a pid of -1 or 0; the scenario refuses to run unless the guard is
+    shown to be in place.
+    """
+    import shims
+    log = os.path.join(fppd.media, "tmp", "killguard.log")
+    fppd.write("playlists/P.json", {"name": "P", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                    "mainPlaylist": [{"type": "script", "enabled": 1, "playOnce": 0,
+                                                      "scriptName": "../nope.sh", "blocking": True},
+                                                     pause(5)],
+                                    "leadOut": []})
+    fppd.start(preload=[shims.build("killguard.c")], extra_env={"KILLGUARD_LOG": log})
+
+    def lines():
+        if not os.path.exists(log):
+            return []
+        with open(log) as f:
+            return [l.split(None, 1) for l in f.read().splitlines()]
+    pid = str(fppd.proc.pid)
+    if not any(p == pid and rest.startswith("selftest blocked") for p, rest in lines()):
+        fppd.kill()
+        fppd.exit_expected = True
+        pytest.fail(f"killguard.so did not engage in fppd, so this can't run safely: {lines()}")
+    for _ in range(20):
+        fppd.command("Start Playlist", "P", "false", "false")
+        fppd.command("Stop Now")
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=10,
+                      what="the playlist to stop")
+    blocked = [l for l in lines() if l[0] == pid and not l[1].startswith("selftest")]
+    assert not blocked, f"fppd called kill() on a pid of -1 or 0: {blocked}"
+
+
+def test_global_pause_cut_short_by_a_stop_is_forgotten(fppd):
+    """A playlist stopped in its pause between sequences leaves nothing
+    behind: the next playlist starts its first entry once.
+
+    Regression: 8aef0c238. The "in the pause" flag survived the stop, and
+    the next playlist's first tick took it as the pause ending and started
+    its first entry a second time (media restarted, a command ran twice).
+    """
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), step(2)],
+                                            globalPauseBetweenSequencesMS=3000))
+    fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                    "mainPlaylist": [step(5), pause(5)], "leadOut": []})
+    fppd.start()
+    fppd.command("Start Playlist", "P", "false", "false")
+    fppd.wait_for(lambda: trace(fppd) == "1", timeout=10, what="P's first entry, after a pause")
+    fppd.command("Stop Now")  # inside the 3 s pause before step 2
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", what="P to stop")
+    fppd.command("Set Variable", TRACE, "Value", "0")
+    fppd.command("Start Playlist", "Q", "false", "false")
+    fppd.wait_for(lambda: trace(fppd) == "5", what="Q's first entry")
+    time.sleep(1)
+    assert trace(fppd) == "5", "Q's first entry ran twice"
+    fppd.command("Stop Now")
+
+
+def test_dynamic_entry_from_a_slow_url_leaves_fppd_answering(fppd):
+    """While a dynamic entry waits on a slow URL, status keeps answering at
+    once, and the entries arrive and play when the answer comes.
+
+    Regression: 16f7f37dd. The entry fetched the URL with a blocking request
+    inside its start, holding the playlist lock: status stalled for as long
+    as the URL took to answer (up to 15 s).
+    """
+    body = json.dumps({"mainPlaylist": [step(7), step(8)]})
+
+    def slow():
+        time.sleep(3)
+        return body
+    with http_server({"/slow": slow}) as (port, got):
+        fppd.write("playlists/P.json", playlist("P", main=[
+            step(1), dynamic("url", url=f"http://127.0.0.1:{port}/slow"), step(2)]))
+        fppd.start()
+        fppd.command("Start Playlist", "P", "false", "false")
+        fppd.wait_for(lambda: trace(fppd) == "1", what="the first entry")
+        worst = 0
+        until = time.monotonic() + 2.5
+        while time.monotonic() < until:
+            t = time.monotonic()
+            status(fppd)
+            worst = max(worst, time.monotonic() - t)
+            time.sleep(0.1)
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=20,
+                      what="the playlist to finish")
+        assert trace(fppd) == "1782"
+        assert worst < 1.0, f"status took {worst:.1f} s while the URL was fetched"
+
+
+def test_repeated_remap_entry_applies_once(fppd):
+    """A remap entry in a repeating playlist (channels 1-6 copied onto 4-9,
+    overlapping) gives the same output on the second pass as on the first:
+    the remap is applied once, not once more per pass.
+
+    Regression: 4f13d1049. Every pass's "add" stacked another identical
+    remap processor, so on the second pass the copy ran twice and channels
+    7-9 carried A, B, C (already moved once) instead of D, E, F.
+    """
+    from ddp import DdpReceiver
+    from show import CHANNELS, install, sequence_entry
+    data = bytes([10, 11, 12, 13, 14, 15])  # A..F
+    frames = [data + bytes(CHANNELS - 6)] * 40  # 2 s
+    remap = {"type": "remap", "enabled": 1, "playOnce": 0, "action": "add", "source": 1,
+             "destination": 4, "count": 6, "loops": 1, "reverse": 0}
+    want = bytes([10, 11, 12]) + data  # channels 1-9
+    with DdpReceiver(CHANNELS) as rx:
+        install(fppd, frames)
+        fppd.write("playlists/R.json", playlist("R", main=[remap, sequence_entry("Show.fseq")],
+                                                repeat=1, loop_count=3))
+        fppd.start()
+        fppd.command("Start Playlist", "R", "true", "false")
+        fppd.wait_for(lambda: rx.last() and rx.last()[:9] == want, what="the remap on pass 1")
+        t0 = time.monotonic()
+        time.sleep(4.5)  # through pass 2 (each pass is 2 s)
+        later = [d[:9] for t, d in rx.snapshot(since=t0 + 2.5) if any(d[:9])]
+    assert later, "nothing on the wire on pass 2"
+    bad = [list(d) for d in later if d != want]
+    assert not bad, f"channels 1-9 on pass 2: {bad[0]} (want {list(want)})"
+
+
+def test_instant_loop_warning_once_per_run(fppd):
+    """A repeating playlist of instant entries warns once that it is held to
+    a pass a second, also when Next Playlist Item moves it on meanwhile.
+
+    Regression: 1827506be. The warned flag was reset in Start(), which
+    navigation goes through to restart in place, so every Next logged the
+    warning again.
+    """
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), step(2)]))
+    fppd.start()
+    fppd.command("Start Playlist", "P", "true", "false")
+    line = "repeats with nothing in it that takes time"
+    fppd.wait_for(lambda: line in fppd.log(), timeout=10, what="the instant-loop warning")
+    for _ in range(3):
+        time.sleep(1.5)
+        fppd.command("Next Playlist Item")
+    time.sleep(1.5)
+    fppd.command("Stop Now")
+    n = fppd.log().count(line)
+    assert n == 1, f"the instant-loop warning was logged {n} times"

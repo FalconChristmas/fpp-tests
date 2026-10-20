@@ -4,6 +4,7 @@ nothing else is broken when it runs. SIGUSR1 asks for a stack dump only, and
 fppd carries on. ShareCrashData 0 makes the report a local one, never
 uploaded."""
 
+import json
 import os
 import signal
 import subprocess
@@ -162,3 +163,88 @@ def test_requested_stack_dump_writes_no_report_and_fppd_carries_on(fppd):
     fppd.check_alive()
     fppd.get("/fppd/status", timeout=10)
     assert not os.listdir(crashes), f"a requested dump wrote a report: {os.listdir(crashes)}"
+
+
+def thread_kill(pid, name, sig):
+    """Send `sig` to the one thread of `pid` named `name` (tgkill), as a fault
+    on that thread would raise it there."""
+    import ctypes
+    import platform
+    tids = []
+    for tid in os.listdir(f"/proc/{pid}/task"):
+        try:
+            with open(f"/proc/{pid}/task/{tid}/comm") as f:
+                if f.read().strip() == name:
+                    tids.append(int(tid))
+        except OSError:
+            pass
+    assert len(tids) == 1, f"threads named {name}: {tids}"
+    nr = {"x86_64": 234, "aarch64": 131}[platform.machine()]
+    libc = ctypes.CDLL(None, use_errno=True)
+    assert libc.syscall(nr, pid, tids[0], sig) == 0, os.strerror(ctypes.get_errno())
+
+
+def test_crash_on_the_warnings_thread_exits_through_the_handler(fppd):
+    """A fatal signal on the warnings thread itself (a crash inside a
+    warnings listener) runs the crash handler to its end: fppd leaves the
+    "FPPD has crashed" warning and exits with the handler's _exit(-1).
+
+    Regression: 3a52e4ffb. The handler stopped the warnings thread by
+    joining it, here from that same thread: join() threw, terminate
+    aborted, and the SIGABRT ran the whole handler again (its re-entry guard
+    had already been reset), which joined itself again. fppd ended by
+    abort, or by the handler's two-minute watchdog, never through _exit(-1).
+    """
+    fppd.settings(ShareCrashData="0")
+    fppd.start()
+    thread_kill(fppd.proc.pid, "FPP-Warnings", signal.SIGSEGV)
+    try:
+        rc = fppd.proc.wait(timeout=180)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(f"the crash handler did not finish within 180s\n{fppd.tail()}")
+    fppd.exit_expected = True
+    assert rc == 255, f"fppd exited with {describe_rc(rc)}, not the crash handler's _exit(-1)\n{fppd.tail()}"
+    with open(os.path.join(fppd.tree, "www", "warnings.json")) as f:
+        assert json.load(f) == ["FPPD has crashed.  Check crash reports."]
+    reports = fppd.sanitizer_reports()
+    assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
+
+
+def private_fppdir(tree, media):
+    """A view of the tree whose www/media_root.txt names this test's media
+    directory, for running a script from the tree directly. The tree's own
+    media_root.txt is rewritten by every fppd that starts from it, other
+    runs' included. Scripts find FPP from their own path (logically, so
+    through these links), and so their media directory from this file."""
+    view = os.path.join(media, "tmp", "fppdir")
+    os.makedirs(os.path.join(view, "www"))
+    for entry in os.listdir(tree):
+        if entry != "www":
+            os.symlink(os.path.join(tree, entry), os.path.join(view, entry))
+    for entry in os.listdir(os.path.join(tree, "www")):
+        if entry != "media_root.txt":
+            os.symlink(os.path.join(tree, "www", entry), os.path.join(view, "www", entry))
+    with open(os.path.join(view, "www", "media_root.txt"), "w") as f:
+        f.write(media)
+    return view
+
+
+def test_crash_report_says_when_it_could_not_write_the_zip(fppd):
+    """generate_crash_report exits non-zero and says so when the zip could
+    not be written -- here because crashes/ is a file, not a directory.
+
+    Regression: e0bbeef37. It printed "Crash report created" and exited 0
+    whatever zip did, so fppd and the UI went looking for a report that
+    wasn't there.
+    """
+    with open(os.path.join(fppd.media, "crashes"), "w") as f:
+        f.write("not a directory\n")
+    view = private_fppdir(fppd.tree, fppd.media)
+    out = os.path.join(fppd.media, "crashes", "report.zip")
+    r = subprocess.run(["bash", os.path.join(view, "scripts", "generate_crash_report"), "1", out],
+                       capture_output=True, text=True, timeout=120)
+    text = f"rc {r.returncode}\nstdout:\n{r.stdout[-2000:]}\nstderr:\n{r.stderr[-2000:]}"
+    assert "Generating crash report in" in r.stdout, f"the script stopped before the zip step:\n{text}"
+    assert "Crash report created" not in r.stdout, f"a report that wasn't made was announced:\n{text}"
+    assert "Could not create" in r.stderr, f"no word that the report wasn't made:\n{text}"
+    assert r.returncode == 1, text

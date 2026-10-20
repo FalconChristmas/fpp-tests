@@ -6,6 +6,8 @@ The devices are fakes in their own network namespace (fake_devices.py),
 answering with the pages and API replies each vendor's detector looks for.
 """
 
+import time
+
 import pytest
 
 from fake_devices import drop, fake_devices, page, requests_seen
@@ -143,6 +145,66 @@ def test_a_hostile_front_page_does_not_crash_the_regex_detectors(fppd):
         got = discover(fppd, ["10.88.0.2", "10.88.0.3"], timeout=30)
     assert got["10.88.0.3"]["hostname"] == "fake-wled"
     assert fppd.get("/fppd/status")["status_name"]
+
+
+def vm_rss_mb(pid):
+    try:
+        with open(f"/proc/{pid}/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) // 1024
+    except OSError:
+        pass
+    return 0
+
+
+@pytest.mark.parametrize("subnets", ["10.0.0.0/8", "10.77.0.[1-100000000]"])
+def test_a_huge_discovery_range_is_bounded(fppd, subnets):
+    """An HTTP discovery range far larger than any show network -- a /8, or
+    an octet range running to 10^8 -- is refused or clamped at startup, and
+    fppd reaches its main loop without its memory running away. A watchdog
+    kills fppd (failing the test) if its RSS passes 600 MB first.
+
+    Regression: 344019a8a. Every address was expanded into a set of strings,
+    then copied: 16.7M strings for the /8 and a 10^8 iteration loop for the
+    range, on every start, until fppd ran out of memory.
+    """
+    import threading
+    limit_mb = 600
+    peak = {"mb": 0, "killed": False}
+    done = threading.Event()
+
+    def watch():
+        while not done.is_set() and fppd.proc is None:
+            time.sleep(0.01)
+        while not done.is_set() and fppd.proc.poll() is None:
+            peak["mb"] = max(peak["mb"], vm_rss_mb(fppd.proc.pid))
+            if peak["mb"] > limit_mb:
+                peak["killed"] = True
+                fppd.kill()
+                return
+            time.sleep(0.1)
+
+    fppd.settings(MultiSyncHTTPSubnets=subnets)
+    watchdog = threading.Thread(target=watch, daemon=True)
+    watchdog.start()
+    try:
+        fppd.start()
+        fppd.wait_for(lambda: "Starting main processing loop" in fppd.log(), timeout=30,
+                      interval=0.2, what="fppd to reach its main loop")
+        time.sleep(2)
+        fppd.check_alive()
+    except Exception:
+        if peak["killed"]:
+            raise AssertionError(f"fppd's RSS passed {limit_mb} MB expanding {subnets}")
+        raise
+    finally:
+        done.set()
+        watchdog.join()
+    assert not peak["killed"], f"fppd's RSS passed {limit_mb} MB expanding {subnets}"
+    if "/" in subnets:
+        assert "only /16 to /32 can be scanned" in fppd.log()
+
 
 
 def fields(s, *keys):

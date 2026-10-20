@@ -384,3 +384,48 @@ def test_an_unsigned_cape_may_only_add_overlays_to_the_boot_config(fppinit):
     cfg = fppinit.boot_file("config.txt")
     assert "dtoverlay=fpp-test-overlay" in cfg, cfg
     assert "kernel=evil.img" not in cfg and "cmdline=evil.txt" not in cfg, cfg
+
+
+def boot_config_after(sb, original, bootConfig):
+    with open(os.path.join(sb.boot, "config.txt"), "w") as f:
+        f.write(original)
+    sb.write_bytes(EEPROM, ee.image(ee.cape_info(bootConfig=bootConfig)))
+    try:
+        sb.capedetect("-no-set-permissions", timeout=60)
+    except subprocess.TimeoutExpired:
+        pytest.fail("fppcapedetect hung")
+    return sb.boot_file("config.txt")
+
+
+@pytest.mark.skipif(not on_pi(), reason="bootConfig edits config.txt, on a Pi")
+def test_an_unsigned_boot_config_line_cannot_carry_another_line(fppinit):
+    """An unsigned cape's append is one line: a newline inside an allowed
+    dtparam= value can't bring a kernel= line in behind it.
+
+    Regression: 633a25493. Only the value's prefix was checked, so
+    "dtparam=x\\nkernel=evil.img" passed and wrote kernel=evil.img into
+    config.txt."""
+    cfg = boot_config_after(fppinit, "dtparam=audio=on\n", {
+        "append": ["dtparam=fpp_test=on\nkernel=evil.img", "dtoverlay=fpp-test-overlay"]})
+    lines = [l.strip() for l in cfg.splitlines()]
+    assert "kernel=evil.img" not in lines, cfg
+    # the control: a plain overlay line from the same cape still goes in
+    assert "dtoverlay=fpp-test-overlay" in lines, cfg
+
+
+@pytest.mark.skipif(not on_pi(), reason="bootConfig edits config.txt, on a Pi")
+def test_an_unsigned_boot_config_removal_takes_whole_lines(fppinit):
+    """An unsigned cape's remove takes out whole matching lines: "dtparam="
+    matches no line, so i2c and audio stay on, while a whole-line remove
+    still works.
+
+    Regression: 633a25493. The remove was a substring erase, so "dtparam="
+    stripped that prefix from every dtparam line ("audio=on", "i2c_arm=on"
+    left as lines of their own, and the parameters off)."""
+    original = "dtparam=audio=on\ndtparam=i2c_arm=on\ndtoverlay=fpp-test-remove-me\n"
+    cfg = boot_config_after(fppinit, original, {
+        "remove": ["dtparam=", "dtoverlay=fpp-test-remove-me"]})
+    lines = [l.strip() for l in cfg.splitlines()]
+    assert "dtparam=audio=on" in lines and "dtparam=i2c_arm=on" in lines, cfg
+    assert "audio=on" not in lines and "i2c_arm=on" not in lines, cfg
+    assert "dtoverlay=fpp-test-remove-me" not in lines, cfg

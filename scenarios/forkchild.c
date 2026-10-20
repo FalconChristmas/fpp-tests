@@ -1,0 +1,91 @@
+/* forkchild.so: LD_PRELOAD into fppd to catch a forked child that does
+ * more than exec.  fppd is threaded, so between fork() and exec the child
+ * may only make async-signal-safe calls: a lock another thread held at the
+ * fork stays held in the child for good, and the child hangs on it.
+ *
+ * Armed only in fppd itself (an exec'd child loads this afresh, unarmed).
+ * In a child forked from fppd, setenv() and the pthread mutex and rwlock
+ * lock calls append their name to $FORKCHILD_LOG and _exit(97) instead:
+ * the child dies at once, whether or not the lock happened to be free.
+ */
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+
+static int armed;
+static volatile int inChild;
+static char logPath[512];
+
+static void caught(const char* what) {
+    if (logPath[0]) {
+        int fd = open(logPath, O_WRONLY | O_APPEND | O_CREAT, 0644);
+        if (fd >= 0) {
+            write(fd, what, strlen(what));
+            write(fd, "\n", 1);
+            close(fd);
+        }
+    }
+    _exit(97);
+}
+
+static void child(void) {
+    if (armed) {
+        inChild = 1;
+    }
+}
+
+#define REAL(fn) \
+    static __typeof__(&fn) real; \
+    if (!real) real = (__typeof__(&fn))dlsym(RTLD_NEXT, #fn)
+
+__attribute__((constructor)) static void init(void) {
+    const char* log = getenv("FORKCHILD_LOG");
+    if (strcmp(program_invocation_short_name, "fppd") != 0 || !log) {
+        return;
+    }
+    strncpy(logPath, log, sizeof(logPath) - 1);
+    armed = 1;
+    pthread_atfork(NULL, NULL, child);
+}
+
+int setenv(const char* n, const char* v, int o) {
+    REAL(setenv);
+    if (inChild) caught("setenv");
+    return real(n, v, o);
+}
+
+int pthread_mutex_lock(pthread_mutex_t* m) {
+    REAL(pthread_mutex_lock);
+    if (inChild) caught("pthread_mutex_lock");
+    return real(m);
+}
+
+int pthread_mutex_timedlock(pthread_mutex_t* m, const struct timespec* t) {
+    REAL(pthread_mutex_timedlock);
+    if (inChild) caught("pthread_mutex_timedlock");
+    return real(m, t);
+}
+
+int pthread_mutex_clocklock(pthread_mutex_t* m, clockid_t c, const struct timespec* t) {
+    REAL(pthread_mutex_clocklock);
+    if (inChild) caught("pthread_mutex_clocklock");
+    return real(m, c, t);
+}
+
+int pthread_rwlock_rdlock(pthread_rwlock_t* l) {
+    REAL(pthread_rwlock_rdlock);
+    if (inChild) caught("pthread_rwlock_rdlock");
+    return real(l);
+}
+
+int pthread_rwlock_wrlock(pthread_rwlock_t* l) {
+    REAL(pthread_rwlock_wrlock);
+    if (inChild) caught("pthread_rwlock_wrlock");
+    return real(l);
+}

@@ -85,6 +85,57 @@ def test_deeply_nested_expression_is_refused(fppd):
     assert variable(fppd, "Shallow") == "2"
 
 
+def test_expression_results_keep_their_magnitude(fppd):
+    """An expression whose result prints long (1e30, 31 digits before the
+    point) comes back whole, not cut short to a number a hundred times
+    smaller.
+
+    Regression: 5b393e21b. The result was printed with "%lf" into a 30-byte
+    buffer, so 1e30 came back as its first 29 digits."""
+    fppd.start()
+    fppd.post("/command", expression("Big", "1e30"))
+    assert variable(fppd, "Big") == "1000000000000000019884624838656"
+
+
+def test_a_variable_named_like_a_number_leaves_the_literal_alone(fppd):
+    """With a variable named "2" set, the literal 12 in an expression is
+    still twelve.
+
+    Regression: 5b393e21b. A variable whose name isn't an identifier is
+    given an alias for tinyexpr, and the alias replaced every occurrence of
+    the name as a substring: "12+1" became "1ev0+1", an invalid
+    expression."""
+    fppd.start()
+    fppd.command("Set Variable", "2", "Value", "5", "1", "0", "100", "")
+    try:
+        fppd.post("/command", expression("Sum", "12+1"))
+    except urllib.error.HTTPError as e:
+        print(f"the expression answered {e.code}: {e.body}")
+    assert variable(fppd, "Sum") == "13"
+
+
+def test_a_megabyte_expression_is_refused_at_once(fppd):
+    """A Set Variable expression of a megabyte of "==1==" markers is refused
+    straight away, and fppd answers on.
+
+    Regression: 5b393e21b. The marker scan re-copied the rest of the string
+    at every marker, and the length cap applied only to each piece after
+    it: a megabyte (well inside the HTTP body limit) held the request
+    thread for minutes."""
+    fppd.start()
+    body = {"command": "Set Variable",
+            "args": ["Long", "Expression", "", "1", "0", "100", "==1==" * 200000]}
+    began = time.monotonic()
+    try:
+        fppd.post("/command", body, timeout=20)
+    except urllib.error.HTTPError as e:  # refused is right
+        print(f"the long expression answered {e.code}")
+    took = time.monotonic() - began
+    assert took < 5, f"a 1 MB expression took {took:.1f} s to answer"
+    fppd.post("/command", expression("After", "1+1"))
+    assert variable(fppd, "After") == "2"
+
+
 @pytest.mark.parametrize("presets, what", [
     ({"commands": {"name": "P"}}, '"commands" given as an object'),
     ({"commands": [5, {"name": {"x": 1}, "command": "Set Variable", "args": []},
@@ -376,3 +427,138 @@ def test_running_a_command_by_get_is_marked_deprecated(fppd):
     log = open(os.path.join(fppd.media, "logs", "fppd.log")).read()
     lines = [l for l in log.splitlines() if "Deprecated: GET /api/command/Volume Set" in l]
     assert len(lines) == 1, lines
+
+
+def test_a_url_too_long_for_libcurl_fails_on_its_own(fppd):
+    """A URL command whose URL libcurl refuses (over its 8,000,000-byte
+    limit; a presets file has no HTTP body limit in the way) fails, and
+    fppd carries on.
+
+    Regression: 9cc0f637c. The transfer's members had no initializers, and
+    the constructor cleaned up after the rejected URL before the multi
+    handle was ever set: libcurl was handed a garbage pointer and fppd
+    crashed."""
+    fppd.write("config/commandPresets.json", {"commands": [
+        preset("Big", {"command": "URL", "args": ["http://127.0.0.1/" + "a" * 8_100_000, "GET", ""]}),
+        preset("After", set_variable("After", "yes"))]})
+    fppd.start(timeout=90)
+    try:
+        fppd.command("Trigger Command Preset", "Big", timeout=30)
+    except urllib.error.HTTPError:
+        pass  # refused is fine; fppd has to live
+    fppd.check_alive()
+    fppd.command("Trigger Command Preset", "After")
+    assert variable(fppd, "After") == "yes"
+
+
+def test_random_variable_over_the_whole_int_range(fppd):
+    """Set Variable Random between INT_MIN and INT_MAX (a MultiSync command
+    packet can ask for that) sets an int, and does no undefined arithmetic.
+
+    Regression: 37268fa78. The span mx - mn + 1 overflowed to 0, and
+    rand() % 0 raised SIGFPE on x86 (fppd died). arm64 doesn't trap, so
+    there it is the UBSan build (--flavor ubsan) that shows it, in fppd's
+    stdout."""
+    import re
+    fppd.start()
+    for _ in range(5):
+        fppd.command("Set Variable", "R", "Random", "", "1", "-2147483648", "2147483647", "")
+        assert re.fullmatch(r"-?\d+", variable(fppd, "R")), variable(fppd, "R")
+    fppd.check_alive()
+    with open(os.path.join(fppd.media, "logs", "fppd.stdout"), errors="replace") as f:
+        ub = [l for l in f if "VariableCommands.cpp" in l and "runtime error" in l]
+    assert not ub, ub
+
+
+def test_run_script_refuses_a_path_outside_the_scripts_directory(fppd):
+    """Run Script with a ".." in the script's path doesn't run it, and says
+    so in a warning; a script in the scripts directory still runs.
+
+    Regression: 2494f1e34. The name was appended to the scripts directory
+    and run (as root), so "../anything" ran any file on the box."""
+    escaped = os.path.join(fppd.media, "tmp", "escaped")
+    ok = os.path.join(fppd.media, "tmp", "ok")
+    for rel, marker in (("escape.sh", escaped), ("scripts/ok.sh", ok)):
+        os.chmod(fppd.write(rel, f"#!/bin/bash\ntouch {marker}\n"), 0o755)
+    fppd.start()
+    try:
+        fppd.command("Run Script", "../escape.sh", "", "")
+    except urllib.error.HTTPError:
+        pass
+    fppd.command("Run Script", "ok.sh", "", "")
+    fppd.wait_for(lambda: os.path.exists(ok), timeout=10, what="the script in scripts/ to run")
+    time.sleep(3)
+    assert not os.path.exists(escaped), "a script outside the scripts directory ran"
+    assert any("Refused to run a script outside the scripts directory" in str(w)
+               for w in fppd.get("/fppd/status").get("warnings", [])), \
+        fppd.get("/fppd/status").get("warnings")
+
+
+def test_routing_preset_name_with_a_quote_is_sent_intact(fppd):
+    """"Pipewire Apply Routing Preset" with a preset name containing a quote
+    and a backslash sends the live-apply endpoint valid JSON naming exactly
+    that preset.
+
+    Regression: 03d41a751. The request body was pasted together around the
+    name, so '"' or '\\' in it made invalid JSON (or a different request)."""
+    import http.server
+    import threading
+    bodies = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            bodies.append(self.rfile.read(int(self.headers.get("Content-Length", 0))))
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        def log_message(self, *a):
+            pass
+
+    fppd.start()
+    if "Pipewire Apply Routing Preset" not in [c["name"] for c in fppd.get("/commands")]:
+        pytest.skip("built without AES67 GStreamer support")
+    try:
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 80), H)
+    except OSError as e:
+        pytest.skip(f"can't listen on port 80 for the live-apply endpoint: {e}")
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        name = 'a"b\\c'
+        fppd.command("Pipewire Apply Routing Preset", name, timeout=15)
+        fppd.wait_for(lambda: bodies, timeout=10, what="the live-apply request")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert json.loads(bodies[0])["name"] == name, bodies[0]
+
+
+def test_persisted_variable_saves_land_in_order(fppd):
+    """Two persisted Set Variable commands, the first one's save held up at
+    the file lock, leave the later value on disk.
+
+    Regression: 4a1d2280a. A save snapshotted the variables under the lock
+    and wrote them after releasing it, so a slow earlier save could write
+    its stale snapshot over a later one: here "old" ended up on disk
+    though "new" was set last (slowflock.so holds up the first write)."""
+    import threading
+    import shims
+    flag = os.path.join(fppd.media, "tmp", "slowflock")
+    fppd.start(preload=[shims.build("slowflock.c")],
+               extra_env={"SLOWFLOCK_SUFFIX": "/config/variables.json", "SLOWFLOCK_FLAG": flag})
+    open(flag, "w").close()
+
+    def persist(value):
+        fppd.command("Set Variable", "X", "Value", value, "1", "0", "100", "", "true", timeout=15)
+
+    a = threading.Thread(target=persist, args=("old",))
+    a.start()
+    time.sleep(0.3)
+    persist("new")
+    a.join(15)
+    assert not os.path.exists(flag), "the first save never reached its file lock"
+    time.sleep(2)
+    with open(os.path.join(fppd.media, "config", "variables.json")) as f:
+        saved = json.load(f)
+    assert saved["X"]["value"] == "new", saved

@@ -197,3 +197,47 @@ def test_cape_sensor_sources_with_bad_entries(fppd):
         "sensors": []})
     fppd.start()
     fppd.get("/fppd/status", timeout=10)
+
+
+def directory_seeking_to_a_bogus_end(fppd):
+    """A new, empty directory on a filesystem where seeking to the end of a
+    directory answers a huge offset: ext4, an SD card's filesystem, gives
+    its htree end (LLONG_MAX). tmpfs refuses that seek instead, which the
+    old code happened to survive, so with the media directory on tmpfs (as
+    in Docker) the directory is made on another filesystem."""
+    import tempfile
+    for base in (fppd.media, "/var/tmp", os.path.dirname(fppd.tree)):
+        try:
+            d = tempfile.mkdtemp(dir=base, prefix="fpp-dir-")
+        except OSError:
+            continue
+        fd = os.open(d, os.O_RDONLY)
+        try:
+            end = os.lseek(fd, 0, os.SEEK_END)
+        except OSError:
+            end = 0
+        finally:
+            os.close(fd)
+        if end > 2 ** 40:
+            return d
+        os.rmdir(d)
+    pytest.skip("no filesystem here gives a directory a seek-to-end offset")
+
+
+def test_a_directory_where_a_config_file_belongs(fppd):
+    """A directory named schedule.json in config/ (made by hand, or left by
+    a botched copy) is not a schedule: fppd starts with none and answers.
+
+    Regression: b3c330134. GetFileContents() sized its read from the
+    seek-to-end offset, which for a directory on ext4 is LLONG_MAX; resize()
+    threw from the scheduler's load at startup, outside its per-entry try,
+    and fppd died before it answered (and again on every start)."""
+    d = directory_seeking_to_a_bogus_end(fppd)
+    try:
+        os.symlink(d, os.path.join(fppd.media, "config", "schedule.json"))
+        fppd.start()
+        fppd.get("/fppd/status", timeout=10)
+        fppd.get("/fppd/schedule", timeout=10)
+    finally:
+        if not d.startswith(fppd.media):
+            os.rmdir(d)

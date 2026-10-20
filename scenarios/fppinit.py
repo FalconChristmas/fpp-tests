@@ -47,8 +47,14 @@ MEDIA = "/fpp-test-media"  # where the media directory appears to fppinit
 
 
 def _stub(log):
+    # Prints /fppinit-state/<command>.<argument>.out for the first argument
+    # that has one (stub_output()), so a scenario can give a verb its output.
     return ("#!/bin/sh\n"
             f"printf '%s\\n' \"$(basename \"$0\") $*\" >> {log}\n"
+            "for a in \"$@\"; do\n"
+            "    f=\"/fppinit-state/$(basename \"$0\").$a.out\"\n"
+            "    if [ -f \"$f\" ]; then cat \"$f\"; break; fi\n"
+            "done\n"
             "exit 0\n")
 
 
@@ -75,7 +81,10 @@ for a in "$@"; do
             st=$(cat "$S/$n.enabled" 2>/dev/null || echo disabled); echo "$st"
             [ "$st" = enabled ] || rc=1 ;;
         stop|kill) echo inactive > "$S/$n.active" ;;
-        start|restart|reload-or-restart|try-restart) echo active > "$S/$n.active" ;;
+        start|restart|reload-or-restart|try-restart)
+            # a start job waiting on its device (start_delay())
+            if [ -f "$S/$n.startdelay" ]; then sleep "$(cat "$S/$n.startdelay")"; fi
+            echo active > "$S/$n.active" ;;
         enable) echo enabled > "$S/$n.enabled" ;;
         disable|mask) echo disabled > "$S/$n.enabled" ;;
     esac
@@ -97,6 +106,7 @@ class FppinitSandbox:
         self.state = os.path.join(self.dir, "state")
         os.makedirs(self.state)
         self.upper = None
+        self.root_files = {}
 
     def write(self, rel, content):
         """Write a file into the sandbox's media directory (JSON for a dict
@@ -113,6 +123,25 @@ class FppinitSandbox:
             if value is not None:
                 with open(os.path.join(self.state, f"{name}.{what}"), "w") as f:
                     f.write((yes if value else no) + "\n")
+
+    def stub_output(self, command, argument, text):
+        """What a stubbed command prints when called with `argument` (say
+        amixer with scontrols); otherwise the stubs print nothing. The
+        command is stubbed in /usr/bin even where it isn't installed."""
+        with open(os.path.join(self.state, f"{command}.{argument}.out"), "w") as f:
+            f.write(text)
+
+    def start_delay(self, name, seconds):
+        """Make the stubbed systemctl take `seconds` to start or restart this
+        unit, as a start job waiting on a device that isn't there does."""
+        with open(os.path.join(self.state, f"{name}.startdelay"), "w") as f:
+            f.write(f"{seconds}\n")
+
+    def root_file(self, path, content):
+        """A file at an absolute path outside the media and boot directories
+        as each later run starts (a script, from its "#!", is executable),
+        or None to remove one the system has."""
+        self.root_files[path] = content
 
     def settings(self, **kv):
         with open(os.path.join(self.media, "settings"), "a") as f:
@@ -150,8 +179,24 @@ class FppinitSandbox:
             # The command's own path, not what it links to: on systemd
             # systems reboot/poweroff/halt are links to systemctl.
             path = shutil.which(name, path="/usr/sbin:/usr/bin:/sbin:/bin")
+            if not path and any(f.startswith(name + ".") for f in os.listdir(self.state)):
+                # not installed here, but given output with stub_output()
+                path = "/usr/bin/" + name
             if path:
                 stub_lines.append(f"stub {shlex.quote(path)}")
+        roots = os.path.join(run_dir, "root-files")
+        root_lines = []
+        for i, (path, content) in enumerate(self.root_files.items()):
+            dest = '"$R"' + shlex.quote(path)
+            if content is None:
+                root_lines.append(f"rm -rf {dest}")
+                continue
+            os.makedirs(roots, exist_ok=True)
+            src = os.path.join(roots, str(i))
+            with open(src, "w") as f:
+                f.write(content)
+            mode = "755" if content.startswith("#!") else "644"
+            root_lines.append(f'mkdir -p "$(dirname {dest})"; cp {shlex.quote(src)} {dest}; chmod {mode} {dest}')
         home = ""
         if media_home:
             home = f'mkdir -p "$R/home/fpp/media"; mount --bind {shlex.quote(self.media)} "$R/home/fpp/media"'
@@ -179,6 +224,7 @@ mkdir -p "$R"{shlex.quote(self.tree)}; mount --bind {shlex.quote(self.tree)} "$R
 stub() {{ rm -f "$R$1"; printf '%s' {shlex.quote(_stub(log))} > "$R$1"; chmod 755 "$R$1"; }}
 mkdir -p "$R/fppinit-state"; cp -a {shlex.quote(self.state)}/. "$R/fppinit-state/"
 {chr(10).join(stub_lines)}
+{chr(10).join(root_lines)}
 rm -f "$R{systemctl}"; printf '%s' {shlex.quote(SYSTEMCTL)} > "$R{systemctl}"; chmod 755 "$R{systemctl}"
 : > "$R{log}"
 set +e

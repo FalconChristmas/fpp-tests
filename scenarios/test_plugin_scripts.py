@@ -10,6 +10,11 @@ directory, which the scenario reads back.
 import json
 import os
 import time
+import urllib.error
+
+import pytest
+
+import pytest
 
 from test_playlist_entries import pause, playlist, step
 
@@ -243,3 +248,194 @@ def test_unload_mid_walk_waits_only_for_its_own_plugin(fppd):
         after = events(other)[before:]
         assert after == ["lifecycle shutdown"], \
             f"fpp-test-b was called after its unload was asked for: {after}"
+
+
+SLOW_COMMAND = '#!/bin/sh\ntouch "$(dirname "$0")/started"\nsleep SECONDS\ntouch "$(dirname "$0")/done"\n'
+
+
+def slow_command_plugin(fppd, seconds):
+    return plugin(fppd, extra={
+        "commands/descriptions.json": [{"name": "Test Plugin Slow", "script": "slow.sh", "args": []}],
+        "commands/slow.sh": SLOW_COMMAND.replace("SECONDS", str(seconds)),
+    })
+
+
+def unload_during_command(fppd, d):
+    """Run "Test Plugin Slow" from one client and unload its plugin from
+    another once the script has started; return (unload's answer, how long
+    the unload took, the command's answer or exception)."""
+    import threading
+    got = {}
+
+    def run():
+        try:
+            got["r"] = fppd.command("Test Plugin Slow", timeout=40)
+        except Exception as e:  # noqa: BLE001 -- reported below
+            got["r"] = e
+
+    t = threading.Thread(target=run)
+    t.start()
+    fppd.wait_for(lambda: os.path.exists(os.path.join(d, "commands", "started")), timeout=10,
+                  what="the command's script to start")
+    began = time.monotonic()
+    r = fppd.post("/fppd/plugin/fpp-test/unload", {}, timeout=40)
+    took = time.monotonic() - began
+    t.join(45)
+    return r, took, got.get("r")
+
+
+def test_unloading_a_plugin_waits_for_its_running_command(fppd):
+    """Unloading a script plugin while one of its commands is running waits
+    for that run to end before freeing the command, and both requests are
+    answered.
+
+    Regression: 34e2a2efa. Unload deleted the plugin's commands at once, so
+    a command still running on an HTTP thread came back from waiting on its
+    script into a freed object (it built its "complete" reply from the
+    freed name)."""
+    d = slow_command_plugin(fppd, 3)
+    fppd.start()
+    r, took, result = unload_during_command(fppd, d)
+    assert r["loaded"] is False, r
+    assert not isinstance(result, Exception), result
+    fppd.check_alive()
+    assert took >= 2, f"the unload returned after {took:.1f} s, before the 3 s command ended"
+
+
+NATIVE_PROBE = r"""
+#include <stdio.h>
+#include <stdlib.h>
+__attribute__((constructor)) static void loaded(void) {
+    const char* p = getenv("FPP_TEST_PROBE");
+    FILE* f = p ? fopen(p, "a") : NULL;
+    if (f) { fputs("loaded\n", f); fclose(f); }
+}
+"""
+
+
+def native_probe_plugin(fppd, name="fpp-native"):
+    """A plugin whose callbacks answer c++:probe.so, a library that records
+    being loaded (it has no createPlugin, so fppd refuses it after that);
+    returns the probe file."""
+    import subprocess
+    d = plugin(fppd, name=name, types="c++:probe.so")
+    src = os.path.join(d, "probe.c")
+    with open(src, "w") as f:
+        f.write(NATIVE_PROBE)
+    subprocess.run(["gcc", "-shared", "-fPIC", "-o", os.path.join(d, "probe.so"), src], check=True)
+    return os.path.join(fppd.media, "tmp", "probe.log")
+
+
+def probe(path):
+    try:
+        with open(path) as f:
+            return f.read().split()
+    except FileNotFoundError:
+        return []
+
+
+@pytest.mark.parametrize("reinstall", ["1", ""])
+def test_native_plugin_is_not_loaded_until_reinstalled_after_fppos(fppd, reinstall):
+    """While pluginReinstallNeededAfterOS is set (an FPPOS reflash kept the
+    plugin clones, built against the previous FPP), fppd does not load a
+    native plugin's library at startup; the Plugin Manager's load after rebuilding it still loads it. With the
+    setting empty, the library loads at startup.
+
+    Regression: 080e60347. fppd dlopened the stale library at boot; one
+    built against 10.1 headers crashed in its constructor, a boot loop
+    before the user could reinstall."""
+    log = native_probe_plugin(fppd)
+    fppd.settings(pluginReinstallNeededAfterOS=reinstall)
+    fppd.start(extra_env={"FPP_TEST_PROBE": log})
+    if not reinstall:
+        fppd.wait_for(lambda: probe(log) == ["loaded"], timeout=10, what="the library to load")
+        return
+    time.sleep(2)
+    assert probe(log) == [], "the stale native library was loaded at startup"
+    assert "Not loading plugin fpp-native" in fppd.log()
+    try:
+        fppd.post("/fppd/plugin/fpp-native/load", {}, timeout=40)
+    except urllib.error.HTTPError:
+        pass  # no createPlugin: refused once loaded, which is all this needs
+    assert probe(log) == ["loaded"], probe(log)
+
+
+def test_slow_lifecycle_shutdown_does_not_hold_the_unload(fppd):
+    """Unloading a script plugin whose "shutdown" lifecycle script takes 20 s
+    (stopping a daemon, say) returns within a few seconds.
+
+    Regression: c30b88f04. The lifecycle script was waited for without a
+    bound, on the main loop, so output and every main-loop request stopped
+    for as long as it ran."""
+    d = plugin(fppd, types="lifecycle")
+    with open(os.path.join(d, "callbacks.sh"), "w") as f:
+        f.write(CALLBACKS.replace("LIST_DELAY", ":").replace("LIST", "lifecycle")
+                .replace('echo "$*" >> "$LOG"',
+                         'echo "$*" >> "$LOG"; case "$*" in *shutdown*) sleep 20;; esac'))
+    fppd.start()
+    fppd.wait_for(lambda: "lifecycle startup" in events(d), timeout=10, what="startup")
+    began = time.monotonic()
+    r = fppd.post("/fppd/plugin/fpp-test/unload", {}, timeout=40)
+    took = time.monotonic() - began
+    assert r["loaded"] is False, r
+    assert took < 10, f"the unload waited {took:.1f} s for the shutdown script"
+
+
+def test_shutdown_while_an_mqtt_message_is_being_handled(fppd):
+    """fppd stopped (SIGTERM) while the MQTT thread is still handling a
+    message -- a playlist stop whose plugin callback takes 8 s -- exits 0.
+
+    Regression: 5cac5ea15. Shutdown stopped the MQTT thread with a forced
+    cancel, which landed at the callback's cancellation point (waiting on
+    the plugin's script); the catch (...) around message callbacks
+    swallowed the forced unwind, and the process aborted ("exception not
+    rethrown") instead of exiting."""
+    from test_mqtt_control import HOST, PORT, broker, publish
+    slow = plugin(fppd, name="fpp-test-a")
+    with open(os.path.join(slow, "callbacks.sh"), "w") as f:
+        f.write(CALLBACKS.replace("LIST_DELAY", ":").replace("LIST", "playlist")
+                .replace('echo "$*" >> "$LOG"',
+                         'echo "$*" >> "$LOG"; case "$*" in *\\"stop\\"*) sleep 8;; esac'))
+    fppd.write("playlists/P.json", playlist("P", main=[pause(60)]))
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    with broker():
+        fppd.start()
+        time.sleep(2)  # connected and subscribed
+        fppd.command("Start Playlist", "P", "false", "false", timeout=30)
+        fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "playing",
+                      timeout=20, what="the playlist to start")
+        n = len(events(slow))
+        publish("set/playlist/P/stop/now")
+        fppd.wait_for(lambda: any('"stop"' in l for l in events(slow)[n:]), timeout=10,
+                      what="the plugin's stop callback to start")
+        rc = fppd.stop(timeout=30)
+        fppd.exit_expected = True
+    assert rc == 0, f"fppd exited {rc} when stopped mid-callback\n{fppd.tail()}"
+    assert not fppd.sanitizer_reports(), fppd.sanitizer_reports()[0][:4000]
+
+
+@pytest.mark.parametrize("name", [".", "%2E", ".."])
+def test_load_route_refuses_a_dot_name(fppd, name):
+    """The plugin load route refuses "." and ".." as a plugin name: the
+    name becomes a directory under plugins/, and those name the plugin
+    directory itself and the media directory. Nothing is run.
+
+    Regression: 4af3c6b3e (HP-14). Only empty names and names with a
+    slash were refused, so "." ran plugins/callbacks --list as a plugin's.
+    """
+    import urllib.error
+    ran = os.path.join(fppd.media, "tmp", "ran")
+    for d in ("plugins", ""):
+        script = os.path.join(fppd.media, d, "callbacks")
+        with open(script, "w") as f:
+            f.write(f"#!/bin/sh\ntouch '{ran}'\necho playlist\n")
+        os.chmod(script, 0o755)
+    fppd.start()
+    try:
+        fppd.post(f"/fppd/plugin/{name}/load", {})
+        code = 200
+    except urllib.error.HTTPError as e:
+        code = e.code
+    time.sleep(1)
+    assert not os.path.exists(ran), f"loading plugin {name!r} ran a callbacks script"
+    assert code == 400, f"loading plugin {name!r} answered {code}"

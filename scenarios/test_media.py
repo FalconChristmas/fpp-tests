@@ -718,6 +718,8 @@ def test_play_media_answers_while_pipewire_is_frozen(fppd, audio):
     under mediaOutputLock: the command never answered, and nothing else
     could start media. (The rate is cached, so this has to be the run's
     first media.)"""
+    if os.environ.get("FPP_TESTS_HOST_AUDIO"):
+        pytest.skip("stops the scenario's own PipeWire; under --host-audio that is the device's")
     import signal
     write_wav_at(os.path.join(fppd.media, "music", "Hi.wav"), 2, 96000)
     write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 2)

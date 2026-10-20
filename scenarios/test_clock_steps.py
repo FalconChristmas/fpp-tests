@@ -75,7 +75,9 @@ def test_overlay_effect_keeps_running_across_a_clock_step(fppd, step):
     setup(fppd, [matrix()])
     with DdpReceiver(CHANNELS) as rx:
         fppd.start(fake_time="2026-12-24 18:00:00")
-        effect(fppd, "M", "Bars", Direction="Down")
+        # 30 sweeps in 60 s: the default speed (one in 2 s), but still
+        # running when the 2 s window after the step ends.
+        effect(fppd, "M", "Bars", Direction="Down", time="60000", iterations="30")
         assert rx.wait_frames(20, timeout=10), "the Bars effect never reached the wire"
         overlay_frames_keep_changing(fppd, rx, step, "the Bars effect")
 
@@ -176,6 +178,8 @@ def test_a_stalled_track_survives_a_clock_step_back(fppd, audio):
     import re
     import signal
     from test_media import sounding
+    if os.environ.get("FPP_TESTS_HOST_AUDIO"):
+        pytest.skip("stops the scenario's own PipeWire; under --host-audio that is the device's")
     from test_video import MODEL, make_video, overlay_consumer, setup
     make_video(os.path.join(fppd.media, "videos", "Eight.mkv"), seconds=8)
     setup(fppd, [overlay_consumer()])
@@ -336,3 +340,54 @@ def test_mqtt_status_keeps_publishing_across_a_clock_step(fppd):
     # the step and 4 after
     assert len(statuses) >= 4, \
         f"{len(statuses)} fppd_status publishes in 7.5 s: they stopped after the clock stepped back"
+
+
+def test_virtual_display_keeps_streaming_across_a_clock_step(fppd):
+    """The HTTP virtual display (the browser preview) keeps sending frames of
+    a playing sequence when the wall clock steps back.
+
+    Regression: 2c36c564e. Its send pacing waited until the wall clock
+    reached the next send time, so a step back froze the preview for the
+    size of the step."""
+    from fseq import unique_frames
+    from show import install
+    from test_output_config import sse_messages, virtual_display, wait_for_display
+    install(fppd, unique_frames(2400, 9))  # 120 s
+    virtual_display(fppd, ["10,10", "5,5,3,3,RGB"], 9)
+    fppd.start(fake_time="2026-12-24 18:00:00")
+    wait_for_display(fppd)
+    fppd.command("Start Playlist", "Show", "false", "false")
+    assert len(sse_messages(2)) >= 5, "the display streamed nothing before the clock step"
+    fppd.set_clock("2026-12-24 17:00:01")
+    time.sleep(0.5)
+    sent = len(sse_messages(2))
+    assert sent >= 5, f"{sent} frames streamed in the 2 s after the clock stepped back"
+
+
+def test_script_entry_elapsed_time_across_a_clock_step(fppd):
+    """A running script playlist entry reports the time it has been running
+    in /fppd/status, through a wall-clock step back.
+
+    Regression: 2c36c564e. Its elapsed time was the wall clock less its start,
+    so a step back made it an hour negative (and its config's
+    secondsElapsed, unsigned, about 1.8e19)."""
+    import os
+    path = fppd.write("scripts/wait.sh", "#!/bin/sh\nsleep 60\n")
+    os.chmod(path, 0o755)
+    fppd.write("playlists/Wait.json", {"name": "Wait", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                       "mainPlaylist": [{"type": "script", "enabled": 1, "playOnce": 0,
+                                                         "scriptName": "wait.sh", "scriptArgs": "",
+                                                         "blocking": True}],
+                                       "leadOut": []})
+    fppd.start(fake_time="2026-12-24 18:00:00")
+    fppd.command("Start Playlist", "Wait", "false", "false")
+    fppd.wait_for(lambda: fppd.get("/fppd/status").get("current_sequence") == "wait.sh",
+                  what="the script entry to run")
+    time.sleep(1)
+    fppd.set_clock("2026-12-24 17:00:01")
+    time.sleep(1)
+    elapsed = int(fppd.get("/fppd/status").get("seconds_elapsed"))
+    try:
+        assert 0 <= elapsed < 120, f"the script entry reports {elapsed} s elapsed after about 2 s"
+    finally:
+        fppd.command("Stop Now")

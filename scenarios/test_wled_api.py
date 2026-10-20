@@ -14,7 +14,7 @@ import pytest
 
 from ddp import DdpReceiver
 from show import ddp_output
-from test_overlays import CHANNELS, matrix, setup
+from test_overlays import CHANNELS, PANEL_CHANNELS, colorlight_panel, matrix, resave_outputs, setup
 
 PORT = 32327
 
@@ -303,3 +303,178 @@ def test_audio_input_setting_cannot_add_pipeline_elements(fppd):
     time.sleep(5)
     assert not os.path.exists(dst), "WLEDAudioInput added elements to the capture pipeline"
     assert fppd.get("/fppd/status").get("status_name") is not None
+
+
+def test_state_requests_during_output_reloads(fppd):
+    """WLED apps reading and setting state while the channel outputs are
+    saved again and again (each save removes the panel output's own model
+    and creates it again): every request is answered, and the panel's model
+    is back afterwards.
+
+    Regression: bd18449ff. The client threads walked the overlay manager's
+    model-name list by reference without its lock while the reload erased
+    the panel's entry from it; a walk standing on that entry -- the only
+    one here -- read the freed list node (heap-use-after-free)."""
+    import threading
+    fppd.write("config/channeloutputs.json", colorlight_panel())
+    fppd.write("config/co-universes.json", ddp_output(PANEL_CHANNELS))
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": []})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: _answers(), timeout=10, what="the WLED API to listen")
+    fppd.wait_for(lambda: "Panel" in [m.get("Name") for m in fppd.get("/models") or []],
+                  what="the panel's own model")
+    stop = threading.Event()
+
+    def hammer(method, path, body):
+        while not stop.is_set():
+            try:
+                http(method, path, body)
+            except Exception:  # a request cut off by the reload is fine
+                time.sleep(0.01)
+
+    jobs = [("GET", "/json/state", None)] * 2 + [("GET", "/json/info", None)] * 2 + \
+        [("POST", "/json/state", {"on": True})] * 2
+    threads = [threading.Thread(target=hammer, args=j, daemon=True) for j in jobs]
+    for t in threads:
+        t.start()
+    try:
+        for _ in range(20):
+            resave_outputs(fppd)
+            fppd.check_alive()
+    finally:
+        stop.set()
+        for t in threads:
+            t.join(10)
+    seg = json.loads(http("GET", "/json/state")[1])["seg"]
+    assert seg, "the panel's model is not in the WLED state after the reloads"
+
+
+def running_effect(fppd, model="M"):
+    """The effect running on `model`, as /overlays/running reports it."""
+    for m in fppd.get("/overlays/running"):
+        if m.get("Name") == model:
+            return m.get("effect")
+    return None
+
+
+def test_slider_only_update_adjusts_the_running_effect(fppd):
+    """A WLED app dragging the Speed slider sends a segment with "sx" and
+    no "fx": the running effect carries on at the new speed. A segment sent
+    as one object rather than a list is applied as well.
+
+    Regression: bf5fae81c. The update was read through a non-const
+    Json::Value, so with GCC's argument order seg["fx"] was inserted before
+    isMember("fx") was asked: a slider drag fell back to effect 0, "Stop
+    Effects". A single-object "seg" was ignored."""
+    start(fppd)
+    names = effects()
+    rainbow, colorloop = names.index("WLED - Rainbow"), names.index("WLED - Colorloop")
+    http("POST", "/json/state", {"seg": [{"id": 0, "fx": rainbow}]})
+    fppd.wait_for(lambda: (running_effect(fppd) or {}).get("name") == "WLED - Rainbow",
+                  what="the Rainbow to start")
+    http("POST", "/json/state", {"seg": [{"id": 0, "sx": 200}]})
+    time.sleep(0.5)
+    eff = running_effect(fppd)
+    assert eff and eff.get("name") == "WLED - Rainbow", f"a slider-only update replaced the effect: {eff}"
+    assert eff.get("speed") == 200, f"the slider didn't reach the effect: {eff}"
+    http("POST", "/json/state", {"seg": {"id": 0, "fx": colorloop}})
+    fppd.wait_for(lambda: (running_effect(fppd) or {}).get("name") == "WLED - Colorloop",
+                  timeout=5, what="a segment sent as one object to apply")
+
+
+def test_a_client_that_stops_reading_is_dropped(fppd):
+    """A WebSocket client that stops reading is dropped the first time a
+    state broadcast to it times out: after that, state changes from other
+    clients are answered at once again.
+
+    Regression: bf5fae81c (WV-6). A broadcast that timed out was ignored,
+    so every later one waited out the 2 s send timeout on the stalled client
+    again, under the lock every answer needs: each state change took 2 s."""
+    start(fppd)
+    stalled = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    stalled.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+    stalled.connect(("127.0.0.1", PORT))
+    stalled.sendall(b"GET /ws HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                    b"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n")
+    # ...and never read from it again.
+
+    def change():
+        began = time.monotonic()
+        http("POST", "/json/state", {"on": True}, timeout=30)
+        return time.monotonic() - began
+
+    try:
+        deadline = time.monotonic() + 60
+        while change() < 1.5:  # until a broadcast first waits on the stalled client
+            assert time.monotonic() < deadline, "no broadcast ever waited on the stalled client"
+        took = sorted(change() for _ in range(10))
+    finally:
+        stalled.close()
+    assert took[5] < 0.5, f"state changes after the stall took {[round(t, 2) for t in took]} s"
+
+
+def test_a_reused_descriptor_is_still_shut_down_at_stop(fppd):
+    """A connection accepted onto the descriptor number a finished one just
+    gave back is still tracked: fppd shuts it down at stop and exits, though
+    the client never sends a request.
+
+    Regression: bf5fae81c (WV-4). The client thread closed its descriptor
+    before untracking it, and untracking erased every entry with that
+    number: a connection accepted in between was erased with it, never shut
+    down, and its thread's recv() (no timeout) held up shutdown for good.
+    slowclose.so widens the in-between to 300 ms."""
+    import shims
+    setup(fppd, [matrix()])
+    fppd.start(preload=[shims.build("slowclose.c")])
+    fppd.wait_for(lambda: _answers(), timeout=10, what="the WLED API to listen")
+    idle = []
+    try:
+        for _ in range(10):
+            assert http("GET", "/json/info")[0] == 200
+            # at once, while the finished connection's thread is in close()
+            idle.append(socket.create_connection(("127.0.0.1", PORT), timeout=5))
+            time.sleep(0.5)
+        rc = fppd.stop(timeout=20)
+        fppd.exit_expected = True
+    finally:
+        for s in idle:
+            s.close()
+    assert rc == 0, f"fppd exited {rc}"
+
+
+def test_an_oversized_ping_closes_the_connection(fppd):
+    """A WebSocket ping carrying more than 125 bytes (a control frame may
+    not) closes the connection; fppd never answers with a frame whose
+    length byte sets the MASK bit.
+
+    Regression: bf5fae81c (WV-5). The pong echoed the ping with its length
+    in one byte: 200 came out as 0xC8, the MASK flag plus 72, which no
+    client can parse."""
+    start(fppd)
+    ws = WS()
+    ws.send(b"p" * 200, opcode=0x9)
+    ws.s.settimeout(5)
+    try:
+        head = ws.s.recv(2)
+    except ConnectionError:
+        head = b""
+    ws.close()
+    assert not head or not head[1] & 0x80, f"fppd answered a frame with the MASK bit set: {head.hex()}"
+    assert not head, f"the connection stayed open after a 200-byte ping: {head.hex()}"
+    assert http("GET", "/json/info")[0] == 200
+
+
+def test_out_of_range_slider_values_are_clamped(fppd):
+    """A slider value past WLED's 0-255 (here 100000) reaches the effect
+    clamped to its range.
+
+    Regression: bf5fae81c (WV-8). A value for an argument whose range is
+    0-255 was passed through unchecked, and for other ranges scaled into an
+    int conversion that overflowed."""
+    start(fppd)
+    rainbow = effects().index("WLED - Rainbow")
+    http("POST", "/json/state", {"seg": [{"id": 0, "fx": rainbow, "sx": 100000}]})
+    eff = fppd.wait_for(lambda: running_effect(fppd), what="the Rainbow to start")
+    assert eff.get("name") == "WLED - Rainbow", eff
+    assert 0 <= eff.get("speed", -1) <= 255, f"speed {eff.get('speed')} reached the effect"

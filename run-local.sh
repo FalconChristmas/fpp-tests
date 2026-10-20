@@ -22,7 +22,30 @@
 #     writes there (media_root.txt, www/warnings*.json) lands in a scratch
 #     layer, so the device's fppd and web UI never see it;
 #   - no sound cards, SPI devices as /dev/null (fppd probes SPI0 for a GPIO
-#     expander at startup), read-only /sys, and a scratch HOME.
+#     expander at startup), read-only /sys, and a scratch HOME;
+#   - when the tree under test is not /opt/fpp, an overlay over /opt/fpp as
+#     well: cape configs are read from /opt/fpp/capes whatever the tree, so
+#     a scenario writes its own there;
+#   - an overlay over /home/fpp/media and no I2C buses: cape detection, which
+#     fppd re-runs when an output first asks for a cape config, hardcodes
+#     /home/fpp/media. On the bus it would find the cape's EEPROM, fail to
+#     bind it through the read-only /sys, wait 17 s, and delete the device's
+#     own tmp/eeprom.bin. The device's EEPROM is offered as a virtual one
+#     (config/cape-eeprom.bin) in the overlay instead, so the test fppd still
+#     sees the cape -- as unsigned, since a signature is bound to the bus.
+#
+# On a BeagleBone the PRUs are hidden from the test fppd, which would
+# otherwise map the live PRUSS through /dev/mem and install firmware into
+# the real /lib/firmware -- under a running show's outputs:
+#   - an empty /sys/class/remoteproc, which puts an AM62x fppd in its
+#     FAKE_PRU mode: PRU memory is anonymous memory, nothing is started, and
+#     the outputs' Init, PrepData and SendData run against a PRU that never
+#     answers;
+#   - an empty /lib/firmware, /dev/mem as /dev/null (an AM335x fppd has no
+#     FAKE_PRU mode; its PRU outputs fail to start instead), and a pinctrl
+#     that only logs its calls to /tmp/pinctrl.log, so no pad is re-muxed.
+# GPIO lines are still the real ones: stop the device's fppd first if a
+# scenario drives an output whose pins it uses.
 #
 # Needs root (for the namespaces). Installs python3-pytest and faketime if missing.
 set -e
@@ -68,7 +91,12 @@ mkdir -p "$ARTIFACTS"
 echo "fpp tree $TREE: $(cd "$TREE" && git describe --tags --dirty 2>/dev/null || echo unknown)," \
      "fppd built $(date -r "$TREE/src/fppd" '+%Y-%m-%d %H:%M')"
 
-export FPP_TREE="$TREE" FPP_TESTS_HERE="$HERE" FPP_TESTS_ARTIFACTS="$ARTIFACTS"
+BEAGLE=""
+if grep -qi beagle /proc/device-tree/model 2>/dev/null; then
+    BEAGLE=1
+fi
+
+export FPP_TREE="$TREE" FPP_TESTS_HERE="$HERE" FPP_TESTS_ARTIFACTS="$ARTIFACTS" FPP_TESTS_BEAGLE="$BEAGLE"
 
 # unshare makes every mount in the new namespace private, so nothing below is
 # visible to the host or outlives the run.
@@ -91,11 +119,41 @@ exec unshare --mount --net --fork sh -c '
     mkdir -p /tmp/overlay/upper /tmp/overlay/work /tmp/home
     mount -t overlay overlay \
         -o "lowerdir=$FPP_TREE,upperdir=/tmp/overlay/upper,workdir=/tmp/overlay/work" "$FPP_TREE"
+    if [ -d /opt/fpp ] && [ "$FPP_TREE" != /opt/fpp ]; then
+        mkdir -p /tmp/overlay-opt/upper /tmp/overlay-opt/work
+        mount -t overlay overlay \
+            -o "lowerdir=/opt/fpp,upperdir=/tmp/overlay-opt/upper,workdir=/tmp/overlay-opt/work" /opt/fpp
+    fi
+    if [ -d /home/fpp/media ]; then
+        mkdir -p /tmp/overlay-media/upper /tmp/overlay-media/work
+        mount -t overlay overlay \
+            -o "lowerdir=/home/fpp/media,upperdir=/tmp/overlay-media/upper,workdir=/tmp/overlay-media/work" /home/fpp/media
+        if [ -f /home/fpp/media/tmp/eeprom.bin ] && [ ! -e /home/fpp/media/config/cape-eeprom.bin ]; then
+            cp /home/fpp/media/tmp/eeprom.bin /home/fpp/media/config/cape-eeprom.bin
+        fi
+    fi
+    for f in /dev/i2c-*; do
+        if [ -e "$f" ]; then mount --bind /dev/null "$f"; fi
+    done
     if [ -d /dev/snd ]; then mount -t tmpfs tmpfs /dev/snd; fi
     for f in /dev/spidev*; do
         if [ -e "$f" ]; then mount --bind /dev/null "$f"; fi
     done
     mount --bind /sys /sys
+    if [ -n "$FPP_TESTS_BEAGLE" ]; then
+        if [ -d /sys/class/remoteproc ]; then
+            mount -t tmpfs -o mode=755 tmpfs /sys/class/remoteproc
+        fi
+        if [ -d /lib/firmware ]; then
+            mount -t tmpfs -o mode=755 tmpfs /lib/firmware
+        fi
+        if [ -e /dev/mem ]; then mount --bind /dev/null /dev/mem; fi
+        if [ -e /usr/bin/pinctrl ]; then
+            printf "#!/bin/sh\necho \"\$*\" >> /tmp/pinctrl.log\n" > /tmp/pinctrl
+            chmod 755 /tmp/pinctrl
+            mount --bind /tmp/pinctrl /usr/bin/pinctrl
+        fi
+    fi
     mount -o remount,bind,ro /sys
     export HOME=/tmp/home XDG_CACHE_HOME=/tmp/home/.cache
     cd "$FPP_TESTS_HERE"

@@ -406,3 +406,45 @@ def test_virtual_display_skips_a_pixel_outside_the_channel_buffer(fppd):
     msgs = sse_messages(3)
     assert any(m.startswith(want + ":") for m in msgs), f"no {want!r} pixel in {msgs[-3:]}"
     assert fppd.get("/fppd/status")["status_name"]
+
+
+def model_pixel_strings(port):
+    """A 10x5 overlay model and a ModelPixelStrings output drawing one
+    10-pixel string on it, from the string's port `port`."""
+    return ({"autoCreate": False, "models": [{
+        "Name": "M", "Type": "Channel", "StartChannel": 1, "ChannelCount": 150,
+        "ChannelCountPerNode": 3, "Orientation": "horizontal", "StartCorner": "TL",
+        "StringCount": 5, "StrandsPerString": 1}]},
+        {"channelOutputs": [{
+            "type": "ModelPixelStrings", "enabled": 1, "startChannel": 1001, "channelCount": 30,
+            "modelName": "M", "outputs": [{
+                "portNumber": port, "protocol": "ws2811", "virtualStrings": [{
+                    "description": "s", "startChannel": 1000, "pixelCount": 10, "groupCount": 0,
+                    "reverse": 0, "colorOrder": "RGB", "nullNodes": 0, "endNulls": 0,
+                    "zigZag": 0, "brightness": 100, "gamma": "1.0"}]}]}]})
+
+
+@pytest.mark.parametrize("port", [0, -1], ids=["port 0", "port -1"])
+def test_a_pixel_string_with_a_negative_port_number_is_refused(fppd, port):
+    """A pixel string whose port number is negative is refused when its
+    output is set up; port 0 is a string like any other. The PRU string
+    drivers index per-port arrays by it (smart receiver packets among
+    them), so a negative one wrote outside them.
+
+    Regression: 2fdf7e617. Any port number was accepted. This checks the
+    guard in PixelString, which every string driver shares; the overflow
+    itself is in the BeagleBone drivers, out of reach here.
+    """
+    models, outputs = model_pixel_strings(port)
+    fppd.write("config/model-overlays.json", models)
+    fppd.write("config/co-pixelStrings.json", outputs)
+    # "Configured <type> Channel Output" is logged at debug level
+    fppd.settings(DisableFakeNetworkBridges="1", LogLevel_ChannelOut="debug")
+    fppd.start()
+    failed = any("Could not initialize output type ModelPixelStrings" in w for w in warnings(fppd))
+    if port < 0:
+        assert failed, warnings(fppd)
+        assert "invalid port number -1" in fppd.log()
+    else:
+        assert not failed, warnings(fppd)
+        assert "Configured ModelPixelStrings" in fppd.log(), fppd.log()[-3000:]

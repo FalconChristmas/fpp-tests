@@ -1,6 +1,7 @@
 """Serial channel outputs, written into a pty and decoded."""
 
 import os
+import termios
 import time
 
 import pytest
@@ -47,6 +48,30 @@ def test_lor_enhanced_reaches_every_unit(fppd):
         while missing() and time.monotonic() < deadline:
             time.sleep(0.2)
         assert not missing(), "; ".join(missing())
+
+
+def test_lor_enhanced_without_a_speed_runs_at_1mbps(fppd):
+    """A LOR Enhanced output whose config names no speed opens its port at
+    1 Mbps, the rate Pixies run their LOR network at.
+
+    Regression: ddc172b48. The default was 500k, so such an output talked to
+    its Pixies at half the rate they listen on.
+    """
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", {"channelOutputs": [{
+            "type": "LOREnhanced", "enabled": 1, "startChannel": 1, "channelCount": 150,
+            "device": pty.device,
+            "units": [{"unitId": 1, "numOfPixels": 50, "lorStartPixel": 1, "fppStartAddr": 1}],
+        }]})
+        fppd.start()
+        # Data on the pty shows the output opened and configured its port.
+        fppd.command("Test Start", "100", "RGB Cycle", "1-150", "R-G-B")
+        fppd.wait_for(lambda: pty.messages(), what="LOR data on the pty")
+        ospeed = termios.tcgetattr(pty.slave)[5]
+        # SerialOpen() sets a rate termios has no constant for through termios2,
+        # which reads back here as BOTHER.
+        names = {termios.B500000: "B500000", termios.B1000000: "B1000000", 0o010000: "a custom rate (BOTHER)"}
+        assert ospeed == termios.B1000000, f"port opened at {names.get(ospeed, ospeed)}, not B1000000"
 
 
 def test_serial_device_without_a_pin_raises_no_warning(fppd):

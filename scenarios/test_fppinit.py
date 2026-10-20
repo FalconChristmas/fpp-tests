@@ -8,6 +8,7 @@ half set up -- so a bad config file must be survived here too.
 
 import json
 import os
+import time
 
 import pytest
 
@@ -170,3 +171,101 @@ def test_tether_credentials_are_not_run_as_shell(fppinit, field):
     assert_clean(r)
     assert not fppinit.media_exists("pwned"), f"{field} was run by the shell"
     assert fppinit.media_exists("tmp/wifi-L.ascii"), "no QR code was written"
+
+
+def test_a_wifi_client_for_a_missing_adapter_does_not_hold_setup(fppinit):
+    """A Wi-Fi client configured for an adapter that isn't plugged in: its
+    supplicant's start job waits for the device (here the stub takes 60 s),
+    and setupNetwork goes on without waiting for it.
+
+    Regression: ed2b830fd. "systemctl reload-or-restart wpa_supplicant@<if> &"
+    ran through popen, whose pipe the backgrounded child kept open, so
+    fppinit -- and systemd-networkd, ordered after it -- waited out the start
+    job (the device's 90 s timeout on a box)."""
+    fppinit.write("config/interface.wlan1",
+                  'INTERFACE="wlan1"\nPROTO="dhcp"\nSSID="TestNet"\nPSK="testpass123"\n')
+    fppinit.start_delay("wpa_supplicant@wlan1", 60)
+    began = time.monotonic()
+    r = fppinit.run("setupNetwork", timeout=180)
+    took = time.monotonic() - began
+    assert_clean(r)
+    calls = fppinit.calls()
+    assert [c for c in calls if "reload-or-restart" in c and "wpa_supplicant@wlan1" in c], \
+        f"the supplicant was never started, so this proves nothing: {calls}"
+    assert took < 30, f"setupNetwork took {took:.0f} s, waiting on the supplicant's start job"
+
+
+def test_setup_audio_resets_an_empty_volume(fppinit):
+    """An empty volume setting is put back to the default, 70, by
+    setupAudio.
+
+    Regression: b3c330134. getRawSettingInt() parsed the digits by hand and
+    read "" as -14, not the -1 "unset" default, so the volume was never
+    reset."""
+    fppinit.settings(volume="")
+    assert_clean(fppinit.run("setupAudio", timeout=180))
+    assert 'volume = "70"' in fppinit.media_file("settings"), fppinit.media_file("settings")
+
+
+def test_mixer_name_reaches_amixer_as_one_argument(fppinit):
+    """The card's mixer control name, which setupAudio takes from "amixer
+    scontrols" (and keeps as the AudioMixerDevice setting), reaches the
+    amixer command that sets the volume as one argument, not as shell text.
+
+    Regression: c400823b5. The name went into a root shell command
+    unquoted: "PCM Playback" was split in two, and a name -- or setting --
+    like "Master; cmd" ran cmd."""
+    fppinit.stub_output("amixer", "scontrols",
+                        "Simple mixer control 'Master; touch /fpp-test-media/pwned',0\n")
+    assert_clean(fppinit.run("setupAudio", timeout=180))
+    calls = fppinit.calls()
+    assert [c for c in calls if c.startswith("amixer") and " set Master" in c], \
+        f"the volume was never set, so this proves nothing: {calls}"
+    assert not fppinit.media_exists("pwned"), "the mixer name was run by the shell"
+
+
+def seed_plugin(sb, name, url):
+    """A plugin clone in the media directory, as the Plugin Manager leaves one."""
+    sb.write(f"plugins/{name}/pluginInfo.json", {"repoName": name, "name": name})
+    sb.write(f"plugins/{name}/.git/config",
+             '[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
+             f'[remote "origin"]\n\turl = {url}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n')
+
+
+def media_settings(sb):
+    out = {}
+    for line in sb.media_file("settings").splitlines():
+        k, sep, v = line.partition("=")
+        if sep:
+            out[k.strip()] = v.strip().strip('"')
+    return out
+
+
+def reflash_boot(sb):
+    """The first boot's postNetwork after an FPPOS reflash. The media
+    directory is also at /home/fpp/media, where fppinit kept it before
+    FPP_MEDIA_DIR (e930dec80)."""
+    sb.root_file("/fppos_upgraded", "")
+    return sb._run(["/opt/fpp/src/fppinit", "postNetwork"], timeout=300, media_home=True)
+
+
+def test_os_reflash_parks_surviving_plugins_as_unverified(fppinit):
+    """After an FPPOS reflash, the sticky "unknown plugin ever installed"
+    flag starts over, and every surviving plugin clone not published by
+    the FPP project is parked as unverified, keyed on the URL it was cloned
+    from, for the Plugin Manager to settle against the plugin list.
+
+    Regression: b7dee3cb9. A reflash left the flag (and the names of the
+    plugins that raised it) as they were, though the OS that those
+    plugins' installs changed was gone.
+    """
+    fppinit.settings(PluginUnknownEverInstalled="1",
+                     PluginUnknownRepos="fpp-gone|https://example.com/x.git")
+    seed_plugin(fppinit, "fpp-third", "https://github.com/someone/fpp-third.git")
+    seed_plugin(fppinit, "fpp-official", "https://github.com/FalconChristmas/fpp-official.git")
+    r = reflash_boot(fppinit)
+    assert_clean(r)
+    s = media_settings(fppinit)
+    assert s.get("PluginUnknownEverInstalled", "") == "", s
+    assert s.get("PluginUnknownRepos", "") == "", s
+    assert s.get("PluginUnverifiedRepos") == "fpp-third|https://github.com/someone/fpp-third.git", s

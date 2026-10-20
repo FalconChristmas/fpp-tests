@@ -83,3 +83,31 @@ def test_a_hard_stop_whose_stopped_preset_starts_a_playlist_ends(fppd):
     assert s.get("status_name") == "playing" and s["current_playlist"]["playlist"] == "Idle", s
     assert float(variable(fppd, "stops")) == 1, \
         f"PLAYLIST_STOPPED ran {variable(fppd, 'stops')} times for one hard stop"
+
+
+def test_start_while_paused_stops_the_paused_playlist(fppd):
+    """A start of the paused playlist (Start Playlist At Item) stops it as a
+    stop would -- its PLAYLIST_STOPPED preset runs -- and it plays again
+    from the item.
+
+    Regression: 018f7fd38. A paused playlist didn't count as running, so
+    the start went straight to loading the new one over it: the paused
+    entry was dropped without being stopped, and no stop callback or
+    PLAYLIST_STOPPED preset ran.
+    """
+    from test_playlist_commands import wait_in_pause
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(30)]))
+    fppd.write("config/commandPresets.json", {"commands": preset(
+        "PLAYLIST_STOPPED", ("Set Variable", "stopped", "Value", "seen", "1", "0", "100", ""))})
+    fppd.start()
+    start(fppd, "P")
+    wait_in_pause(fppd, "1")
+    fppd.command("Pause Playlist")
+    fppd.wait_for(lambda: status_name(fppd) == "paused", what="status paused")
+    # Row 2 is step 1 (row 1 is the lead-in's reset, skipped this way).
+    fppd.command("Start Playlist At Item", "P", "2", "true", "false")
+    wait_trace(fppd, "11")
+    fppd.wait_for(lambda: variable(fppd, "stopped") == "seen", timeout=5, interval=0.1,
+                  what="PLAYLIST_STOPPED for the paused playlist")
+    fppd.command("Stop Now")
+    wait_idle(fppd)

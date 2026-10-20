@@ -5,6 +5,8 @@ buries everything else in the log. Each problem is logged once (or now and
 then) and, where a user can act on it, shown as a warning.
 """
 
+import contextlib
+import subprocess
 import time
 
 import pytest
@@ -12,9 +14,24 @@ import pytest
 from fseq import unique_frames
 from show import CHANNELS, install
 
-# Nothing answers here, and in the test's network namespace there is no
-# route to it at all, so every send to it fails.
+# Nothing answers here, and unreachable() takes away any route to it, so
+# every send to it fails.
 NOWHERE = "10.77.0.9"
+
+
+@contextlib.contextmanager
+def unreachable(address):
+    """No route to `address`: sends to it fail with EHOSTUNREACH. run-local's
+    loopback-only namespace has no route there anyway, but the container has
+    a default route, where the send would simply go to the gateway."""
+    r = subprocess.run(["ip", "route", "add", "unreachable", address + "/32"],
+                       capture_output=True, text=True)
+    if r.returncode:
+        pytest.skip(f"cannot add an unreachable route: {r.stderr.strip()}")
+    try:
+        yield
+    finally:
+        subprocess.run(["ip", "route", "del", "unreachable", address + "/32"])
 
 
 def log_size(fppd):
@@ -61,18 +78,22 @@ def test_unreachable_multisync_remote(fppd):
     Regression: fixed by a00caa85d."""
     install(fppd, unique_frames(1200, CHANNELS))
     fppd.settings(MultiSyncEnabled="1", MultiSyncRemotes=NOWHERE)
-    fppd.start()
-    play(fppd)
-    start = fppd.log().count("Unable to send multisync packet")
-    time.sleep(5)
-    lines = fppd.log().count("Unable to send multisync packet") - start
+    with unreachable(NOWHERE):
+        fppd.start()
+        play(fppd)
+        start = fppd.log().count("Unable to send multisync packet")
+        time.sleep(5)
+        lines = fppd.log().count("Unable to send multisync packet") - start
     assert lines == 0, f"{lines} lines about the unreachable MultiSync remote in 5 s"
 
 
 @pytest.mark.parametrize("kind", ["E1.31", "DDP"])
 def test_unreachable_controller(fppd, kind):
     """An output to a controller that is not there (and not pinged) fails
-    every send; that is logged now and then, not each frame."""
+    every send; that is logged now and then, not each frame.
+
+    Regression: 2ac813fce. Each failed send was logged, every frame: about
+    40 KB of log in 5 s here."""
     install(fppd, unique_frames(1200, CHANNELS))
     fppd.write("config/co-universes.json", {"channelOutputs": [{
         "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": CHANNELS,
@@ -80,9 +101,10 @@ def test_unreachable_controller(fppd, kind):
                        "channelCount": CHANNELS, "type": 1 if kind == "E1.31" else 5,
                        "address": NOWHERE, "priority": 0, "monitor": 0, "deDuplicate": 0}],
     }]})
-    fppd.start()
-    play(fppd)
-    grew = log_growth(fppd)
+    with unreachable(NOWHERE):
+        fppd.start()
+        play(fppd)
+        grew = log_growth(fppd)
     assert grew < 2000, f"fppd.log grew {grew} bytes in 5 s with the {kind} controller unreachable"
 
 
@@ -215,3 +237,35 @@ def test_mqtt_output_with_a_wildcard_topic(fppd):
     finally:
         broker.terminate()
     assert grew < 2000, f"fppd.log grew {grew} bytes in 5 s with a wildcard MQTT output topic"
+
+
+def test_wled_api_out_of_descriptors(fppd):
+    """With fppd out of file descriptors and connections queued on the WLED
+    API's port, accept() fails at once every time it is called; that is
+    logged now and then, not on each pass of a loop that never waits.
+
+    Regression: bf5fae81c (WV-7). The accept loop logged the failure and
+    went straight back to accept(): it spun a core writing a line a spin."""
+    import os
+    import resource
+    import socket
+    from test_wled_api import PORT, start
+    start(fppd)
+    pid = fppd.proc.pid
+    old = resource.prlimit(pid, resource.RLIMIT_NOFILE)
+    conns = []
+    try:
+        resource.prlimit(pid, resource.RLIMIT_NOFILE,
+                         (len(os.listdir(f"/proc/{pid}/fd")) + 4, old[1]))
+        for _ in range(12):
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.setblocking(False)
+            s.connect_ex(("127.0.0.1", PORT))
+            conns.append(s)
+        time.sleep(0.5)
+        grew = log_growth(fppd, seconds=3)
+    finally:
+        for s in conns:
+            s.close()
+        resource.prlimit(pid, resource.RLIMIT_NOFILE, old)
+    assert grew < 2000, f"fppd.log grew {grew} bytes in 3 s with the WLED API out of descriptors"

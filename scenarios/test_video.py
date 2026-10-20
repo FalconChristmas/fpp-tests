@@ -181,6 +181,22 @@ def test_a_video_with_no_sound_plays_at_its_own_speed(fppd, audio):
     assert took >= 3.5, f"a 4 s video finished after {took:.1f} s"
 
 
+def test_play_media_default_video_output_follows_the_setting(fppd, audio):
+    """Play Media with the video output "--Default--" plays the video to
+    the VideoOutput setting's target, here a pixel overlay model directly.
+
+    Regression: decdfeb4e. Play Media passed "--Default--" through as the
+    output, where it was taken for the name of a pixel overlay model; there
+    was none, and the video was dropped (playlists already resolved it)."""
+    make_video(os.path.join(fppd.media, "videos", "Bars.mkv"))
+    fppd.write("config/co-universes.json", ddp_output(W * H * 3))
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [model()]})
+    fppd.settings(DisableFakeNetworkBridges="1", VideoOutput=MODEL)
+    fppd.start()
+    fppd.command("Play Media", "Bars.mkv", "1", "0", "1", "--Default--")
+    wait_for_bars(fppd)
+
+
 def test_a_live_test_pattern_reaches_an_overlay_model(fppd, audio):
     """A video input source (videotestsrc, SMPTE bars) and an overlay member
     of a group that takes its video from it: the model shows the bars with

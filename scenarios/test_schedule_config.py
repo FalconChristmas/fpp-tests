@@ -224,3 +224,108 @@ def test_a_command_entry_with_an_object_argument_runs(fppd):
     fppd.start(fake_time=f"{YEAR}-06-10 12:00:00", tz=ZONE)
     fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("playlist") == "Show",
                   timeout=30, interval=0.5, what="the scheduled command with an object arg to run")
+
+
+def test_sun_relative_offset_out_of_range_is_refused(fppd):
+    """A sun-relative start offset past a day (2000 minutes) is ignored with
+    a warning: the entry starts at sunset like one with no offset.
+
+    Regression: 16f0f5262. The time offsets went in unchecked: this one
+    started the show at sunset plus 33 hours, without a word, and a large
+    negative one put the first occurrence decades back and made every
+    schedule load step forward from there for minutes.
+    """
+    fppd.settings(Latitude="40.7128", Longitude="-74.0060")
+    got = items(fppd, [entry(7, "SunSet", "23:59:00"),
+                       entry(7, "SunSet", "23:59:00", startTimeOffset=2000)],
+                f"{YEAR}-06-10 12:00:00")
+    first = {}
+    for i in got:
+        first.setdefault(i["id"], i["startTime"])
+        first[i["id"]] = min(first[i["id"]], i["startTime"])
+    assert 0 in first and first.get(1) == first[0], first
+    assert any("startTimeOffset out of range" in w for w in warnings(fppd)), warnings(fppd)
+
+
+def test_sunset_in_the_polar_night_is_in_the_evening(fppd):
+    """A SunSet entry far enough north that the sun doesn't rise in
+    December starts at 8 PM, the time a show without a sunset falls back
+    to.
+
+    Regression: da4fa51b0 (SP-9). With no sunset the lookup returned time
+    0, which the before-the-day-starts clamp turned into 8 AM.
+    """
+    from zoneinfo import ZoneInfo
+    zone = "Europe/Oslo"
+    fppd.settings(Latitude="78.22", Longitude="15.65")
+    fppd.write("playlists/Show.json", {"name": "Show", "repeat": 0, "loopCount": 0,
+                                       "leadIn": [], "leadOut": [], "mainPlaylist": []})
+    fppd.write("config/schedule.json", [entry(7, "SunSet", "23:00:00", startDate=f"{YEAR}-12-15",
+                                              endDate=f"{YEAR}-12-20")])
+    fppd.start(fake_time=f"{YEAR}-12-15 12:00:00", tz=zone)
+    got = fppd.get("/fppd/schedule")["schedule"]["items"]
+    assert got, "nothing scheduled"
+    first = datetime.datetime.fromtimestamp(got[0]["startTime"], ZoneInfo(zone))
+    assert first.hour == 20, f"SunSet in the polar night scheduled for {first}"
+
+
+def test_time_format_too_long_for_the_buffer_is_left_empty(fppd):
+    """A date format whose result doesn't fit the scheduler's buffer gives
+    an empty time string in the schedule status, not whatever the failed
+    format left in the buffer.
+
+    Regression: e37a13abf. strftime() failed (returned 0) and left the
+    buffer unterminated, and the scheduler copied it into the JSON anyway,
+    reading past the end of the buffer.
+    """
+    fppd.settings(DateFormat="%Y-%m-%d %Y-%m-%d %Y", TimeFormat="%H:%M")
+    got = items(fppd, [entry(7, "20:00:00", "21:00:00")], f"{YEAR}-06-10 12:00:00")
+    assert got, "nothing scheduled"
+    strs = [i["startTimeStr"] for i in got]
+    assert all(s == "" for s in strs), strs[:3]
+
+
+def test_extend_schedule_after_2038(fppd):
+    """Extend Schedule with a limit moves an entry due within that limit
+    later by the extension, also once the clock is past January 2038.
+
+    Regression: 0b3f1a8a3. The limit was passed on as an int: past 2038
+    it wrapped negative, read as already expired, and the extension was
+    dropped instead of applied.
+    """
+    from zoneinfo import ZoneInfo
+    year = 2039
+    fppd.write("playlists/Show.json", {"name": "Show", "repeat": 1, "loopCount": 0,
+                                       "leadIn": [], "leadOut": [],
+                                       "mainPlaylist": [{"type": "pause", "enabled": 1,
+                                                         "playOnce": 0, "duration": 600}]})
+    show = entry(7, "12:00:00", "13:00:00", startDate=f"{year}-01-01", endDate=f"{year}-12-31")
+    late = entry(7, "12:30:00", "12:45:00", startDate=f"{year}-01-01", endDate=f"{year}-12-31")
+    fppd.write("config/schedule.json", [show, late])
+    fppd.start(fake_time=f"{year}-06-10 12:00:05", tz=ZONE)
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", timeout=15,
+                  what="the scheduled playlist to start")
+
+    def late_start():
+        for i in fppd.get("/fppd/schedule")["schedule"]["items"]:
+            if i["id"] == 1:
+                return datetime.datetime.fromtimestamp(i["startTime"], ZoneInfo(ZONE)).strftime("%H:%M")
+    assert late_start() == "12:30"
+    fppd.command("Extend Schedule", "300", "3600")
+    fppd.wait_for(lambda: late_start() == "12:35", timeout=10,
+                  what="the entry due within the limit to move 5 minutes later")
+
+
+def test_coordinates_of_nan_are_not_numeric(fppd):
+    """Latitude and Longitude of "nan" raise the coordinates warning and
+    fall back to the default location, as any other value that isn't a
+    number does.
+
+    Regression: da4fa51b0 (SP-9). The coordinates were parsed with
+    std::stod, which takes "nan" and "inf": no warning, and the sun times
+    came out of NaN arithmetic.
+    """
+    fppd.settings(Latitude="nan", Longitude="nan")
+    items(fppd, [entry(7, "SunSet", "23:00:00")], f"{YEAR}-06-10 12:00:00")
+    fppd.wait_for(lambda: any("Latitude/Longitude" in w for w in warnings(fppd)), timeout=10,
+                  what="the coordinates warning")

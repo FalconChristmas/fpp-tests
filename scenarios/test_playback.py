@@ -210,7 +210,10 @@ def test_all_lights_off_while_output_is_disabled_and_a_sequence_plays(fppd):
     sending; it still prepares every frame. The blank was then sent inline
     from the caller's thread with only inlineOutputLock held, so two threads
     ran PrepareChannelData() and every output's PrepData() on the same
-    buffers at once (reported by a TSan build)."""
+    buffers at once (reported by a TSan build).
+
+    Coverage, not a red-before test: it passes on 12257d973's parent under
+    ASan and TSan alike, and with the inline send put back on master."""
     install(fppd, solid_frames(400, CHANNELS, 77))
     fppd.start()
     fppd.command("Start Playlist", "Show", "true", "false")

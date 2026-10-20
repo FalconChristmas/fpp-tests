@@ -183,3 +183,86 @@ def test_shutdown_while_the_broker_drops_connections(fppd):
         for c in fill:
             c.close()
         lst.close()
+
+
+def test_legacy_playlist_topic_after_an_inserted_playlist_ends(fppd):
+    """The deprecated playlist/repeat/set topic still reaches the playing
+    playlist after an inserted playlist has come and gone.
+
+    Regression: 84cf36987. Every playlist instance registered the legacy
+    topics with a callback holding itself and never removed it, so the
+    inserted playlist's callback replaced the resident one's; once the
+    inserted playlist ended and was freed, the next message on the topic
+    ran on freed memory on the MQTT thread.
+    """
+    from test_playlist_entries import pause, playlist, step, trace
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(30), step(2)]))
+    fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                    "mainPlaylist": [step(7)], "leadOut": []})
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    repeat = lambda: int(status(fppd).get("repeat_mode") or 0)
+    with broker():
+        fppd.start()
+        fppd.command("Start Playlist", "P", "false", "false")
+        fppd.wait_for(lambda: trace(fppd) == "1", what="P to start")
+
+        def heard():
+            # fppd subscribes once it has connected; publish until it hears
+            publish("playlist/repeat/set", "1")
+            return repeat() == 1
+        fppd.wait_for(heard, timeout=30, interval=1, what="fppd to act on playlist/repeat/set")
+        fppd.command("Insert Playlist Immediate", "Q", "0", "0", "false")
+        fppd.wait_for(lambda: trace(fppd) == "17", timeout=5, what="the inserted playlist to play")
+        time.sleep(2)  # the main loop frees the finished inserted playlist
+        publish("playlist/repeat/set", "0")
+        fppd.wait_for(lambda: repeat() == 0, timeout=10,
+                      what="the playing playlist to hear playlist/repeat/set")
+        fppd.command("Stop Now")
+
+
+def test_an_inserted_playlist_does_not_announce_idle(fppd):
+    """Inserting a playlist into the one playing publishes no "idle" status
+    over MQTT: the player doesn't go idle until the show ends.
+
+    Regression: e14e24890. Every playlist's constructor announced idle
+    (status "idle", an empty playlist name, repeat 0), meant for the
+    resident playlist at startup; an inserted playlist is constructed
+    mid-show, so subscribers saw the player go idle in the middle of it.
+    """
+    from test_playlist_entries import pause, playlist, step, trace
+    if not shutil.which("mosquitto_sub"):
+        pytest.skip("mosquitto_sub is not installed")
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(30), step(2)]))
+    fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                    "mainPlaylist": [step(7)], "leadOut": []})
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    import threading
+    got = []
+    with broker():
+        fppd.start()
+        # fppd subscribes once it has connected; until then what it
+        # publishes is lost, so wait for it to hear a probe first.
+        probe = f"falcon/player/{HOST}/set/probe"
+        fppd.wait_for(lambda: (_publish_many([probe]) or probe in fppd.get("/fppd/mqtt/cache")),
+                      timeout=30, interval=1, what="fppd to connect")
+        fppd.command("Start Playlist", "P", "false", "false")
+        fppd.wait_for(lambda: trace(fppd) == "1", what="P to start")
+        sub = subprocess.Popen(["mosquitto_sub", "-h", "127.0.0.1", "-p", PORT,
+                                "-t", f"falcon/player/{HOST}/status"],
+                               stdout=subprocess.PIPE, text=True)
+        reader = threading.Thread(target=lambda: got.extend(l.strip() for l in sub.stdout),
+                                  daemon=True)
+        reader.start()
+        try:
+            # The status is retained: "playing" arrives as soon as we subscribe.
+            fppd.wait_for(lambda: "playing" in got, what="the retained playing status")
+            fppd.command("Insert Playlist Immediate", "Q", "0", "0", "false")
+            fppd.wait_for(lambda: trace(fppd) == "17", timeout=5, what="the inserted playlist")
+            time.sleep(1.5)
+            assert status(fppd).get("status_name") == "playing"
+        finally:
+            sub.terminate()
+            sub.wait(timeout=5)
+            reader.join(5)
+        fppd.command("Stop Now")
+    assert "idle" not in got, f"status published while P played on: {got}"

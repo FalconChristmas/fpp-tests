@@ -837,3 +837,53 @@ def test_submodel_effect_end_reaches_its_parent_while_models_are_busy(fppd):
             time.sleep(0.3)
         assert not stuck, (f"rounds {stuck} of 5: the submodel's corner stayed over the "
                            "sequence after the submodel's effect disabled it")
+
+
+def test_text_too_big_to_scroll_is_refused_without_the_memory(fppd):
+    """A scrolling Text effect whose strip would be tens of millions of
+    pixels (3000 characters at FontSize 100, some 280000x120) is refused
+    with a log line, without GraphicsMagick allocating the strip, and the
+    model it auto-enabled is disabled again.
+
+    Regression: 371ab1ae7. The scrolling path renders the whole message
+    onto one strip whose size was the caller's to choose: this one took
+    hundreds of MB (8 bytes a pixel, then an RGB copy), more than a
+    BeagleBone has."""
+    channels = PANEL_W * PANEL_H * 3
+    setup(fppd, [matrix("Panel", width=PANEL_W, height=PANEL_H)], channels=channels)
+    fppd.start()
+    desc = fppd.get("/overlays/effects/Text")
+    overrides = dict(Font=a_font(fppd), FontSize="100", Position="Right to Left", Text="W" * 3000)
+    args = [overrides.get(a["name"], a.get("default", "")) for a in desc["args"]]
+    before = peak_rss_mb(fppd.proc.pid)
+    try:
+        fppd.command("Overlay Model Effect", "Panel", "Enabled", "Text", *args, timeout=60)
+    except urllib.error.HTTPError as e:  # refused is right
+        print(f"the effect answered {e.code}")
+    time.sleep(2)
+    grew = peak_rss_mb(fppd.proc.pid) - before
+    assert grew < 128, f"fppd's peak memory grew {grew} MB rendering the text strip"
+    assert "over the 4194304 pixel limit" in fppd.log()
+    m = [x for x in fppd.get("/overlays/models") if x.get("Name") == "Panel"]
+    assert m and m[0].get("isActive") == 0, f"the model was left enabled: {m}"
+
+
+def test_overlay_commands_exist_with_no_models(fppd):
+    """With no overlay models at all, the overlay commands are registered,
+    once each, and a fill of a model that doesn't exist reaches the
+    command.
+
+    Regression: 41f1af083. The commands were registered by addModel() when
+    it added the first model, so a player with no models (or one where a
+    model listener had already put an empty entry in the map) never had
+    them."""
+    setup(fppd, [])
+    fppd.start()
+    names = [c.get("name") for c in fppd.get("/commands")]
+    for n in ("Overlay Model Effect", "Overlay Model Fill", "Overlay Model State"):
+        assert names.count(n) == 1, f"{n!r} is registered {names.count(n)} times"
+    try:
+        reply = fppd.command("Overlay Model Fill", "Nothing", "Enabled", "#FF0000")
+    except urllib.error.HTTPError as e:
+        reply = e.body
+    assert "No model found" in str(reply), reply

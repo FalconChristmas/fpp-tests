@@ -170,3 +170,36 @@ def test_test_run_reports_the_raw_and_filtered_output(fppd, endpoint):
         "t", ep.url, filterType="json", filterJsonPath="data.city")})
     assert r["ok"] is True and r["raw"] == WEATHER and r["filtered"] == "Here", r
     assert variable(fppd, "t") == "Here"
+
+
+def test_two_tasks_with_one_name_run_the_first(fppd, endpoint):
+    """Of two tasks with the same name, the first runs and the second is
+    skipped at load.
+
+    Regression: 5620959b0. The name was the task's timer id, so the second
+    task's timer replaced the first's before it ever fired: the first task
+    never ran."""
+    a, b = endpoint("a"), endpoint("b")
+    fppd.write("config/recurringtasks.json", [url_task("dup", a.url), url_task("dup", b.url)])
+    fppd.start()
+    time.sleep(4)
+    assert (a.hits, b.hits) == (1, 0), f"first task ran {a.hits} times, second {b.hits}"
+
+
+def test_a_task_cannot_take_over_a_future_preset(fppd, endpoint):
+    """A task whose name is the timer id a pending "Trigger Command Preset
+    In Future" uses ("preset:T") leaves that preset to fire.
+
+    Regression: 5620959b0. Task timers and every other timer shared one
+    namespace, so the task's timer replaced the pending preset's, which
+    then never fired."""
+    ep = endpoint("x")
+    fppd.write("config/commandPresets.json", {"commands": [{
+        "name": "P", "command": "Set Variable", "args": ["Fired", "Value", "yes"],
+        "multisyncCommand": False}]})
+    fppd.start()
+    fppd.command("Trigger Command Preset In Future", "T", "3000", "P")
+    fppd.write("config/recurringtasks.json", [url_task("preset:T", ep.url)])
+    fppd.post("/fppd/recurringtasks", {"command": "reload"})
+    fppd.wait_for(lambda: variable(fppd, "Fired") == "yes", timeout=6,
+                  what="the future preset to fire")

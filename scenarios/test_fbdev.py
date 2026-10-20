@@ -7,6 +7,8 @@ quirks -- is out of reach here; test_framebuffer.py covers fbtft on a Pi.
 The KMS path (KMSFrameBuffer) needs a DRM device and is not reached.
 """
 
+import time
+
 import pytest
 
 from framebuffer import FakeFb
@@ -104,7 +106,12 @@ def test_a_small_model_is_scaled_to_the_device(fppd):
 
 def test_a_model_bigger_than_the_device_is_cropped(fppd):
     """A model wider and taller than the device shows its top-left corner,
-    with a warning, rather than writing past the page."""
+    with a warning, rather than writing past the page.
+
+    Regression: 33e7e5867. The copy into the device's page was not clipped
+    to it, so the model's extra rows and columns wrote past the image
+    buffer (an ASan heap-buffer-overflow), with no warning.
+    """
     fb = FakeFb(fppd, width=W, height=H, bpp=32)
     fb_model(fppd, width=W + 32, height=H + 16)
     fb.start()
@@ -158,6 +165,55 @@ def test_a_transition_ends_on_the_new_image(fppd, transition, size):
     second = [[(255 - r, 255 - g, 255 - b) for r, g, b in row] for row in first]
     send(fppd, second)
     fppd.wait_for(lambda: shows(fb, second), timeout=10, what="the second image after the transition")
+
+
+def test_an_image_sent_during_a_transition_waits_for_it(fppd):
+    """An image that arrives while a transition is drawing the one before
+    it is drawn by its own transition afterwards: the running transition
+    keeps revealing the image it started with.
+
+    A top-down wipe of image 2 is under way when image 3 arrives. Image 2's
+    rows are only ever above image 1's while it wipes in, and image 3's
+    rows above image 2's while it does: a screen with image 2 on top of
+    image 3 means image 3 leaked into image 2's wipe.
+
+    Regression: 6d3c38544. FBCopyData() wrote each new image straight into
+    the buffer the draw thread's transition was reading, so the rest of
+    image 2's wipe revealed rows of image 3.
+    """
+    fb = FakeFb(fppd, width=W, height=H, bpp=32)
+    fb_model(fppd, TransitionType=str(TRANSITIONS.index("WipeDown") + 1))
+    fb.start()
+    imgs = [image(W, H)]
+    imgs.append([[(255 - r, 255 - g, 255 - b) for r, g, b in row] for row in imgs[0]])
+    imgs.append([[(g, b, r) for r, g, b in row] for row in imgs[0]])
+    send(fppd, imgs[0])
+    fppd.wait_for(lambda: shows(fb, imgs[0]), timeout=10, what="the first image")
+    time.sleep(1)  # its own wipe is over
+
+    def rows():
+        """Which image each row on screen comes from (None: none of them)."""
+        return [next((i for i, img in enumerate(imgs) if row == img[y]), None)
+                for y, row in enumerate(fb.pixels())]
+
+    samples = []
+    send(fppd, imgs[1])
+    time.sleep(0.15)  # a row or two of image 2 is down
+    send(fppd, imgs[2])
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        samples.append(rows())
+        if samples[-1] == [2] * H:
+            break
+        time.sleep(0.02)
+    assert samples[-1] == [2] * H, f"image 3 never filled the screen: {samples[-1]}"
+    # the sampling saw image 2 part way in, or it proves nothing
+    assert any(1 in s and set(s) != {1} for s in samples), samples
+    for s in samples:
+        twos = [y for y, i in enumerate(s) if i == 1]
+        threes = [y for y, i in enumerate(s) if i == 2]
+        assert not any(a < b for a in twos for b in threes), \
+            f"rows of image 3 under image 2 while image 2 wiped in: {s}"
 
 
 def test_virtual_display_draws_its_map(fppd):

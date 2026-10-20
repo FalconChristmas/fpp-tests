@@ -30,7 +30,7 @@ def test_taken_artnet_port_warns_once_and_keeps_the_log_quiet(fppd):
     fppd.write("playlists/Show.json", playlist("Show", [sequence_entry("Show.fseq")]))
     fppd.write("config/co-universes.json", {"channelOutputs": [{
         "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 200,
-        "universes": [
+        "interface": "lo", "universes": [
             {"active": 1, "description": "from 6454", "id": 1, "startChannel": 1,
              "channelCount": 100, "type": 3, "address": "127.0.0.1", "priority": 0,
              "monitor": 0, "deDuplicate": 0},
@@ -100,7 +100,7 @@ def test_taken_artnet_port_leaks_no_sockets(fppd):
     fppd.write("playlists/Show.json", playlist("Show", [sequence_entry("Show.fseq")]))
     fppd.write("config/co-universes.json", {"channelOutputs": [{
         "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 100,
-        "universes": [{"active": 1, "description": "from 6454", "id": 1, "startChannel": 1,
+        "interface": "lo", "universes": [{"active": 1, "description": "from 6454", "id": 1, "startChannel": 1,
                        "channelCount": 100, "type": 3, "address": "127.0.0.1", "priority": 0,
                        "monitor": 0, "deDuplicate": 0}]}]})
     fppd.settings(DisableFakeNetworkBridges="1")

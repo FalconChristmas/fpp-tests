@@ -151,6 +151,28 @@ def test_sync_destinations_change_without_a_restart(fppd):
     assert "127.0.0.2" not in after, "sync still went to the old remote after the change"
 
 
+def test_settings_file_change_to_a_multisync_setting(fppd):
+    """The settings file rewritten under a running fppd with a MultiSync
+    remote list changed, again and again: MultiSync's listener rebuilds its
+    destinations each time. Only a TSan build can tell: it reports the lock
+    cycle.
+
+    Regression: e1bee3f47. Listeners ran under the listeners lock, which a
+    settings reload takes while it holds the settings lock, and MultiSync's
+    listener takes its own lock and then reads a setting: a three-lock
+    cycle."""
+    frames = unique_frames(400, CHANNELS)
+    install(fppd, frames, step_ms=STEP_MS)
+    fppd.settings(MultiSyncEnabled="1", MultiSyncRemotes="127.0.0.2")
+    fppd.start()
+    fppd.command("Start Playlist", "Show", "false", "false")
+    for n in range(3, 8):
+        time.sleep(1.1)  # a change the file monitor sees as a new write
+        fppd.settings(MultiSyncRemotes=f"127.0.0.{n}")
+    time.sleep(1.5)
+    fppd.get("/fppd/status")
+
+
 QUOTED_REMOTES = ["127.0.0.2", "127.0.0.3", "127.0.0.4"]
 # As each is stored in the value: the old MultiSync page PUT MultiSyncRemotes as
 # a JSON string (the whole list in quotes), and a list typed with its own quotes
@@ -357,7 +379,10 @@ def test_broadcast_command_runs_once_with_two_interfaces(fppd):
     The first echo used up the entry and the others were dispatched, so on
     a box with two interfaces (eth0 and wlan0) every all-hosts command ran
     twice locally. Two dummy interfaces stand in for them here (in Docker
-    the container's eth0 makes a third)."""
+    the container's eth0 makes a third).
+
+    It fails before faa6774ed (MS-2) too, which checked no echo at all:
+    every looped-back copy ran the command again, 4 runs here."""
     import os
     import subprocess
 
@@ -401,3 +426,37 @@ def test_broadcast_command_runs_once_with_two_interfaces(fppd):
     finally:
         for name in added:
             ip("link", "del", name)
+
+
+def test_a_send_buffer_that_never_drains_does_not_stall_the_show(fppd):
+    """A master whose multicast and broadcast sockets can't send -- the
+    interface stopped transmitting and their buffers are full -- keeps its
+    own show running: frames keep reaching the controller on time and the
+    sync packets are dropped. blocksend.so makes those sends fail with
+    EAGAIN when they ask not to wait, and block for 1 s when they don't.
+
+    Regression: 19d4c7899 (#3072). The multicast and broadcast sync sends
+    blocked, on the channel output thread and holding the MultiSync socket
+    lock: every sync packet stopped the show for as long as the send waited.
+    """
+    import contextlib
+
+    import shims
+    frames = unique_frames(400, CHANNELS)
+    with contextlib.ExitStack() as stack:
+        # In Docker eth0 is there as well; under run-local.sh this is the
+        # only interface fppd sends multicast and broadcast out of.
+        stack.enter_context(interface("10.77.0.1"))
+        rx = stack.enter_context(DdpReceiver(CHANNELS))
+        install(fppd, frames, step_ms=STEP_MS)
+        fppd.settings(MultiSyncEnabled="1", MultiSyncMulticast="1", MultiSyncBroadcast="1")
+        fppd.start(preload=[shims.build("blocksend.c")], extra_env={"BLOCKSEND_MS": "1000"})
+        fppd.wait_for(lambda: "Starting main processing loop" in fppd.log(), timeout=60,
+                      what="fppd to finish starting")
+        fppd.command("Start Playlist", "Show", "false", "false")
+        rx.wait_frames(1, timeout=10)
+        time.sleep(6)
+        times = [t for t, d in rx.snapshot() if any(d)]
+    gaps = [b - a for a, b in zip(times, times[1:])]
+    assert len(times) >= 60, f"only {len(times)} frames in 6 s of a 20 fps show"
+    assert max(gaps) < 0.25, f"the show stopped for {max(gaps):.2f} s"

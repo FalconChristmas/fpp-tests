@@ -265,3 +265,121 @@ def test_set_playlist_repeat_while_running(fppd):
     time.sleep(2.5)
     wait_idle(fppd, timeout=5)
     assert trace(fppd) in ("11", "111"), trace(fppd)
+
+
+def test_restart_of_the_running_playlist_keeps_it_loaded(fppd):
+    """Start Playlist At Item on the playlist already playing, with a
+    different repeat flag, restarts it there and it plays on; three times
+    over.
+
+    Regression: 44e46b706. The restart stops the playlist and waits 100 ms
+    under its lock; the main loop saw it idle meanwhile and queued a
+    cleanup behind that lock, which then wiped the restarted playlist:
+    status "playing" with no playlist name and no entries, and nothing
+    more played until someone pressed Stop.
+    """
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(2), step(2), pause(20)]))
+    fppd.start()
+    for _ in range(3):
+        start(fppd, "P")
+        wait_trace(fppd, "12")
+        # Row 1 is the lead-in's reset, so row 2 is step 1. The trace isn't
+        # reset this way: it carries on from "12".
+        fppd.command("Start Playlist At Item", "P", "2", "true", "false")
+        wait_trace(fppd, "1212", timeout=6)
+        cur = status(fppd).get("current_playlist", {})
+        assert cur.get("playlist") == "P", cur
+        fppd.command("Stop Now")
+        wait_idle(fppd)
+
+
+def test_insert_after_current_into_an_inserted_playlist_with_a_lead_out(fppd):
+    """Insert Playlist After Current while an inserted playlist is on its
+    last main entry, with its lead-out still to play, waits for that
+    playlist's lead-out before playing the new one.
+
+    Regression: 83fba5958. Its test of whether the current playlist would
+    stop after the current entry was inverted: the inserted playlist was
+    taken as ending, the new insert replaced it, and its lead-out never
+    played.
+    """
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(2), step(2)]))
+    fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                    "mainPlaylist": [step(5), pause(3)], "leadOut": [step(6)]})
+    fppd.write("playlists/R.json", {"name": "R", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                    "mainPlaylist": [step(7)], "leadOut": []})
+    fppd.start()
+    start(fppd, "P")
+    wait_in_pause(fppd, "1")
+    fppd.command("Insert Playlist After Current", "Q", "-1", "-1", "false")
+    wait_in_pause(fppd, "15")
+    fppd.command("Insert Playlist After Current", "R", "-1", "-1", "false")
+    wait_idle(fppd, timeout=20)
+    assert trace(fppd) == "15762", trace(fppd)
+
+
+def test_insert_random_item_comes_from_the_main_section(fppd):
+    """Insert Random Item From Playlist plays one entry from the playlist's
+    main section, never its lead-in or lead-out.
+
+    Regression: 6eedfedee. The random single entry was loaded with the
+    lead-in first, which took the one slot: it always played the lead-in.
+    """
+    fppd.write("playlists/P.json", playlist("P", main=[pause(60)]))
+    fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0,
+                                    "leadIn": [step(9)], "mainPlaylist": [step(3), step(4), step(5)],
+                                    "leadOut": [step(8)]})
+    fppd.start()
+    start(fppd, "P")
+    fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("type") == "pause",
+                  what="P's pause")
+    got = ""
+    for _ in range(5):
+        fppd.command("Insert Random Item From Playlist", "Q", "true")
+        fppd.wait_for(lambda: len(trace(fppd) or "") == len(got) + 1, timeout=5,
+                      what="the inserted item to play")
+        got = trace(fppd)
+        time.sleep(0.3)
+    assert set(got) <= set("345"), f"inserted items {got!r}"
+    fppd.command("Stop Now")
+    wait_idle(fppd)
+
+
+def test_stop_during_an_insert_start_stops_the_inserted_playlist(fppd):
+    """Stop Now that arrives while an inserted playlist is still starting
+    (its sequence slow to open) stops the inserted playlist once it is
+    current, and the first one carries on: one Stop Now unwinds one level.
+
+    Regression: 48ba58136 (repaired by 41485599f; checked red at 8aff2cf96,
+    the last commit before it that builds). Commands took a snapshot of
+    the current playlist, then waited for its lock, which the first
+    playlist holds while it starts the inserted one; the stop then ran on
+    the first playlist after the inserted one had become current: the
+    output was blanked and idle published while the inserted playlist
+    played on.
+    """
+    import os
+
+    import shims
+    from fseq import solid_frames, write_fseq
+    from show import sequence_entry
+    write_fseq(os.path.join(fppd.media, "sequences", "Q.fseq"), solid_frames(40, 30, 9))  # 2 s
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(2), step(2)]))
+    fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                    "mainPlaylist": [sequence_entry("Q.fseq"), step(7)],
+                                    "leadOut": []})
+    fppd.start(preload=[shims.build("slowfileopen.c")],
+               extra_env={"SLOWFILEOPEN_SUFFIX": "/Q.fseq", "SLOWFILEOPEN_MS": "2000"})
+    start(fppd, "P")
+    wait_in_pause(fppd, "1")
+    t1 = time.monotonic()
+    fppd.command("Insert Playlist After Current", "Q", "-1", "-1", "false")
+    # The pause ends about 2 s after step 1; Q then loads and starts under
+    # P's lock, opening Q.fseq slowly.
+    time.sleep(max(0, t1 + 2.5 - time.monotonic()))
+    fppd.command("Stop Now", timeout=20)
+    cur = status(fppd).get("current_playlist", {}).get("playlist")
+    assert cur == "P", f"after Stop Now during Q's start the current playlist is {cur!r}"
+    wait_idle(fppd, timeout=20)
+    time.sleep(1)
+    assert "7" not in (trace(fppd) or ""), f"Q played on after Stop Now: trace {trace(fppd)!r}"

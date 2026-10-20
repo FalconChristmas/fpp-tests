@@ -9,6 +9,7 @@ so a crash, a sanitizer report, a wedge or a player left broken all fail.
 
 import os
 import struct
+import subprocess
 import time
 import urllib.error
 
@@ -280,3 +281,115 @@ def test_frame_commands_skipped_by_a_jump_still_fire(fppd):
         got = {p: variable(fppd, p) for p in ("J", "J_END")}
     sock.close()
     assert got == {"J": 1, "J_END": 1}, got
+
+
+def vm_hwm_kb(fppd):
+    with open(f"/proc/{fppd.proc.pid}/status") as f:
+        for line in f:
+            if line.startswith("VmHWM:"):
+                return int(line.split()[1])
+    return 0
+
+
+def test_frame_command_header_with_many_ranges_stays_small(fppd):
+    """An 'FC' header naming one long preset name over 5000 frame ranges
+    (about 55 KB of header) costs fppd about that much to load, not a copy
+    of the name per range. (The ranges lie past the last frame: firing
+    them would churn through the sanitizer's quarantine and blur the
+    measure.)
+
+    Regression: 488190d50 (SP-7). The trigger table copied the name into
+    every range, twice for a command (its _END twin too): 5000 ranges of a
+    15 KB name grew fppd by about 150 MB, and a crafted header by hundreds.
+    """
+    name = "N" * 15000
+    data = v2(unique_frames(20, CHANNELS),
+              vheaders=vheader("FC", fc_header([(name, [(1000 + i, 1000 + i) for i in range(5000)])])))
+    assert len(data) < 65536 - 1000, "the header must fit FSEQ's 16-bit data offset"
+    frames = unique_frames(40, CHANNELS)
+    with DdpReceiver(CHANNELS):
+        install(fppd, frames, step_ms=STEP_MS)
+        with open(os.path.join(fppd.media, "sequences", "Bad.fseq"), "wb") as f:
+            f.write(bytes(data))
+        fppd.start()
+        # Playing any sequence the first time raises the peak (buffers, the
+        # output thread); measure from after a plain one.
+        start(fppd)
+        wait_idle(fppd, timeout=30)
+        before = vm_hwm_kb(fppd)
+        fppd.command("Start Playlist", "Bad.fseq", "false", "false")
+        wait_idle(fppd, timeout=30)
+        grew = (vm_hwm_kb(fppd) - before) // 1024
+        print(f"peak {before // 1024} MB before the header, grew {grew} MB")
+    assert grew < 50, f"loading the header grew fppd's peak memory by {grew} MB"
+
+
+def test_frame_effect_running_past_the_end_stops_with_the_sequence(fppd):
+    """An effect an 'FE' header starts on frame 2 and ends past the last
+    frame is stopped when the sequence ends, not left looping.
+
+    Regression: 4ae64c3a0. Effects started by FE triggers loop, and nothing
+    stopped one whose end frame the sequence never reached: it ran on after
+    the show, until someone stopped it by hand.
+    """
+    from eseq import solid, write_eseq
+    from test_effects import running
+    frames = unique_frames(40, CHANNELS)  # 2 s
+    with DdpReceiver(CHANNELS):
+        install(fppd, frames, step_ms=STEP_MS)
+        write_eseq(fppd, "E", solid(20, 3, 0x40), 101)
+        with open(os.path.join(fppd.media, "sequences", "Show.fseq"), "wb") as f:
+            f.write(bytes(v2(frames, vheaders=vheader("FE", fc_header([("E", [(2, 100000)])])))))
+        fppd.start()
+        start(fppd)
+        fppd.wait_for(lambda: running(fppd) == ["E"], timeout=5, what="the FE effect to start")
+        wait_idle(fppd, timeout=20)
+        fppd.wait_for(lambda: running(fppd) == [], timeout=3,
+                      what="the FE effect to stop with the sequence")
+
+
+def test_frame_effect_starting_as_the_sequence_stops_is_stopped(fppd):
+    """An 'FE' effect whose file is slow to open, so that it is still
+    starting when Stop Now closes the sequence, is stopped once it has
+    started instead of looping on.
+
+    Regression: 488190d50 (SP-6). The effect started after the close had
+    swapped out the list of effects to stop, so it was recorded nowhere
+    and looped forever.
+    """
+    import shims
+    from eseq import solid, write_eseq
+    from test_effects import running
+    frames = unique_frames(200, CHANNELS)  # 10 s
+    with DdpReceiver(CHANNELS):
+        install(fppd, frames, step_ms=STEP_MS)
+        write_eseq(fppd, "E", solid(20, 3, 0x40), 101)
+        with open(os.path.join(fppd.media, "sequences", "Show.fseq"), "wb") as f:
+            f.write(bytes(v2(frames, vheaders=vheader("FE", fc_header([("E", [(2, 100000)])])))))
+        fppd.start(preload=[shims.build("slowfileopen.c")],
+                   extra_env={"SLOWFILEOPEN_SUFFIX": "/E.eseq", "SLOWFILEOPEN_MS": "2000"})
+        start(fppd)
+        time.sleep(0.5)
+        fppd.command("Stop Now", timeout=20)
+        wait_idle(fppd, timeout=20)
+        time.sleep(3)
+        assert running(fppd) == [], f"still running after the stop: {running(fppd)}"
+
+
+
+def test_fsequtils_says_when_it_drops_channels(fppd, tmp_path):
+    """fsequtils converting a file wider than FPP's channel space (8388608
+    channels, a file written by another tool) says that it keeps only the
+    first 8388608, rather than writing a shorter file without a word.
+
+    Regression: 49b2a39e3. The conversion read and wrote only the first
+    8388608 channels and printed nothing about the rest.
+    """
+    src = str(tmp_path / "wide.fseq")
+    write_fseq_reference(src, [bytes([7]) * 8_400_000], step_ms=STEP_MS)
+    r = subprocess.run([os.path.join(fppd.tree, "src", "fsequtils"), "-o", str(tmp_path / "out.fseq"), src],
+                       capture_output=True, text=True, timeout=120,
+                       env=dict(os.environ, LD_LIBRARY_PATH=os.path.join(fppd.tree, "src")))
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out
+    assert "only the first 8388608 channels are used" in out, out
