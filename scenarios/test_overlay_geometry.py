@@ -154,7 +154,9 @@ def test_polar_mappings_light_rings_and_spokes_not_wiring_order(fppd):
         rings of each;
       - Angular CCW 25%: the spokes at 315 and 270 degrees.
     The layout also holds positions for channels no model uses, which the
-    join ignores."""
+    join ignores.
+
+    Feature: b4b022d17."""
     channels = RINGS * 3
     setup(fppd, [matrix("Rings", width=RINGS, height=1)], channels=channels)
     pts = three_rings()
