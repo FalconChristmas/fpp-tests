@@ -44,10 +44,13 @@
 #   - an empty /lib/firmware, /dev/mem as /dev/null (an AM335x fppd has no
 #     FAKE_PRU mode; its PRU outputs fail to start instead), and a pinctrl
 #     that only logs its calls to /tmp/pinctrl.log, so no pad is re-muxed.
-# GPIO lines are still the real ones: stop the device's fppd first if a
-# scenario drives an output whose pins it uses.
+# GPIO lines are still the real ones: stop whatever holds the pins a scenario
+# uses first -- on a cape with an OLED and buttons that is fppoled, which
+# holds the buttons' lines (test_gpio_pins uses P1-37 and P1-31) -- or the
+# device's fppd if one of its outputs is on them.
 #
-# Needs root (for the namespaces). Installs python3-pytest and faketime if missing.
+# Needs root (for the namespaces). Installs python3-pytest, python3-zstandard
+# and faketime if missing.
 set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -81,10 +84,11 @@ if [ ! -x "$TREE/src/fppd" ]; then
     echo "$TREE/src/fppd is not built; run make in $TREE/src first" >&2
     exit 2
 fi
-# pytest runs the suite; libfaketime lets the calendar scenarios fake fppd's
-# clock (they skip without it).
+# pytest runs the suite; zstandard writes zstd FSEQ files; libfaketime lets
+# the calendar scenarios fake fppd's clock (they skip without it).
 MISSING=""
 python3 -c "import pytest" 2>/dev/null || MISSING="$MISSING python3-pytest"
+python3 -c "import zstandard" 2>/dev/null || MISSING="$MISSING python3-zstandard"
 ls /usr/lib/*/faketime/libfaketimeMT.so.1 > /dev/null 2>&1 || MISSING="$MISSING faketime"
 if [ -n "$MISSING" ]; then
     echo "installing:$MISSING"

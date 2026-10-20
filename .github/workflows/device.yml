@@ -79,6 +79,15 @@ jobs:
             exit 1
           fi
 
+      # fppoled holds the cape buttons' GPIO lines, which test_gpio_pins
+      # drives. Started again at the end, however the job ends.
+      - name: Stop fppoled
+        run: |
+          if systemctl is-active --quiet fppoled; then
+            sudo systemctl stop fppoled
+            echo "RESTART_FPPOLED=1" >> "$GITHUB_ENV"
+          fi
+
       - name: Run the scenarios
         env:
           HOST_AUDIO: ${{ (github.event_name == 'schedule' || github.event.inputs.host_audio == 'true') && '--host-audio' || '' }}
@@ -86,6 +95,10 @@ jobs:
         # HOST_AUDIO and PYTEST_ARGS are left unquoted on purpose, to split
         # into arguments.
         run: sudo ./run-local.sh --fpp fpp $HOST_AUDIO -v -rA --junitxml=artifacts/junit.xml $PYTEST_ARGS
+
+      - name: Start fppoled again
+        if: always() && env.RESTART_FPPOLED == '1'
+        run: sudo systemctl start fppoled
 
       # run-local.sh runs as root, so its artifacts are root's.
       - name: Make the artifacts readable
