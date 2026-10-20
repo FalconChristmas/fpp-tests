@@ -10,6 +10,38 @@ import { routePluginsPage } from './plugins-page';
 
 test.skip(!container, 'builds plugin repositories inside the run-web.sh container');
 
+const listedPlugin = (name: string, minFPPVersion: string) => ({
+  name, repoName: name, author: 'fpp-tests', description: 'fpp-tests', homeURL: '',
+  srcURL: `https://github.com/fpp-tests/${name}.git`,
+  versions: [{ minFPPVersion, maxFPPVersion: '0', branch: 'master', sha: '' }],
+});
+
+// fpp 1bcca1964 ("fix(plugins): don't recommend plugins not updated for this
+// FPP release"): the Popular strip, the page's recommendations, took any
+// plugin it could install, so one whose only version was built for an older
+// FPP major (offered as "Install anyway", untested here) was recommended
+// alongside the ones made for this release.
+test('the Popular strip leaves out a plugin not updated for this FPP release', async ({ page, baseURL }) => {
+  const OK = 'fpp-tests-rec-current';
+  const OLD = 'fpp-tests-rec-untested';
+  const major = (await (await page.request.get('/api/system/info')).json()).Version.split('.')[0];
+  // The untested plugin is the more popular, so only the filter can keep it out.
+  await routePluginsPage(page, baseURL!, [listedPlugin(OK, `${major}.0`), listedPlugin(OLD, `${Number(major) - 1}.0`)],
+    { [OK]: 50, [OLD]: 100 });
+  await page.goto('/plugins.php');
+  await page.waitForFunction((names) => {
+    const w = window as any;
+    const infos = w.pluginInfos || [];
+    return w.popularityLoaded && names.every((n: string) => infos.some((d: any) => d && d.repoName === n));
+  }, [OK, OLD]);
+  // The page rebuilds the strip 300 ms after the last plugin arrives; build
+  // it now, from everything loaded, rather than race that.
+  await page.evaluate(() => (window as any).BuildPopularStrip());
+  // The control: the strip is built, and holds the plugin made for this release.
+  await expect(page.locator('#popularStrip')).toContainText(OK);
+  expect(await page.locator('#popularStrip').textContent()).not.toContain(OLD);
+});
+
 // Update All's report of a plugin whose code updated but whose own upgrade
 // script failed.  The page decides from the re-check afterwards, and that
 // plugin no longer has an update, so it counted as updated successfully.
