@@ -296,3 +296,39 @@ def test_state_topics_go_out_retained_at_qos_1(fppd):
     # The control: version was retained at QoS 1 on both sides of the fix.
     assert got.get("version") == ("1", "1"), out
     assert got.get("status") == ("1", "1"), f"status not retained at QoS 1: {out}"
+
+
+def test_legacy_position_topics_while_a_playlist_advances(fppd):
+    """The deprecated playlist/name/set and sectionPosition/set topics arrive
+    while a playlist is moving from entry to entry.
+
+    Covers e04cf1842, which takes m_playlistMutex for both on the MQTT
+    thread: name/set read the playlist's section position there with no
+    lock while the playlist thread moved it, and SetPosition() wrote the
+    start position the same way. Not a red-before-green test: the playlist
+    thread publishes its status right after each move, and that publish's
+    lock orders the accesses for TSan in all but a microsecond window, so
+    neither build reports the race here. What this checks is that the
+    playlist keeps playing and nothing wedges with the lock taken there.
+    """
+    from test_playlist_entries import playlist, reset, step
+    # Command entries finish at once, so the playlist advances every tick.
+    fppd.write("playlists/P.json", playlist("P", main=[reset(), step(1), step(2), step(3)]))
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    repeat = lambda: int(status(fppd).get("repeat_mode") or 0)
+    with broker():
+        fppd.start()
+        fppd.command("Start Playlist", "P", "false", "false")
+
+        def heard():
+            # fppd subscribes once it has connected; publish until it hears
+            publish("playlist/repeat/set", "1")
+            return repeat() == 1
+        fppd.wait_for(heard, timeout=30, interval=1, what="fppd to act on playlist/repeat/set")
+        for i in range(40):
+            publish("playlist/name/set", "P")
+            publish("playlist/sectionPosition/set", str(i % 4))
+            time.sleep(0.05)
+        fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("playlist") == "P",
+                      timeout=10, what="P to keep playing")
+        fppd.command("Stop Now")

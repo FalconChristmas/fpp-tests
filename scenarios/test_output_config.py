@@ -306,6 +306,68 @@ def test_virtual_display_shows_rgbw_pixels_with_white_off(fppd):
     assert any(m.startswith(want + ":") for m in msgs), f"no {want!r} pixel in {msgs[-3:]}"
 
 
+def test_virtual_display_clients_join_while_frames_flow(fppd):
+    """Preview clients connect, one after another, to a large HTTP virtual
+    display while a test pattern streams to another client, and each new
+    client is sent every pixel.
+
+    Regression: 0ec85d6ae (verify with --flavor tsan). The connection thread
+    zeroed the display's frame cache for each new client while the output
+    thread was diffing the frame against it and rolling it back, with no
+    lock between them: a data race, and a frame could leave the new client
+    without pixels until they next changed. A display this size makes each
+    frame's diff long enough that the clients land inside one. The pattern
+    changes every pixel each cycle, so the full-frame check is a sanity
+    check; the race is what the TSan build reports.
+    """
+    import socket
+    pixels = 10000
+    virtual_display(fppd, ["100,100"] + [f"{i % 100},{i // 100},{i * 3},3,RGB"
+                                         for i in range(pixels)], pixels * 3)
+    fppd.start()
+    wait_for_display(fppd)
+    fppd.command("Test Start", "100", "RGB Cycle", f"1-{pixels * 3}", "R-G-B")
+
+    def full_frame(sock, seconds=10):
+        """Whether `sock` is sent a frame holding every pixel: all one
+        colour, so one colour group with all of their locations."""
+        sock.settimeout(0.2)
+        buf = b""
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            try:
+                chunk = sock.recv(1 << 20)
+            except socket.timeout:
+                continue
+            if not chunk:
+                return False
+            buf += chunk
+            lines = buf.split(b"\n")
+            buf = lines.pop()
+            if any(l.startswith(b"data: ") and l.count(b";") == pixels - 1 for l in lines):
+                return True
+        return False
+
+    watcher = socket.create_connection(("127.0.0.1", VD_PORT), timeout=2)
+    try:
+        assert full_frame(watcher), "the test pattern never reached the display"
+        watcher.setblocking(False)
+        for n in range(20):
+            try:
+                while watcher.recv(1 << 20):
+                    pass
+            except BlockingIOError:
+                pass
+            client = socket.create_connection(("127.0.0.1", VD_PORT), timeout=2)
+            try:
+                assert full_frame(client), f"client {n} was never sent every pixel"
+            finally:
+                client.close()
+    finally:
+        watcher.close()
+        fppd.command("Test Stop")
+
+
 def test_virtual_display_pixel_at_x_4095_uses_the_pages_key(fppd):
     """A pixel at x 4095 is sent with the short location key, the form the
     page's scaleMap uses below 4096.
