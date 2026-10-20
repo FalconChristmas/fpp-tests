@@ -309,6 +309,29 @@ def test_random_media_picks_only_media_files(fppd, audio):
     assert heard >= 3.0, f"heard {heard:.2f} s of six 0.6 s random picks"
 
 
+def test_random_media_plays_a_mixed_case_extension(fppd, audio):
+    """Three random-audio entries over a music folder whose one file is
+    "Tone.Wav" play it three times.
+
+    Regression: 0098170ef. The media-only filter from 9c8ee3ffe checked the
+    raw extension against tables holding only the all-lower and all-upper
+    spellings, so a folder ripped as *.Mp3 raised "No media files found to
+    play in 'randomAudio' mode" and played nothing.
+    """
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.Wav"), 0.6)
+    entry = {"type": "media", "enabled": 1, "playOnce": 0, "fileMode": "randomAudio"}
+    fppd.write("playlists/Random.json", playlist("Random", [dict(entry) for _ in range(3)]))
+    fppd.start()
+    rec = audio.record()
+    fppd.command("Start Playlist", "Random", "false", "false")
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=30,
+                  what="the playlist to finish")
+    heard = sounding_seconds(rec.stop())
+    warnings = status(fppd).get("warnings", [])
+    assert not any("No media files found" in w for w in warnings), warnings
+    assert heard >= 1.2, f"heard {heard:.2f} s of three 0.6 s random picks"
+
+
 def test_remote_finds_its_own_video_for_the_masters_audio(fppd, audio):
     """A remote told by MultiSync to play Song.mp3, which it doesn't have,
     plays its own per-host video for it, videos/Song-<HostName>.mkv.

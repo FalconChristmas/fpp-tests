@@ -329,3 +329,42 @@ def test_coordinates_of_nan_are_not_numeric(fppd):
     items(fppd, [entry(7, "SunSet", "23:00:00")], f"{YEAR}-06-10 12:00:00")
     fppd.wait_for(lambda: any("Latitude/Longitude" in w for w in warnings(fppd)), timeout=10,
                   what="the coordinates warning")
+
+
+def coordinates_flagged(fppd):
+    return any("Latitude/Longitude" in w for w in warnings(fppd))
+
+
+def test_coordinates_warning_comes_down_with_the_last_sun_entry(fppd):
+    """Coordinates that don't parse ("N38.9") and a SunSet entry raise the
+    coordinates warning; once schedule.json no longer has a sun-relative
+    entry and is reloaded, the warning goes.
+
+    Regression: d260c06fa. The warning was raised outside the schedule-load
+    warnings a reload retracts, and only a later sun computation with good
+    coordinates removed it, so deleting the last sun entry left the banner
+    up until fppd restarted.
+    """
+    fppd.settings(Latitude="N38.9", Longitude="W104.6")
+    items(fppd, [entry(7, "SunSet", "23:00:00")], f"{YEAR}-06-10 12:00:00")
+    fppd.wait_for(lambda: coordinates_flagged(fppd), timeout=10, what="the coordinates warning")
+    fppd.write("config/schedule.json", [entry(7, "20:00:00", "21:00:00")])
+    reload_schedule(fppd)
+    fppd.wait_for(lambda: not coordinates_flagged(fppd), timeout=10,
+                  what="the coordinates warning to come down with the last sun entry")
+
+
+def test_coordinates_warning_comes_down_when_they_are_fixed(fppd):
+    """Fixing Latitude/Longitude in settings takes the coordinates warning
+    down without a schedule save or an fppd restart.
+
+    Regression: d260c06fa. Sun times are only worked out on a schedule load,
+    and nothing reloaded on a coordinates change, so the warning stayed until
+    the next load (midnight, or a schedule save).
+    """
+    fppd.settings(Latitude="N38.9", Longitude="W104.6")
+    items(fppd, [entry(7, "SunSet", "23:00:00")], f"{YEAR}-06-10 12:00:00")
+    fppd.wait_for(lambda: coordinates_flagged(fppd), timeout=10, what="the coordinates warning")
+    fppd.settings(Latitude="38.9", Longitude="-104.6")
+    fppd.wait_for(lambda: not coordinates_flagged(fppd), timeout=10,
+                  what="the coordinates warning to come down once they are fixed")

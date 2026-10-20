@@ -94,6 +94,37 @@ def test_start_at_item_of_a_random_playlist(fppd):
         assert t and t[0] == "3" and sorted(t) == list("12345"), t
 
 
+def test_start_at_item_of_the_playing_random_playlist(fppd):
+    """Start Playlist At Item row 4 (step 3) on the random playlist that is
+    playing, five times over: step 3 is what plays next each time.
+
+    Regression: 93ed185e2. Starting at an item of the playlist already
+    playing takes the jump fast path, which mapped the row to a position in
+    load order and then started whatever sat at that index of the shuffled
+    main playlist, so the requested entry played one time in N.
+    """
+    # rows: 1 the lead-in's reset, 2-6 steps 1-5, 7 a long pause
+    fppd.write("playlists/P.json", playlist("P", main=[step(d) for d in range(1, 6)] + [pause(60)],
+                                            random=1))
+    fppd.start()
+    got = []
+    for _ in range(5):
+        start(fppd, "P")
+        fppd.wait_for(lambda: status_name(fppd) == "playing"
+                      and status(fppd).get("current_playlist", {}).get("type") == "pause",
+                      timeout=10, what="P's pause")
+        fppd.command("Set Variable", "trace", "Value", "0")
+        fppd.command("Start Playlist At Item", "P", "4", "false", "false")
+        try:
+            fppd.wait_for(lambda: trace(fppd), timeout=3, what="an entry to run")
+            got.append(trace(fppd)[0])
+        except TimeoutError:
+            got.append("the pause")
+        fppd.command("Stop Now")
+        wait_idle(fppd)
+    assert got == ["3"] * 5, f"first entry run after Start At Item row 4, each time: {got}"
+
+
 @pytest.mark.parametrize("command", ["Insert Playlist Immediate", "Insert Playlist After Current"])
 def test_insert_one_item_plays_only_that_item(fppd, command):
     """An insert whose start and end item are the same plays just that entry
