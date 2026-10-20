@@ -386,3 +386,33 @@ def test_lor_intensity_is_a_whole_percent(fppd):
             time.sleep(0.2)
         got = latest()
     assert got == want, f"levels {[hex(v) if v is not None else None for v in got]}"
+
+
+def test_serial_open_warning_comes_down_when_the_port_is_fixed(fppd):
+    """A LOR output on a port that doesn't exist raises "could not open";
+    once co-other.json names a port that does, the output sends and the
+    warning comes down.
+
+    Regression: 176d2d251. The serial Init() warnings (setupSerialPort()'s
+    "could not open" and SerialOpen()'s id 38) were raised with plain
+    AddWarning() and never retracted, so both stayed up until fppd
+    restarted although the output worked.
+    """
+    def lor(device):
+        return {"channelOutputs": [{
+            "type": "LOR", "enabled": 1, "startChannel": 1, "channelCount": 16,
+            "device": device, "speed": 19200, "firstControllerId": 1}]}
+
+    def stale():
+        return [w for w in fppd.get("/fppd/status").get("warnings", []) if "pts/999" in w]
+
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", lor("pts/999"))
+        fppd.start()
+        fppd.wait_for(stale, timeout=10, what="the could-not-open warning")
+        time.sleep(1.1)
+        fppd.write("config/co-other.json", lor(pty.device))
+        set_range(fppd, 1, 16, 0x80)
+        fppd.wait_for(lambda: pty.messages(), timeout=10, what="LOR data on the real port")
+        fppd.wait_for(lambda: not stale(), timeout=5, interval=0.5,
+                      what=f"the warnings for the missing port to come down (still: {stale()})")

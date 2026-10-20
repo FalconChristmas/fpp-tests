@@ -7,6 +7,7 @@ quirks -- is out of reach here; test_framebuffer.py covers fbtft on a Pi.
 The KMS path (KMSFrameBuffer) needs a DRM device and is not reached.
 """
 
+import json
 import os
 import time
 
@@ -360,3 +361,36 @@ def test_virtual_matrix_refuses_a_model_that_is_not_rgb(fppd):
     fppd.wait_for(lambda: warned(fppd, "is not an RGB model"), timeout=10,
                   what="the not-an-RGB-model warning")
     time.sleep(2)
+
+
+def test_virtual_display_warning_comes_down_when_the_model_is_fixed(fppd):
+    """A Virtual Display pointed at a model that is not RGB raises "is not
+    an RGB model"; pointing it at an RGB model and saving starts the
+    display, and the warning comes down.
+
+    Regression: 53594ea12. The virtual displays raised their Init()
+    warnings with plain WarningHolder::AddWarning(), which nothing retracts
+    on the next load of the config, so the banner stayed until fppd
+    restarted.
+    """
+    rgbw_model(fppd)
+    path = os.path.join(fppd.media, "config", "model-overlays.json")
+    with open(path) as f:
+        models = json.load(f)
+    models["models"].append({  # an RGB model beside the RGBW one
+        "Name": "RGB", "Type": "Channel", "StartChannel": 1, "ChannelCount": 16 * 8 * 3,
+        "ChannelCountPerNode": 3, "Orientation": "horizontal", "StartCorner": "TL",
+        "StringCount": 8, "StrandsPerString": 1})
+    fppd.write("config/model-overlays.json", models)
+    fppd.write("config/co-other.json", virtual_display(device="", model="W"))
+    fppd.write("config/virtualdisplaymap", "64,32\n2,2,0,3,RGB\n")
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: warned(fppd, "is not an RGB model"), timeout=10,
+                  what="the not-an-RGB-model warning")
+    time.sleep(1.1)  # a save in a later second, as a person makes it
+    fppd.write("config/co-other.json", virtual_display(device="", model="RGB"))
+    fppd.wait_for(lambda: fppd.log().count("Init succeeded") >= 1, timeout=10,
+                  what="the fixed display to start")
+    fppd.wait_for(lambda: not warned(fppd, "is not an RGB model"), timeout=15, interval=0.5,
+                  what="the warning to come down after the fix")
