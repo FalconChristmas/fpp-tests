@@ -266,3 +266,33 @@ def test_an_inserted_playlist_does_not_announce_idle(fppd):
             reader.join(5)
         fppd.command("Stop Now")
     assert "idle" not in got, f"status published while P played on: {got}"
+
+
+def test_state_topics_go_out_retained_at_qos_1(fppd):
+    """fppd's state topics reach a subscriber retained and at the QoS 1
+    every caller asks for.
+
+    Regression: 82d3da8bf. MosquittoClient::Publish(topic, msg, retain, qos)
+    handed PublishRaw() its last two arguments swapped, so every message was
+    retained and the topics meant to be non-retained (status, playlist/...)
+    went out at QoS 0. The fix keeps them retained and makes them QoS 1.
+    """
+    if not shutil.which("mosquitto_sub"):
+        pytest.skip("mosquitto_sub is not installed")
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    with broker():
+        fppd.start()
+        probe = f"falcon/player/{HOST}/set/probe"
+        fppd.wait_for(lambda: (_publish_many([probe]) or probe in fppd.get("/fppd/mqtt/cache")),
+                      timeout=30, interval=1, what="fppd to connect")
+        # Subscribed at QoS 2, a message arrives at the QoS it was published
+        # with; %r is 1 for a retained message replayed on subscribe.
+        prefix = f"falcon/player/{HOST}"
+        out = subprocess.run(["mosquitto_sub", "-h", "127.0.0.1", "-p", PORT, "-q", "2",
+                              "-t", f"{prefix}/status", "-t", f"{prefix}/version",
+                              "-F", "%t %q %r", "-C", "2", "-W", "10"],
+                             capture_output=True, text=True, timeout=20).stdout
+    got = {t[len(prefix) + 1:]: (q, r) for t, q, r in (l.split() for l in out.splitlines())}
+    # The control: version was retained at QoS 1 on both sides of the fix.
+    assert got.get("version") == ("1", "1"), out
+    assert got.get("status") == ("1", "1"), f"status not retained at QoS 1: {out}"
