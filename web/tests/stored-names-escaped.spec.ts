@@ -37,10 +37,82 @@ test('the status page shows a running playlist name as text', async ({ page, req
     const status = page.locator('#schedulerStatus');
     await expect(status).toContainText(name, { timeout: 15_000 });
     // Only the status line is checked: the page's playlist list is another
-    // sink, still unescaped at the time of writing.
+    // sink, with its own test below.
     await expect(status.locator('img')).toHaveCount(0);
   } finally {
     await command(request, 'Stop Now');
+    await request.delete(path);
+  }
+});
+
+// The status page's Playlist or Sequence dropdown built its options from the
+// playlist, sequence and media names as they were, so a playlist or media file
+// named with markup ran script for whoever opened the status page.  The
+// command editor's lists (playlists for Start Playlist, files for others)
+// did the same, or escaped only the first quote (the next test).  Regression:
+// 096d367ba ("fix(security): list playlist and media names on the status page
+// as text").
+test('the status page lists playlist and media names as text', async ({ page, request }) => {
+  const name = 'x"><img src=x onerror=window.__fppTestsPlaylistList=1>';
+  const media = 'x"><img src=x onerror=window.__fppTestsMediaList=1>.mp3';
+  const path = `/api/playlist/${encodeURIComponent(name)}`;
+  const mediaPath = `/api/file/Music/${encodeURIComponent(media)}`;
+  const pl = await request.post(path, {
+    data: {
+      name, version: 4, leadIn: [], leadOut: [], playlistInfo: {},
+      mainPlaylist: [{ type: 'pause', enabled: 1, playOnce: 0, duration: 60 }],
+    },
+  });
+  expect(pl.ok(), await pl.text()).toBe(true);
+  try {
+    expect((await request.post(mediaPath, { data: 'fpp-tests' })).ok()).toBe(true);
+    await page.goto('/index.php');
+    const select = page.locator('#playlistSelect');
+    // Filled once the lists have loaded: the placeholder is all it has before.
+    await expect(select.locator('optgroup[label="Media"]')).toHaveCount(1, { timeout: 15_000 });
+    expect(await ran(page, '__fppTestsPlaylistList'), 'the playlist name ran as markup').toBeUndefined();
+    expect(await ran(page, '__fppTestsMediaList'), 'the media name ran as markup').toBeUndefined();
+    await expect(select.locator('img')).toHaveCount(0);
+    // The control: both names are listed, whole, as the options' values.
+    await expect(select.locator('option', { hasText: name })).toHaveAttribute('value', name);
+    await expect(select.locator('option', { hasText: media })).toHaveAttribute('value', media);
+  } finally {
+    await request.delete(mediaPath);
+    await request.delete(path);
+  }
+});
+
+test('the command editor lists playlist names as text', async ({ page, request }) => {
+  // Two quotes: one copy escaped only the first.
+  const name = 'x"y"><img src=x onerror=window.__fppTestsCommandList=1>';
+  const path = `/api/playlist/${encodeURIComponent(name)}`;
+  const pl = await request.post(path, {
+    data: {
+      name, version: 4, leadIn: [], leadOut: [], playlistInfo: {},
+      mainPlaylist: [{ type: 'pause', enabled: 1, playOnce: 0, duration: 60 }],
+    },
+  });
+  expect(pl.ok(), await pl.text()).toBe(true);
+  try {
+    await page.goto('/commandPresets.php');
+    // Both copies of the editor's argument builder, given the playlist
+    // argument Start Playlist declares.
+    const values = await page.evaluate(() => {
+      const w = window as any;
+      const arg = [{ name: 'name', type: 'string', description: 'Playlist Name', contentListUrl: 'api/playlists' }];
+      const out: string[][] = [];
+      for (const [id, fn] of [['fppTestsArgs', w.PrintArgInputs], ['fppTestsEditable', w.PrintArgsInputsForEditable]]) {
+        document.body.insertAdjacentHTML('beforeend', `<table><tbody id='${id}'></tbody></table>`);
+        fn(id, false, arg);
+        out.push(Array.from(document.querySelectorAll(`#${id} option`)).map((o) => (o as HTMLOptionElement).value));
+      }
+      return out;
+    });
+    expect(await ran(page, '__fppTestsCommandList'), 'the playlist name ran as markup').toBeUndefined();
+    // The control: both lists hold the name, whole.
+    expect(values[0]).toContain(name);
+    expect(values[1]).toContain(name);
+  } finally {
     await request.delete(path);
   }
 });

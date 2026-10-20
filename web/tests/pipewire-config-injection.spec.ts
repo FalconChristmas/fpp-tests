@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
-import { container } from './container';
+import { container, inPlayer } from './container';
+import type { APIRequestContext } from '@playwright/test';
 import { EVIL, cleanup, injected, readConf, seedOutputGroup, settleAfterApply } from './pipewire-conf';
 
 // Names saved for audio groups, input groups and VBAN streams are written into
@@ -53,4 +54,46 @@ test('an audio group name is stored the way the generator writes it', async ({ r
   const stored = JSON.parse(readConf('pipewire-audio-groups.json'));
   expect(stored.groups[0].name).toContain('fpp-tests');
   expect(stored.groups[0].name).not.toMatch(/["\n\\]/);
+});
+
+// 18e79cb4e sanitized at the top of each generator, but the input group
+// generator reads the Opus RTP (and VBAN) instance file again for a member
+// saved without a name, as the UI saves one, and wrote the instance name into
+// "# Loopback: ..." and node.description as it was; the Opus RTP saver stored
+// it as given.  Regression: 83ebbd1ff ("fix(security): keep Opus RTP instance
+// names from breaking out of PipeWire configs").
+
+async function applyOpusMember(request: APIRequestContext) {
+  seedOutputGroup();
+  const save = await request.post('/api/pipewire/audio/input-groups', {
+    data: { inputGroups: [{ id: 1, name: 'fpp-tests in', enabled: true, channels: 2, outputs: [1],
+      members: [{ type: 'opus_rtp_receive', instanceId: 1, name: '' }] }] },
+  });
+  expect(save.ok(), await save.text()).toBe(true);
+  const apply = await request.post('/api/pipewire/audio/input-groups/apply', { timeout: 120_000 });
+  expect(apply.ok(), await apply.text()).toBe(true);
+  await settleAfterApply(request);
+  const conf = readConf('pipewire-input-groups.conf');
+  expect(conf, 'the Opus member was not generated').toContain('Opus RTP');
+  return conf;
+}
+
+test('an Opus RTP instance name stays inside the input group config', async ({ request }) => {
+  const opus = await request.post('/api/pipewire/opusrtp/instances', {
+    data: { instances: [{ id: 1, name: EVIL, mode: 'receive', enabled: true }] },
+  });
+  expect(opus.ok(), await opus.text()).toBe(true);
+  const stored = JSON.parse(readConf('pipewire-opus-rtp-instances.json'));
+  expect(stored.instances[0].name).not.toMatch(/["\n\\]/);
+  const conf = await applyOpusMember(request);
+  expect(injected(conf), conf).toEqual([]);
+});
+
+test('an Opus RTP instance file saved as it was stays inside the input group config', async ({ request }) => {
+  // As a file saved before the saver sanitized names.
+  const legacy = Buffer.from(JSON.stringify({ instances: [{ id: 1, name: EVIL, mode: 'receive', enabled: true }] }));
+  inPlayer('sh', '-c', `echo ${legacy.toString('base64')} | base64 -d > /home/fpp/media/config/pipewire-opus-rtp-instances.json`);
+  expect(JSON.parse(readConf('pipewire-opus-rtp-instances.json')).instances[0].name).toBe(EVIL);
+  const conf = await applyOpusMember(request);
+  expect(injected(conf), conf).toEqual([]);
 });
