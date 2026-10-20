@@ -69,6 +69,14 @@ if [ "$(id -u)" != 0 ]; then
     echo "run-local.sh needs root for its private namespaces (try sudo)" >&2
     exit 2
 fi
+# /home/fpp/media is overlaid below, so the artifacts written under this
+# checkout would land in the scratch layer and vanish with the namespace.
+case "$(cd "$HERE" && pwd -P)/" in
+/home/fpp/media/*)
+    echo "run-local.sh writes its artifacts next to itself, which is under /home/fpp/media" \
+         "and hidden by its overlay; check fpp-tests out somewhere else" >&2
+    exit 2 ;;
+esac
 if [ ! -x "$TREE/src/fppd" ]; then
     echo "$TREE/src/fppd is not built; run make in $TREE/src first" >&2
     exit 2

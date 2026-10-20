@@ -45,7 +45,15 @@ The device's own fppd keeps running. Each test fppd gets private network, /tmp, 
 and /dev/shm, an overlay over the tree (so its writes to `www/` never reach the real
 one), no sound cards or SPI devices, and a read-only /sys. pytest is installed if
 missing. ASan doesn't run on FPP's Pi kernels (39-bit address space); use the normal,
-debug, tsan or ubsan build there.
+debug, tsan or ubsan build there. Check fpp-tests out somewhere other than
+`/home/fpp/media`: that directory is overlaid too, and the artifacts would vanish with it.
+
+The `Device` workflow does this nightly on a Raspberry Pi 5, a self-hosted runner in the
+org's `Devices` group: it builds fpp master's debug flavor and runs the whole suite with
+`--host-audio`, so the scenarios the Docker runs skip (Pi-only fppinit and cape detection,
+DPI pixels, framebuffer, KMS, GPIO, serial, the real sound card) run there. It can be
+started by hand from the Actions tab for any fpp ref and the debug, optimized or tsan
+flavor. A job there is root on the device, so the workflow has no pull_request trigger.
 
 The first build of a commit takes a few minutes; ccache makes later builds of nearby
 commits take seconds. Builds are cached per commit and flavor in the `fpp-tests-work`

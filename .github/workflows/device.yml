@@ -1,0 +1,123 @@
+name: Device
+
+# The scenarios on a real Raspberry Pi 5, through run-local.sh: the ones the
+# Docker runs skip -- Pi-only fppinit and cape detection, DPI pixels, the
+# framebuffer and KMS outputs, GPIO, the serial console, the real sound card
+# (--host-audio) -- along with everything else, on the hardware FPP ships on.
+#
+# This runs on a self-hosted runner in the org's Devices group, where a job is
+# root on the device (run-local.sh needs it). So there is no pull_request
+# trigger: only the schedule and a run by hand reach it.
+
+on:
+  schedule:
+    # 07:00 UTC, with the Docker nightly. --host-audio plays through the
+    # device's sound card; this is the middle of the night in the US.
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      fpp_ref:
+        description: fpp branch, tag or commit to test
+        default: master
+      flavor:
+        description: Build flavor (ASan doesn't run on the Pi's 39-bit kernel)
+        type: choice
+        options: [debug, optimized, tsan]
+        default: debug
+      host_audio:
+        description: Play media through the device's sound card (run-local.sh --host-audio)
+        type: boolean
+        default: true
+      pytest_args:
+        description: Extra pytest arguments (e.g. -k presets)
+        default: ""
+
+concurrency:
+  group: device
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  pi5:
+    runs-on:
+      group: Devices
+      labels: [self-hosted, Linux, ARM64]
+    timeout-minutes: 240
+    env:
+      FPP_REF: ${{ github.event.inputs.fpp_ref || 'master' }}
+      FLAVOR: ${{ github.event.inputs.flavor || 'debug' }}
+    steps:
+      - name: Checkout fpp-tests
+        uses: actions/checkout@v6
+
+      - name: Checkout fpp
+        uses: actions/checkout@v6
+        with:
+          repository: FalconChristmas/fpp
+          ref: ${{ env.FPP_REF }}
+          path: fpp
+          fetch-depth: 0
+          filter: blob:none
+          # A device build needs them (RGBMatrix, RF24, spixels), and make -j
+          # left to fetch them itself races two clones of one submodule.
+          submodules: recursive
+
+      # The checkout cleans the tree each night; ccache (the runner user's
+      # own, which outlives the runs) makes the rebuild cheap. Hash paths
+      # relative to the tree, as build-fpp.sh does.
+      - name: Build fpp
+        working-directory: fpp/src
+        env:
+          CCACHE: ccache
+          CCACHE_BASEDIR: ${{ github.workspace }}/fpp
+          CCACHE_NOHASHDIR: "1"
+        run: |
+          if ! make -j"$(nproc)" "$FLAVOR" > build.log 2>&1; then
+            grep -E "error|Error" build.log | tail -40
+            exit 1
+          fi
+
+      - name: Run the scenarios
+        env:
+          HOST_AUDIO: ${{ (github.event_name == 'schedule' || github.event.inputs.host_audio == 'true') && '--host-audio' || '' }}
+          PYTEST_ARGS: ${{ github.event.inputs.pytest_args }}
+        # HOST_AUDIO and PYTEST_ARGS are left unquoted on purpose, to split
+        # into arguments.
+        run: sudo ./run-local.sh --fpp fpp $HOST_AUDIO -v -rA --junitxml=artifacts/junit.xml $PYTEST_ARGS
+
+      # run-local.sh runs as root, so its artifacts are root's.
+      - name: Make the artifacts readable
+        if: always()
+        run: |
+          mkdir -p artifacts
+          sudo chown -R "$(id -u):$(id -g)" artifacts && chmod -R u+rwX artifacts
+          version=$(git -C fpp describe --tags --match='[0-9]*' 2>/dev/null || git -C fpp rev-parse --short HEAD)
+          printf '{"flavor":"pi5-%s","version":"%s","sha":"%s"}\n' "$FLAVOR" "$version" \
+            "$(git -C fpp rev-parse HEAD)" > artifacts/meta.json
+          cp fpp/src/build.log artifacts/ 2>/dev/null || true
+
+      - name: Upload failed scenarios
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failed-scenarios-pi5
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Summarize
+        if: always()
+        run: python3 scripts/ci-summary.py artifacts >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: results-pi5
+          path: |
+            artifacts/meta.json
+            artifacts/junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
