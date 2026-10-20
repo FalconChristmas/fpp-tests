@@ -57,6 +57,8 @@ async function disablePassword(request: APIRequestContext) {
 }
 
 test('choosing No Password on a protected player turns the password off', async ({ browser, request }) => {
+  // Room for the clean-up after a failure, which reloads Apache.
+  test.setTimeout(90_000);
   await enablePassword(request);
   const context = await browser.newContext({ httpCredentials: { username: 'admin', password: PASSWORD } });
   try {
