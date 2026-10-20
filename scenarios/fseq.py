@@ -104,10 +104,12 @@ def write_fseq(path, frames, step_ms=50, version=2, compression=None, level=-99,
 
 
 def write_fseq_reference(path, frames, step_ms=50, version=2, compression=None, blocks=1,
-                         sparse=None, media=None):
+                         sparse=None, media=None, streams=1):
     """The same file written independently of FPP (see the module docs).
 
-    blocks: number of compression blocks the frames are split into.
+    blocks:  number of compression blocks the frames are split into.
+    streams: compressed streams each block is made of, back to back (the
+             format allows several; FPP's writer makes one).
     """
     if sparse:
         frames = [b"".join(f[s:s + n] for s, n in sparse) for f in frames]
@@ -138,12 +140,14 @@ def write_fseq_reference(path, frames, step_ms=50, version=2, compression=None, 
         blobs = []
         for first, chunk in chunks:
             raw = b"".join(chunk)
+            cut = -(-len(raw) // streams)
+            parts = [raw[i:i + cut] for i in range(0, len(raw), cut)]
             if ctype == 1:
                 if zstandard is None:
                     raise RuntimeError("zstd FSEQ needs the zstandard module")
-                blobs.append((first, zstandard.ZstdCompressor().compress(raw)))
+                blobs.append((first, b"".join(zstandard.ZstdCompressor().compress(p) for p in parts)))
             else:
-                blobs.append((first, zlib.compress(raw)))
+                blobs.append((first, b"".join(zlib.compress(p) for p in parts)))
         nblocks = len(blobs)
     else:
         blobs = []
