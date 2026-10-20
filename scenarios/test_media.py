@@ -289,6 +289,80 @@ def test_offset_does_not_carry_across_songs(fppd, audio):
         f"the offset moved {max(offs) - min(offs)} ms from song to song: {offs}"
 
 
+def test_sequence_and_media_pause_resume_and_stop_together(fppd, audio):
+    """A playlist entry with both a sequence and a song, paused, resumed and
+    stopped: the sound and the lights stop and start together, status
+    carries the elapsed time on from where it paused, and Stop Now silences
+    and blanks both and goes idle.
+
+    (Status reads 0 ms elapsed while a song is paused: Pause closes the media
+    output, and PlaylistEntryMedia::GetElapsedMS() answers 0 without one
+    before it reaches its paused case. Not asserted here until that is
+    fixed.)"""
+    secs = 10
+    frames = unique_frames(secs * 20, CHANNELS)
+    lookup = {f: i for i, f in enumerate(frames)}
+    write_fseq(os.path.join(fppd.media, "sequences", "Song.fseq"), frames)
+    write_tone_wav(os.path.join(fppd.media, "music", "Song.wav"), secs, amplitude=0.5)
+    fppd.write("playlists/Song.json", playlist("Song", [{
+        "type": "both", "enabled": 1, "playOnce": 0,
+        "sequenceName": "Song.fseq", "mediaName": "Song.wav"}]))
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        rec = audio.record()
+        fppd.command("Start Playlist", "Song", "false", "false")
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", what="playing")
+        time.sleep(2.5)
+        s = status(fppd)
+        assert (s["current_sequence"], s["current_song"]) == ("Song.fseq", "Song.wav"), s
+        held = s["milliseconds_elapsed"]
+        assert held >= 1500, s
+
+        paused_at = time.monotonic()
+        fppd.command("Pause Playlist")
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "paused", what="paused")
+        time.sleep(0.5)
+        frames_while_paused = rx.count()
+        time.sleep(1.5)
+        assert rx.count() == frames_while_paused, "frames kept coming while paused"
+        assert not any(rx.last()), "pausing did not blank the output"
+        last_content = [lookup[d] for t, d in rx.snapshot() if t < paused_at and d in lookup][-1]
+
+        resumed_at = time.monotonic()
+        fppd.command("Resume Playlist")
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", what="playing again")
+        time.sleep(2)
+        e = status(fppd)["milliseconds_elapsed"]
+        assert held + 1000 <= e <= held + 1000 * (time.monotonic() - resumed_at) + 1000, \
+            f"elapsed {e} ms two seconds after resuming, {held} ms before pausing"
+        after = [lookup[d] for t, d in rx.snapshot(since=resumed_at) if d in lookup]
+        assert after, "the lights did not come back after resuming"
+        assert last_content - 2 <= after[0] <= last_content + 25, \
+            f"the lights resumed at frame {after[0]}, paused after frame {last_content}"
+
+        stopped_at = time.monotonic()
+        fppd.command("Stop Now")
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", what="idle after Stop Now")
+        s = status(fppd)
+        assert (s["current_sequence"], s["current_song"]) == ("", ""), s
+        time.sleep(1)
+        samples = rec.stop()
+        assert not any(rx.last()), "Stop Now did not blank the output"
+
+    def level(start, end):
+        """The loudest 50 ms window between two monotonic times."""
+        windows = [r for t, r in rms_windows(samples) if start <= rec.time_of(int(t * RATE)) <= end]
+        return max(windows, default=0.0)
+
+    floor = 0.1 if audio.unity else 0.005
+    assert level(paused_at - 1.5, paused_at - 0.2) > floor, "nothing heard before the pause"
+    assert level(paused_at + 0.5, resumed_at) < 0.01, "sound while paused"
+    assert level(resumed_at + 0.7, stopped_at - 0.2) > floor, "nothing heard after resuming"
+    assert level(stopped_at + 0.5, rec.ended) < 0.01, "sound after Stop Now"
+
+
 def test_continuous_tone_has_no_dropouts(fppd, audio):
     """A song's audio reaches the card whole: no gaps, however far the card's
     crystal is from the system clock.
