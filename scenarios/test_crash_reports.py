@@ -9,6 +9,7 @@ import os
 import signal
 import subprocess
 import time
+import zipfile
 
 import pytest
 
@@ -248,3 +249,42 @@ def test_crash_report_says_when_it_could_not_write_the_zip(fppd):
     assert "Crash report created" not in r.stdout, f"a report that wasn't made was announced:\n{text}"
     assert "Could not create" in r.stderr, f"no word that the report wasn't made:\n{text}"
     assert r.returncode == 1, text
+
+
+def test_crash_report_drops_the_cape_serial_from_logs(fppd, tmp_path):
+    """With serial sharing off (SendVendorSerial=0), the cape serial is left
+    out of every file in a level-3 report: the line fppcapedetect prints at
+    boot ("Serial Number: ..."), in fppd.log and in the boot log alike, and
+    the serial itself wherever else a log carries it.
+
+    Regression: 5a3524b2a. Only config/cape-eeprom.bin was withheld
+    (9e9db1297): the redactor had no rule for the serial, so fppd.log kept
+    the capedetect line, and boot.log (dmesg plus the fppinit journal) was
+    copied with no redaction at all.
+    """
+    serial = "LEAK-sn-0042"
+    line = f"Found cape fpp-tests-cape, Version 1.0, Serial Number: {serial}"
+    fppd.write("logs/fppd.log", f"2026-01-01 00:00:00 fppinit: {line}\n"
+               f"2026-01-01 00:00:01 fpp-tests: cape {serial} registered\n")
+    fppd.write("tmp/cape-info.json", {"id": "fpp-tests-cape", "serialNumber": serial})
+    fppd.settings(SendVendorSerial="0")
+    os.makedirs(os.path.join(fppd.media, "crashes"))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for tool in ("journalctl", "dmesg"):
+        (bin_dir / tool).write_text(f"#!/bin/sh\necho '{line}'\n")
+        (bin_dir / tool).chmod(0o755)
+    view = private_fppdir(fppd.tree, fppd.media)
+    out = os.path.join(fppd.media, "crashes", "report.zip")
+    env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}")
+    env.pop("LD_PRELOAD", None)
+    r = subprocess.run(["bash", os.path.join(view, "scripts", "generate_crash_report"), "3", out],
+                       capture_output=True, text=True, timeout=180, env=env)
+    assert r.returncode == 0 and os.path.exists(out), f"no report:\n{r.stdout[-2000:]}\n{r.stderr[-2000:]}"
+    with zipfile.ZipFile(out) as z:
+        texts = {n: z.read(n).decode("latin-1") for n in z.namelist()}
+    for name, what in (("logs/fppd.log", "registered"), ("tmp/boot.log", "Found cape")):
+        assert any(n.endswith(name) and what in t for n, t in texts.items()), \
+            f"{name} with the serial's line isn't in the report, so this proves nothing: {sorted(texts)}"
+    leaks = sorted(n for n, t in texts.items() if "LEAK-sn" in t)
+    assert not leaks, f"the cape serial ships in: {leaks}"

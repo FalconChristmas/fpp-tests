@@ -269,3 +269,24 @@ def test_os_reflash_parks_surviving_plugins_as_unverified(fppinit):
     assert s.get("PluginUnknownEverInstalled", "") == "", s
     assert s.get("PluginUnknownRepos", "") == "", s
     assert s.get("PluginUnverifiedRepos") == "fpp-third|https://github.com/someone/fpp-third.git", s
+
+
+def test_os_reflash_keeps_plugin_clone_credentials_out_of_settings(fppinit):
+    """After an FPPOS reflash, a plugin cloned with a GitHub token in its
+    URL (as the Plugin Manager clones while gitHubUser/gitHubPAT are set)
+    is parked without it, and an official plugin cloned that way is still
+    recognised as official.
+
+    Regression: 8ea4a53d6. resetPluginSourceAfterOS() copied
+    remote.origin.url raw into PluginUnverifiedRepos, which GET
+    /api/settings returns and every backup carries, and its "official"
+    test was a prefix match that a user:token@ URL missed.
+    """
+    token = "ghp_LEAKLEAKLEAKLEAKLEAKLEAK"
+    seed_plugin(fppinit, "fpp-official", f"https://u:{token}@github.com/FalconChristmas/fpp-official.git")
+    seed_plugin(fppinit, "fpp-third", f"https://u:{token}@github.com/someone/fpp-third.git?x=1")
+    r = reflash_boot(fppinit)
+    assert_clean(r)
+    v = media_settings(fppinit).get("PluginUnverifiedRepos")
+    assert v == "fpp-third|https://github.com/someone/fpp-third.git", \
+        f"PluginUnverifiedRepos is {v!r}: a token, the official plugin, or no third-party plugin"

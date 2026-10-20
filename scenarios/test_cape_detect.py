@@ -117,6 +117,26 @@ def test_a_cape_cannot_choose_the_signing_host(fppinit):
     assert s.get("CapeTestUnset") == "cape", out
 
 
+def test_a_cape_default_cannot_carry_another_setting(fppinit):
+    """A default whose value or name holds a line break is refused whole:
+    each setting is one `key = "value"` line, so the break would add a line
+    of the cape's choosing past every rule -- here, the signing host.
+
+    Regression: c9a0cf6ce. Before it, `capeMaySetSetting()` judged only the
+    key, and the value was written verbatim, so the embedded line became a
+    `SigningAPIHost` setting that fppd and the cape pages read."""
+    fppinit.settings(LegalJurisdiction="US")
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(defaultSettings={
+        "CapeTestCarrier": 'x"\nSigningAPIHost = "signing.example.invalid',
+        'CapeTestKey = "y"\nSigningAPIHost': "signing.example.invalid",
+        "CapeTestUnset": "cape"})))
+    out = detect(fppinit)
+    s = settings_of(fppinit)
+    assert s.get("CapeTestUnset") == "cape", f"the control: a plain default is applied\n{out}"
+    assert "SigningAPIHost" not in s, f"{fppinit.media_file('settings')}\n{out}"
+    assert "CapeTestCarrier" not in s and "CapeTestKey" not in s, fppinit.media_file("settings")
+
+
 def test_an_unsigned_cape_cannot_remove_settings(fppinit):
     """removeSettings deletes a value the user may have chosen, which wants
     a signature; an unsigned image's list is ignored.
