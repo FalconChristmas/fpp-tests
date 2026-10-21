@@ -8,7 +8,7 @@
  *
  * The C++ names are spelled out mangled (they take no arguments, so the
  * mangling is just the name).  The first time a caller inside FPP's WLED
- * code is seen, its symbol is appended to $MONOSHIFT_LOG, so a test can
+ * code (or its millis()/micros() wrappers) is seen, its symbol is appended to $MONOSHIFT_LOG, so a test can
  * show the shifted clock reached the code under test.
  */
 #define _GNU_SOURCE
@@ -34,8 +34,13 @@ static void note_caller(void* ra) {
         return;
     }
     Dl_info info;
+    // Optimized, WLED's millis()/micros() (wled.h) are inlined into the
+    // effects; at -O0 (the coverage build) they are functions of their own,
+    // and are the callers seen here. Only the WLED port defines them.
     if (dladdr(ra, &info) && info.dli_sname &&
-        (strstr(info.dli_sname, "WS2812FX") || strstr(info.dli_sname, "mode_"))) {
+        (strstr(info.dli_sname, "WS2812FX") || strstr(info.dli_sname, "mode_") ||
+         !strcmp(info.dli_sname, "_Z6millisv") || !strcmp(info.dli_sname, "_Z10GET_MILLISv") ||
+         !strcmp(info.dli_sname, "_Z6microsv"))) {
         noted = 1;
         const char* log = getenv("MONOSHIFT_LOG");
         int fd = log ? open(log, O_WRONLY | O_APPEND | O_CREAT, 0644) : -1;
