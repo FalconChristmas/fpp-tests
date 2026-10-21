@@ -397,7 +397,10 @@ def test_stop_during_an_insert_start_stops_the_inserted_playlist(fppd):
     from fseq import solid_frames, write_fseq
     from show import sequence_entry
     write_fseq(os.path.join(fppd.media, "sequences", "Q.fseq"), solid_frames(40, 30, 9))  # 2 s
-    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(2), step(2)]))
+    # The pause after step 2 keeps P current once Q is stopped: P otherwise
+    # ends at once, and on a slow build (TSan) it had already finished, and
+    # left no current playlist, by the time the status was read.
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(2), step(2), pause(5)]))
     fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0, "leadIn": [],
                                     "mainPlaylist": [sequence_entry("Q.fseq"), step(7)],
                                     "leadOut": []})
