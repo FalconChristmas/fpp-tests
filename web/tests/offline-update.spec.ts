@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
+import { snapshotSettings } from './settings-file';
 
 // When the update source could not be reached, git_pull printed a warning and
 // exited 0, so manualUpdate.php restarted fppd and logged "Upgrade Complete"
@@ -12,9 +13,19 @@ const LOG = '/home/fpp/media/logs/fpp_system_upgrades.log';
 
 test.skip(!container, 'needs the player run-web.sh serves (FPP_TESTS_WEB_CONTAINER)');
 
+// Each test puts the settings file back as it found it.  Writing back the
+// UpgradeSource read from the API instead left UpgradeSource = "" where it
+// had never been set, and an empty source is a custom one: every status poll
+// then skipped the no-internet shortcut and waited out a ping to github.com,
+// which takes ten seconds where ICMP is dropped (as on CI's runners) and is
+// not cached when it fails -- every later page that asks for status slowed by
+// that much.
+let restoreSettings: () => void;
+test.beforeEach(() => { restoreSettings = snapshotSettings(); });
+test.afterEach(() => restoreSettings());
+
 test('an update from an unreachable source fails', async ({ request }) => {
   test.setTimeout(120_000);
-  const before = (await (await request.get('/api/settings/UpgradeSource')).json()).value ?? '';
   try {
     expect((await request.put('/api/settings/UpgradeSource', { data: 'fpp-tests-unreachable.invalid' })).ok()).toBe(true);
     const out = inPlayer('sh', '-c', '/opt/fpp/scripts/git_pull > /tmp/fpp-tests-git-pull.out 2>&1; echo "rc=$?"; cat /tmp/fpp-tests-git-pull.out');
@@ -23,7 +34,6 @@ test('an update from an unreachable source fails', async ({ request }) => {
     expect(out).not.toContain('Building FPP');
     expect(out.split('\n')[0]).toBe('rc=1');
   } finally {
-    await request.put('/api/settings/UpgradeSource', { data: before });
     inPlayer('rm', '-f', LOG, '/tmp/fpp-tests-git-pull.out');
   }
 });
