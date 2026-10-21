@@ -78,6 +78,59 @@ test('upgrade 135 replaces the start-time IPv6 define with a check in ports.conf
   }
 });
 
+// Regression: cc0cc1a04, the "broken 130 upgrade" half. Upgrade 130 ended with
+// "systemctl restart apache2", which drops every connection, including the
+// one streaming the update's output to the browser (manualUpdate.php runs
+// behind that Apache): the user was left watching a dead upgrade dialog.
+// Now a running Apache is left alone (both listeners are chosen at parse
+// time, so its next start picks the new file up) and only a stopped one --
+// down from the IPv6 bug this upgrade fixes -- is started. systemctl is
+// stood in for by a script that records its calls and answers is-active (in
+// place of the image's, which scripts/common's PATH finds first). Proved by
+// putting upgrade/130 back as it was before the fix on master: the suite's
+// setup wizard can't be finished on cc0cc1a04 or its parent.
+test('upgrade 130 leaves a running Apache alone and starts a stopped one', async () => {
+  const restorePorts = keep(PORTS);
+  const restoreEnv = keep(ENVVARS);
+  const LOG = '/tmp/fpp-tests-systemctl.log';
+  const STATE = '/tmp/fpp-tests-apache-state';
+  const SYSTEMCTL = inPlayer('sh', '-c', 'PATH=/bin:/usr/bin:/sbin:/usr/sbin command -v systemctl || echo /usr/bin/systemctl').trim();
+  const hadSystemctl = exists(SYSTEMCTL);
+  if (hadSystemctl) inPlayer('mv', SYSTEMCTL, `${SYSTEMCTL}.fpp-tests-orig`);
+  putFile(SYSTEMCTL, `#!/bin/sh
+# fpp-tests stand-in for systemctl
+echo "$*" >> ${LOG}
+case "$1" in
+  is-active) [ "$(cat ${STATE} 2>/dev/null)" = active ] && exit 0 || exit 3 ;;
+esac
+exit 0
+`);
+  inPlayer('chmod', '+x', SYSTEMCTL);
+  const calls = (state: string) => {
+    inPlayer('sh', '-c', `rm -f ${LOG}; echo ${state} > ${STATE}`);
+    const out = runUpgrade(130);
+    const log = exists(LOG) ? readFile(LOG).trim().split('\n') : [];
+    return { out, log };
+  };
+  try {
+    let { out, log } = calls('active');
+    // The control: 130 rewrote ports.conf (before and after the fix).
+    expect(readFile(PORTS)).toContain('Listen [::]:80');
+    expect(log.filter((l) => /\b(re)?start\b|\breload\b|\bstop\b/.test(l)), 'a running Apache was restarted').toEqual([]);
+    expect(out).toContain('Apache is running; the new listener config applies at its next start.');
+    expect(log).toContain('is-active --quiet apache2');
+
+    ({ out, log } = calls('failed'));
+    expect(log, 'a stopped Apache was not started').toContain('start apache2');
+  } finally {
+    if (hadSystemctl) inPlayer('mv', '-f', `${SYSTEMCTL}.fpp-tests-orig`, SYSTEMCTL);
+    else inPlayer('rm', '-f', SYSTEMCTL);
+    inPlayer('rm', '-f', LOG, STATE);
+    restorePorts();
+    restoreEnv();
+  }
+});
+
 // Feature: 3eaece428 ("re-deploy the systemd units on a version upgrade").
 // The units in /lib/systemd/system were copied once, at install, so a unit
 // change (fppd.service's LimitRTPRIO) never reached an upgraded box. Upgrade
