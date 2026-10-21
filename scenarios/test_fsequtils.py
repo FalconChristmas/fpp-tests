@@ -283,6 +283,26 @@ def test_merge_range_past_the_channel_space_is_dropped(tmp_path):
     assert got == base, "a merge range past every channel changed the base"
 
 
+def test_merge_of_a_shorter_sequence_leaves_the_rest_of_the_base(tmp_path):
+    """Merging a sequence with fewer frames than the base lays it over the
+    base's first frames only; the base's later frames come out unchanged.
+
+    Regression: cb08077be. The merge loop asked the shorter file for every
+    frame of the base and read through the null getFrame() returns past its
+    end: fsequtils crashed with no output."""
+    a, b, base, over = merge_inputs(tmp_path)
+    short = str(tmp_path / "short.fseq")
+    write_fseq(short, over[:FRAMES // 2])
+    out = str(tmp_path / "m.fseq")
+    rc, stdout, err = fsequtils("-c", "none", "-o", out, "-m", short, a)
+    assert rc == 0, stdout + err
+    _, got = read_fseq(out)
+    assert len(got) == FRAMES, len(got)
+    want = [x[:8] + y[8:16] + x[16:] for x, y in zip(base, over)][:FRAMES // 2] + base[FRAMES // 2:]
+    bad = [i for i in range(FRAMES) if got[i] != want[i]]
+    assert not bad, f"frames {bad} wrong, first {list(got[bad[0]][:20])}"
+
+
 def test_dump_prints_each_frame_of_the_range(src):
     """-d -r prints a titled hex dump of the range for every frame.
 
