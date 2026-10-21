@@ -158,6 +158,10 @@ called_from_lib:libvorbis.so.0
 called_from_lib:libgstudp.so
 called_from_lib:libgstvpx.so
 called_from_lib:libgio-2.0.so
+# Opus RTP's encoder (test_aes67_config.py): the same g_rec_mutex_unlock()
+# tail call as pipewiresink above, attributed to this plugin when an Opus
+# send pipeline is built and torn down.
+called_from_lib:libgstopus.so
 called_from_lib:libgstdebugutilsbad.so
 called_from_lib:libjpeg.so.62
 # kmssink (the HDMI groups), rtspsrc (cameras) and the RTSP server (playback
