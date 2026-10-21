@@ -13,7 +13,7 @@ import os
 import subprocess
 
 from fppinit import MEDIA, fppinit  # noqa: F401 -- the fixture
-from test_system_scripts import SUDO, fppdir_view, git, upgrade_fpp, version_switch_checkout
+from test_system_scripts import fppdir_view, git, upgrade_fpp, version_switch_checkout
 
 CHECKOUT = f"{MEDIA}/tmp/fpp"
 
@@ -47,7 +47,6 @@ def head(fpp):
 
 
 def run_script(sb, script, *args, timeout=300):
-    sb.root_file("/usr/bin/sudo", SUDO)
     r = sb._run(["unshare", "--net", f"{CHECKOUT}/scripts/{script}", *args],
                 timeout=timeout, media_home=True)
     return r, r.stdout + r.stderr
@@ -219,7 +218,6 @@ def plugin_script(sb, script, *args):
     view = f"{MEDIA}/tmp/fppdir"
     if not sb.media_exists("tmp/fppdir"):
         fppdir_view(sb)
-    sb.root_file("/usr/bin/sudo", SUDO)
     r = sb._run(["unshare", "--net", f"{view}/scripts/{script}", *args])
     return r, r.stdout + r.stderr
 

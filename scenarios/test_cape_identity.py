@@ -7,13 +7,13 @@ EEPROM, and the system UUID FPP reports -- plus fppcapedetect's
 import json
 import os
 import re
+import shutil
 
 import pytest
 
 import cape_eeprom as ee
 from fppinit import MEDIA, fppinit  # noqa: F401 -- the fixture
 from test_cape_detect import EEPROM, detect, settings_of
-from test_system_scripts import SUDO
 
 # --- upgradeCapeFirmware on a blank EEPROM ---------------------------------
 
@@ -113,8 +113,8 @@ def test_force_defaults_resets_a_users_value_to_the_capes(fppinit):
 
 # --- PocketBeagle2 EEPROM repair -------------------------------------------
 
-# xxd, which the image doesn't have: -r turns a dump back into bytes, -p
-# prints plain hex.
+# Stands in for xxd where the system has none (images built before it was
+# added): -r turns a dump back into bytes, -p prints plain hex.
 XXD = """#!/usr/bin/python3
 import sys
 if "-r" in sys.argv:
@@ -134,7 +134,8 @@ else:
 
 def repair(sb, script, eeprom):
     sb.write_bytes("tmp/pb2-eeprom.bin", eeprom)
-    sb.root_file("/usr/bin/xxd", XXD)
+    if not shutil.which("xxd"):
+        sb.root_file("/usr/bin/xxd", XXD)
     r = sb._run(["env", f"PB2_EEPROM={MEDIA}/tmp/pb2-eeprom.bin", "bash",
                  f"/opt/fpp/capes/drivers/bb64/{script}"])
     with open(os.path.join(sb.media, "tmp", "pb2-eeprom.bin"), "rb") as f:
@@ -171,7 +172,6 @@ printf '\\tUUID: 4c4c4544-0042-3510-8051-b4c04f4e4d32\\n'
 
 
 def get_uuid(sb, *args, container=False):
-    sb.root_file("/usr/bin/sudo", SUDO)
     env = ["env", "FPP_DOCKERENV=/fpp-tests-none"]
     if not container:
         env.append("FPP_CONTAINERFILE=/fpp-tests-none")

@@ -13,7 +13,12 @@ under test with none of that reaching the machine:
   and /tmp are empty, and the action runs in its own PID namespace, so it
   can't see a disk, a bus or another process;
 - commands with side effects outside the filesystem are stubs that record
-  their arguments (calls()) and succeed;
+  their arguments (calls()) and succeed; mount and umount among them, which
+  also say on stderr that nothing was mounted (unstub() gives a scenario
+  the real one, its mounts confined to the sandbox's mount namespace);
+- sudo runs its command as is (the sandbox is root already), so a
+  script's "$SUDO rm ..." does what it says rather than failing to find
+  sudo -- the scenario image has none;
 - the capabilities to load a module, reboot, set the clock or do raw I/O
   are dropped, so a command missing from the stub list fails instead.
 
@@ -41,16 +46,24 @@ STUBS = [
     "a2enmod", "a2dismod", "apachectl", "ssh-keygen", "chpasswd", "setfont",
 ]
 
+# Stubs whose no-op changes what the filesystem looks like afterwards, so a
+# scenario that relied on one would otherwise go on with a filesystem the
+# script never had: these say so as well as recording the call.
+LOUD_STUBS = {"mount", "umount"}
+
 DEVICES = ["null", "zero", "random", "urandom", "full"]
 
 MEDIA = "/fpp-test-media"  # where the media directory appears to fppinit
 
 
-def _stub(log):
+def _stub(log, loud=False):
     # Prints /fppinit-state/<command>.<argument>.out for the first argument
     # that has one (stub_output()), so a scenario can give a verb its output.
+    note = ("echo \"fppinit sandbox: $(basename \"$0\") is a stub, nothing done: $*\" >&2\n"
+            if loud else "")
     return ("#!/bin/sh\n"
             f"printf '%s\\n' \"$(basename \"$0\") $*\" >> {log}\n"
+            + note +
             "for a in \"$@\"; do\n"
             "    f=\"/fppinit-state/$(basename \"$0\").$a.out\"\n"
             "    if [ -f \"$f\" ]; then cat \"$f\"; break; fi\n"
@@ -93,6 +106,23 @@ exit $rc
 """
 
 
+# sudo, which the scenario image doesn't have: options are dropped (-u fpp
+# runs as root here, as everything in the sandbox does) and the command run
+# through env, so "sudo VAR=value cmd" works as it does with the real one.
+# A command that isn't there fails, as it would.
+SUDO = """#!/bin/sh
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -u|-g|-p|-C|-h|-r|-t|-U) shift 2 ;;
+        --) shift; break ;;
+        -*) shift ;;
+        *) break ;;
+    esac
+done
+exec env "$@"
+"""
+
+
 class FppinitSandbox:
     def __init__(self, tree):
         self.tree = os.path.realpath(tree)
@@ -107,6 +137,7 @@ class FppinitSandbox:
         os.makedirs(self.state)
         self.upper = None
         self.root_files = {}
+        self.unstubbed = set()
 
     def write(self, rel, content):
         """Write a file into the sandbox's media directory (JSON for a dict
@@ -130,6 +161,13 @@ class FppinitSandbox:
         command is stubbed in /usr/bin even where it isn't installed."""
         with open(os.path.join(self.state, f"{command}.{argument}.out"), "w") as f:
             f.write(text)
+
+    def unstub(self, command):
+        """Leave a command from the stub list as the system has it for each
+        later run. For mount: the sandbox is a mount namespace of its own,
+        so what is mounted in it goes no further."""
+        assert command in STUBS and command != "systemctl", command
+        self.unstubbed.add(command)
 
     def start_delay(self, name, seconds):
         """Make the stubbed systemctl take `seconds` to start or restart this
@@ -174,7 +212,7 @@ class FppinitSandbox:
         stub_lines = []
         systemctl = shutil.which("systemctl", path="/usr/bin:/bin") or "/usr/bin/systemctl"
         for name in STUBS:
-            if name == "systemctl":
+            if name == "systemctl" or name in self.unstubbed:
                 continue
             # The command's own path, not what it links to: on systemd
             # systems reboot/poweroff/halt are links to systemctl.
@@ -183,7 +221,7 @@ class FppinitSandbox:
                 # not installed here, but given output with stub_output()
                 path = "/usr/bin/" + name
             if path:
-                stub_lines.append(f"stub {shlex.quote(path)}")
+                stub_lines.append(f"stub {shlex.quote(path)}" + (" loud" if name in LOUD_STUBS else ""))
         roots = os.path.join(run_dir, "root-files")
         root_lines = []
         for i, (path, content) in enumerate(self.root_files.items()):
@@ -221,9 +259,15 @@ mount --bind {shlex.quote(self.tree)} "$R/opt/fpp"
 # on the overlay they would be thrown away with the sandbox.
 mkdir -p "$R"{shlex.quote(self.tree)}; mount --bind {shlex.quote(self.tree)} "$R"{shlex.quote(self.tree)}
 {home}
-stub() {{ rm -f "$R$1"; printf '%s' {shlex.quote(_stub(log))} > "$R$1"; chmod 755 "$R$1"; }}
+stub() {{
+    rm -f "$R$1"
+    if [ "$2" = loud ]; then printf '%s' {shlex.quote(_stub(log, loud=True))} > "$R$1"
+    else printf '%s' {shlex.quote(_stub(log))} > "$R$1"; fi
+    chmod 755 "$R$1"
+}}
 mkdir -p "$R/fppinit-state"; cp -a {shlex.quote(self.state)}/. "$R/fppinit-state/"
 {chr(10).join(stub_lines)}
+rm -f "$R/usr/bin/sudo"; printf '%s' {shlex.quote(SUDO)} > "$R/usr/bin/sudo"; chmod 755 "$R/usr/bin/sudo"
 {chr(10).join(root_lines)}
 rm -f "$R{systemctl}"; printf '%s' {shlex.quote(SYSTEMCTL)} > "$R{systemctl}"; chmod 755 "$R{systemctl}"
 : > "$R{log}"

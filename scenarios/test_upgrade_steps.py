@@ -9,6 +9,7 @@ upgrade step's own path.
 """
 
 import os
+import shutil
 import stat
 
 from fppinit import MEDIA, fppinit  # noqa: F401 -- the fixture
@@ -217,9 +218,10 @@ def test_upgrade_150_keeps_the_stock_kernel_off_a_bbb(fppinit):
 
 # --- 145 and 149: Pi overlays that leave the pins free ----------------------
 
-# dtc: writes a stand-in .dtbo where -o says, or fails if told to.
+# Stands in for dtc where the system has none (images built before it was
+# added): writes a stand-in .dtbo where -o says. With the real one the
+# overlay sources themselves are compiled.
 DTC = """#!/bin/sh
-[ -f /fppinit-state/dtc.fail ] && exit 1
 while [ $# -gt 0 ]; do
     if [ "$1" = -o ]; then printf 'dtbo' > "$2"; shift; fi
     shift
@@ -227,12 +229,23 @@ done
 exit 0
 """
 
+REAL_DTC = bool(shutil.which("dtc"))
+
 
 def pi_boot(sb, config):
     sb.root_file("/etc/fpp/platform", "Raspberry Pi\n")
-    sb.root_file("/usr/bin/dtc", DTC)
+    if not REAL_DTC:
+        sb.root_file("/usr/bin/dtc", DTC)
     boot_write(sb, "config.txt", config)
     boot_mkdir(sb, "overlays")
+
+
+def assert_overlay(sb, name):
+    with open(os.path.join(sb.boot, "overlays", name), "rb") as f:
+        data = f.read()
+    assert data, f"{name} is empty"
+    if REAL_DTC:
+        assert data[:4] == b"\xd0\x0d\xfe\xed", f"{name} is not a device tree blob"
 
 
 def test_upgrade_145_moves_uart0_to_the_overlay_that_leaves_gpio14_free(fppinit):
@@ -242,8 +255,9 @@ def test_upgrade_145_moves_uart0_to_the_overlay_that_leaves_gpio14_free(fppinit)
     config.txt is left as it was and the step fails.
 
     Regression: e0e2287f5. dtparam=uart0=on on a Pi 5 claimed GPIO14 and
-    GPIO15 for the UART, so neither could be used as a GPIO. (dtc is a
-    stub here: the overlay source itself is not compiled.)
+    GPIO15 for the UART, so neither could be used as a GPIO. (Where the
+    system has no dtc, a stand-in: the overlay source is then not
+    compiled.)
     """
     config = "[pi5]\ndtparam=uart0=on\n  dtparam=uart0=on\n#dtparam=uart0=on\n[all]\n"
     pi_boot(fppinit, config)
@@ -251,13 +265,12 @@ def test_upgrade_145_moves_uart0_to_the_overlay_that_leaves_gpio14_free(fppinit)
     assert r.returncode == 0, out[-3000:]
     assert fppinit.boot_file("config.txt") == \
         "[pi5]\ndtoverlay=fpp-uart0-nopins\n  dtparam=uart0=on\n#dtparam=uart0=on\n[all]\n", out[-3000:]
-    assert fppinit.boot_file("overlays/fpp-uart0-nopins.dtbo") == "dtbo"
+    assert_overlay(fppinit, "fpp-uart0-nopins.dtbo")
     assert media_settings(fppinit).get("rebootFlag") == "1"
 
     pi_boot(fppinit, config)
     os.remove(os.path.join(fppinit.boot, "overlays", "fpp-uart0-nopins.dtbo"))
-    with open(os.path.join(fppinit.state, "dtc.fail"), "w"):
-        pass
+    fppinit.root_file("/usr/bin/dtc", "#!/bin/sh\nexit 1\n")
     r, out = step(fppinit, 145)
     assert r.returncode != 0, out[-3000:]
     assert fppinit.boot_file("config.txt") == config
@@ -270,8 +283,8 @@ def test_upgrade_149_adds_the_spi1_overlay_after_spi0(fppinit):
     nothing.
 
     Regression: b12b7c6f3. Pis updated in place never got the overlay that
-    gives SPI1 without claiming GPIO19-21, which new images carry. (dtc is
-    a stub here.)
+    gives SPI1 without claiming GPIO19-21, which new images carry. (Where
+    the system has no dtc, a stand-in.)
     """
     pi_boot(fppinit, "[all]\ndtoverlay=spi0-0cs\ndtparam=audio=on\n")
     r, out = step(fppinit, 149)
@@ -279,7 +292,7 @@ def test_upgrade_149_adds_the_spi1_overlay_after_spi0(fppinit):
     after = fppinit.boot_file("config.txt")
     assert after == "[all]\ndtoverlay=spi0-0cs\ndtoverlay=fpp-spi1-nopins\ndtparam=audio=on\n", \
         f"{after}\n{out[-3000:]}"
-    assert fppinit.boot_file("overlays/fpp-spi1-nopins.dtbo") == "dtbo"
+    assert_overlay(fppinit, "fpp-spi1-nopins.dtbo")
     assert media_settings(fppinit).get("rebootFlag") == "1"
 
     r, out = step(fppinit, 149)

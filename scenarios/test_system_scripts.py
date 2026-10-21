@@ -269,22 +269,14 @@ def version_switch_checkout(sb):
     return fpp
 
 
-# We are root already; the test image has no sudo.
-SUDO = """#!/bin/sh
-while [ $# -gt 0 ]; do case "$1" in -u) shift 2 ;; -*) shift ;; *) break ;; esac; done
-exec "$@"
-"""
-
-
 def upgrade_fpp(sb, version):
     """scripts/upgrade_FPP <version> run from the checkout made by
     version_switch_checkout(): FPP finds itself from the script's path, so
     that checkout is the FPP being upgraded, by the path a user checkout
-    takes (sudo -u fpp, here the shim). Never at /opt/fpp, which in the
-    sandbox is the tree under test: the script cleans and rebuilds the FPP
-    it upgrades. With no network: it would otherwise download a compiler
+    takes (sudo -u fpp, here the sandbox's stand-in). Never at /opt/fpp,
+    which in the sandbox is the tree under test: the script cleans and
+    rebuilds the FPP it upgrades. With no network: it would otherwise download a compiler
     cache and call this machine's web UI."""
-    sb.root_file("/usr/bin/sudo", SUDO)
     fppd = os.path.join(sb.tree, "src", "fppd")
     before = os.stat(fppd).st_mtime_ns
     r = sb._run(["unshare", "--net", f"{MEDIA}/tmp/fpp/scripts/upgrade_FPP", version], timeout=300)
