@@ -287,6 +287,9 @@ def test_the_frames_dropped_warning_is_filed_as_a_frame_rate_warning(fppd):
     "Frame Rate Too High For Pixel Strings".
 
     Regression: 448e6f775. It was raised as 61, "Command Not Found".
+
+    Also covers fc4bac547: the gate itself. Without it no frame is ever
+    declined, and the warning never comes.
     """
     fake_pru(fppd)
     shift_cape("TestShift16")
