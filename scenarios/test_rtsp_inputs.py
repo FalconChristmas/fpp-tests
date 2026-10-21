@@ -65,9 +65,7 @@ def test_a_camera_with_no_video_track_says_so(fppd, audio):
     that says so.
 
     Regression: ecb6cffbb. The source came up empty and the only sign of it
-    was "No frames" in the preview, with nothing in the log. (With audio
-    off the report never comes: every track is refused, and rtspsrc fails
-    with "No supported stream was found" before it would.)"""
+    was "No frames" in the preview, with nothing in the log."""
     with FakeCamera([PCMU]) as cam:
         setup(fppd, [overlay_consumer(SOURCE)],
               [camera_source(cam, audioEnabled=True, audioPipeWireNodeName="fpp_cam_audio")])
@@ -77,6 +75,39 @@ def test_a_camera_with_no_video_track_says_so(fppd, audio):
         fppd.wait_for(lambda: any("contains no video track" in w
                                   for w in fppd.get("/fppd/status").get("warnings", [])),
                       timeout=10, what="the no-video warning")
+
+
+def no_video_warning(fppd):
+    return any("contains no video track" in w for w in fppd.get("/fppd/status").get("warnings", []))
+
+
+def test_an_audio_only_camera_with_audio_off_says_it_has_no_video(fppd, audio):
+    """A camera whose SDP has only an audio track, on a source with audio
+    off: fppd logs that the stream has no video track and raises the
+    warning, not rtspsrc's transport complaint. Once the camera offers
+    video again, the source's next retry shows its picture and the warning
+    comes down.
+
+    Regression: 2e11dbeb2. The audio track was refused, so rtspsrc made no
+    pads and "no-more-pads" (ecb6cffbb's report) never fired: it failed
+    with "No supported stream was found. You might need to allow more
+    transport protocols", and the source retried forever under that, with
+    no warning."""
+    # Made with the video track, so its producer is running when the camera
+    # offers it again; the SDP is audio-only until then.
+    with FakeCamera([JPEG]) as cam:
+        cam.tracks = [PCMU]
+        setup(fppd, [overlay_consumer(SOURCE)], [camera_source(cam)])
+        fppd.start()
+        fppd.wait_for(lambda: "offers no video track" in fppd.log(), timeout=20,
+                      what="fppd to log that the stream has no video")
+        fppd.wait_for(lambda: no_video_warning(fppd), timeout=10, what="the no-video warning")
+        assert "No supported stream was found" not in fppd.log(), \
+            "rtspsrc's transport message was logged as the source's error"
+        cam.tracks = [JPEG]
+        wait_for_bars(fppd, timeout=30)
+        fppd.wait_for(lambda: not no_video_warning(fppd), timeout=10,
+                      what="the no-video warning to come down once the camera offers video")
 
 
 def pw_nodes():
