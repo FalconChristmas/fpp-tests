@@ -29,6 +29,10 @@ on:
         description: Add this run to the dashboard on GitHub Pages (coverage of fpp master only)
         type: boolean
         default: false
+      device:
+        description: Also run the device scenarios on the Pi (needs flavor asan, whose skips pick them)
+        type: boolean
+        default: false
   # A pull request to this repo runs the suite against fpp master, so a
   # contributor can add a scenario without Docker or an FPP device.
   pull_request:
@@ -157,10 +161,164 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # The scenarios only a device can run, on a real Raspberry Pi 5 through
+  # run-local.sh: the ones the last nightly's ASan run skipped
+  # (scripts/device-tests.py; taken from the previous night so this runs
+  # beside the shards instead of after them) --
+  # Pi fppinit and cape detection, DPI pixels, framebuffer and KMS outputs,
+  # GPIO, the serial console, the real sound card (--host-audio). On the same
+  # fpp ref as the shards, as a coverage build: its counters join the Docker
+  # shards' in the coverage report, so the code only a Pi reaches is counted.
+  # Self-hosted, where a job is root on the device, so never for a pull
+  # request: only the nightly and a run by hand that asks for it.
+  device:
+    if: github.event_name == 'schedule' || github.event.inputs.device == 'true'
+    runs-on:
+      group: Devices
+      labels: [self-hosted, Linux, ARM64]
+    timeout-minutes: 120
+    concurrency:
+      group: device
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: read
+    env:
+      FPP_REF: ${{ github.event.inputs.fpp_ref || 'master' }}
+    steps:
+      # run-local.sh runs as root; anything of root's left in the workspace
+      # (a crashed run's files) would stop the checkout from cleaning it.
+      - name: Give the workspace back to the runner
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
+      - name: Checkout fpp-tests
+        uses: actions/checkout@v6
+
+      - name: Pick the scenarios
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/last-asan-results.py last-asan.xml
+          python3 scripts/device-tests.py last-asan.xml > device-tests.txt
+          echo "$(wc -l < device-tests.txt) scenarios that ASan run skipped"
+
+      - name: Checkout fpp
+        uses: actions/checkout@v6
+        with:
+          repository: FalconChristmas/fpp
+          ref: ${{ env.FPP_REF }}
+          path: fpp
+          fetch-depth: 0
+          filter: blob:none
+          # A device build needs them (RGBMatrix, RF24, spixels), and make -j
+          # left to fetch them itself races two clones of one submodule.
+          submodules: recursive
+
+      # The coverage flavor, as build-fpp.sh makes it in Docker: the debug
+      # target at -O0 with --coverage. The checkout cleans the tree each
+      # night; ccache (the runner user's own) makes the rebuild cheap.
+      - name: Build fpp
+        working-directory: fpp/src
+        env:
+          CCACHE: ccache
+          CCACHE_BASEDIR: ${{ github.workspace }}/fpp
+          CCACHE_NOHASHDIR: "1"
+          LDFLAGS: --coverage
+        run: |
+          if ! make -j"$(nproc)" debug "OPTIMIZE_FLAGS=-g -O0 -Wno-psabi --coverage" > build.log 2>&1; then
+            grep -E "error|Error" build.log | tail -40
+            exit 1
+          fi
+
+      # fppoled holds the cape buttons' GPIO lines, which test_gpio_pins
+      # drives. Started again at the end, however the job ends.
+      - name: Stop fppoled
+        run: |
+          if systemctl is-active --quiet fppoled; then
+            sudo systemctl stop fppoled
+            echo "RESTART_FPPOLED=1" >> "$GITHUB_ENV"
+          fi
+
+      # The test fppd writes its counters through run-local.sh's overlay of
+      # the tree, where they would vanish with it: GCOV_PREFIX puts them in
+      # gcov/ instead, under each object's full path. No bytecode: as root it
+      # would land in a scenarios/__pycache__ the runner cannot remove. The
+      # node ids go in a file (pytest's @file), one per line, since some
+      # carry spaces in their parameters.
+      - name: Run the scenarios
+        run: |
+          sudo env PYTHONDONTWRITEBYTECODE=1 GCOV_PREFIX="$PWD/gcov" \
+            ./run-local.sh --fpp fpp --host-audio -v -rA --junitxml=artifacts/junit.xml "@$PWD/device-tests.txt"
+
+      - name: Start fppoled again
+        if: always() && env.RESTART_FPPOLED == '1'
+        run: sudo systemctl start fppoled
+
+      - name: Measure the coverage
+        if: always()
+        run: |
+          if [ -d "gcov$PWD/fpp" ]; then
+            sudo cp -a "gcov$PWD/fpp/." fpp/
+          fi
+          python3 -m venv /tmp/gcovr-$$ && /tmp/gcovr-$$/bin/pip install -q gcovr==7.2
+          sudo env "PATH=/tmp/gcovr-$$/bin:$PATH" sh scripts/coverage-report.sh "$PWD/fpp" "$PWD/artifacts/coverage" || true
+          rm -rf /tmp/gcovr-$$
+
+      # run-local.sh and the report ran as root, so their files are root's.
+      - name: Make the artifacts readable
+        if: always()
+        run: |
+          mkdir -p artifacts
+          sudo chown -R "$(id -u):$(id -g)" artifacts gcov fpp 2>/dev/null; chmod -R u+rwX artifacts
+          version=$(git -C fpp describe --tags --match='[0-9]*' 2>/dev/null || git -C fpp rev-parse --short HEAD)
+          printf '{"flavor":"pi5","version":"%s","sha":"%s"}\n' "$version" \
+            "$(git -C fpp rev-parse HEAD)" > artifacts/meta.json
+          cp fpp/src/build.log artifacts/ 2>/dev/null || true
+
+      - name: Upload failed scenarios
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failed-scenarios-pi5
+          path: |
+            artifacts/
+            !artifacts/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Summarize
+        if: always()
+        run: python3 scripts/ci-summary.py artifacts >> "$GITHUB_STEP_SUMMARY"
+
+      # Its counters, for the coverage merge in the results job.
+      - name: Upload the coverage counts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: shard-coverage-device
+          # Two paths, so the artifact keeps coverage/ as the shards' do.
+          path: |
+            artifacts/meta.json
+            artifacts/coverage/coverage.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload the results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: results-pi5
+          path: |
+            artifacts/meta.json
+            artifacts/junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
   # A flavor's shards, put back together as one results-<flavor>: what the
   # dashboard reads. A shard that never finished leaves the flavor failed.
+  # Coverage also takes the device's counters, when it ran.
   results:
-    needs: [scenarios]
+    needs: [scenarios, device]
     if: always() && needs.scenarios.result != 'skipped'
     runs-on: ubuntu-latest
     strategy:

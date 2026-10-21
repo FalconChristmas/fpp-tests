@@ -20,8 +20,9 @@ import sys
 import ci_results
 
 results, site, history_file, run_url = sys.argv[1:5]
-FLAVORS = ["asan", "tsan", "coverage", "web"]
-LABEL = {"asan": "ASan", "tsan": "TSan", "coverage": "coverage build", "web": "web UI"}
+FLAVORS = ["asan", "tsan", "coverage", "pi5", "web"]
+LABEL = {"asan": "ASan", "tsan": "TSan", "coverage": "coverage build", "pi5": "Pi 5",
+         "web": "web UI"}
 FPP_COMMIT = "https://github.com/FalconChristmas/fpp/commit/"
 README = "https://github.com/FalconChristmas/fpp-tests#writing-a-scenario"
 
