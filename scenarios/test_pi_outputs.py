@@ -13,6 +13,8 @@ import tempfile
 
 import pytest
 
+import hosttools
+
 
 def on_pi(model=""):
     try:
@@ -47,37 +49,31 @@ def test_an_invalid_nrf24_speed_is_refused(fppd):
 @contextlib.contextmanager
 def without_module(name):
     """/proc/modules without `name` (not even in other modules' "used by"
-    lists), and modprobe/rmmod as stubs that only log, for this mount
-    namespace only.
+    lists), for this mount namespace only.
 
     RGBMatrix's Init runs `rmmod snd_bcm2835` and `modprobe snd_dummy` when
     it finds snd_bcm2835 there -- on a device, taking its sound card away
-    and adding a dummy one the device's PipeWire then picks up -- so a
-    scenario hides the module, and makes sure no module command can reach
-    the kernel if anything still tries. Yields the stub's log path."""
-    kmod = os.path.realpath(shutil.which("rmmod") or "/usr/sbin/rmmod")
-    if not os.path.exists(kmod):
-        pytest.skip("no kmod here")
+    and adding a dummy one the device's PipeWire then picks up. run-local.sh
+    already stands in for the module commands (they only log), so nothing
+    reaches the kernel; hiding the module as well keeps the output on the
+    path a board without the sound driver takes. Yields a hosttools.CallLog
+    of the module commands run meanwhile."""
+    if not hosttools.stubbed("kmod"):
+        pytest.skip("needs run-local.sh's module-command stub (not --host-modules)")
     with open("/proc/modules") as f:
         text = f.read().replace(name, "x" * len(name))
     work = tempfile.mkdtemp(prefix="modules-")
-    fake, stub, log = (os.path.join(work, n) for n in ("modules", "kmod", "kmod.log"))
+    fake = os.path.join(work, "modules")
     with open(fake, "w") as f:
         f.write(text)
-    with open(stub, "w") as f:
-        f.write(f"#!/bin/sh\necho \"$(basename \"$0\") $*\" >> {log}\n")
-    os.chmod(stub, 0o755)
-    mounted = []
+    r = subprocess.run(["mount", "--bind", fake, "/proc/modules"], capture_output=True, text=True)
+    if r.returncode:
+        shutil.rmtree(work, ignore_errors=True)
+        pytest.skip("cannot bind over /proc/modules here: " + r.stderr.strip())
     try:
-        for src, dst in ((fake, "/proc/modules"), (stub, kmod)):
-            r = subprocess.run(["mount", "--bind", src, dst], capture_output=True, text=True)
-            if r.returncode:
-                pytest.skip(f"cannot bind over {dst} here: " + r.stderr.strip())
-            mounted.append(dst)
-        yield log
+        yield hosttools.kmod_calls()
     finally:
-        for dst in reversed(mounted):
-            subprocess.run(["umount", dst])
+        subprocess.run(["umount", "/proc/modules"])
         shutil.rmtree(work, ignore_errors=True)
 
 
@@ -114,7 +110,7 @@ def test_panels_on_more_outputs_than_the_pinout_has_are_refused(fppd):
         fppd.start()
         fppd.wait_for(lambda: "panels are assigned to" in fppd.log(), timeout=20,
                       what="the RGBMatrix output to be refused")
-        assert not os.path.exists(kmod_calls), open(kmod_calls).read()
+        assert not kmod_calls.calls(), kmod_calls.calls()
     assert "The regular-pi1 pinout supports 1 output, but panels are assigned to 2" \
         in fppd.log(), fppd.tail()
     fppd.get("/fppd/status")

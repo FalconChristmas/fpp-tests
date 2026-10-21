@@ -3,9 +3,9 @@ driver holds (strict pinmux, kernel 6.18), a uart pad left at its alt
 function, and a PWM pin whose PWM chip can't be set up.
 
 Device only: run with run-local.sh on a Raspberry Pi. run-local.sh passes the
-gpiochips through but runs the Pi's real pinctrl, which writes the pad
-registers directly, so these scenarios bind a stub that only logs over it:
-nothing here re-muxes a pad. /sys is read-only there, so fppd can neither
+gpiochips through and gives fppd a pinctrl stub that only logs (the real one
+writes the pad registers directly): nothing here re-muxes a pad. /sys is
+read-only there, so fppd can neither
 unbind a driver nor export a PWM channel. The pads a scenario reaches are
 read before it and put back after it (a released gpiod line stays muxed as a
 GPIO). The kernel's gpio consumer
@@ -16,13 +16,13 @@ Skipped where the pins aren't as described (each scenario checks first).
 import glob
 import os
 import re
-import shutil
 import subprocess
-import tempfile
 import time
 import urllib.error
 
 import pytest
+
+import hosttools
 
 
 def on_pi():
@@ -39,56 +39,23 @@ pytestmark = pytest.mark.skipif(not on_pi(), reason="Raspberry Pi header pins")
 HEADER_GPIOS = (2, 3, 12, 13, 15, 18, 19, 27)  # every pad a scenario here can reach
 
 
-def pad_states():
-    out = {}
-    for g in HEADER_GPIOS:
-        r = subprocess.run(["pinctrl", "get", str(g)], capture_output=True, text=True)
-        out[g] = r.stdout.split("//")[0].split(":", 1)[-1].strip() if r.returncode == 0 else None
-    return out
-
-
 @pytest.fixture
 def pads():
-    """The header pads as they were before the scenario, put back after it.
-    A gpiod request moves a pad to the gpio function and its release leaves
-    it there, and the pinctrl stub below swallows fppd's own restore, so
-    without this a scenario would leave the device's pins changed. Ask for it
-    first, so it runs after fppd has stopped and the stub is gone."""
-    if not shutil.which("pinctrl"):
-        pytest.skip("no pinctrl here")
-    before = pad_states()
-    yield
-    after = pad_states()
-    for g, was in before.items():
-        if was and after.get(g) != was:
-            # "no    pd | --" or "op dh pn | hi": function, then level, then pull
-            words = [w for w in was.split("|")[0].split() if w != "--"]
-            subprocess.run(["pinctrl", "set", str(g), *words])
-    assert pad_states() == before, (before, pad_states())
+    """The header pads as they were before the scenario, put back after it
+    (hosttools.pads_kept). Ask for it first, so it runs after fppd has
+    stopped."""
+    with hosttools.pads_kept(HEADER_GPIOS):
+        yield
 
 
 @pytest.fixture
 def pinctrl():
-    """pinctrl, for this mount namespace only, as a stub that logs its
-    arguments; yields the log path. Ask for it before `fppd`, so it outlasts
-    fppd's shutdown, where releasePin() runs pinctrl too."""
-    real = shutil.which("pinctrl") or "/usr/bin/pinctrl"
-    if not os.path.exists(real):
-        pytest.skip("no pinctrl here")
-    work = tempfile.mkdtemp(prefix="pinctrl-")
-    stub, log = os.path.join(work, "pinctrl"), os.path.join(work, "pinctrl.log")
-    with open(stub, "w") as f:
-        f.write(f"#!/bin/sh\necho \"$*\" >> {log}\n")
-    os.chmod(stub, 0o755)
-    r = subprocess.run(["mount", "--bind", stub, os.path.realpath(real)], capture_output=True, text=True)
-    if r.returncode:
-        shutil.rmtree(work, ignore_errors=True)
-        pytest.skip("cannot stub pinctrl here: " + r.stderr.strip())
-    try:
-        yield log
-    finally:
-        subprocess.run(["umount", os.path.realpath(real)])
-        shutil.rmtree(work, ignore_errors=True)
+    """What fppd asks run-local.sh's pinctrl stub to do during the scenario
+    (a hosttools.CallLog). Skips where fppd has the real pinctrl."""
+    if not hosttools.stubbed("pinctrl"):
+        pytest.skip("needs run-local.sh's pinctrl stub (not --host-pinctrl)")
+    hosttools.real("pinctrl")
+    return hosttools.pinctrl_calls()
 
 
 @pytest.fixture
@@ -264,4 +231,4 @@ def test_a_pwm_output_whose_pwm_cannot_be_set_up_starts(pads, pinctrl, debugfs, 
     time.sleep(3)
     fppd.get("/fppd/status")
     fppd.command("Test Stop")
-    assert os.path.exists(pinctrl), "the output never muxed its pin for PWM"
+    assert pinctrl.calls(), "the output never muxed its pin for PWM"

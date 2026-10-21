@@ -80,10 +80,25 @@ def _stall_pipewire(at_s, stall_ms):
     board, and the card underruns."""
     def run(t0):
         time.sleep(max(0, t0 + at_s - time.monotonic()))
-        pid = int(subprocess.run(["pgrep", "-x", "-o", "pipewire"], capture_output=True, text=True).stdout.split()[0])
-        os.kill(pid, signal.SIGSTOP)
-        time.sleep(stall_ms / 1000)
-        os.kill(pid, signal.SIGCONT)
+        helper = os.environ.get("FPP_TESTS_STALL_DIR")
+        if helper:
+            # run-local.sh's PID namespace hides the device's PipeWire: its
+            # helper outside does the stall (scripts/pipewire-stall.py)
+            done = os.path.join(helper, "done")
+            seen = os.path.getsize(done) if os.path.exists(done) else 0
+            with open(os.path.join(helper, "fifo"), "w") as f:
+                f.write(f"{stall_ms}\n")
+            deadline = time.monotonic() + stall_ms / 1000 + 10
+            while (not os.path.exists(done) or os.path.getsize(done) == seen) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            with open(done) as f:
+                f.seek(seen)
+                pid = f.read().split()[0]
+        else:
+            pid = int(subprocess.run(["pgrep", "-x", "-o", "pipewire"], capture_output=True, text=True).stdout.split()[0])
+            os.kill(pid, signal.SIGSTOP)
+            time.sleep(stall_ms / 1000)
+            os.kill(pid, signal.SIGCONT)
         print(f"stalled pipewire ({pid}) for {stall_ms} ms at {at_s} s")
     return run
 
