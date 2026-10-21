@@ -2,7 +2,7 @@
 # Build fpp at a given ref, serve its web UI from Docker, and run the
 # Playwright suite in web/ against it from this machine.
 #
-#   ./run-web.sh [--fpp DIR] [--ref REF] [--flavor asan|tsan|debug|optimized] [--port N] [playwright args...]
+#   ./run-web.sh [--fpp DIR] [--ref REF] [--flavor asan|tsan|debug|optimized] [--nopch] [--port N] [playwright args...]
 #
 # The options are run.sh's; --port is where the UI is published on 127.0.0.1
 # (default 8080). Anything else goes to `playwright test`, e.g.
@@ -33,6 +33,7 @@ while [ $# -gt 0 ]; do
     --ref) REF="$2"; shift 2 ;;
     --flavor) FLAVOR="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
+    --nopch) export FPP_TESTS_NOPCH=require; shift ;;
     --serve) SERVE=1; shift ;;
     *) break ;;
     esac

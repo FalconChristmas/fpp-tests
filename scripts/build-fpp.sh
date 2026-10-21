@@ -15,10 +15,18 @@ flock -s 8
 # once, and each build sizes -j to the whole VM's memory.
 exec 9> "$(dirname "$TREE")/.build.lock"
 flock 9
+# FPP_TESTS_NOPCH (run.sh --nopch): "require" makes the build without the
+# precompiled header the only one -- if a file doesn't include what it uses,
+# the build fails. Anything else falls back to a PCH build when that one fails
+# (see below), which old commits need.
+NOPCH="${FPP_TESTS_NOPCH:-fallback}"
 # A tree built in an older image is built again: its makefiles leave out what
 # that image lacked (gst-rtsp-server, say), and fpp's own feature stamp then
-# rebuilds what the new one adds.  Otherwise make finds nothing to do.
-if [ -f .fpp-tests-built ] && [ "$(cat .fpp-tests-built)" = "${FPP_TESTS_IMAGE:-}" ]; then
+# rebuilds what the new one adds.  Otherwise make finds nothing to do. So is a
+# tree that fell back to the PCH when NOPCH is now required: its objects were
+# never proven to build without it.
+if [ -f .fpp-tests-built ] && [ "$(cat .fpp-tests-built)" = "${FPP_TESTS_IMAGE:-}" ] &&
+    { [ "$NOPCH" != require ] || [ "$(cat .fpp-tests-pch 2>/dev/null)" = nopch ]; }; then
     exit 0
 fi
 # Build-only fixes for old commits that don't compile under these flags. Each
@@ -68,17 +76,31 @@ MEM_JOBS=$(awk '/^MemTotal:/ { j = int($2 / 1200000); print (j < 1 ? 1 : j) }' /
 # DISTRIBUTED_COMPILE=1 turns off the precompiled header, which is built with
 # the release flags whatever the target; it also proves every file includes
 # what it uses. Older commits are not always clean that way (a header the PCH
-# happened to supply), so on failure fall back to a PCH build of the rest --
-# PCH and NOPCH objects link together fine.
+# happened to supply), so unless NOPCH is required, a failure falls back to a
+# PCH build of the rest -- PCH and NOPCH objects link together fine. That
+# fallback is what lets a red check build an old parent; it also hides a NOPCH
+# regression, which is why CI on fpp master requires NOPCH.
+PCHMODE=nopch
 if ! eval make -j"$JOBS" DISTRIBUTED_COMPILE=1 $TARGET > "$TREE/build.log" 2>&1; then
-    echo "NOPCH build failed, retrying with the precompiled header:" >&2
+    if [ "$NOPCH" = require ]; then
+        # Whatever this make relinked is no longer the tree the stamp vouches for.
+        rm -f .fpp-tests-built .fpp-tests-pch
+        grep -E "error|Error" "$TREE/build.log" | tail -40
+        echo "NOPCH build failed (FPP_TESTS_NOPCH=require, so no fallback to the" \
+            "precompiled header); full log in $TREE/build.log" >&2
+        exit 1
+    fi
+    echo "NOPCH build failed, retrying with the precompiled header (pass --nopch to" \
+        "fail here instead):" >&2
     grep -E "error:" "$TREE/build.log" | head -5 >&2
+    PCHMODE=pch-fallback
     if ! eval make -j"$JOBS" $TARGET >> "$TREE/build.log" 2>&1; then
         grep -E "error|Error" "$TREE/build.log" | tail -40
         echo "build failed; full log in $TREE/build.log" >&2
         exit 1
     fi
 fi
+printf '%s' "$PCHMODE" > .fpp-tests-pch
 printf '%s' "${FPP_TESTS_IMAGE:-}" > .fpp-tests-built
 # A tree is built once and never incrementally: one built in an older image is
 # rebuilt from ccache, which holds every object. Dropping them takes a tree

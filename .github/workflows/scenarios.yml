@@ -89,8 +89,11 @@ jobs:
         env:
           FPP_TESTS_CCACHE: .ccache
           PYTEST_ARGS: ${{ github.event.inputs.pytest_args }}
+          # A NOPCH build failure fails the run, except for an fpp ref asked
+          # for by hand, which may be an old commit that needs the PCH.
+          NOPCH: ${{ (github.event_name != 'workflow_dispatch' || github.event.inputs.fpp_ref == 'master') && '--nopch' || '' }}
         # PYTEST_ARGS is left unquoted on purpose, to split into arguments.
-        run: ./run.sh --fpp fpp --ref HEAD --flavor "$FLAVOR" -v -rA $PYTEST_ARGS
+        run: ./run.sh --fpp fpp --ref HEAD --flavor "$FLAVOR" $NOPCH -v -rA $PYTEST_ARGS
 
       # The container writes the artifacts as root, some of them unreadable
       # to the runner user that uploads them.
@@ -189,8 +192,9 @@ jobs:
         env:
           FPP_TESTS_CCACHE: .ccache
           PLAYWRIGHT_ARGS: ${{ github.event.inputs.playwright_args }}
+          NOPCH: ${{ (github.event_name != 'workflow_dispatch' || github.event.inputs.fpp_ref == 'master') && '--nopch' || '' }}
         # PLAYWRIGHT_ARGS is left unquoted on purpose, to split into arguments.
-        run: ./run-web.sh --fpp fpp --ref HEAD --flavor "$FLAVOR" $PLAYWRIGHT_ARGS
+        run: ./run-web.sh --fpp fpp --ref HEAD --flavor "$FLAVOR" $NOPCH $PLAYWRIGHT_ARGS
 
       # meta.json's flavor is the dashboard's column for this suite.
       - name: Make the artifacts readable

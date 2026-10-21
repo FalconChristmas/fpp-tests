@@ -190,6 +190,13 @@ from. One is applied to an exported tree only when it applies cleanly, so an old
 can still be built and tested. Add one when a historical commit fails to compile under
 these flags (a missing include the precompiled header used to supply, for instance).
 
+fpp is built without its precompiled header (`DISTRIBUTED_COMPILE=1`), which proves
+every file includes what it uses. When that build fails, the runners fall back to a
+build with the header, so an old commit's red check still runs. `--nopch` (run.sh,
+run-web.sh, verify-fix.sh) turns the fallback off: the build failing is then the
+failure, which is how a fix for a missing include is shown red. CI uses it whenever it
+tests fpp master.
+
 ## Layout
 
 | Path | What |

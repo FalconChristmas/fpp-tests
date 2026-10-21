@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build fpp at a given ref and run the scenario suite against it, in Docker.
 #
-#   ./run.sh [--fpp DIR] [--ref REF] [--flavor asan|tsan|debug|optimized|coverage] [pytest args...]
+#   ./run.sh [--fpp DIR] [--ref REF] [--flavor asan|tsan|debug|optimized|coverage] [--nopch] [pytest args...]
 #
 # With no pytest args it runs every scenario; otherwise pass paths or node ids
 # as usual, e.g. scenarios/test_playlists.py -k Restart -v
@@ -10,6 +10,9 @@
 # --ref     any commit-ish in that checkout (default HEAD)
 # --flavor  make target to build (default asan); coverage also writes
 #           artifacts/coverage/ (scripts/coverage-report.sh)
+# --nopch   fail if fpp doesn't build without its precompiled header, rather
+#           than falling back to it (which old commits need); CI uses it on
+#           fpp master
 #
 # The results, one entry per test, go to artifacts/junit.xml.
 #
@@ -26,6 +29,7 @@ while [ $# -gt 0 ]; do
     --fpp) FPP="$2"; shift 2 ;;
     --ref) REF="$2"; shift 2 ;;
     --flavor) FLAVOR="$2"; shift 2 ;;
+    --nopch) export FPP_TESTS_NOPCH=require; shift ;;
     *) break ;;
     esac
 done

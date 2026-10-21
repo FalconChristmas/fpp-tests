@@ -24,7 +24,7 @@ fi
 # fppd's exit path visits every descriptor up to the open-file limit, and
 # some Docker setups (WSL's) default it to 2^30: under TSan that takes longer
 # than any scenario waits for fppd to exit.
-DOCKER="docker run --rm --ulimit nofile=1048576:1048576 -v fpp-tests-work:/work -v $CCACHE_MOUNT -e FPP_TESTS_IMAGE=$IMAGE_ID"
+DOCKER="docker run --rm --ulimit nofile=1048576:1048576 -v fpp-tests-work:/work -v $CCACHE_MOUNT -e FPP_TESTS_IMAGE=$IMAGE_ID -e FPP_TESTS_NOPCH"
 
 # Each built tree is ~190MB (build-fpp.sh drops the objects); keep the most
 # recently used FPP_TESTS_KEEP_TREES. A run holds a shared lock on its tree
