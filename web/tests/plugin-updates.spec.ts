@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
 import {
-  PluginRepo, MEDIA, sh, exists, installPlugin, uninstallPlugin, clonePlugin, runUpdateCheck, lineCount,
+  PluginRepo, MEDIA, sh, exists, writeFile, installPlugin, uninstallPlugin, clonePlugin, runUpdateCheck, lineCount,
   linesAfter, routePluginList, clearPluginSourceSettings,
 } from './plugin-backfill';
 
@@ -74,6 +74,35 @@ test('the background check finds an update, the header shows it, and an update c
   await page.goto('/index.php');
   await expect(page.locator('#navbarPluginUpdateAvailIcon')).toBeAttached();
   await expect(icon).toBeHidden();
+});
+
+test("the background check's verdict is kept when it starts in the same second as an install's", async ({ request }) => {
+  // Regression: 3b454c5d9.  A sweep drops its verdict when a user action
+  // (an install, an update, a hand check) recorded one after its fetch began.
+  // Both times were whole seconds and "after" was >=, so an install recorded
+  // in the same second the sweep's fetch started -- an install then Update
+  // All, at once -- threw away the sweep's "update available", and Update
+  // All found nothing to update.  Each pass here records an install's
+  // verdict at the start of a second, as InstallPluginFromInfo() does, and
+  // starts the sweep straight after it, so they share a second.
+  const repo = newRepo('fpp-tests-upd-samesec');
+  repo.init();
+  clonePlugin(repo);
+  repo.commit('v2', { 'v.txt': '2\n' });
+  const record = `
+$f = '${MEDIA}/cache/plugin_updates.json';
+$s = file_exists($f) ? json_decode(file_get_contents($f), true) : null;
+if (!is_array($s) || !isset($s['plugins'])) $s = array('version' => 1, 'plugins' => array());
+while (fmod(microtime(true), 1) > 0.05) usleep(2000);
+$t = microtime(true);
+$s['plugins']['${repo.name}'] = array('updates' => false, 'checkedAt' => (int) $t, 'recordedAt' => $t, 'error' => '', 'source' => 'install');
+file_put_contents($f, json_encode($s));`;
+  writeFile('/tmp/fpp-tests-upd-record.php', `<?php${record}\n`);
+  for (let i = 0; i < 5; i++) {
+    sh('php /tmp/fpp-tests-upd-record.php && php /opt/fpp/scripts/plugin_update_check.php --force > /dev/null 2>&1 || true');
+    const st = await updateStatus(request);
+    expect(st.plugins, `pass ${i + 1}: ${JSON.stringify(st)}`).toContain(repo.name);
+  }
 });
 
 test('the background check logs a lasting failure once, and one summary line per pass', async ({ request }) => {
