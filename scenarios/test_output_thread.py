@@ -156,3 +156,30 @@ def test_a_start_during_the_last_pass_before_idling(fppd):
             assert effect_frames_since(rx, frames, time.monotonic() - 1.5), \
                 f"effect started {offset} s after test mode stopped: nothing on the wire"
             fppd.command("Effect Stop", "fx")
+
+
+def test_fppd_stops_without_waiting_out_the_idle_window(fppd):
+    """fppd stopped while the output thread is in its 2.5 s idle wait exits
+    promptly, not when that wait runs out.
+
+    Test mode is started and stopped, so the thread is running and then
+    idle; SIGTERM lands 0.3 s into the idle wait.
+
+    Regression: 4ee74b20e. StopChannelOutputThread() cleared RunThread and
+    polled for the thread to exit, but nothing woke the idle wait: every
+    shutdown (and every restart from the UI) sat out the rest of it, about
+    2.2 s here.
+    """
+    fppd.start()
+    fppd.command("Test Start", "100", "RGB Cycle", "1-30", "R-G-B")
+    time.sleep(1)
+    fppd.command("Test Stop")
+    time.sleep(0.3)
+    started = time.monotonic()
+    rc = fppd.stop()
+    took = time.monotonic() - started
+    fppd.exit_expected = True
+    assert rc == 0, f"fppd exited with {rc} on SIGTERM\n{fppd.tail()}"
+    reports = fppd.sanitizer_reports()
+    assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
+    assert took < 1.0, f"fppd took {took:.2f} s to exit on SIGTERM\n{fppd.tail()}"
