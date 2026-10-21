@@ -70,3 +70,29 @@ test('each ESPixelStick generation is asked the way it can answer', async ({ pag
   await expect(row4).toContainText('Idle');
   await expect(row4).not.toContainText('undefined');
 });
+
+test('a stick whose WebSocket the browser refuses does not empty the table', async ({ page }) => {
+  // Regression: 8b0cde7dd.  The sticks' sockets are opened before the rows
+  // are loaded into the table, and new WebSocket() was not guarded: where the
+  // browser refused one (Firefox throws when CSP blocks the URL; any browser
+  // throws on an address it cannot parse) the throw unwound the render and the
+  // whole system table stayed empty.  7a6786e8a had moved the probes out of
+  // the row loop for this, which was not enough.  Here every stick socket
+  // throws.
+  await page.addInitScript(() => {
+    const Real = window.WebSocket;
+    const Fake: any = function (url: string, protocols?: string | string[]) {
+      if (/\/ws$/.test(String(url))) {
+        throw new DOMException('The operation is insecure.', 'SecurityError');
+      }
+      return new Real(url, protocols);
+    };
+    Fake.prototype = Real.prototype;
+    for (const k of ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED']) Fake[k] = (Real as any)[k];
+    (window as any).WebSocket = Fake;
+  });
+  await openMultisync(page, [], []);
+  await expect(page.locator('#fppSystems tr.systemRow')).toHaveCount(3, { timeout: 15_000 });
+  await expect(page.locator('tr.systemRow', { hasText: 'fpptests-esps3' })).toBeVisible();
+  await expect(page.locator('tr.systemRow', { hasText: 'FPPTESTLOCAL' })).toBeVisible();
+});
