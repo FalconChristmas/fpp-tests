@@ -156,6 +156,19 @@ FORMULAS = [
     # Value can be another variable.
     ("Count", "greater than", "count", "yes"),
     ("count", "equal to", "Five", "yes"),
+    # Words joined by '-' or '/' that don't compile are the text.
+    ("Show", "equal to", "on-air", "yes"),
+    ("Rating", "equal to", "5-star-review", "yes"),
+    # A formula that doesn't compile (nosuch is no variable) is not found, on
+    # either side, rather than "" (which "10" is greater than) or its text
+    # (which "10" is less than): with "=", bare, as a template, or next to a
+    # real variable.
+    ("Count", "greater than", "=nosuch-1", "no"),
+    ("=nosuch+1", "equal to", "", "no"),
+    ("Count", "greater than", "nosuch-1", "no"),
+    ("Count", "less than", "nosuch-1", "no"),
+    ("Count", "less than", "Count-x", "no"),
+    ("Count", "greater than", "%%nosuch%%", "no"),
 ]
 
 
@@ -163,14 +176,26 @@ def test_formulas_and_variables_in_name_and_value(fppd):
     """Check's Name and Value read a variable when they name one exactly,
     compute a formula when they look like one ("=" or "%%name%%" optional),
     and are plain text otherwise; variable names with '-' and '/' in them
-    stay names, also inside a formula."""
+    stay names, also inside a formula. Words joined by '-' or '/' that don't
+    compile are plain text; any other formula that doesn't compile reads as
+    not found: false, and true with NOT.
+
+    Regression: 7d1e1729d. A formula that failed to compile evaluated to
+    "", so "Count greater than =nosuch-1" held and "Show equal to on-air"
+    didn't."""
     fppd.start()
-    set_vars(fppd, Count="10", count="5", Five="5", Word="ON", **{"Score-Total": "7", "a/b": "3"})
+    set_vars(fppd, Count="10", count="5", Five="5", Word="ON", Show="on-air",
+             Rating="5-star-review", **{"Score-Total": "7", "a/b": "3"})
     wrong = {}
     for name, cmp_, value, want in FORMULAS:
         got = check(fppd, leaf(name, cmp_, value))
         if got != want:
             wrong[(name, cmp_, value)] = got
+    for name, cmp_, value in (("Count", "greater than", "=nosuch-1"), ("=nosuch+1", "equal to", ""),
+                              ("Count", "less than", "nosuch-1"), ("Count", "greater than", "%%nosuch%%")):
+        got = check(fppd, leaf(name, cmp_, value, negate=True))
+        if got != "yes":
+            wrong[(name, cmp_, value, "NOT")] = got
     assert not wrong, f"wrong answers: {wrong}"
 
 
@@ -262,6 +287,11 @@ def test_condition_preview(fppd):
     r = preview(fppd, source="GPIO Pin", name="P9-12", comparator="equal to", value="1",
                 **{"not": "true"})
     assert (r["found"], r["rhsValue"], r["result"]) == (False, "1", True), r
+    # An "=" Value that fails to compile: the result is the NOT, as If has it.
+    r = preview(fppd, source="Expression", name="Count", comparator="greater than", value="=nosuch-1")
+    assert r["result"] is False, r
+    r = preview(fppd, source="Expression", name="=nosuch+1")
+    assert r["found"] is False, r
 
 
 VALIDATE = [
@@ -271,6 +301,8 @@ VALIDATE = [
     ("=sqrt(Count)", True, True, "formula"),
     ("Count+(", True, False, "formula"),
     ("ON", True, True, "literal"),
+    ("on-air", True, True, "literal"),
+    ("nosuch-1", True, False, "formula"),
     # Set Variable's Expression field.
     ("=1+2", False, True, "formula"),
     ("=1+", False, False, "formula"),
