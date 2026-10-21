@@ -137,7 +137,7 @@ def test_a_source_linked_late_still_paces_ahead_of_its_time(fppd, audio):
     that links late; on a Pi the graph alone takes ~100 ms): its packets still
     arrive about 3 ms ahead of their own RTP time, paced one per ms.
 
-    Regression: b47c0450f. The RTP timeline was anchored when the pipeline was
+    Regression: 0e60966c4. The RTP timeline was anchored when the pipeline was
     built, so every timestamp was early by however long the first audio took
     to arrive. The lead servo answered by moving transmission earlier until
     each buffer was past its render time on arrival: udpsink then sent them as
