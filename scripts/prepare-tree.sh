@@ -24,7 +24,14 @@ fi
 # fppd's exit path visits every descriptor up to the open-file limit, and
 # some Docker setups (WSL's) default it to 2^30: under TSan that takes longer
 # than any scenario waits for fppd to exit.
-DOCKER="docker run --rm --ulimit nofile=1048576:1048576 -v fpp-tests-work:/work -v $CCACHE_MOUNT -e FPP_TESTS_IMAGE=$IMAGE_ID -e FPP_TESTS_NOPCH"
+# FPP's own upload endpoints resolve to loopback in every container, so no
+# run reaches them: the statistics server (setup's US answer turns
+# statsPublish on, and fppd publishes two minutes after the opt-in) and the
+# crash server (fppd's crash handler and the Diagnostic Report's Send).
+# Something that would have contacted one finds nothing listening.
+# web/tests/no-upload-egress.spec.ts checks it.
+NO_UPLOAD_HOSTS="--add-host fppstats.falconchristmas.com:127.0.0.1 --add-host crashes.falconplayer.com:127.0.0.1"
+DOCKER="docker run --rm --ulimit nofile=1048576:1048576 -v fpp-tests-work:/work -v $CCACHE_MOUNT -e FPP_TESTS_IMAGE=$IMAGE_ID -e FPP_TESTS_NOPCH $NO_UPLOAD_HOSTS"
 
 # Each built tree is ~190MB (build-fpp.sh drops the objects); keep the most
 # recently used FPP_TESTS_KEEP_TREES. A run holds a shared lock on its tree
