@@ -80,3 +80,15 @@ test('a cape that hides GPIOFan gets no fan line, whatever GPIOFan holds', async
   runBootActions();
   expect(lines()).toContain(FAN);
 });
+
+// Regression: b2185d34f ("write the GPIO fan line even when config.txt
+// mentions the overlay elsewhere"). The line was added only when the text
+// appeared nowhere in config.txt, but only line-anchored ones were rewritten:
+// an indented copy or a comment naming the overlay left GPIOFan on with no line.
+test('GPIOFan on writes its line beside other mentions of the overlay', async ({ request }) => {
+  putFile(CONFIG, `# fpp-tests: see dtoverlay=gpio-fan in the overlay README\ndtparam=audio=on\n${INDENTED}\n`);
+  setSettingInFile('GPIOFan', undefined);
+  expect((await request.put('/api/settings/GPIOFan?skipBackup=1', { data: '1' })).ok()).toBe(true);
+  expect(lines(), 'no fan line was written').toContain(FAN);
+  expect(lines()).toContain(INDENTED);
+});
