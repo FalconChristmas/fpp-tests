@@ -50,8 +50,9 @@ jobs:
     if: github.event.inputs.suites != 'web'
     runs-on: ubuntu-latest
     # TSan runs fppd several times slower than ASan, and the coverage build
-    # is unoptimized.
-    timeout-minutes: 150
+    # is unoptimized. With ~1450 scenarios, ASan and TSan both ran past 150
+    # minutes on a hosted runner; 360 is GitHub's ceiling for one job.
+    timeout-minutes: 330
     strategy:
       fail-fast: false
       matrix:
