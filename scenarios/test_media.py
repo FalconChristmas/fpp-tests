@@ -296,14 +296,14 @@ def test_offset_does_not_carry_across_songs(fppd, audio):
 
 def test_sequence_and_media_pause_resume_and_stop_together(fppd, audio):
     """A playlist entry with both a sequence and a song, paused, resumed and
-    stopped: the sound and the lights stop and start together, status
-    carries the elapsed time on from where it paused, and Stop Now silences
-    and blanks both and goes idle.
+    stopped: the sound and the lights stop and start together, status holds
+    the elapsed time where it paused and carries it on from there, and Stop
+    Now silences and blanks both and goes idle.
 
-    (Status reads 0 ms elapsed while a song is paused: Pause closes the media
-    output, and PlaylistEntryMedia::GetElapsedMS() answers 0 without one
-    before it reaches its paused case. Not asserted here until that is
-    fixed.)"""
+    Regression: bf1ed77fe. Status read 0 ms elapsed while a song was
+    paused: Pause closes the media output, and
+    PlaylistEntryMedia::GetElapsedMS() answered 0 without one before it
+    reached its paused case."""
     secs = 10
     frames = unique_frames(secs * 20, CHANNELS)
     lookup = {f: i for i, f in enumerate(frames)}
@@ -330,7 +330,11 @@ def test_sequence_and_media_pause_resume_and_stop_together(fppd, audio):
         fppd.wait_for(lambda: status(fppd).get("status_name") == "paused", what="paused")
         time.sleep(0.5)
         frames_while_paused = rx.count()
+        paused_ms = status(fppd)["milliseconds_elapsed"]
+        assert held <= paused_ms <= held + 1000, \
+            f"elapsed {paused_ms} ms while paused, {held} ms just before pausing"
         time.sleep(1.5)
+        assert status(fppd)["milliseconds_elapsed"] == paused_ms, "elapsed time moved while paused"
         assert rx.count() == frames_while_paused, "frames kept coming while paused"
         assert not any(rx.last()), "pausing did not blank the output"
         last_content = [lookup[d] for t, d in rx.snapshot() if t < paused_at and d in lookup][-1]
