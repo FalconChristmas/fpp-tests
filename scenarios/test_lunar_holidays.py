@@ -15,14 +15,6 @@ The Global locale's Passover asks for Nisan 14, but the table holds Nisan
 15, the first day of Passover (the Seder is the evening before). That is the
 date people mean by Passover, so 15 Nisan is what is checked.
 
-Left out of the assertions, as fpp master 69a734449 gets them wrong: Diwali
-2034 and 2035 are in the table as November 12 and November 1, a day after
-the new moon (November 11, 06:46 IST and October 31, 08:29 IST); Diwali is
-November 10, 2034 and October 30, 2035. And once this year's date has
-passed, an entry on any of these holidays runs on next year's month and day
-in this year (the day after Diwali 2030, it is scheduled on November 14,
-2030, 2031's Diwali). Both are in ~/PROBLEMS.md.
-
 Years before 2030 are not checked: fppd holds its scheduler back while its
 clock reads earlier than its build, so faked dates must stay in the future
 of whatever fpp commit the nightly builds (as test_holidays.py's Islamic
@@ -180,6 +172,45 @@ def test_diwali_falls_on_the_new_moon_or_the_day_before(fppd, year):
     day = next(iter(days))
     assert moon - datetime.timedelta(days=1) <= day <= moon, \
         f"Diwali {year}'s new moon is {moon} in India; scheduled on {day}"
+
+
+PASSED = [
+    # (holiday, a day just after this year's, next year's date this year)
+    ("Diwali", datetime.date(2030, 10, 28), datetime.date(2030, 11, 14)),
+    ("RoshHashanah", datetime.date(2034, 9, 16), datetime.date(2034, 10, 4)),
+    ("Passover", datetime.date(2034, 4, 6), datetime.date(2034, 4, 24)),
+]
+
+
+@pytest.mark.parametrize("name, now, wrong", PASSED, ids=[n for n, _, _ in PASSED])
+def test_a_holiday_that_has_passed_does_not_run_again_this_year(fppd, name, now, wrong):
+    """Once this year's date has passed, an entry on the holiday runs on no
+    other day this year.
+
+    Regression: a88c87545. The date resolved at load rolled forward to
+    next year's, without its year, so the entry ran on next year's month and
+    day this year: the day after Diwali 2030 it was scheduled on November
+    14, 2030 (2031's Diwali)."""
+    days = scheduled_on(fppd, name, now)
+    assert wrong not in days, f"{name} scheduled on {wrong}, next year's date"
+    assert not [d for d in days if d.year == now.year], \
+        f"{name} has passed for {now.year}; scheduled on {sorted(days)[:5]}"
+
+
+def test_a_range_from_a_holiday_that_has_passed_keeps_running(fppd):
+    """A range that began on this year's Diwali runs every day after it up to
+    its end, Christmas.
+
+    Regression: a88c87545. The day after Diwali 2030 (October 26) the
+    range's start rolled forward to November 14, 2031's Diwali, so the show
+    went dark from October 27 to November 13."""
+    show(fppd)
+    fppd.write("config/schedule.json", [entry(7, "19:00:00", "20:00:00",
+                                              startDate="Diwali", endDate="Christmas")])
+    fppd.start(fake_time="2030-10-28 12:00:00", tz=ZONE)
+    days = scheduled_days(fppd)
+    want = {datetime.date(2030, 10, 28) + datetime.timedelta(days=d) for d in range(9)}
+    assert want <= days, f"dark on {sorted(want - days)}; scheduled on {sorted(days)[:5]}"
 
 
 @pytest.mark.parametrize("name, word", [("RoshHashanah", "Hebrew"), ("Passover", "Hebrew"),
