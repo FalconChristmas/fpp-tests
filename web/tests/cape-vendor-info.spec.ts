@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import type { APIRequestContext } from '@playwright/test';
+import type { APIRequestContext, Page } from '@playwright/test';
 import { container, inPlayer } from './container';
 
 // What the pages show about the cape comes from media/tmp/cape-info.json,
@@ -157,4 +157,317 @@ test('the cape/firmware mismatch is read from its own lines, whatever comes befo
   expect(await parse(out)).toEqual({ cape: 'Cape: TestCape-A   Version: 1.0', firmware: 'Firmware: TestCape-B   Version: 2.0' });
   expect(await parse('Resolving vendor.invalid...\nCape does not match new firmware.\n')).toBeNull();
   expect(await parse('Upgrade complete.\n')).toBeNull();
+});
+
+// A cape's vendor block -- name, URL, landing page, phone, e-mail, forum, logo
+// and the header logo -- comes from its EEPROM, which anyone can write (an
+// unsigned EEPROM, or an uploaded cape-eeprom.bin).  fppcapedetect copies it
+// into media/tmp/cape-info.json and config.php puts that in $settings for
+// every page.  Fixed in fpp 9d00d30ad ("Cape vendor URLs: build them in one
+// place and escape what the EEPROM says"):
+//
+//   - menu.inc echoed the header logo URL into a JavaScript string literal on
+//     every page, and the landing page into an href, unescaped; Cape Info
+//     printed every vendor field as markup.  A crafted EEPROM ran script on
+//     every page of the UI.
+//   - a javascript: or data: URL went straight into an href or src.
+//   - the two pages built the vendor URLs separately and had drifted: Cape
+//     Info's link carried the serial on SendVendorSerial alone, so a user who
+//     denied logos (FetchVendorLogos 0) and clicked the vendor link sent it.
+//     Now CapeVendorUrls() builds both: nothing unless FetchVendorLogos is 1,
+//     sn/id/cs (urlencoded) on both only when SendVendorSerial is 1 too, and
+//     hideExternalURLs blanks the link.
+//
+// As above, cape-info.json is written in the player.  The settings file and
+// cape-info.json are put back after each test (the suite runs one test at a
+// time), so no other test sees a cape.
+//
+// The page's CSP is bypassed so the browser can fetch the logo (answered here
+// by a route) and the test can see the URL it asks the vendor for.  On a
+// player the vendor's host is in img-src anyway: ManageApacheContentPolicy.sh
+// adds it from cape-info.json, but this CSP was generated before the test
+// wrote the file.  script-src allows inline script either way, so bypassing it
+// changes nothing about whether a payload runs.
+//
+// Not checked: 9d00d30ad also closes the e-mail row's missing </a>.  The
+// parser closes an open <a> at the end of its table cell, so the page that
+// results is the same either way and there is nothing a browser can tell.
+//
+// The capes here have no description: Cape Info still prints a cape's
+// description as markup when the cape names a vendor, on master as well
+// (PROBLEMS.md #22).
+
+const SETTINGS = '/home/fpp/media/settings';
+const SAVED = '/tmp/fpp-tests-cape-vendor-settings.saved';
+const VENDOR = 'https://vendor.fpp-tests.invalid';
+// Script that marks, by name, the field it came from if it ever runs.
+const run = (field: string) => `window.__fppTestsCape_${field}=1`;
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+
+function writeCapeInfo(info: object) {
+  inPlayer('sh', '-c', `mkdir -p "$(dirname "$1")" && printf '%s' "$2" > "$1" && chmod 644 "$1"`,
+    'sh', CAPE_INFO, JSON.stringify(info));
+}
+
+async function privacy(request: APIRequestContext, logos: 0 | 1, serial: 0 | 1) {
+  for (const [name, value] of [['FetchVendorLogos', logos], ['SendVendorSerial', serial]] as const) {
+    const r = await request.put(`/api/settings/${name}?skipApply=1`, { data: String(value) });
+    expect(r.ok(), `${name}: ${await r.text()}`).toBe(true);
+  }
+}
+
+// Answers every request to the vendor with a 1x1 PNG, and records them.
+async function vendorHost(page: Page) {
+  const asked: string[] = [];
+  await page.route((url) => url.origin === VENDOR, (route) => {
+    asked.push(route.request().url());
+    return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+  });
+  return asked;
+}
+
+// Opens a page and lets it finish loading; what the vendor is asked from here
+// on goes into a fresh `asked`.
+async function load(page: Page, path: string, asked: string[] = []) {
+  asked.length = 0;
+  await page.goto(path);
+  await page.waitForLoadState('load');
+}
+
+// The header loads its logo after the page's load event and adds it to the
+// link once it has loaded.
+async function expectHeaderLogo(page: Page, asked: string[], url: string) {
+  await expect.poll(() => asked, { message: 'the header logo was not fetched from the vendor', timeout: 15_000 })
+    .toContain(new URL(url).href);
+  await expect(page.locator('#capeVendorLink img.logo')).toHaveCount(1);
+}
+
+// The fields whose script ran on this page.
+async function ran(page: Page) {
+  return page.evaluate(() => Object.keys(window).filter((k) => k.startsWith('__fppTestsCape_')).sort());
+}
+
+// PHP's urlencode(): everything but [A-Za-z0-9_.-] is %XX, a space is '+'.
+function phpUrlencode(s: string) {
+  return encodeURIComponent(s)
+    .replace(/[!'()*~]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+    .replace(/%20/g, '+');
+}
+
+// The value cell of the Cape Info vendor table row with this label.
+function vendorRow(page: Page, label: string) {
+  return page.locator('#eeprom-about .aboutRight tr').filter({ has: page.locator('b', { hasText: new RegExp(`^${label.replace(' ', '.')}:$`) }) });
+}
+
+const BASE = {
+  name: 'fpp-tests cape',
+  id: '1234',
+  version: '1.0',
+  serialNumber: '0042',
+};
+
+test.describe('cape vendor URLs from a crafted EEPROM', () => {
+  test.use({ bypassCSP: true });
+
+  test.beforeEach(() => {
+    // A player with no cape has no cape-info.json; one left behind would be
+    // overwritten and then deleted, so refuse to start rather than lose it.
+    expect(inPlayer('sh', '-c', `test -e ${CAPE_INFO} && echo present || echo absent`).trim()).toBe('absent');
+    inPlayer('cp', '-p', SETTINGS, SAVED);
+  });
+  test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    // Nothing saved means beforeEach refused, and the cape-info.json is not ours.
+    inPlayer('sh', '-c', `test -e ${SAVED} || exit 0; rm -f ${CAPE_INFO} && cp -p ${SAVED} ${SETTINGS} && rm -f ${SAVED}`);
+  });
+
+  for (const [what, image] of [
+    ['a quote', `${VENDOR}/header.png?x=';${run('header_cape_image')};//`],
+    ['a </script>', `${VENDOR}/header.png?x=</script><script>${run('header_cape_image')}</script>`],
+  ]) {
+    test(`a header logo URL with ${what} in it stays a string on every page`, async ({ page, request }) => {
+      const landing = `${VENDOR}/landing?x="><img src=x onerror=${run('landingPage')}>`;
+      writeCapeInfo({
+        ...BASE,
+        header_cape_image: image,
+        vendor: { name: 'fpp-tests', url: `${VENDOR}/`, landingPage: landing, image: `${VENDOR}/logo.png` },
+      });
+      await privacy(request, 1, 0);
+      const asked = await vendorHost(page);
+      for (const path of ['/index.php', '/about.php']) {
+        await load(page, path, asked);
+        expect(await ran(page), `the header's vendor URLs ran as script on ${path}`).toEqual([]);
+        // The control: the URL reached the browser whole, as a string, and the
+        // landing page whole, as the link.
+        await expectHeaderLogo(page, asked, image);
+        await expect(page.locator('#capeVendorLink')).toHaveAttribute('href', landing);
+      }
+    });
+  }
+
+  test('Cape Info shows what the EEPROM says about the vendor as text', async ({ page, request }) => {
+    const vendor = {
+      name: `<img src=x onerror=${run('name')}>`,
+      url: `${VENDOR}/?"><img src=x onerror=${run('url')}>`,
+      landingPage: `${VENDOR}/landing?x='"><img src=x onerror=${run('landingPage')}>`,
+      phone: `</td><img src=x onerror=${run('phone')}>`,
+      email: `x"><img src=x onerror=${run('email')}>@example.com`,
+      forum: `${VENDOR}/forum?x="><img src=x onerror=${run('forum')}>`,
+      image: `${VENDOR}/logo.png?x="><img src=x onerror=${run('image')}>`,
+    };
+    writeCapeInfo({ ...BASE, vendor });
+    await privacy(request, 1, 0);
+    const asked = await vendorHost(page);
+    // An <img>'s error event comes before the page's load event.
+    await load(page, '/cape-info.php', asked);
+    await expect(page.locator('#eeprom-about .aboutRight')).toHaveCount(1);
+    expect(await ran(page), 'vendor fields ran as markup').toEqual([]);
+
+    // The control: each field is on the page, whole, where it belongs.
+    await expect(vendorRow(page, 'Vendor Name').locator('td').nth(1)).toHaveText(vendor.name);
+    await expect(vendorRow(page, 'Phone Number').locator('td').nth(1)).toHaveText(vendor.phone);
+    const url = vendorRow(page, 'Vendor URL').locator('a');
+    await expect(url).toHaveText(vendor.url);
+    await expect(url).toHaveAttribute('href', vendor.landingPage);
+    const email = vendorRow(page, 'E-mail').locator('a');
+    await expect(email).toHaveText(vendor.email);
+    await expect(email).toHaveAttribute('href', `mailto:${vendor.email}`);
+    const forum = vendorRow(page, 'Support Forum').locator('a');
+    await expect(forum).toHaveText(vendor.forum);
+    await expect(forum).toHaveAttribute('href', vendor.forum);
+    // The only image in the block is the logo, from the vendor's URL as given.
+    const imgs = page.locator('#eeprom-about .aboutRight img');
+    await expect(imgs).toHaveCount(1);
+    await expect(imgs).toHaveAttribute('src', vendor.image);
+    await expect(imgs.locator('xpath=..')).toHaveAttribute('href', vendor.landingPage);
+    await expect.poll(() => asked).toContain(new URL(vendor.image).href);
+  });
+
+  test('javascript: and data: vendor URLs never reach an href or src', async ({ page, request }) => {
+    const vendor = {
+      name: 'fpp-tests',
+      url: `javascript:${run('url')}`,
+      forum: `javascript:${run('forum')}`,
+      image: 'data:image/png;base64,' + PNG.toString('base64'),
+    };
+    writeCapeInfo({ ...BASE, header_cape_image: `JavaScript:${run('header_cape_image')}`, vendor });
+    await privacy(request, 1, 0);
+
+    // The header has a logo only when there is a web URL to fetch it from.
+    await page.goto('/index.php');
+    await expect(page.locator('#header_Time')).toHaveCount(1);
+    await expect(page.locator('.capeVendor')).toHaveCount(0);
+
+    await page.goto('/cape-info.php');
+    const block = page.locator('#eeprom-about .aboutRight');
+    // The control: the rows are there, with the URLs shown as text.
+    await expect(vendorRow(page, 'Vendor URL').locator('a')).toHaveText(vendor.url);
+    await expect(vendorRow(page, 'Support Forum').locator('a')).toHaveText(vendor.forum);
+    for (const a of await block.locator('a').all()) {
+      expect(await a.getAttribute('href') ?? '').not.toMatch(/^\s*(javascript|data):/i);
+    }
+    await expect(block.locator('img')).toHaveCount(0);
+  });
+
+  test.describe('the vendor URLs follow the privacy settings', () => {
+    // Values that need encoding, and a landing page that already has a query.
+    const info = {
+      name: 'fpp-tests cape',
+      version: '1.0',
+      serialNumber: 'SN 42&x=1#y',
+      id: 'id/1+2',
+      // No quote here: the parent's header script breaks on one, which the
+      // escaping tests above cover, and these are about which values go out.
+      cs: 'c+s=&',
+      vendor: {
+        name: 'fpp-tests',
+        url: `${VENDOR}/`,
+        landingPage: `${VENDOR}/landing?from=fpp`,
+        email: 'support@example.com',
+        forum: `${VENDOR}/forum`,
+        image: `${VENDOR}/logo.png`,
+      },
+      header_cape_image: `${VENDOR}/header.png`,
+    };
+    const q = `sn=${phpUrlencode(info.serialNumber)}&id=${phpUrlencode(info.id)}&cs=${phpUrlencode(info.cs)}`;
+
+    test('logos denied: no logo, and the serial is not on the link', async ({ page, request }) => {
+      writeCapeInfo(info);
+      // The old bug: the serial allowed, logos denied, and Cape Info's link
+      // still carried the serial.
+      await privacy(request, 0, 1);
+      await page.goto('/index.php');
+      await expect(page.locator('#header_Time')).toHaveCount(1);
+      await expect(page.locator('.capeVendor')).toHaveCount(0);
+
+      await page.goto('/cape-info.php');
+      const link = vendorRow(page, 'Vendor URL').locator('a');
+      // The control: the row is there.
+      await expect(link).toHaveText(info.vendor.url);
+      const href = await link.getAttribute('href') ?? '';
+      for (const leak of ['sn=', 'id=', 'cs=', '42', 'SN']) {
+        expect(href, `the link sends ${leak}`).not.toContain(leak);
+      }
+      await expect(page.locator('#eeprom-about .aboutRight img')).toHaveCount(0);
+    });
+
+    // The baseline for the other three, and the one case where the old code
+    // already did the right thing, so it passes before 9d00d30ad as well.
+    test('logos allowed, serial denied: plain URLs', async ({ page, request }) => {
+      writeCapeInfo(info);
+      await privacy(request, 1, 0);
+      const asked = await vendorHost(page);
+      await load(page, '/index.php', asked);
+      await expectHeaderLogo(page, asked, info.header_cape_image);
+      await expect(page.locator('#capeVendorLink')).toHaveAttribute('href', info.vendor.landingPage);
+
+      await load(page, '/cape-info.php', asked);
+      await expect(vendorRow(page, 'Vendor URL').locator('a')).toHaveAttribute('href', info.vendor.landingPage);
+      const img = page.locator('#eeprom-about .aboutRight img');
+      await expect(img).toHaveAttribute('src', info.vendor.image);
+      await expect(img.locator('xpath=..')).toHaveAttribute('href', info.vendor.landingPage);
+      // Everything the vendor was asked for here (this page has the header
+      // logo too) is the plain URL.
+      await expect.poll(() => asked).toContain(info.vendor.image);
+      for (const u of asked) expect(u).not.toContain('?');
+    });
+
+    test('logos and serial allowed: sn, id and cs, urlencoded, on the logos and the links', async ({ page, request }) => {
+      writeCapeInfo(info);
+      await privacy(request, 1, 1);
+      const asked = await vendorHost(page);
+      await load(page, '/index.php', asked);
+      await expectHeaderLogo(page, asked, `${info.header_cape_image}?${q}`);
+      await expect(page.locator('#capeVendorLink')).toHaveAttribute('href', `${info.vendor.landingPage}&${q}`);
+
+      await page.goto('/cape-info.php');
+      await expect(vendorRow(page, 'Vendor URL').locator('a')).toHaveAttribute('href', `${info.vendor.landingPage}&${q}`);
+      const img = page.locator('#eeprom-about .aboutRight img');
+      await expect(img).toHaveAttribute('src', `${info.vendor.image}?${q}`);
+      await expect(img.locator('xpath=..')).toHaveAttribute('href', `${info.vendor.landingPage}&${q}`);
+    });
+
+    test('hideExternalURLs: no link to follow, the logo is still shown', async ({ page, request }) => {
+      writeCapeInfo(info);
+      await privacy(request, 1, 1);
+      // hideExternalURLs is not stored: config.php sets it for a kiosk's own
+      // browser and for a request that carries this header.
+      await page.setExtraHTTPHeaders({ 'Hide-External-Links': 'true' });
+      const asked = await vendorHost(page);
+      await load(page, '/index.php', asked);
+      await expectHeaderLogo(page, asked, `${info.header_cape_image}?${q}`);
+      await expect(page.locator('#capeVendorLink')).toHaveAttribute('href', '');
+
+      await page.goto('/cape-info.php');
+      await expect(vendorRow(page, 'Vendor URL').locator('a')).toHaveAttribute('href', '');
+      const img = page.locator('#eeprom-about .aboutRight img');
+      await expect(img).toHaveAttribute('src', `${info.vendor.image}?${q}`);
+      await expect(img.locator('xpath=..')).toHaveAttribute('href', '');
+      // E-mail and forum are external links too, so their rows go; the
+      // control is that the block itself is still drawn.
+      await expect(vendorRow(page, 'Vendor Name')).toHaveCount(1);
+      await expect(vendorRow(page, 'E-mail')).toHaveCount(0);
+      await expect(vendorRow(page, 'Support Forum')).toHaveCount(0);
+    });
+  });
 });
