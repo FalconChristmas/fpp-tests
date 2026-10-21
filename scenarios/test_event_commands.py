@@ -9,9 +9,6 @@ import os
 import time
 import urllib.error
 
-import pytest
-
-from fppd import sanitizer
 from test_commands import count, counter, preset
 
 
@@ -196,20 +193,16 @@ def switch(fppd, command):
         pass
 
 
-@pytest.mark.skipif(sanitizer() == "tsan", reason=(
-    "fpp master 69a734449 races on settings.fppMode: the settings-file reload "
-    "rewrites it while the channel output thread reads getFPPmode()"))
 def test_switch_between_player_and_remote_mode(fppd):
     """Switch To Remote Mode saves fppMode = remote in the settings and
     restarts fppd, which comes back in remote mode; Switch To Player Mode
     brings it back to player mode the same way. The same process restarts
     in place each time.
 
-    Skipped under TSan on fpp master 69a734449: the mode switch writes the
-    settings file, and fppd's reload of it (SettingsConfig::setSettingLocked)
-    writes settings.fppMode under settingsMutex while RunChannelOutputThread
-    reads it through getFPPmode() with no lock, a data race on every switch.
-    Take the skip out once fppMode is atomic."""
+    Regression: 1eded48e4 (run with --flavor tsan). The mode switch writes
+    the settings file, and fppd's reload of it (SettingsConfig::setSettingLocked)
+    wrote settings.fppMode under settingsMutex while RunChannelOutputThread
+    read it through getFPPmode() with no lock, a data race on every switch."""
     fppd.start()
     pid = fppd.proc.pid
     assert mode(fppd) == "player"
