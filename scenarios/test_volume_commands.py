@@ -73,8 +73,13 @@ def peak(samples):
 def test_set_slot_volume_scales_only_that_slot(fppd, audio):
     """Set Slot Volume on a playing slot scales what that slot plays (25
     plays at a quarter of the level, 150 is taken as 100, a negative volume
-    as 0, which mutes it without stopping it) and leaves the global volume alone; on an idle slot, or a slot
-    number outside 1..5, it is refused."""
+    as 0, which mutes it without stopping it) and leaves the global volume alone; a slot
+    number outside 1..5 is refused. On an idle slot it is kept, and that
+    slot's next stream starts at it.
+
+    Regression: 6f875034b. An idle slot refused the volume ("Slot N not
+    active"), so a level set before the slot played was lost, and the
+    mixer reported every move of an idle slot's fader as an error."""
     write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 40, amplitude=0.5)
     fppd.start()
     fppd.command("Play Media", "Tone.wav", "1", "0", "2")
@@ -112,13 +117,22 @@ def test_set_slot_volume_scales_only_that_slot(fppd, audio):
     back = level()
     assert 0.9 <= back / full <= 1.1, f"150 (taken as 100) played at {back:.3f}, full is {full:.3f}"
 
-    assert "not active" in (refused(fppd, "Set Slot Volume", "3", "50") or ""), \
-        "Set Slot Volume on an idle slot was accepted"
     for slot in ("0", "6", "x"):
         assert "Invalid slot" in (refused(fppd, "Set Slot Volume", slot, "50") or ""), \
             f"Set Slot Volume on slot {slot!r} was accepted"
     assert refused(fppd, "Set Slot Volume", "2") is not None, "a slot with no volume was accepted"
     fppd.command("Stop Media Slot", "2")
+
+    # An idle slot keeps the volume for its next stream.
+    assert refused(fppd, "Set Slot Volume", "3", "25") is None, \
+        "Set Slot Volume on an idle slot was refused"
+    fppd.command("Play Media", "Tone.wav", "1", "0", "3")
+    fppd.wait_for(lambda: fppd.command("Media Slot Status")[2]["status"] == "playing",
+                  timeout=10, what="slot 3 to play")
+    idle_set = level()
+    assert 0.18 <= idle_set / full <= 0.32, \
+        f"a slot set to 25 while idle started at {idle_set:.3f}, full is {full:.3f}"
+    fppd.command("Stop Media Slot", "3")
 
 
 class FakeApache:

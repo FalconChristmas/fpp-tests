@@ -5,8 +5,9 @@ import { CONFIG, cleanupPipeWire, readFile, writeFile } from './pw-helpers';
 // The per-slot volume API the PipeWire mixer drives: /api/pipewire/audio/
 // stream/volume, and the target-aware /api/system/volume in front of it.
 // Nothing is playing in the container, so every slot is idle: fppd's Set Slot
-// Volume answers "Slot N not active" with HTTP 500, which is what shows the
-// command really reached it.
+// Volume keeps the value for the slot's next start and answers that the slot
+// is idle, and the API passes that answer on -- which also shows the command
+// reached fppd.
 
 test.skip(!container, 'reads the saved slot volumes inside the run-web.sh container');
 
@@ -29,6 +30,9 @@ test('slot 1 is a fader of its own, sent to fppd as Set Slot Volume', async ({ r
   // answered OK whatever happened: slot 1 could never be set.
   // Regression: ecbaa46e7. Slot 1 was sent as the global "Volume Set", so
   // moving slot 1 moved the master with it.
+  // Regression: 6f875034b. An idle slot's volume was saved but reported as
+  // an error ("fppd did not accept ... HTTP 500"), so the mixer raised an
+  // error toast for every move of an idle slot's fader.
   const set = await request.post('/api/system/volume', { data: { volume: 61 } });
   expect(set.ok(), await set.text()).toBe(true);
   expect(await master(request)).toBe(61);
@@ -36,10 +40,11 @@ test('slot 1 is a fader of its own, sent to fppd as Set Slot Volume', async ({ r
   const r = await request.post('/api/pipewire/audio/stream/volume', { data: { slot: 1, volume: 33 } });
   expect(r.ok(), await r.text()).toBe(true);
   const body = await r.json();
-  // fppd was asked, and refused: the idle slot has no stream.  A 404 here would
-  // mean the command went to a path fppd does not serve.
-  expect(body.status, JSON.stringify(body)).toBe('error');
-  expect(body.message).toContain('HTTP 500');
+  // fppd was asked, and kept it: the idle slot has no stream, so the value
+  // waits for its next start.  A path fppd does not serve (a 404) would be an
+  // error, and an OK without fppd's answer never asked fppd at all.
+  expect(body.status, JSON.stringify(body)).toBe('OK');
+  expect(body.message, JSON.stringify(body)).toContain('idle');
   expect(savedSlots()['1']).toBe(33);
   expect(await master(request), 'setting slot 1 moved the master volume').toBe(61);
 
