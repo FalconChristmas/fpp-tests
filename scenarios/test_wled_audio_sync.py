@@ -13,10 +13,9 @@ wire: the bars, red, and nothing else. Without a recent packet the effect
 falls back to its simulated sound (sine waves per band), which never holds
 still -- so a frame that equals the expected bars came from the packets.
 
-The effects run at Brightness 128, the WLED port's unity (PROBLEMS.md #18:
-other values compound on every pixel an effect reads back), and with
-BufferMapping "Horizontal" spelled out (#19: an empty one transposes 2D
-effects).
+The effects run at Brightness 128, the WLED port's unity, except where
+Brightness is what's tested, and with BufferMapping "Horizontal" spelled out
+except where the mapping is what's tested.
 """
 
 import socket
@@ -394,6 +393,49 @@ def test_out_of_range_values_are_clamped(fppd):
                 assert steady("volume 100", smth=100.0, major=1000.0) != at_255
                 at_nyquist = steady("peak 11025 Hz", smth=255.0, major=11025.0)
                 assert steady("peak 1e9 Hz", smth=255.0, major=1e9) == at_nyquist
+        finally:
+            sock.close()
+        stop_effects(fppd, "S")
+
+
+def test_brightness_scales_each_pixel_once(fppd):
+    """An effect's Brightness scales its colours once, however often it reads
+    its pixels back: Freqmatrix (which shifts the string one pixel a frame)
+    fed a steady packet turns the 10-pixel string one colour, at Brightness
+    255 the colour it has at 128 scaled by 255/128, and at 64 by a half.
+
+    Regression: 73015d126. The bus returned the scaled colour when a pixel
+    was read back, so each shift scaled it again: at 255 every pixel came out
+    twice the one before, and at 64 half."""
+    n = 10
+    setup(fppd, [matrix("S", width=n, height=1)], channels=n * 3)
+    fppd.settings(WLEDAudioSyncMode="receive")
+
+    def start(brightness):
+        effect(fppd, "S", "WLED♪ - Freqmatrix", BufferMapping="Horizontal",
+               brightness=str(brightness), Speed="255",
+               **{"Sound effect": "64", "Low bin": "0", "High bin": "255", "Sensitivity": "0"})
+
+    with DdpReceiver(n * 3) as rx:
+        fppd.start()
+        sock = udp_socket(PEER)
+        try:
+            with Stream() as stream:
+                stream.send = [(sock, packet(SILENT, smth=255.0, major=1000.0), PORT)]
+                start(128)
+                frame = fppd.wait_for(
+                    lambda: (f := rx.last()) is not None and any(f[:3]) and f == f[:3] * n and f,
+                    interval=0.02, what="one colour all along at Brightness 128")
+                colour = frame[:3]
+                for brightness in (255, 64):
+                    want = bytes(min(v * brightness // 128, 255) for v in colour) * n
+                    start(brightness)
+                    try:
+                        fppd.wait_for(lambda: rx.last() == want, interval=0.02,
+                                      what=f"Brightness {brightness}")
+                    except TimeoutError:
+                        raise AssertionError(f"Brightness {brightness}: wanted {list(want[:3])} "
+                                             f"all along, got {list(rx.last())}")
         finally:
             sock.close()
         stop_effects(fppd, "S")
