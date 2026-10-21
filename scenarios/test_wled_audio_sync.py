@@ -185,7 +185,7 @@ def test_bad_packets_are_ignored(fppd):
     the whole matrix; no frame may come out fully lit, and the good packets'
     stairs must still be on the wire afterwards:
 
-    - too short (43 bytes), and empty,
+    - too short (43 bytes), too long (45 bytes), and empty,
     - the V1 header "00001" (in an 88-byte V1-sized packet and a 44-byte one),
       and an unknown "00003",
     - a NaN or an infinity in any of the four floats,
@@ -195,15 +195,16 @@ def test_bad_packets_are_ignored(fppd):
     Then the same full-matrix bands in a good packet do light the matrix, so
     the check above could see them.
 
-    Not checked: a datagram longer than 44 bytes with a V2 header is taken as
-    a V2 packet (recvfrom into the 44-byte struct truncates it and returns
-    44); WLED drops it. See PROBLEMS.md #17."""
+    Regression: 0be145b8b. A datagram longer than 44 bytes with a V2
+    header was taken as a V2 packet: recvfrom into the 44-byte struct cut it
+    short and returned 44. WLED drops it."""
     setup(fppd, [matrix("M", width=W, height=H)], channels=CHANNELS)
     fppd.settings(WLEDAudioSyncMode="receive")
     full = packet(bands(FULL))
     nan, inf = float("nan"), float("inf")
     bad = [
         ("43 bytes", PEER, full[:43]),
+        ("45 bytes", PEER, full + b"\0"),
         ("empty", PEER, b""),
         ("V1 header, 88 bytes", PEER, packet(bands(FULL), header=b"00001\0") + bytes(44)),
         ("V1 header, 44 bytes", PEER, packet(bands(FULL), header=b"00001\0")),
