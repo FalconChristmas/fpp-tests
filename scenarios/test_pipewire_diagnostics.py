@@ -1,6 +1,9 @@
 """scripts/pipewire_diagnostics.sh, the Troubleshooting page's PipeWire
-health checks, run as root in the fppinit sandbox (fppinit.py) so nothing
-it does reaches the machine."""
+health checks: run as root in the fppinit sandbox (fppinit.py) so nothing
+it does reaches the machine, or against the scenario's own PipeWire (the
+audio fixture) for the checks that read the running graph."""
+
+import os
 
 from fppinit import fppinit  # noqa: F401 -- the fixture
 
@@ -33,3 +36,53 @@ ls /tmp
     listing = out.split("diagnostics exited", 1)[1].split()
     assert "keep" in listing, f"the diagnostics emptied /tmp:\n{out[-2000:]}"
     assert "cannot create temp directory" in out, out[-2000:]
+
+
+def test_a_configured_default_sink_that_is_gone_is_reported(fppd, audio):
+    """The graph section says when WirePlumber's configured default sink
+    (default.configured.audio.sink, the sticky "set default") names a node
+    that is not in the graph, and which sink the graph uses instead; one
+    that exists passes (the control). Against the scenario's own PipeWire
+    and WirePlumber, which is where the script looks (/run/pipewire-fpp).
+
+    Feature: 4b49ca1ea, the diagnostics half. A backend mode switch deletes
+    the group sinks of the mode it leaves, the configured default stays on
+    one of them, and nothing complained until a node of that name came back
+    and silently took the default."""
+    import shutil
+    import subprocess
+    from audio import SINK, env
+
+    # The script points clients at /etc/pipewire, which on a device always
+    # has client.conf (FPP_Install.sh, and fppinit's setupAudio, copy it
+    # there); the container has none.
+    conf = "/etc/pipewire/client.conf"
+    made = not os.path.exists(conf)
+    if made:
+        os.makedirs(os.path.dirname(conf), exist_ok=True)
+        shutil.copy("/usr/share/pipewire/client.conf", conf)
+
+    def sh(cmd):
+        r = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, env=env(), timeout=60)
+        return r.stdout + r.stderr
+
+    def configured(name):
+        sh(f"pw-metadata -n default 0 default.configured.audio.sink '{{\"name\":\"{name}\"}}' Spa:String:JSON")
+        got = sh("pw-metadata -n default")
+        assert f"key:'default.configured.audio.sink' value:'{{\"name\":\"{name}\"}}'" in got, got
+        return sh(f"bash {fppd.tree}/scripts/pipewire_diagnostics.sh graph")
+
+    fppd.start()
+    try:
+        out = configured("fpp_gone_sink")
+        assert "Could not read the graph" not in out, out
+        assert "[WARN] The configured default sink 'fpp_gone_sink' does not exist in the graph" in out, out
+        assert f"The graph is using {SINK}" in out, out
+
+        out = configured(SINK)
+        assert f"[PASS] The configured default sink ({SINK}) exists" in out, out
+        assert "does not exist in the graph" not in out, out
+    finally:
+        sh("pw-metadata -n default -d 0 default.configured.audio.sink")
+        if made:
+            os.remove(conf)
