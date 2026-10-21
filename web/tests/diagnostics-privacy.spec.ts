@@ -131,6 +131,51 @@ test('a Diagnostic Report carries the troubleshooting output, without what ident
   }
 });
 
+test('a Diagnostic Report carries the end of the plugin manager and upgrade logs, redacted', async ({ request }) => {
+  // Feature: a34aeb64c.  The plugin manager's and the FPP upgrades' logs go
+  // into a Diagnostic Report through the redactor, each cut to its last MiB
+  // (from a line start) so a long-lived log can't swell the report.
+  test.setTimeout(330_000);
+  const PLUGIN_LOG = `${MEDIA}/logs/fpp_plugin_manager.log`;
+  const UPGRADE_LOG = `${MEDIA}/logs/fpp_system_upgrades.log`;
+  const secret = 'FppTestsSecret8c1';
+  await keepingFile(PLUGIN_LOG, () => keepingFile(UPGRADE_LOG, async () => {
+    writeFile(PLUGIN_LOG, `fpp-tests plugin line\nclone https://fpp-tests:${secret}@example.invalid/r.git\npassword=${secret}\n`);
+    // 1.2 MiB: a first line, filler, and a last line.
+    const filler = Array.from({ length: 20_000 }, (_, i) => `fpp-tests upgrade filler line ${String(i).padStart(6, '0')} ..................`).join('\n');
+    writeFile(UPGRADE_LOG, `FPP-TESTS-FIRST-LINE\n${filler}\nFPP-TESTS-LAST-LINE\n`);
+    expect(Number(inPlayer('stat', '-c', '%s', UPGRADE_LOG))).toBeGreaterThan(1048576);
+    let file = '';
+    try {
+      // One report per 10 s: the test before may have just built one.
+      let body: any;
+      const until = Date.now() + 30_000;
+      do {
+        if (body) await new Promise((res) => setTimeout(res, 1_000));
+        body = await (await request.post('/api/crashes/report', { data: { client: 'fpp-tests' }, timeout: 300_000 })).json();
+      } while (body.Code === 'rate-limited' && Date.now() < until);
+      expect(body.Status, JSON.stringify(body)).toBe('OK');
+      file = body.File;
+      const path = `${CRASHES}/${file}`;
+      expect(zipNames(path)).toEqual(expect.arrayContaining(['logs/fpp_plugin_manager.log', 'logs/fpp_system_upgrades.log']));
+
+      const plugins = zipMember(path, 'logs/fpp_plugin_manager.log');
+      // The control: the log is the one planted.
+      expect(plugins).toContain('fpp-tests plugin line');
+      expect(plugins, 'a secret in the plugin manager log was not redacted').not.toContain(secret);
+
+      const upgrades = zipMember(path, 'logs/fpp_system_upgrades.log');
+      expect(upgrades).toContain('FPP-TESTS-LAST-LINE');
+      expect(upgrades, 'the upgrades log was not cut to its end').not.toContain('FPP-TESTS-FIRST-LINE');
+      expect(upgrades.length).toBeLessThanOrEqual(1048576);
+      // Cut at a line start: the first line is a whole filler line.
+      expect(upgrades.split('\n')[0]).toMatch(/^fpp-tests upgrade filler line \d{6} \.+$/);
+    } finally {
+      if (file) inPlayer('rm', '-f', `${CRASHES}/${file}`);
+    }
+  }));
+});
+
 test('the logs zip keeps JSON settings whole and leaves out stale Diagnostic Report files', async ({ request }) => {
   // Regression: 5232d8091.  The settings file was read with parse_ini_file(),
   //   which strips the quotes inside a JSON value (privacyConsent came out
