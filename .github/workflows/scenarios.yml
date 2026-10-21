@@ -191,25 +191,25 @@ jobs:
           [ -n "$meta" ] && cp "$meta" artifacts/meta.json
           [ -f "shards/shard-$FLAVOR-1/coverage/totals.json" ] && cp "shards/shard-$FLAVOR-1/coverage/totals.json" artifacts/coverage/
           echo "status=$status" >> "$GITHUB_OUTPUT"
+          # The fpp commit the shards built (master may have moved since).
+          [ -f artifacts/meta.json ] && python3 -c 'import json; print("sha=" + json.load(open("artifacts/meta.json"))["sha"])' >> "$GITHUB_OUTPUT"
         id: merge
 
       # Coverage: the shards' counts, merged into one report. gcovr is the
       # image's version (Debian's), and the per-line pages read fpp's source
       # at the commit the shards built.
       - name: Checkout fpp
-        if: env.FLAVOR == 'coverage' && env.SHARDS != '1'
+        if: env.FLAVOR == 'coverage' && env.SHARDS != '1' && steps.merge.outputs.sha != ''
         uses: actions/checkout@v6
         with:
           repository: FalconChristmas/fpp
-          ref: ${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}
+          ref: ${{ steps.merge.outputs.sha }}
           path: fpp
 
       - name: Merge the coverage
         id: coverage
-        if: env.FLAVOR == 'coverage' && env.SHARDS != '1'
+        if: env.FLAVOR == 'coverage' && env.SHARDS != '1' && steps.merge.outputs.sha != ''
         run: |
-          sha=$(python3 -c 'import json; print(json.load(open("artifacts/meta.json"))["sha"])')
-          git -C fpp checkout -q "$sha"
           python3 -m venv /tmp/gcovr && /tmp/gcovr/bin/pip install -q gcovr==7.2
           PATH=/tmp/gcovr/bin:$PATH sh scripts/coverage-report.sh "$PWD/fpp" "$PWD/artifacts/coverage" \
               shards/shard-coverage-*/coverage/coverage.json
