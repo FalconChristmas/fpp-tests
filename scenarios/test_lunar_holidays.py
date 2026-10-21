@@ -166,10 +166,14 @@ def test_hebrew_holidays_fall_on_their_dates(fppd, name, when, year):
     assert days == {want}, f"{name} {year} is {want}; scheduled on {sorted(days)[:5]}"
 
 
-@pytest.mark.parametrize("year", range(2030, 2034))
+@pytest.mark.parametrize("year", range(2030, 2036))
 def test_diwali_falls_on_the_new_moon_or_the_day_before(fppd, year):
     """An entry on Diwali runs on one day, the day of its new moon in India
-    or the day before."""
+    or the day before.
+
+    Regression: b8e4e6752. The table held 2034 and 2035 as November 12 and
+    November 1, a day after the new moon (November 11, 06:46 IST and October
+    31, 08:29 IST)."""
     moon = diwali_new_moon(year)
     days = scheduled_on(fppd, "Diwali", moon - datetime.timedelta(days=6))
     assert len(days) == 1, f"Diwali {year} scheduled on {sorted(days)[:5]}"
