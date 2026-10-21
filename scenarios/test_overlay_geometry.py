@@ -9,13 +9,7 @@ it lights the first round(n * p / 100) of the n indices the buffer mapping
 lays out, in Color 1 (the "* Color 1" palette), and paints the rest Color 2
 (black here). So which nodes light says which nodes the mapping put first.
 Before each run the model is filled with a dim grey, so a node the effect
-never paints shows as grey rather than passing for one painted black.
-
-Known fpp bug, left out of the assertions: a WLED segment one cell wide and
-several high is not 2D to WLED, and its length is its width, 1. So Angular
-CW/CCW on a single ring (polar buffer 1 x S), Vertical on a one-row model
-and Horizontal on a one-column model paint one pixel and leave the rest
-alone (WS2812FXExt's constructor, src/overlays/wled/wled.cpp)."""
+never paints shows as grey rather than passing for one painted black."""
 
 import math
 import os
@@ -184,20 +178,46 @@ def test_one_ring_is_one_radius_with_every_pixel_round_it(fppd):
     to 30.1, a spread under 0.15 of the mean): Radial Out 25% lights the six
     pixels from bearing 0 to 75 degrees, an arc, and Radial In the same arc
     (one ring reversed is itself). Split into rings by those radii, 25% would
-    have lit four pixels at bearings 45, 135, 225 and 315 degrees.
+    have lit four pixels at bearings 45, 135, 225 and 315 degrees. Angular
+    CW 25% lights the same arc, and Angular CCW the arc going the other way,
+    from bearing 345 down to 270.
 
-    Angular CW/CCW on one ring are left out: that buffer is 1 x 24, and
-    WLED draws only its first cell (the bug in the module docstring)."""
+    Regression: 2a3c4cbc1 (Angular). The angular buffer of one ring is 1 x
+    24, which WLED takes as one pixel long, so only its first cell was
+    painted."""
     n = 24
     setup(fppd, [matrix("Ring", width=n, height=1)], channels=n * 3)
     sector = {c: 5 * c % n for c in range(n)}
     pts = {3 * c: on_circle(30, sector[c] * 15) for c in range(n)}
     layout(fppd, pts)
     arc = {c for c in range(n) if sector[c] < 6}
+    back = {c for c in range(n) if sector[c] >= n - 6}
     with DdpReceiver(n * 3) as rx:
         fppd.start()
-        for mapping in ("Radial Out", "Radial In"):
-            percent_lights(fppd, rx, "Ring", mapping, 25, arc, n, f"{mapping} on one ring")
+        for mapping, expected in (("Radial Out", arc), ("Radial In", arc),
+                                  ("Angular CW", arc), ("Angular CCW", back)):
+            percent_lights(fppd, rx, "Ring", mapping, 25, expected, n, f"{mapping} on one ring")
+
+
+def test_a_one_cell_wide_buffer_is_painted_whole(fppd):
+    """Percent 25% through a mapping that makes the buffer one cell wide
+    lights a quarter of the model, not one pixel: Vertical and Vertical
+    Flipped on a 24-node string (one row), and Horizontal and Horizontal
+    Flipped on a 24-node column.
+
+    Regression: 2a3c4cbc1. WLED takes a segment one cell wide as one pixel
+    long, so the effect painted only the first node and left the rest."""
+    n = 24
+    setup(fppd, [matrix("Row", width=n, height=1),
+                 matrix("Col", start=1 + 3 * n, width=1, height=n)], channels=2 * n * 3)
+    first, last = set(range(6)), set(range(n - 6, n))
+    with DdpReceiver(2 * n * 3) as rx:
+        fppd.start()
+        for model, base, mapping, expected in (
+                ("Row", 0, "Vertical", first), ("Row", 0, "Vertical Flipped", last),
+                ("Col", 3 * n, "Horizontal", first), ("Col", 3 * n, "Horizontal Flipped", last)):
+            percent_lights(fppd, rx, model, mapping, 25, expected, n, f"{mapping} on {model}",
+                           first=base)
 
 
 def test_two_rings_are_split_by_population(fppd):
