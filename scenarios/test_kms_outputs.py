@@ -109,3 +109,83 @@ def test_a_deleted_framebuffer_never_gets_a_flip_event(fppd):
     # both outputs flipped, so the reloads really did run with flips queued
     assert len(flipped) >= 2, lines[-20:]
     fppd.command("Test Stop")
+
+
+def test_a_restarted_camera_does_not_share_the_framebuffer_outputs_fd(fppd, audio):
+    """A camera group showing on HDMI-A-2 whose display fails (its kmssink
+    errors), next to an FB model drawing on HDMI-A-1 of the same card: the
+    camera is restarted on a lease of its own, never on the card's shared fd
+    the framebuffer output flips on, and comes back without stalling.
+
+    Media F1 (fpp 10.3 review). If the restart found the old consumer's lease
+    still held, DrmCards::AcquireLease() fell back to the card's master fd,
+    where the framebuffer outputs drain every page-flip event: kmssink could
+    lose its own event (a 3 s stall) or take theirs (SIGSEGV through their
+    flip token). 081ff8d9e stopped kmssink waiting for events at all.
+
+    Not a red-before-green test: on a Pi 5 the dead pipeline's teardown
+    releases its lease in the 12 ms before the restart asks for one, so the
+    restart got its own lease on every run, before 081ff8d9e and after. This
+    checks that stays so.
+
+    Device only: both HDMI connectors on one card, HDMI-A-2 reading
+    "connected", and nothing else holding DRM master -- a kiosk's X server
+    does; switch away from its VT (chvt 2) for the run, chvt 1 after. With
+    nothing plugged in, force the connector before the run (echo on >
+    /sys/class/drm/card1-HDMI-A-2/status) and put it back after (echo
+    detect). failplane.so fails two of kmssink's plane updates, after its
+    first 60, and logs every one.
+    """
+    import shims
+    from test_video import hdmi_consumer, setup as video_setup, source
+    paths = {c: glob.glob(f"/sys/class/drm/card*-{c}/status") for c in ("HDMI-A-1", "HDMI-A-2")}
+    if not paths["HDMI-A-1"] or not paths["HDMI-A-2"]:
+        pytest.skip("needs HDMI-A-1 and HDMI-A-2")
+    card = paths["HDMI-A-2"][0].split("/")[4].split("-")[0]
+    if paths["HDMI-A-1"][0].split("/")[4].split("-")[0] != card:
+        pytest.skip("the HDMI connectors are on different cards")
+    with open(paths["HDMI-A-2"][0]) as f:
+        if f.read().strip() != "connected":
+            pytest.skip("HDMI-A-2 must read connected (force it: echo on > its status)")
+    with open(os.path.join(os.path.dirname(paths["HDMI-A-2"][0]), "connector_id")) as f:
+        connector_id = int(f.read())
+
+    video_setup(fppd, [hdmi_consumer(1, connector_id=connector_id, card=f"/dev/dri/{card}", group=3)],
+                [source("videotestsrc", pattern="ball", framerate=30)])
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [
+        {"Name": "Keep", "Type": "FB", "Width": 64, "Height": 32, "Device": "HDMI-A-1"}]})
+    log = os.path.join(fppd.media, "tmp", "failplane.log")
+    fppd.start(preload=[shims.build("failplane.c")],
+               extra_env={"FAILPLANE_LOG": log, "FAILPLANE_SKIP": "60", "FAILPLANE_COUNT": "2"})
+
+    def calls():
+        try:
+            with open(log) as f:
+                return [(w, int(fd), float(t), int(rc)) for w, fd, _, t, rc in (l.split() for l in f if l.strip())]
+        except FileNotFoundError:
+            return []
+
+    n = 0
+    end = time.monotonic() + 25
+    while time.monotonic() < end:
+        fppd.command("Overlay Model Fill", "Keep", "Enabled", ("#FF0000", "#0000FF")[n % 2])
+        n += 1
+        time.sleep(0.03)
+    out = fppd.log()
+    if "refused (Permission denied)" in out:
+        pytest.skip("another process holds DRM master (a kiosk's X server?)")
+    got = calls()
+    fb_fds = {fd for w, fd, _, _ in got if w == "f"}
+    failed = [t for w, _, t, rc in got if w == "k" and rc < 0]
+    # The controls: the framebuffer output drew, the camera's display
+    # failed, and its consumer really was restarted.
+    assert fb_fds, "the framebuffer output never updated its plane"
+    assert failed, "kmssink never reached its failing frame"
+    assert "pipeline died" in out and out.count("kmssink on DRM") >= 2, fppd.tail()
+    after = [(fd, t) for w, fd, t, rc in got if w == "k" and rc >= 0 and t > failed[-1]]
+    assert after, fppd.tail()
+    assert after[0][1] - failed[-1] < 15, f"the camera took {after[0][1] - failed[-1]:.1f} s to come back"
+    shared = sorted({fd for fd, _ in after if fd in fb_fds})
+    assert not shared, f"the restarted kmssink drew on the framebuffer outputs' fd {shared}"
+    gaps = [b - a for (_, a), (_, b) in zip(after, after[1:])]
+    assert max(gaps, default=0) < 1.0, f"the restarted camera stalled {max(gaps):.1f} s"
