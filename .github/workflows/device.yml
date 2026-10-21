@@ -25,6 +25,9 @@ on:
         type: choice
         options: [device, all]
         default: device
+      docker_run:
+        description: The Docker Scenarios run whose skipped tests to take (default the last scheduled one)
+        default: ""
       fpp_ref:
         description: fpp branch, tag or commit to test
         default: master
@@ -72,7 +75,7 @@ jobs:
         if: env.ALL_TESTS != '1'
         env:
           GH_TOKEN: ${{ github.token }}
-          TRIGGER: ${{ github.event.workflow_run.id }}
+          TRIGGER: ${{ github.event.workflow_run.id || github.event.inputs.docker_run }}
         run: |
           id="$TRIGGER"
           if [ -z "$id" ]; then
