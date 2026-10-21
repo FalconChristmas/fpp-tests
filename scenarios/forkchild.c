@@ -7,6 +7,12 @@
  * In a child forked from fppd, setenv() and the pthread mutex and rwlock
  * lock calls append their name to $FORKCHILD_LOG and _exit(97) instead:
  * the child dies at once, whether or not the lock happened to be free.
+ *
+ * The one lock a child may take is on a mutex it initialized itself after
+ * the fork: no other thread can have held that one. A --coverage build's
+ * runtime does exactly this -- its fork() wrapper re-initializes its mutex
+ * in the child, and its exec wrappers take it to write out the counters
+ * before exec -- and nothing else is let through.
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -21,6 +27,9 @@
 static int armed;
 static volatile int inChild;
 static char logPath[512];
+// Mutexes initialized in this child since the fork.
+static pthread_mutex_t* fresh[16];
+static int nfresh;
 
 static void caught(const char* what) {
     if (logPath[0]) {
@@ -38,6 +47,13 @@ static void child(void) {
     if (armed) {
         inChild = 1;
     }
+}
+
+static int isFresh(pthread_mutex_t* m) {
+    for (int i = 0; i < nfresh; i++) {
+        if (fresh[i] == m) return 1;
+    }
+    return 0;
 }
 
 #define REAL(fn) \
@@ -60,21 +76,29 @@ int setenv(const char* n, const char* v, int o) {
     return real(n, v, o);
 }
 
+int pthread_mutex_init(pthread_mutex_t* m, const pthread_mutexattr_t* a) {
+    REAL(pthread_mutex_init);
+    if (inChild && !isFresh(m) && nfresh < (int)(sizeof(fresh) / sizeof(fresh[0]))) {
+        fresh[nfresh++] = m;
+    }
+    return real(m, a);
+}
+
 int pthread_mutex_lock(pthread_mutex_t* m) {
     REAL(pthread_mutex_lock);
-    if (inChild) caught("pthread_mutex_lock");
+    if (inChild && !isFresh(m)) caught("pthread_mutex_lock");
     return real(m);
 }
 
 int pthread_mutex_timedlock(pthread_mutex_t* m, const struct timespec* t) {
     REAL(pthread_mutex_timedlock);
-    if (inChild) caught("pthread_mutex_timedlock");
+    if (inChild && !isFresh(m)) caught("pthread_mutex_timedlock");
     return real(m, t);
 }
 
 int pthread_mutex_clocklock(pthread_mutex_t* m, clockid_t c, const struct timespec* t) {
     REAL(pthread_mutex_clocklock);
-    if (inChild) caught("pthread_mutex_clocklock");
+    if (inChild && !isFresh(m)) caught("pthread_mutex_clocklock");
     return real(m, c, t);
 }
 

@@ -6,7 +6,9 @@ until it execs: a lock another thread held at the moment of the fork stays
 held in the child, which then hangs on it, and whatever waits for that
 child (a blocking playlist script entry, the main loop) hangs with it.
 forkchild.so makes any such call in a child fail at once and every time,
-instead of one run in thousands, and logs what it was.
+instead of one run in thousands, and logs what it was. (A lock on a mutex
+the child initialized after the fork is let through: the coverage flavor's
+runtime takes one to write its counters before exec.)
 """
 
 import os
