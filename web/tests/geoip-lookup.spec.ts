@@ -12,6 +12,9 @@ import type { Page, Route } from '@playwright/test';
 // Regression: f99f0566a.  ipapi.co's rate-limit refusal sent the wizard
 // straight to the time-zone estimate; ipwho.is was neither tried nor allowed
 // by the CSP.
+//
+// Also covers ccde0eeb2: the browser-side lookup itself, for a player with no
+// route out, under the page's scoped CSP.
 
 const CORS = { 'Access-Control-Allow-Origin': '*' };
 
