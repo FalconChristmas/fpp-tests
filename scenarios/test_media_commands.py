@@ -136,6 +136,9 @@ def test_resumed_companion_media_rejoins_the_entry(fppd, audio):
     Media and seeks it to the entry's offset at once, while that pipeline is
     still starting, and the seek was dropped: the companion played from 0
     until the slot drift repair noticed, about 4 s later.
+
+    Also covers 6d944fcdb: the entry's own media, restarted at the paused
+    offset, sought before decodebin had linked and played from 0.
     """
     write_tone_wav(os.path.join(fppd.media, "music", "Song.wav"), 30)
     write_tone_wav(os.path.join(fppd.media, "music", "Comp.wav"), 30, freq=600)

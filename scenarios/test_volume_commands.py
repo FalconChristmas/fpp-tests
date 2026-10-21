@@ -167,7 +167,9 @@ def test_targeted_volume_goes_to_the_pipewire_api(fppd):
     """Volume Set and Volume Adjust with a target leave the global volume
     alone and POST the target with an absolute "volume" or a relative
     "adjust" to /api/system/volume, returning what that answered; with an
-    empty target they set the global volume as before."""
+    empty target they set the global volume as before.
+
+    Feature: 1cf21f45d (the target-aware volume commands)."""
     fppd.settings(volume="40")
     api = FakeApache(reply=b'{"status":"OK","volume":33}')
     try:
