@@ -58,6 +58,22 @@ test('an install, an uninstall and a reset of the plugins area each leave a hist
   expect(h[3].sha).toBe(sha);
 });
 
+test('Troubleshooting > Plugins > Install History shows an install', async ({ request }) => {
+  // Feature: fcc5a58da.  The history is shown under Troubleshooting, whose
+  // helper runs the command as the web server, through sudo: the install's
+  // commit and clone URL are in its output.  (That it is served as plain
+  // text is fd7b98898's, in plugin-hardening.spec.ts.)
+  const sha = repo.init();
+  expect((await installPlugin(request, repo.info())).Status).toBe('OK');
+  const r = await request.get('/troubleshootingHelper.php?key=PluginHistory');
+  expect(r.ok()).toBe(true);
+  const text = await r.text();
+  expect(text, 'the command failed').not.toContain('Failed to return valid result');
+  // The commit is unique to this test's repository, so the line is this install's.
+  expect(text).toMatch(new RegExp(`${PLUGIN}\\b.*${sha.slice(0, 8)}`));
+  expect(text).toContain(`from ${repo.url}`);
+});
+
 test('the history keeps the real host of a clone URL and drops its query and fragment', async ({ request }) => {
   // Regression: fd7b98898.  PluginHistoryURL() cut everything up to the last
   // '@' before the path, so "https://evil.example?@github.com/o/r.git" was
