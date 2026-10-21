@@ -203,7 +203,11 @@ def test_a_client_that_stops_reading_does_not_wedge_the_api(fppd):
     Regression: d6494e109. State changes are pushed to every WebSocket
     client under one lock, with a blocking send; once the stalled client's
     buffers filled, the send never returned, and everything else that takes
-    that lock -- accepting a connection, shutdown -- waited on it."""
+    that lock -- accepting a connection, shutdown -- waited on it.
+
+    Also guards dcafd456b under TSan: BuildInfoJson() read the WebSocket
+    client list's size while a client thread added itself. Proved by
+    reverting it on 0ec85d6ae (its parent has other races): red 4 of 4."""
     import threading
     start(fppd)
     stalled = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -423,7 +427,12 @@ def test_a_reused_descriptor_is_still_shut_down_at_stop(fppd):
     before untracking it, and untracking erased every entry with that
     number: a connection accepted in between was erased with it, never shut
     down, and its thread's recv() (no timeout) held up shutdown for good.
-    slowclose.so widens the in-between to 300 ms."""
+    slowclose.so widens the in-between to 300 ms.
+
+    Also guards 2f43f7356 under TSan: Cleanup() cleared m_running and closed
+    the listening socket while the accept thread could still loop back into
+    accept() on it. Proved by reverting it on 0ec85d6ae (its parent has
+    other races): TSan reported Cleanup() against AcceptLoop() at the stop."""
     import shims
     setup(fppd, [matrix()])
     fppd.start(preload=[shims.build("slowclose.c")])

@@ -798,7 +798,11 @@ def test_submodel_effect_ending_during_output_reloads(fppd):
 
     Regression: 5611e0bae. The submodel's setState() read its cached parent
     with no lock from the effect and output threads, while the reload freed
-    the parent under modelsLock."""
+    the parent under modelsLock.
+
+    Also guards 34d1b9bf5 under TSan: a model's state was written by the
+    reload's resetParent() while the effect thread read it. Proved by
+    reverting it on 0ec85d6ae (its parent has other races): red 4 of 4."""
     import threading
     fppd.write("config/channeloutputs.json", colorlight_panel())
     fppd.write("config/co-universes.json", ddp_output(PANEL_CHANNELS))

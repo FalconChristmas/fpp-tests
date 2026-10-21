@@ -288,6 +288,30 @@ def test_pause_background_effects_while_a_sequence_plays(fppd):
         assert sorted(running(fppd)) == ["bg", "fg"]
 
 
+def test_pause_background_effects_changed_while_they_run(fppd):
+    """pauseBackgroundEffects can be turned on and off while a background
+    effect runs over a sequence: the effect stops drawing and starts again.
+
+    Regression: 2fefcdaaf, under TSan. The settings listener wrote the flag,
+    a plain volatile int, while the output thread read it every frame.
+    Proved by reverting it on 0ec85d6ae, since its parent has other races.
+    (test_bridge_inputs catches the same commit's m_dataProcessed half.)
+    """
+    seq = solid_frames(600, CHANNELS, 0x10)
+    with DdpReceiver(CHANNELS) as rx:
+        install(fppd, seq)
+        write_eseq(fppd, "bg", solid(20, SIZE, 0xB0), START)
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "false", "false")
+        effect_start(fppd, "bg", bg=True)
+        wait_output(fppd, rx, lambda f: f[MODEL] == b"\xb0" * SIZE, "the background effect")
+        for _ in range(3):
+            fppd.settings(pauseBackgroundEffects="1")
+            wait_output(fppd, rx, lambda f: f[MODEL] == seq[0][MODEL], "the effect to pause")
+            fppd.settings(pauseBackgroundEffects="0")
+            wait_output(fppd, rx, lambda f: f[MODEL] == b"\xb0" * SIZE, "the effect to resume")
+
+
 def bad_eseqs():
     good = eseq_bytes(solid(4, SIZE, 0x77), START)
     return {

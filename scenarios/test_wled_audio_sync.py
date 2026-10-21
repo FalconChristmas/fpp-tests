@@ -394,3 +394,26 @@ def test_send_mode_with_a_destination_that_is_not_an_address(fppd):
     fppd.settings(WLEDAudioSyncMode="receive")
     fppd.wait_for(lambda: warnings() == [], what="the warning to clear in receive mode")
     assert udp_bound(PORT)
+
+
+def test_send_mode_and_a_sound_reactive_effect_share_the_sound_source(fppd):
+    """In send mode the audio sync thread pulls samples from the WLED sound
+    source while a sound-reactive effect pulls from it on the effect
+    thread; both keep running.
+
+    Regression: f2f871695, under TSan; proved by reverting it on 0ec85d6ae,
+    since its parent has other races. The source opened
+    its capture and filled its sample buffer for whichever thread called
+    first, with no lock, so the two threads' first calls raced: two
+    pipelines opened (one leaked) and both wrote the buffer at once.
+    """
+    setup(fppd, [matrix("M", width=W, height=H)], channels=CHANNELS)
+    fppd.settings(WLEDAudioSyncMode="send", WLEDAudioSyncDest="127.0.0.1")
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        time.sleep(1)  # the sync thread is pulling samples by now
+        start_geq(fppd)
+        fppd.wait_for(lambda: any(rx.last() or b""), timeout=10, interval=0.05,
+                      what="the effect to draw")
+        time.sleep(2)
+        stop_effects(fppd, "M")
