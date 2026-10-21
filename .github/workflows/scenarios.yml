@@ -65,19 +65,11 @@ jobs:
         # A dispatch with its own pytest arguments may name files, so it runs
         # whole, in one job.
         shard: ${{ fromJSON(github.event.inputs.pytest_args != '' && github.event.inputs.pytest_args != null && '[1]' || '[1,2,3,4]') }}
-        # Coverage is one job: its report is built from one run's counters.
-        exclude:
-          - flavor: coverage
-            shard: 2
-          - flavor: coverage
-            shard: 3
-          - flavor: coverage
-            shard: 4
     env:
       FPP_REF: ${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}
       FLAVOR: ${{ matrix.flavor }}
       SHARD: ${{ matrix.shard }}
-      SHARDS: ${{ (matrix.flavor == 'coverage' || (github.event.inputs.pytest_args != '' && github.event.inputs.pytest_args != null)) && '1' || '4' }}
+      SHARDS: ${{ (github.event.inputs.pytest_args != '' && github.event.inputs.pytest_args != null) && '1' || '4' }}
     steps:
       - name: Checkout fpp-tests
         uses: actions/checkout@v6
@@ -136,9 +128,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      # One shard's report covers only its quarter; the results job merges
+      # the shards' counts (coverage.json) into the report.
       - name: Upload the coverage report
         id: coverage
-        if: always() && env.FLAVOR == 'coverage'
+        if: always() && env.FLAVOR == 'coverage' && env.SHARDS == '1'
         uses: actions/upload-artifact@v7
         with:
           name: coverage-report
@@ -159,6 +153,7 @@ jobs:
             artifacts/meta.json
             artifacts/junit.xml
             artifacts/coverage/totals.json
+            artifacts/coverage/coverage.json
           if-no-files-found: ignore
           retention-days: 14
 
@@ -174,7 +169,7 @@ jobs:
         flavor: ${{ fromJSON(github.event_name == 'schedule' && '["asan","tsan","coverage"]' || format('["{0}"]', github.event.inputs.flavor || 'asan')) }}
     env:
       FLAVOR: ${{ matrix.flavor }}
-      SHARDS: ${{ (matrix.flavor == 'coverage' || (github.event.inputs.pytest_args != '' && github.event.inputs.pytest_args != null)) && '1' || '4' }}
+      SHARDS: ${{ (github.event.inputs.pytest_args != '' && github.event.inputs.pytest_args != null) && '1' || '4' }}
     steps:
       - name: Checkout fpp-tests
         uses: actions/checkout@v6
@@ -195,8 +190,45 @@ jobs:
           meta=$(ls shards/shard-"$FLAVOR"-*/meta.json 2>/dev/null | head -1)
           [ -n "$meta" ] && cp "$meta" artifacts/meta.json
           [ -f "shards/shard-$FLAVOR-1/coverage/totals.json" ] && cp "shards/shard-$FLAVOR-1/coverage/totals.json" artifacts/coverage/
-          python3 scripts/ci-summary.py artifacts "" >> "$GITHUB_STEP_SUMMARY"
-          exit $status
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+        id: merge
+
+      # Coverage: the shards' counts, merged into one report. gcovr is the
+      # image's version (Debian's), and the per-line pages read fpp's source
+      # at the commit the shards built.
+      - name: Checkout fpp
+        if: env.FLAVOR == 'coverage' && env.SHARDS != '1'
+        uses: actions/checkout@v6
+        with:
+          repository: FalconChristmas/fpp
+          ref: ${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}
+          path: fpp
+
+      - name: Merge the coverage
+        id: coverage
+        if: env.FLAVOR == 'coverage' && env.SHARDS != '1'
+        run: |
+          sha=$(python3 -c 'import json; print(json.load(open("artifacts/meta.json"))["sha"])')
+          git -C fpp checkout -q "$sha"
+          python3 -m venv /tmp/gcovr && /tmp/gcovr/bin/pip install -q gcovr==7.2
+          PATH=/tmp/gcovr/bin:$PATH sh scripts/coverage-report.sh "$PWD/fpp" "$PWD/artifacts/coverage" \
+              shards/shard-coverage-*/coverage/coverage.json
+
+      - name: Upload the coverage report
+        id: report
+        if: env.FLAVOR == 'coverage' && env.SHARDS != '1'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: artifacts/coverage/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Summarize
+        if: always()
+        run: |
+          python3 scripts/ci-summary.py artifacts "${{ steps.report.outputs.artifact-url }}" >> "$GITHUB_STEP_SUMMARY"
+          exit "${{ steps.merge.outputs.status }}"
 
       - name: Upload the results
         if: always()
