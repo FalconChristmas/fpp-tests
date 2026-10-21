@@ -1,0 +1,82 @@
+name: Dashboard
+
+# Publish the dashboard from results already on GitHub, gathered from several
+# runs: one per flavor, e.g. after re-running a flavor by hand. The nightly
+# publishes its own; this is for the day the latest results of each flavor sit
+# in different runs. It adds one entry to the dashboard's history, as a
+# nightly does.
+
+on:
+  workflow_dispatch:
+    inputs:
+      asan_run:
+        description: Scenarios run with the ASan results (results-asan)
+        default: ""
+      tsan_run:
+        description: Scenarios run with the TSan results (results-tsan)
+        default: ""
+      coverage_run:
+        description: Scenarios run with the coverage results and report (results-coverage, coverage-report; and results-pi5 if it ran the device job)
+        default: ""
+      web_run:
+        description: Scenarios run with the web UI results (results-web)
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Checkout fpp-tests
+        uses: actions/checkout@v6
+
+      - name: Download the results
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASAN: ${{ github.event.inputs.asan_run }}
+          TSAN: ${{ github.event.inputs.tsan_run }}
+          COVERAGE: ${{ github.event.inputs.coverage_run }}
+          WEB: ${{ github.event.inputs.web_run }}
+        run: |
+          fetch() {  # run artifact dir
+            [ -n "$1" ] || return 0
+            gh run download "$1" -R "$GITHUB_REPOSITORY" -n "$2" -D "$3" \
+              || { echo "run $1 has no $2" >&2; return 1; }
+          }
+          fetch "$ASAN" results-asan results/results-asan
+          fetch "$TSAN" results-tsan results/results-tsan
+          fetch "$COVERAGE" results-coverage results/results-coverage
+          fetch "$COVERAGE" coverage-report site/coverage
+          fetch "$COVERAGE" results-pi5 results/results-pi5 || true
+          fetch "$WEB" results-web results/results-web
+          ls results
+
+      - name: Build the dashboard
+        run: |
+          curl -fsSL "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/history.json" \
+            -o history.json || echo "no published history yet"
+          python3 scripts/build-site.py results site history.json \
+            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          rm -f site/coverage/coverage.json
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v5
