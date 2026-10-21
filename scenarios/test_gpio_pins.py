@@ -2,17 +2,57 @@
 GPIO command).
 
 Device only: run with run-local.sh on a Raspberry Pi, which passes the
-gpiochips through. The pins used are P1-37 (GPIO26) and P1-31 (GPIO6), left
-unconnected on a bare board; check that nothing on the device uses them.
-Skipped where the pins don't exist.
+gpiochips through. The pins used are plain header GPIOs that are inputs no
+one holds (gpioinfo shows no consumer): on a cape with an OLED and buttons
+the device's own fppoled holds some, and an output something set up without
+holding the line may be wired to hardware. Skipped where there are none.
 """
 
 import os
+import subprocess
 import urllib.error
 
 import pytest
 
-INPUT_PIN = "P1-37"
+import hosttools
+
+# Header pins that are plain GPIOs on every 40-pin Pi (no default alt
+# function), in order of preference: pin -> GPIO number.
+PLAIN_PINS = {"P1-37": 26, "P1-31": 6, "P1-36": 16, "P1-16": 23, "P1-7": 4, "P1-11": 17,
+              "P1-13": 27, "P1-29": 5, "P1-15": 22, "P1-18": 24, "P1-22": 25}
+
+
+def free_pins():
+    """PLAIN_PINS whose line is an input with no consumer, in order."""
+    try:
+        out = subprocess.run(["gpioinfo"], capture_output=True, text=True).stdout
+    except FileNotFoundError:
+        return []
+    lines = {}
+    for line in out.splitlines():
+        for pin, gpio in PLAIN_PINS.items():
+            if f'"GPIO{gpio}"' in line:
+                lines[pin] = line
+    return [pin for pin in PLAIN_PINS if pin in lines and "consumer=" not in lines[pin]
+            and "[used]" not in lines[pin] and "output" not in lines[pin]]
+
+
+def free_pin():
+    """The first free plain header pin, or skip. Ask before fppd starts:
+    once it holds the pin, the pin isn't free any more."""
+    pins = free_pins()
+    if not pins:
+        pytest.skip("no free plain header GPIO here: no board pins, or all held or driven")
+    return pins[0]
+
+
+@pytest.fixture
+def pads():
+    """The pads these scenarios can reach, put back as they were after
+    fppd stops (hosttools.pads_kept): a line fppd drove stays an output
+    when it lets go. Ask for it before `fppd`."""
+    with hosttools.pads_kept(PLAIN_PINS.values()):
+        yield
 
 
 def have_pin(fppd, pin):
@@ -20,7 +60,7 @@ def have_pin(fppd, pin):
         pytest.skip(f"no GPIO pin {pin} on this board")
 
 
-def test_a_configured_input_is_not_driven(fppd):
+def test_a_configured_input_is_not_driven(pads, fppd):
     """A pin gpio.json configures as an input refuses to be driven by
     POST /api/gpio/<pin> (409) and by the GPIO command (an error), and stays
     an input.
@@ -29,19 +69,17 @@ def test_a_configured_input_is_not_driven(fppd):
     input's edge-event request was released and the fd the main loop watches
     was closed, so the input went dead until fppd restarted.
     """
-    fppd.write("config/gpio.json", [{"pin": INPUT_PIN, "enabled": True, "mode": "gpio",
+    pin = free_pin()
+    fppd.write("config/gpio.json", [{"pin": pin, "enabled": True, "mode": "gpio",
                                      "rising": {"command": "Set Variable", "args": ["X", "1"]}}])
     fppd.start()
-    have_pin(fppd, INPUT_PIN)
+    have_pin(fppd, pin)
     with pytest.raises(urllib.error.HTTPError) as e:
-        fppd.post(f"/gpio/{INPUT_PIN}", {"value": 1})
+        fppd.post(f"/gpio/{pin}", {"value": 1})
     assert e.value.code == 409, e.value.body
     with pytest.raises(urllib.error.HTTPError) as e:
-        fppd.command("GPIO", INPUT_PIN, "true")
+        fppd.command("GPIO", pin, "true")
     assert "configured as a GPIO input" in e.value.body, e.value.body
-
-
-OUTPUT_PIN = "P1-31"
 
 
 class GpioTrace:
@@ -80,7 +118,7 @@ class GpioTrace:
             subprocess.run(["umount", self.dir])
 
 
-def test_driving_an_output_again_does_not_glitch_it(fppd):
+def test_driving_an_output_again_does_not_glitch_it(pads, fppd):
     """Setting an output that is already on to on again leaves it on: the
     line is not driven low in between.
 
@@ -88,14 +126,15 @@ def test_driving_an_output_again_does_not_glitch_it(fppd):
     re-requested the line on every call, and a new output request starts
     inactive, so a relay that was on dropped out until setValue().
     """
+    pin = free_pin()
     fppd.start()
-    have_pin(fppd, OUTPUT_PIN)
+    have_pin(fppd, pin)
     trace = GpioTrace()
     try:
         trace.start()
-        fppd.post(f"/gpio/{OUTPUT_PIN}", {"value": 1})
-        fppd.post(f"/gpio/{OUTPUT_PIN}", {"value": 1})
-        fppd.post(f"/gpio/{OUTPUT_PIN}", {"value": 1})
+        fppd.post(f"/gpio/{pin}", {"value": 1})
+        fppd.post(f"/gpio/{pin}", {"value": 1})
+        fppd.post(f"/gpio/{pin}", {"value": 1})
         events = trace.events()
     finally:
         trace.close()
