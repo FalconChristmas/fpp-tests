@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
 import { MEDIA, exists } from './settings-file';
 
-// Regression: 6b95a5ddf ("File Copy to and from the local backups folder
+// Regression: 7c4ef4b74 ("File Copy to and from the local backups folder
 // works when media is a link"). copy_settings_to_storage.sh resolved a
 // TOLOCAL destination or FROMLOCAL source with realpath and compared it to the
 // literal /home/fpp/media/backups, so with the media directory a link every

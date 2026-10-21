@@ -81,7 +81,7 @@ test('a cape that hides GPIOFan gets no fan line, whatever GPIOFan holds', async
   expect(lines()).toContain(FAN);
 });
 
-// Regression: b2185d34f ("write the GPIO fan line even when config.txt
+// Regression: bd8de918e ("write the GPIO fan line even when config.txt
 // mentions the overlay elsewhere"). The line was added only when the text
 // appeared nowhere in config.txt, but only line-anchored ones were rewritten:
 // an indented copy or a comment naming the overlay left GPIOFan on with no line.

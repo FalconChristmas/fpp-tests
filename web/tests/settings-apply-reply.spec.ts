@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 
-// Regression: 705b57f83 ("applying the UI password setting no longer writes
+// Regression: 28a56afdc ("applying the UI password setting no longer writes
 // into the reply"). SetupHtaccess() reloaded Apache with system(), which
 // passes the command's output through, so "Reloading Apache httpd web
 // server..." went out in front of the JSON of every call that applied

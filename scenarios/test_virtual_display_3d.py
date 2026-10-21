@@ -192,7 +192,7 @@ def test_clients_come_and_go_while_it_streams(fppd):
     another and two at a time, are each served, and leave the display
     serving the next.
 
-    Regression (TSan): 6c0b7a6c1. The accept thread set m_connListChanged
+    Regression (TSan): 73f7fd82d. The accept thread set m_connListChanged
     under the connection list's lock while the select thread read it
     without, a volatile bool shared between threads; c08e4f453 had made the
     same flags atomic on the 2D display only.

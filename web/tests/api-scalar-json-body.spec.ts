@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 
 // A POST whose JSON body is valid but not an object or array is answered by
-// its route. Regression: 233108563 ("a JSON request body that is not an
+// its route. Regression: fd990df6b ("a JSON request body that is not an
 // object or array no longer kills the request"). limonade decoded the body
 // into $_POST, and request_method() then called array_key_exists() on the
 // scalar: a PHP fatal before any route ran, answered 200 with the fatal's HTML.

@@ -159,7 +159,7 @@ def test_convert_round_trips_every_version_and_compression(src, tmp_path):
     """Writing the sequence out again as v1, and as v2 uncompressed, zstd,
     zlib and v2.1, keeps every frame of every channel.
 
-    Regression: da539db66. The zlib writer never ended the deflate stream of
+    Regression: c0400c58d. The zlib writer never ended the deflate stream of
     its last block or freed the stream, so every zlib file written leaked
     about 260 KB (LeakSanitizer fails the run here).
 
@@ -312,7 +312,7 @@ def test_merge_of_a_shorter_sequence_leaves_the_rest_of_the_base(tmp_path):
 def test_dump_prints_each_frame_of_the_range(src):
     """-d -r prints a titled hex dump of the range for every frame.
 
-    Regression: da539db66. The dump never freed its 8 MB channel buffer,
+    Regression: c0400c58d. The dump never freed its 8 MB channel buffer,
     which LeakSanitizer reported on every dump."""
     path, frames = src
     rc, out, err = fsequtils("-d", "-r", "1-16", path)

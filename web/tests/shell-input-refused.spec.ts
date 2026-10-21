@@ -155,7 +155,7 @@ test('a script or firmware name that leaves its directory is refused', async ({ 
   }
 });
 
-// Regression: 6c31528a2 ("branch and version refusals answer 400, not 200").
+// Regression: 05f3e1205 ("branch and version refusals answer 400, not 200").
 // Both pages checked the name only after sending the page head, with output
 // buffering off, so the 400 they set never reached the client.
 test('a refused branch or version answers 400', async ({ request }) => {

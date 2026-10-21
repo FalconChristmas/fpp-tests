@@ -34,7 +34,7 @@ test('the config-file and file APIs refuse a name that climbs out of their direc
   expect((await request.get('/api/configfile/commandPresets.json')).status()).toBe(200);
 });
 
-// Regression: dcc98eb15 ("DELETE /api/file refuses a missing file or an
+// Regression: ab24cc121 ("DELETE /api/file refuses a missing file or an
 // outside path with a 4xx"). DeleteFile refused both with a 200 whose status
 // said "Invalid path: directory traversal detected..."; the GET and POST
 // routes refuse with a 403.

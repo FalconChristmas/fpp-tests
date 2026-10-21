@@ -3,7 +3,7 @@ import { container } from './container';
 import { settingInFile } from './settings-file';
 
 // Choosing "No Password (Default)" in the setup wizard is recorded, so a later
-// run of setup shows it as answered. Regression: 557bd3938 ("record a "No
+// run of setup shows it as answered. Regression: 288ca0d2f ("record a "No
 // Password" choice so a re-run of setup does not ask again"). finishSetup()
 // dropped passwordEnable unless it was '1', the settings file kept no key, and
 // every re-run (after an fppOS update, say) offered "-- Choose an Option --"

@@ -117,7 +117,7 @@ test('API answers are not sent as immutable', async () => {
   }
 });
 
-// Regression: 3e13a03c4 ("stripping immutable no longer leaves "no-cache, "
+// Regression: 9c10a5c36 ("stripping immutable no longer leaves "no-cache, "
 // on PHP answers"). The merge added immutable as a second Cache-Control header
 // beside PHP's no-cache, and the rule that takes it off left that one empty:
 // "Cache-Control: no-cache, ".

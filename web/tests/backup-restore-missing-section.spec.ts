@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
 import { BACKUPS, MEDIA, deviceUUID, putFile, readFile, settingInFile, snapshotSettings } from './settings-file';
 
-// Regression: a83ed39e2 ("a settings restore from a backup with no proxies
+// Regression: 3a8d2368f ("a settings restore from a backup with no proxies
 // section restores the rest"). The proxies sub-area implode()d the backup's
 // proxies data without checking it was there, so a backup without it (made by
 // hand, or before proxies were backed up) was a PHP fatal part way through the
