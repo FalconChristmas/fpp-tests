@@ -54,14 +54,40 @@ def link_monitor_to(node):
     return ok
 
 
-def test_an_rtsp_stream_carries_the_audio_fed_to_its_node(fppd, audio):
+def link_as_it_appears(node):
+    """Link `node` from the test sink's monitor the moment it appears, as an
+    audio group targeting it does on a device. Returns a list that gets the
+    time of the link."""
+    import threading
+    linked = []
+
+    def spin():
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            if link_monitor_to(node):
+                linked.append(time.monotonic())
+                return
+            time.sleep(0.005)
+    threading.Thread(target=spin, daemon=True).start()
+    return linked
+
+
+@pytest.mark.parametrize("linked_early", [False, True], ids=["linked-after-start", "linked-as-it-appears"])
+def test_an_rtsp_stream_carries_the_audio_fed_to_its_node(fppd, audio, linked_early):
     """An RTSP stream of playback slot 1 with audio on: its SDP offers an
     Opus audio track next to the video, and with a tone playing into the
-    stream's audio node a client pulling the stream hears it.
+    stream's audio node a client pulling the stream hears it -- also when
+    the node is linked the moment it appears, while its bridge is starting.
 
-    Feature: f42b7c003 (an RTSP video output that carries audio)."""
+    Feature: f42b7c003 (an RTSP video output that carries audio).
+    Regression: 5a98f1b0b. The bridge ran on pipewiresrc's GstPipeWireClock,
+    which stops advancing for a follower stream once the graph's real driver
+    takes it over. Linked while starting, it passed a buffer or two and then
+    waited on that clock forever: clients heard silence."""
     needs_rtsp(fppd)
     port, node = 18557, "fpp_rtsp_av"
+    if linked_early:
+        link_as_it_appears(node)
     write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 30, freq=1000, amplitude=0.5)
     fppd.write("config/pipewire-rtsp-outputs.json",
                {"enabled": True, "port": port, "requireGroupSource": False})

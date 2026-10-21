@@ -2,7 +2,11 @@
 with an instances file, against the audio fixture's PipeWire."""
 
 import os
+import socket
 import threading
+import time
+
+from audio import write_tone_wav
 
 
 def advanced_backend(fppd):
@@ -49,3 +53,41 @@ def test_opus_rtp_applies_at_once_from_two_clients(fppd, audio):
             t.join()
         fppd.check_alive()
         assert not errors, f"round {rnd}: {errors}"
+
+
+def test_an_opus_sender_linked_as_it_appears_keeps_sending(fppd, audio):
+    """An Opus RTP send instance whose node is fed (from the test sink's
+    monitor, with a tone playing) the moment the node appears, as an audio
+    group targeting it does: RTP keeps arriving at its destination, a
+    packet every 20 ms.
+
+    Regression: 5a98f1b0b. The send pipeline ran on pipewiresrc's
+    GstPipeWireClock, which stops advancing for a follower stream once the
+    graph's real driver takes it over: the sender passed its first packets
+    and then waited on that clock for good."""
+    from test_rtsp_outputs import link_as_it_appears
+    advanced_backend(fppd)
+    rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    rx.bind(("127.0.0.1", 0))
+    rx.settimeout(0.2)
+    port = rx.getsockname()[1]
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 30, amplitude=0.5)
+    fppd.write("config/pipewire-opus-rtp-instances.json", {"requireGroupSource": False, "instances": [
+        {"id": 1, "name": "tx", "mode": "send", "enabled": True, "destIP": "127.0.0.1",
+         "port": port, "channels": 2}]})
+    linked = link_as_it_appears("opusrtp_tx_send")
+    try:
+        fppd.start(timeout=90)
+        fppd.wait_for(lambda: linked, timeout=30, what="the sender's node to be linked")
+        fppd.command("Play Media", "Tone.wav", "1", "0", "1")
+        time.sleep(2)
+        packets, end = 0, time.monotonic() + 3
+        while time.monotonic() < end:
+            try:
+                rx.recv(65536)
+                packets += 1
+            except socket.timeout:
+                pass
+    finally:
+        rx.close()
+    assert packets >= 100, f"{packets} RTP packets in 3 s (one per 20 ms is 150)"
