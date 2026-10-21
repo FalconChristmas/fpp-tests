@@ -20,7 +20,7 @@ import pytest
 from ddp import DdpReceiver
 from fseq import solid_frames
 from show import install
-from test_overlays import fill, matrix, put, setup, submodel
+from test_overlays import effect_done, fill, matrix, put, setup, stop_effects, submodel
 
 LIT = (0, 0, 200)
 PRIMER = (9, 9, 9)
@@ -382,11 +382,14 @@ def test_polar_mapping_on_a_rectangle_submodel_joins_through_its_parent(fppd):
     offset, and a submodel's startChannel is forced to 0, so it read the
     positions of channels 0-71 (the first row): the wrong ring lit.
 
-    Known fpp bug, left out: the submodel's parent is looked up only when its
-    state is set, and getPolarMap() remembers a failed build. A polar effect
-    run with AutoEnable False on a submodel never enabled yet finds no
-    parent, falls back to Horizontal, and every polar effect after that does
-    too, enabled or not, until the layout's mtime changes."""
+    Before that, Radial Out runs once with the submodel's state left
+    "False", on a submodel never enabled, so its parent hasn't been looked
+    up by setting its state. The enabled run after it lights the inner ring.
+
+    Regression: ebf703678 (the "False" run first). getPolarMap() joined
+    with no parent, found no channels, and remembered that failed build, so
+    every polar effect after it fell back to Horizontal (nodes 28-35),
+    enabled or not, until the layout's mtime changed."""
     w, h = 26, 2
     nodes = w * h
     sub_node = lambda i: w + 2 + i  # noqa: E731
@@ -399,6 +402,9 @@ def test_polar_mapping_on_a_rectangle_submodel_joins_through_its_parent(fppd):
     expected = {sub_node(i) for i in range(RINGS) if ring_of(i) == 0}
     with DdpReceiver(nodes * 3) as rx:
         fppd.start()
+        percent(fppd, "Row", "Radial Out", 34, state="False")
+        stop_effects(fppd, "Row")
+        effect_done(fppd, "Row")
         percent_lights(fppd, rx, "Row", "Radial Out", 34, expected, nodes,
                        "Radial Out on the submodel",
                        painted={sub_node(i) for i in range(RINGS)})
