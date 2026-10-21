@@ -1,5 +1,6 @@
+import { execFileSync } from 'child_process';
 import { test, expect } from './fixtures';
-import { container, inPlayer } from './container';
+import { container, docker, inPlayer } from './container';
 import { MEDIA, keepingFile, keepingSettings, setSettingInFile, writeFile } from './privacy-helpers';
 
 // Crash reports kept on the player, the Diagnostic Report built on request,
@@ -204,6 +205,197 @@ test('the logs zip keeps JSON settings whole and leaves out stale Diagnostic Rep
       inPlayer('rm', '-f', zip);
     }
   })));
+});
+
+// The API as it answers when fppd is not running, while the suite's fppd goes
+// on running (web_serve.py fails the run if it stops): www/api/index.php
+// served by PHP's own web server in the player, with an LD_PRELOAD shim that
+// refuses every connect() to fppd's port 32322.  So PostCrashReport() gets no
+// reply from fppd, FppdListening() finds nothing listening, and the real
+// BuildManualCrashReportWithoutFppd() builds the report, with the real
+// generate_crash_report (whose own calls to fppd are refused too, as they
+// would be).  The server and its builds run as root, as php-fpm does here.
+class ApiWithoutFppd {
+  static readonly PORT = 18322;
+  private static readonly SHIM = '/tmp/fpp-tests-no-fppd.so';
+
+  static start(): ApiWithoutFppd {
+    writeFile('/tmp/fpp-tests-no-fppd.c', `#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <errno.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+int connect(int fd, const struct sockaddr *sa, socklen_t len) {
+    static int (*real)(int, const struct sockaddr *, socklen_t);
+    if (!real) real = (int (*)(int, const struct sockaddr *, socklen_t))dlsym(RTLD_NEXT, "connect");
+    unsigned short port = 0;
+    if (sa && sa->sa_family == AF_INET) port = ntohs(((const struct sockaddr_in *)sa)->sin_port);
+    if (sa && sa->sa_family == AF_INET6) port = ntohs(((const struct sockaddr_in6 *)sa)->sin6_port);
+    if (port == 32322) { errno = ECONNREFUSED; return -1; }
+    return real(fd, sa, len);
+}
+`);
+    inPlayer('gcc', '-shared', '-fPIC', '-o', ApiWithoutFppd.SHIM, '/tmp/fpp-tests-no-fppd.c', '-ldl');
+    // Two workers: a second request is answered while the first builds.
+    docker('exec', '-d', '-w', '/opt/fpp/www', '-e', 'PHP_CLI_SERVER_WORKERS=2', '-e', `LD_PRELOAD=${ApiWithoutFppd.SHIM}`, container,
+      'php', '-S', `127.0.0.1:${ApiWithoutFppd.PORT}`, '-t', '/opt/fpp/www');
+    const api = new ApiWithoutFppd();
+    for (let i = 0; i < 100; i++) {
+      try {
+        if (api.call('GET', 'crashes/uploadTarget').Status === 'OK') return api;
+      } catch {
+        // not up yet
+      }
+      execFileSync('sleep', ['0.1']);
+    }
+    api.stop();
+    throw new Error('PHP\'s server did not start');
+  }
+
+  url(path: string): string {
+    return `http://127.0.0.1:${ApiWithoutFppd.PORT}/api/index.php/${path}`;
+  }
+
+  call(method: string, path: string): any {
+    return JSON.parse(inPlayer('curl', '-sS', '--max-time', '300', '-X', method,
+      ...(method === 'POST' ? ['-H', 'Content-Type: application/json', '-d', '{"client":"fpp-tests"}'] : []), this.url(path)));
+  }
+
+  stop() {
+    // A build a failed test left running goes too.
+    inPlayer('sh', '-c', `pkill -f '[p]hp -S 127.0.0.1:${ApiWithoutFppd.PORT}'; pkill -f '[g]enerate_crash_report 3 .*/manual-crash-php/'; ` +
+      `rm -f ${ApiWithoutFppd.SHIM} /tmp/fpp-tests-no-fppd.c; true`);
+  }
+}
+
+// The player's local time, as the API stamps a report's name (with date(1)).
+function playerStamp(): string {
+  return inPlayer('date', '+%Y-%m-%d_%H-%M-%S').trim();
+}
+
+// fppd's own Diagnostic Report, waiting out its 10 s after an earlier build.
+async function fppdReport(request: any): Promise<any> {
+  let body: any;
+  const until = Date.now() + 30_000;
+  do {
+    if (body) await new Promise((res) => setTimeout(res, 1_000));
+    body = await (await request.post('/api/crashes/report', { data: { client: 'fpp-tests' }, timeout: 300_000 })).json();
+  } while (body.Code === 'rate-limited' && Date.now() < until);
+  return body;
+}
+
+test.describe('a Diagnostic Report with fppd not running', () => {
+  let api: ApiWithoutFppd | undefined;
+  let kept = '';
+  const PHPTMP = `${MEDIA}/tmp/manual-crash-php`;
+
+  test.beforeEach(() => {
+    // The manual reports already here (none, normally) wait outside, since at
+    // most two are kept and the newest one sets the rate limit.
+    kept = `/tmp/fpp-tests-kept-manual-${process.pid}`;
+    inPlayer('sh', '-c', `mkdir -p ${CRASHES} ${kept} && for f in ${CRASHES}/*-manual.zip; do [ -e "$f" ] && mv "$f" ${kept}/; done; true`);
+    api = ApiWithoutFppd.start();
+  });
+  test.afterEach(() => {
+    api?.stop();
+    inPlayer('sh', '-c', `rm -rf ${CRASHES}/*-manual.zip ${CRASHES}/*-fpp-tests-*.zip ${PHPTMP} ${PHPTMP}.lock /tmp/fpp-tests-no-fppd-*.json; ` +
+      `for f in ${kept}/*; do [ -e "$f" ] && mv "$f" ${CRASHES}/; done; rmdir ${kept}; true`);
+  });
+
+  const manualReports = () => inPlayer('sh', '-c', `cd ${CRASHES} && ls *-manual.zip 2>/dev/null || true`).split('\n').filter(Boolean).sort();
+
+  test('the API builds it itself, named as fppd names its own', async ({ request }) => {
+    // Feature: 584744bc1.  When fppd is not running, POST /api/crashes/report
+    // builds the report in PHP (BuildManualCrashReportWithoutFppd) and says
+    // so with "Fppd":"not-running"; the name is CrashReportName()'s, as
+    // fppd's own report is named.  Proved red with crashes.php at 584744bc1^
+    // on master (the reply is Code unavailable: "fppd did not respond"), and
+    // with the API's platform name for Docker changed (the names differ).
+    test.setTimeout(660_000);
+    const own = await fppdReport(request);
+    expect(own.Status, JSON.stringify(own)).toBe('OK');
+    expect(own.Fppd, 'fppd built its own report but the reply says it is not running').toBeUndefined();
+    // Out of the API's 10 s after the last manual report.
+    inPlayer('touch', '-d', '1 minute ago', `${CRASHES}/${own.File}`);
+
+    const before = playerStamp();
+    const r = api!.call('POST', 'crashes/report');
+    const after = playerStamp();
+    expect(r, JSON.stringify(r)).toMatchObject({ Status: 'OK', Fppd: 'not-running' });
+    // fppd itself never stopped: the shim, not a dead fppd, made the difference.
+    expect((await request.get('/api/fppd/status')).ok()).toBe(true);
+
+    const name = /^(fpp-.+)-(\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d)-manual\.zip$/;
+    const mine = r.File.match(name);
+    const theirs = own.File.match(name);
+    expect(mine, r.File).not.toBeNull();
+    expect(theirs, own.File).not.toBeNull();
+    // fpp-<platform>-<version>-<uuid>, the same as fppd's
+    expect(mine[1], `${r.File} is not named as fppd's ${own.File}`).toBe(theirs[1]);
+    // and the player's local time when it was built
+    expect(mine[2] >= before && mine[2] <= after, `${mine[2]} not in ${before}..${after}`).toBe(true);
+
+    const path = `${CRASHES}/${r.File}`;
+    expect(r.Size).toBe(Number(inPlayer('stat', '-c', '%s', path)));
+    // A level-3 Diagnostic Report, as fppd builds
+    expect(zipNames(path)).toEqual(expect.arrayContaining(['settings', 'logs/fppd.log',
+      'logs/troubleshootingCommands.log', 'logs/healthCheck.log']));
+    expect(manualReports()).toEqual([own.File, r.File].sort());
+    expect(inPlayer('cat', `${MEDIA}/logs/fppd.log`)).toContain(
+      `crash report on request ${r.File} (level 3) built without fppd (not running), kept in crashes/ (client 'fpp-tests')`);
+  });
+
+  test('one is built at a time, none within 10 s of the last, and two are kept', async () => {
+    // Feature: 584744bc1.  The API's build without fppd has fppd's limits:
+    // one build at a time (its own lock), none for 10 s after the newest
+    // manual report, and only the two newest manual reports kept.  A crash
+    // report there is neither counted nor pruned.  Proved red with
+    // crashes.php at 584744bc1^ on master, and with each limit changed in turn
+    // (no lock: the second request builds; 5 s: built 7 s after; 15 s: refused
+    // 12 s after; no pruning: the oldest report stays).
+    test.setTimeout(660_000);
+    const old = ['fpp-Docker-10.x-fpp-tests-uuid-2026-01-01_00-00-00-manual.zip', 'fpp-Docker-10.x-fpp-tests-uuid-2026-01-01_00-00-01-manual.zip'];
+    const crash = 'fpp-Docker-10.x-fpp-tests-uuid-2026-01-01_00-00-02.zip';
+    for (const [f, ago] of [[old[0], '3 minutes ago'], [old[1], '2 minutes ago'], [crash, '1 minute ago']]) {
+      inPlayer('sh', '-c', `printf 'PK\\005\\006%018d' 0 > ${CRASHES}/${f} && touch -d '${ago}' ${CRASHES}/${f}`);
+    }
+
+    // The first build, in the background; while generate_crash_report runs
+    // for it, a second request is turned away.
+    const out = `/tmp/fpp-tests-no-fppd-${process.pid}.json`;
+    docker('exec', '-d', container, 'sh', '-c', `curl -sS --max-time 300 -X POST -H 'Content-Type: application/json' -d '{"client":"fpp-tests"}' ` +
+      `'${api!.url('crashes/report')}' > ${out}.part; mv ${out}.part ${out}`);
+    const building = () => inPlayer('sh', '-c', `pgrep -f '[g]enerate_crash_report 3 .*/manual-crash-php/' > /dev/null && echo yes || true`).trim() === 'yes';
+    const done = () => inPlayer('sh', '-c', `test -e ${out} && echo yes || true`).trim() === 'yes';
+    await expect.poll(() => building() || done(), { timeout: 60_000, intervals: [100] }).toBe(true);
+    // (Answered already, it is shown: an error, or a build too quick to overlap.)
+    expect(done() ? inPlayer('cat', out) : 'building', 'the first request was answered before a second could be made').toBe('building');
+    const second = api!.call('POST', 'crashes/report');
+    expect(second, JSON.stringify(second)).toMatchObject({ Status: 'Error', Code: 'busy' });
+
+    await expect.poll(done, { timeout: 300_000, intervals: [500] }).toBe(true);
+    const first = JSON.parse(inPlayer('cat', out));
+    expect(first, JSON.stringify(first)).toMatchObject({ Status: 'OK', Fppd: 'not-running' });
+    // The oldest manual report went; the crash report stays.
+    expect(manualReports()).toEqual([old[1], first.File].sort());
+    expect(inPlayer('ls', CRASHES)).toContain(crash);
+
+    // Straight after it, and 7 s after it: none.
+    const soon = api!.call('POST', 'crashes/report');
+    expect(soon, JSON.stringify(soon)).toMatchObject({ Status: 'Error', Code: 'rate-limited' });
+    inPlayer('touch', '-d', '7 seconds ago', `${CRASHES}/${first.File}`);
+    const still = api!.call('POST', 'crashes/report');
+    expect(still, JSON.stringify(still)).toMatchObject({ Status: 'Error', Code: 'rate-limited' });
+    expect(manualReports()).toEqual([old[1], first.File].sort());
+
+    // 12 s after it: built, and the older of the two before it goes.
+    inPlayer('touch', '-d', '12 seconds ago', `${CRASHES}/${first.File}`);
+    const later = api!.call('POST', 'crashes/report');
+    expect(later, JSON.stringify(later)).toMatchObject({ Status: 'OK', Fppd: 'not-running' });
+    expect(later.File).not.toBe(first.File);
+    expect(manualReports()).toEqual([first.File, later.File].sort());
+    expect(inPlayer('ls', CRASHES)).toContain(crash);
+  });
 });
 
 test('File Manager > Logs offers the Diagnostic Report, not the old Zip', async ({ page }) => {
