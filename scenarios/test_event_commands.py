@@ -124,8 +124,6 @@ def test_run_script_passes_arguments_and_environment(fppd):
     with its arguments (quoted ones kept whole) and the environment
     variables it is given (a quoted one may hold a comma), plus FPP_SCRIPT
     and FPP_SCRIPTARGS; a variable fppd already has keeps fppd's value.
-    A script name that climbs out of the scripts folder with ".." is not
-    run, and puts up a warning saying so.
     An environment entry with no "=" (FOO) is left out.
 
     Regression: 4bf5304bc. FOO was passed as FOO=FOO. (The same fix drops
@@ -135,9 +133,6 @@ def test_run_script_passes_arguments_and_environment(fppd):
     scripts = os.path.join(fppd.media, "scripts")
     fppd.write("scripts/rec.sh", RECORD.replace("OUT", "rec.out"))
     os.chmod(os.path.join(scripts, "rec.sh"), 0o755)
-    marker = os.path.join(fppd.media, "outside.ran")
-    fppd.write("outside.sh", f"#!/bin/bash\ntouch {marker}\n")
-    os.chmod(os.path.join(fppd.media, "outside.sh"), 0o755)
     fppd.start(extra_env={"FPP_TEST_KEEP": "fppd's"})
 
     args = "one 'two three' \"four five\""
@@ -168,7 +163,25 @@ def test_run_script_passes_arguments_and_environment(fppd):
             lines = f.read().splitlines()
         assert lines[:3] == ["|", "A=", "B="], (given, lines)
 
-    fppd.command("Run Script", "../outside.sh")
+
+def test_run_script_refuses_a_script_outside_the_scripts_folder(fppd):
+    """A Run Script name that climbs out of the scripts folder with ".." is
+    not run: the command answers with an error and a warning goes up saying
+    so.
+
+    Regression: 7231a0b5a. The refused script was answered "Script
+    Started"."""
+    marker = os.path.join(fppd.media, "outside.ran")
+    fppd.write("outside.sh", f"#!/bin/bash\ntouch {marker}\n")
+    os.chmod(os.path.join(fppd.media, "outside.sh"), 0o755)
+    fppd.start()
+
+    try:
+        got = fppd.command("Run Script", "../outside.sh")
+        raise AssertionError(f"a script outside the scripts folder was answered {got!r}")
+    except urllib.error.HTTPError as e:
+        assert e.code == 500, e.code
+        assert e.body == "Script Not Started"
     fppd.wait_for(lambda: any("outside the scripts directory" in str(w)
                               for w in fppd.get("/fppd/status").get("warnings", [])),
                   timeout=5, what="the refused-script warning")
