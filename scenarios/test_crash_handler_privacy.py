@@ -235,3 +235,39 @@ def test_turning_statistics_on_publishes_after_a_grace_period_once(fppd):
     assert log.count(published) == 1, f"published {log.count(published)} times"
     assert log.count("Statistics opt-in superseded by a later change") == 1, \
         "the first, superseded opt-in was not cancelled"
+
+
+def test_a_crash_before_the_crash_question_is_answered_sends_the_full_report(fppd, tmp_path):
+    """Before the user has answered the crash-reporting question (no
+    ShareCrashData in the settings file), a crash sends the full level-3
+    report: settings, configuration and logs. Deliberate: a crash before
+    setup has finished is rare and is the one nobody can reproduce later, so
+    everything is sent; and before setup nothing has been configured, so
+    there is next to no personal data in it to withhold. The level comes from
+    ShareCrashData's www/settings.json default (3), which
+    SettingsConfig::LoadSettingsInfo() seeds before fppd reads it, not from
+    handleCrash()'s own fallback. Red with that default changed to 1.
+
+    Examined: 45815fbf4 (its fallback of 1 is never used).
+    """
+    path = os.path.join(fppd.media, "settings")
+    with open(path) as f:
+        kept = [l for l in f if not l.startswith("ShareCrashData")]
+    with open(path, "w") as f:
+        f.writelines(kept)
+    fppd.write("config/plugin.fpp-tests.json", {"note": "fpp-tests-config"})
+    calls, curl = recording_curl(fppd)
+    fppd.start(extra_env=stub_bin(tmp_path, curl=curl))
+    crash(fppd)
+    reports = reports_in(fppd)
+    assert len(reports) == 1, f"reports: {reports}\n{fppd.tail()}"
+    texts = zip_texts(reports[0])
+    names = sorted(texts)
+    assert any(os.path.basename(n.rstrip("/")) == "settings" for n in names), f"no settings in the report: {names}"
+    assert any("fpp-tests-config" in t for n, t in texts.items() if n.lstrip("./").startswith("config/")), \
+        f"no configuration in the report: {names}"
+    assert any(n.lstrip("./").startswith("logs/") for n in names), f"no logs in the report: {names}"
+    with open(calls) as f:
+        uploads = [l for l in f if "crashUpload" in l]
+    assert len(uploads) == 1 and os.path.basename(reports[0]) in uploads[0], \
+        f"the report was not sent: {uploads}"

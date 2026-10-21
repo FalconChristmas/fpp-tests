@@ -9,7 +9,7 @@ so a row is the record that it was examined.
 | column  | meaning |
 |---------|---------|
 | commit  | fpp commit (short hash) |
-| outcome | `new-test`, `covered-marked` (an existing test already covered it; its hash was added to that test's docstring), `coverage-only` (exercised, but no red-before check), `superseded` (a later commit replaced or removed the change), `untestable` (with the reason in `note`), `open-bug` (the fix has no effect on master) |
+| outcome | `new-test`, `covered-marked` (an existing test already covered it; its hash was added to that test's docstring), `coverage-only` (exercised, but no red-before check), `superseded` (a later commit replaced or removed the change), `untestable` (with the reason in `note`) |
 | test    | the test(s), as `file::test name` |
 | proof   | `red-green-revert` (fails with the fix reverted on master, passes on master), `red-green-parent` (fails on the fix's parent), `control-run`, or `none` |
 | note    | what the red failure was, or why there is no test |
