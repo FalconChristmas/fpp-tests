@@ -6,6 +6,9 @@ FROM debian:trixie
 ARG DEBIAN_FRONTEND=noninteractive
 # fonts-dejavu-core: the Text overlay effect draws nothing without a font,
 # and every scenario that renders text skips.
+# xxd, device-tree-compiler: what FPP's own scripts call (the PocketBeagle2
+# EEPROM repair, the Pi overlay upgrade steps); without them the scenarios
+# for those fall back to stand-ins.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential g++ make pkg-config ccache mold git curl ca-certificates \
         php-cli \
@@ -21,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         pipewire pipewire-bin pipewire-pulse wireplumber pulseaudio-utils \
         python3 python3-pytest python3-zstandard faketime tzdata procps iproute2 gdb patch zip \
         mosquitto mosquitto-clients gcovr qrencode \
+        xxd device-tree-compiler \
         fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
