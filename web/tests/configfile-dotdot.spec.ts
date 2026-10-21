@@ -33,3 +33,17 @@ test('the config-file and file APIs refuse a name that climbs out of their direc
   // The control: an ordinary name in the directory is served.
   expect((await request.get('/api/configfile/commandPresets.json')).status()).toBe(200);
 });
+
+// Regression: dcc98eb15 ("DELETE /api/file refuses a missing file or an
+// outside path with a 4xx"). DeleteFile refused both with a 200 whose status
+// said "Invalid path: directory traversal detected..."; the GET and POST
+// routes refuse with a 403.
+test('the file API answers a refused delete with a 4xx', async ({ request }) => {
+  const settings = readFile(SETTINGS);
+  const outside = await request.delete(`/api/file/config/${UP}settings`);
+  expect(outside.status(), await outside.text()).toBe(403);
+  const missing = await request.delete('/api/file/music/fpp-tests-no-such-file.mp3');
+  expect(missing.status(), await missing.text()).toBe(404);
+  expect((await missing.json()).status).toBe('File Not Found');
+  expect(readFile(SETTINGS)).toBe(settings);
+});
