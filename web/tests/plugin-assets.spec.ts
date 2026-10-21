@@ -44,3 +44,24 @@ test('plugin js, css and images are served with no directory for them in the web
     expect(exists(`/opt/fpp/www/${d}/plugin`), `www/${d}/plugin exists`).toBe(false);
   }
 });
+
+test('a script, stylesheet or image of a plugin that is not installed is a 404', async ({ request }) => {
+  // Regression: a111b72ac.  plugin.php answered a request naming no
+  // installed plugin with 200 and the text "Plugin variable empty, please
+  // don't access this page directly", so a page still loading a removed
+  // plugin's script got that text as its script; a missing file of an
+  // installed plugin was already a 404.
+  // The control: the installed plugin's files are served.
+  expect((await request.get(`/js/plugin/${NAME}/x.js`)).status()).toBe(200);
+  for (const url of [
+    '/js/plugin/fpp-tests-gone/x.js',
+    '/css/plugin/fpp-tests-gone/x.css',
+    '/images/plugin/fpp-tests-gone/x.png',
+    '/plugin.php?plugin=fpp-tests-gone&file=x.js&nopage=1',
+    '/plugin.php?plugin=fpp-tests-gone&page=x.php&nopage=1',
+    '/plugin.php?plugin=..&file=x.js&nopage=1',
+  ]) {
+    const r = await request.get(url);
+    expect(r.status(), url).toBe(404);
+  }
+});
