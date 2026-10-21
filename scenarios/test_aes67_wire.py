@@ -55,8 +55,7 @@ def link(audio, node, connect=True):
 def start_sender(fppd, audio, channels=2, link_delay=0, **top):
     """Start fppd with one send instance and feed it once its node appears
     (link_delay seconds after). The sender's pipeline only reaches PLAYING
-    once something feeds it, and its RTP timeline is anchored before that, so
-    the link is made as soon as it can be: see test_aes67_wire_OPENBUG.py."""
+    once something feeds it."""
     # requireGroupSource off: no Audio Output Group feeds this sender (the
     # scenario links it by hand), and on a player the generated groups conf
     # would hold it idle.
@@ -131,6 +130,31 @@ def test_stream_is_one_packet_per_ms_ahead_of_its_time(fppd, audio, channels):
     median = statistics.median(lead)
     assert abs(median - TARGET_LEAD_MS) < 1.5, f"median lead {median:.2f} ms"
     assert pct(lead, 0.05) > 0, f"5% of packets arrived after their own time (p5 {pct(lead, 0.05):.2f} ms)"
+
+
+def test_a_source_linked_late_still_paces_ahead_of_its_time(fppd, audio):
+    """The sender's node is fed a second after its pipeline is built (a group
+    that links late; on a Pi the graph alone takes ~100 ms): its packets still
+    arrive about 3 ms ahead of their own RTP time, paced one per ms.
+
+    Regression: b47c0450f. The RTP timeline was anchored when the pipeline was
+    built, so every timestamp was early by however long the first audio took
+    to arrive. The lead servo answered by moving transmission earlier until
+    each buffer was past its render time on arrival: udpsink then sent them as
+    they came, a quantum at a time, while the servo -- projecting the send
+    time rather than seeing it -- logged +3 ms. On the wire the lead stayed
+    at minus the link delay (-910 ms here) for as long as the stream ran."""
+    with RtpCapture(5004) as cap:
+        start_sender(fppd, audio, link_delay=1.0)
+        time.sleep(3)
+        pk = window(cap, 8)
+    assert len(pk) > 7000, f"{len(pk)} packets in 8 s"
+    assert not discontinuities(pk, 48), discontinuities(pk, 48)[:10]
+    lead = leads(pk)
+    median = statistics.median(lead)
+    assert abs(median - TARGET_LEAD_MS) < 1.5 and pct(lead, 0.05) > 0, \
+        f"median lead {median:.2f} ms, p5 {pct(lead, 0.05):.2f} ms, max {lead[-1]:.2f} ms\n" + \
+        "\n".join(l for l in fppd.log().splitlines() if "servo" in l or "anchored" in l)
 
 
 def test_source_gaps_are_filled_and_the_lead_held(fppd, audio):

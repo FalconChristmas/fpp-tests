@@ -77,3 +77,16 @@ test('an instance stored without a packet time shows 1 ms, as fppd uses', async 
   const ptime = page.locator('select[onchange*="\'ptime\'"]').first();
   await expect(ptime).toHaveValue('1');
 });
+
+test('an instance saved through the API without a packet time gets 1 ms', async ({ request }) => {
+  // Regression: c0ba73cc4.  The save filled a missing ptime with 4 ms, the
+  // old default, while fppd and the page use 1 ms.
+  const stored = { ...INSTANCE } as any;
+  delete stored.ptime;
+  const save = await request.post('/api/pipewire/aes67/instances', {
+    data: { ptpEnabled: false, ptpInterface: 'lo', instances: [stored] },
+  });
+  expect(save.ok(), await save.text()).toBe(true);
+  const saved = await (await request.get('/api/pipewire/aes67/instances')).json();
+  expect(saved.instances[0].ptime).toBe(1);
+});
