@@ -299,6 +299,45 @@ def test_output_specific_test_pattern_cycles(fppd):
             fppd.command("Test Stop")
 
 
+@pytest.mark.parametrize("order", ["RGB", "RBG", "GRB", "GBR", "BRG", "BGR"])
+def test_output_specific_colour_fades_follow_the_color_order(fppd, order):
+    """The LED Panels page's Red/Green/Blue Fade tests light the colour they
+    name on a panel of any color order: a red fade goes out on the wire the
+    color order gives red, as red in a sequence would.
+
+    Regression: #2891. The test wrote through the panel's pixel map, the
+    same map the output reads the wires through, so the color order cancelled
+    out and a red fade always went out on the first wire."""
+    w, h = 32, 16
+    with captured() as cap:
+        fppd.write("config/channeloutputs.json",
+                   panels_output([panel(0, 0, 0, 0, color=order)], channels=w * h * 3))
+        fppd.settings(DisableFakeNetworkBridges="1")
+        fppd.start()
+        for test_type, colour in ((4, "R"), (5, "G"), (6, "B")):
+            wire = order.index(colour)
+            fppd.command("Test Start", "100", "Output Specific", "--ALL--", str(test_type))
+            with cap.lock:  # only frames from this fade
+                cap.packets.clear()
+
+            def lit():
+                # The newest two lit frames agreeing: a frame of the previous
+                # fade still in flight at the clear can't decide it.
+                seen = [px for _, rows in cap.frames()
+                        if len(px := rows.get(0, b"")[0:3]) == 3 and any(px)]
+                if len(seen) >= 2 and [i for i in range(3) if seen[-1][i]] == \
+                        [i for i in range(3) if seen[-2][i]]:
+                    return seen[-1]
+                return None
+            try:
+                px = fppd.wait_for(lit, timeout=10, interval=0.2,
+                                   what=f"the {colour} fade on the wire")
+            finally:
+                fppd.command("Test Stop")
+            assert [i for i in range(3) if px[i]] == [wire], \
+                f"{colour} fade on a {order} panel went out as {px.hex()}, expected wire {wire}"
+
+
 @pytest.mark.parametrize("sub, what", [
     ({"width": 64, "height": 16, "xOffset": 0, "yOffset": 0}, "wider than the matrix"),
     ({"width": 8, "height": 8, "xOffset": 28, "yOffset": 12}, "hanging off its corner"),
