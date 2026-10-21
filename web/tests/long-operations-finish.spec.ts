@@ -79,3 +79,47 @@ exec /usr/bin/apt-cache "$@"
     if (hadManifest) putFile(MANIFEST, manifest); else inPlayer('rm', '-f', MANIFEST);
   }
 });
+
+// Regression: 0bc5f0adf, Rebuild FPP. PHP stopped at the first line it printed
+// after the browser went: fppd had been stopped and the build ran, but the
+// page never got as far as starting fppd again, so the player was left with
+// no fppd. fppd_stop, fpp_build and fppd_start (and a systemctl, which the
+// page uses outside a container) are stood in for by scripts that record
+// that they ran, so the fppd this suite judges is never touched.
+test('Rebuild FPP starts fppd again after the browser goes', async () => {
+  const SCRIPTS = '/opt/fpp/scripts';
+  const MARK = '/tmp/fpp-tests-rebuild';
+  const FLAG = `${MEDIA}/tmp/fppd_restarted`;
+  const hadFlag = exists(FLAG);
+  const standIns: Record<string, string> = {
+    [`${SCRIPTS}/fppd_stop`]: `#!/bin/sh\necho stop >> ${MARK}.log\n`,
+    [`${SCRIPTS}/fpp_build`]: `#!/bin/sh\necho build >> ${MARK}.log
+i=0
+while [ $i -lt 30 ]; do echo "fpp-tests build line $i"; sleep 0.1; i=$((i+1)); done\n`,
+    [`${SCRIPTS}/fppd_start`]: `#!/bin/sh\necho start >> ${MARK}.log\n`,
+    '/usr/local/bin/systemctl': `#!/bin/sh\necho "systemctl $*" >> ${MARK}.log\n`,
+  };
+  inPlayer('rm', '-f', `${MARK}.log`);
+  for (const [path, script] of Object.entries(standIns)) {
+    if (path.startsWith(SCRIPTS)) inPlayer('cp', '-p', path, `${path}.fpp-tests-orig`);
+    putFile(path, script);
+    inPlayer('chmod', '+x', path);
+  }
+  try {
+    const first = await startAndHangUp('/rebuildfpp.php');
+    // The control: the page had started, and the browser left before the
+    // build could have finished.
+    expect(first.length).toBeGreaterThan(0);
+    expect(first).not.toContain('Rebuild Complete');
+    await expect.poll(() => (exists(`${MARK}.log`) ? readFile(`${MARK}.log`) : '').split('\n').filter((l) => l && !l.startsWith('systemctl')),
+      { timeout: 60_000, message: 'fppd was not started again after the browser went away' })
+      .toEqual(expect.arrayContaining(['build', 'start']));
+  } finally {
+    for (const path of Object.keys(standIns)) {
+      if (path.startsWith(SCRIPTS)) inPlayer('mv', '-f', `${path}.fpp-tests-orig`, path);
+      else inPlayer('rm', '-f', path);
+    }
+    inPlayer('rm', '-f', `${MARK}.log`);
+    if (!hadFlag) inPlayer('rm', '-f', FLAG);
+  }
+});
