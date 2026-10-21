@@ -59,7 +59,7 @@ test('Delete asks first, No leaves the file and its selection alone', async ({ p
     await page.waitForTimeout(500);
     expect(exists(file), 'No deleted the file').toBe(true);
 
-    // Regression: 545619cad.  The dialog coming and going redrew the table,
+    // Regression: 514184bc8.  The dialog coming and going redrew the table,
     // which dropped the selection and left Delete enabled for nothing: a
     // second click did nothing at all.  The selection survives the redraw.
     await expect(row(page, 'Music', 'fpp-tests-delete-me.mp3')).toHaveClass(/selectedEntry/);
@@ -262,7 +262,7 @@ test('a finished upload reads "Upload complete", not "Saving to disk"', async ({
 });
 
 test('the page reads disk usage without a PHP warning when the media is not on a /dev device', async ({ request }) => {
-  // Regression: 4c470535a.  The almost-full check took the df line matching
+  // Regression: 139cf962b.  The almost-full check took the df line matching
   // "/dev/", which media on an overlay or tmpfs (as in this container) does
   // not have, and indexed the empty result: a PHP warning on every load.
   expect(sh(`df -kP ${MEDIA}/upload | awk 'NR==2 {print $1}'`).trim(), 'the control: media is not on a /dev device').not.toMatch(/^\/dev\//);

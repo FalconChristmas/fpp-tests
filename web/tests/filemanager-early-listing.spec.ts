@@ -7,7 +7,7 @@ import { container, inPlayer } from './container';
 // <head>.  A listing that answered before the parser had reached that tab's
 // <table> was rendered into an empty jQuery set: fileData had the files, the
 // table showed nothing (not even "No files found"), and Hide Empty Tabs never
-// ran for it.  Fixed in fpp 201a2b860 ("fix(filemanager): a listing that answers
+// ran for it.  Fixed in fpp 7ca2533d9 ("fix(filemanager): a listing that answers
 // before its table is parsed still fills it").
 //
 // The page is fetched through a proxy that holds it back just before the
