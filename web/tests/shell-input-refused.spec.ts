@@ -154,3 +154,15 @@ test('a script or firmware name that leaves its directory is refused', async ({ 
     expect(body, `${fn} was flashed`).not.toContain('Upgrading firmware');
   }
 });
+
+// Regression: 6c31528a2 ("branch and version refusals answer 400, not 200").
+// Both pages checked the name only after sending the page head, with output
+// buffering off, so the 400 they set never reached the client.
+test('a refused branch or version answers 400', async ({ request }) => {
+  for (const url of ['/changebranch.php?branch=--upload-pack=touch', '/changebranch.php?branch=master..x',
+    '/changebranch.php?branch=pr-x&remote=pull-requests', '/gitCheckoutVersion.php?version=-x',
+    '/gitCheckoutVersion.php?wrapped=1&version=-x']) {
+    const r = await request.get(url, { timeout: 60_000 });
+    expect(r.status(), `${url}: ${(await r.text()).slice(0, 200)}`).toBe(400);
+  }
+});
