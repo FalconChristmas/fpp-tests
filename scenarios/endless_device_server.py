@@ -8,6 +8,7 @@ fake_devices.device_network()'s namespace.
 """
 
 import http.server
+import socket
 import sys
 import threading
 import time
@@ -20,6 +21,10 @@ def handler_for(rate):
         protocol_version = "HTTP/1.1"
 
         def do_GET(self):
+            # What was sent counts as read by the client, so keep little of
+            # it waiting in our send buffer: autotuned, it held up to 4 MB
+            # (the device's tcp_wmem limit) when the client hung up.
+            self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 64 * 1024)
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.send_header("Transfer-Encoding", "chunked")
