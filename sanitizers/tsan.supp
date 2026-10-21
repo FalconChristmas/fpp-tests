@@ -50,6 +50,8 @@ race:PixelOverlayModel::blitData
 # ...including the dirty flag in that shared buffer's header.
 race_top:PixelOverlayModel::overlayBufferIsDirty
 race:PixelOverlayModel::flushOverlayBuffer
+# Making these accesses atomic needs a plugin ABI change (PixelOverlayModel's
+# layout); it is on the FPP 11 list.
 # The fill and clear of that buffer (two API requests filling one model, or an
 # effect's stop clearing it meanwhile), a submodel's draw into its parent,
 # and the model's own dirty flag, which says the same as the header's.
@@ -95,6 +97,9 @@ race:CloseOpenFiles
 # or bus callback looks unordered.
 race:GStreamerOutput::LockCallbackGuard
 race:GStreamerOutput::BusCallbackScope::BusCallbackScope
+# ...and the guard's copy the bus holds is freed through the same unseen
+# locking, by the bus's destroy notify on whichever thread drops it.
+race:GStreamerOutput::ReleaseBusCallbackGuard
 # GLib's own threads hand blocks to each other through GLib's locks; TSan
 # sees only libc allocating on one and freeing on the other.
 race:libc.so.6
@@ -128,8 +133,14 @@ race:trantor::EventLoop::queueInLoop
 # test_status_websocket.py). Only the string-taking send hands a buffer over.
 race:drogon::WebSocketConnectionImpl::sendWsData
 race:trantor::TcpConnectionImpl::send(std::__cxx11::basic_string
-# drogon tearing down its router at shutdown while IO threads dispatch.
-race:drogon::HttpControllersRouter::HttpControllerRouterItem
+# drogon tearing down its router at shutdown while IO threads dispatch: the
+# router's map of controllers is freed on drogon's main-loop thread while an
+# IO thread still drops its reference to a handler, through shared_ptr
+# atomics in libdrogon that TSan doesn't see ordered with the free. Only the
+# map's destructor: the bare type name also matched doControllerHandler(),
+# whose parameters name it, which hid every race with an API handler on the
+# stack.
+race:drogon::HttpControllersRouter::HttpControllerRouterItem*::~_Hashtable
 race:std::__detail::_NFA
 # libstdc++ fills ctype<char>::narrow()'s cache lazily, from whichever
 # thread asks first (GCC PR 77704): two threads compiling a regex at once,
