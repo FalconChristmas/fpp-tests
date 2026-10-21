@@ -2,6 +2,7 @@
 case that broke: Dancing Shadows with its particle pool used up, and Stream
 once its iteration counter has passed 16 bits."""
 
+import json
 import os
 import time
 import urllib.parse
@@ -79,3 +80,69 @@ def test_stream_holds_still_between_steps_past_16_bits(fppd):
     assert len(frames) > 3 * steps + 10, f"{len(frames)} frames in 4 s: too few to tell"
     assert 0.5 * steps - 1 <= changes <= 1.5 * steps + 2, \
         f"{changes} changes in {len(frames)} frames over 4 s of {step} ms steps"
+
+
+def test_copy_segment_is_not_offered_and_is_refused_by_name(fppd):
+    """WLED Copy Segment is not in the overlay effect list, and a command
+    (or a playlist entry, as a saved preset would be) that still names it
+    is refused, logged, and the playlist carries on.
+
+    Regression: 4251d2f5a. FPP gives each model's WLED effect one segment,
+    so Copy Segment had nothing to copy and only faded the model to black;
+    it was offered all the same."""
+    import urllib.error
+    w, h = 16, 4
+    setup(fppd, [matrix("M", width=w, height=h)], channels=w * h * 3)
+    name = "WLED - Copy Segment"
+    fppd.write("playlists/P.json", {"name": "P", "repeat": 0, "loopCount": 0, "leadIn": [], "leadOut": [],
+                                    "mainPlaylist": [
+                                        {"type": "command", "enabled": 1, "playOnce": 0,
+                                         "command": "Overlay Model Effect",
+                                         "args": ["M", "Enabled", name]},
+                                        {"type": "command", "enabled": 1, "playOnce": 0,
+                                         "command": "Set Variable", "args": ["after", "Value", "1"]}]})
+    fppd.start()
+    effects = fppd.get("/overlays/effects")
+    assert any(n.startswith("WLED - ") for n in effects), effects[:5]
+    assert name not in effects
+    commands = fppd.get("/commands")
+    choices = [a for c in commands if c["name"] == "Overlay Model Effect" for a in c.get("args", [])]
+    assert not any(name in str(a) for a in choices), "Copy Segment is still a choice of the command"
+    with pytest.raises(urllib.error.HTTPError) as e:
+        fppd.command("Overlay Model Effect", "M", "Enabled", name)
+    assert "Could not start effect" in e.value.body, e.value.body
+    assert f"'{name}' does not exist" in fppd.log()
+    fppd.command("Start Playlist", "P", "false", "false")
+    fppd.wait_for(lambda: (fppd.get("/variables") or {}).get("after", {}).get("value") == "1",
+                  timeout=10, what="the playlist to run on past the refused effect")
+
+
+def test_wled_api_keeps_the_numbers_of_the_effects_after_copy_segment(fppd):
+    """The WLED JSON API's effect list (/json/eff), which WLED apps and Home
+    Assistant store effects by number, keeps Copy Segment's slot as "RSVD":
+    every effect after it keeps the number it had while Copy Segment was
+    listed. Choosing that number starts nothing and is logged.
+
+    Regression: 4251d2f5a. Taking Copy Segment out of the list would move
+    every effect sorting after it down one, and a saved preset would start
+    a different effect."""
+    from test_wled_api import effects, http, start
+    start(fppd)
+    offered = fppd.get("/overlays/effects")
+    eff = effects()
+    retired = "WLED - Copy Segment"
+    assert retired not in eff
+    # The numbering it had: FPP's sorted list (after "Stop Effects", which
+    # is always first) with Copy Segment in its place.
+    rest = sorted(offered[1:] + [retired])
+    slot = 1 + rest.index(retired)
+    after = rest[rest.index(retired) + 1]
+    assert eff[slot] == "RSVD", eff[slot - 1:slot + 2]
+    assert eff.index(after) == slot + 1, f"{after} is effect {eff.index(after)}, was {slot + 1}"
+    assert [n for n in eff if n != "RSVD"] == offered
+    code, _ = http("POST", "/json/state", {"seg": [{"id": 0, "fx": slot}]})
+    assert code == 200
+    time.sleep(0.5)
+    state = json.loads(http("GET", "/json/state")[1])
+    assert state["seg"][0]["fx"] != slot, state["seg"][0]
+    assert f"effect {slot} is no longer offered" in fppd.log()
