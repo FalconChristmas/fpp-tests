@@ -50,6 +50,13 @@ race:PixelOverlayModel::blitData
 # ...including the dirty flag in that shared buffer's header.
 race_top:PixelOverlayModel::overlayBufferIsDirty
 race:PixelOverlayModel::flushOverlayBuffer
+# The fill and clear of that buffer (two API requests filling one model, or an
+# effect's stop clearing it meanwhile), a submodel's draw into its parent,
+# and the model's own dirty flag, which says the same as the header's.
+race:PixelOverlayModel::fillOverlayBuffer
+race:PixelOverlayModel::clearOverlayBuffer
+race:PixelOverlayModelSub::doOverlay
+race_top:PixelOverlayModel::needRefresh
 
 # ---- by design: lock order TSan can't see is safe ----------------------------
 
