@@ -113,6 +113,7 @@ RECORD = """#!/bin/bash
   echo "SCRIPT=$FPP_SCRIPT"
   echo "ARGS=$FPP_SCRIPTARGS"
   echo "CWD=$(pwd)"
+  echo "FOO=${FOO-unset}"
 } > "$(dirname "$0")/OUT.tmp"
 mv "$(dirname "$0")/OUT.tmp" "$(dirname "$0")/OUT"
 """
@@ -125,10 +126,12 @@ def test_run_script_passes_arguments_and_environment(fppd):
     and FPP_SCRIPTARGS; a variable fppd already has keeps fppd's value.
     A script name that climbs out of the scripts folder with ".." is not
     run, and puts up a warning saying so.
+    An environment entry with no "=" (FOO) is left out.
 
-    Not checked, as fpp master 69a734449 gets it wrong: an
-    environment entry with no "=" (FOO) is passed as FOO=FOO, and an empty
-    environment argument adds an entry "=" to the script's environment."""
+    Regression: 4bf5304bc. FOO was passed as FOO=FOO. (The same fix drops
+    the "=" entry an empty environment argument added, but bash doesn't pass
+    a variable with no name on to a script, so that can't be seen from
+    here.)"""
     scripts = os.path.join(fppd.media, "scripts")
     fppd.write("scripts/rec.sh", RECORD.replace("OUT", "rec.out"))
     os.chmod(os.path.join(scripts, "rec.sh"), 0o755)
@@ -138,7 +141,7 @@ def test_run_script_passes_arguments_and_environment(fppd):
     fppd.start(extra_env={"FPP_TEST_KEEP": "fppd's"})
 
     args = "one 'two three' \"four five\""
-    got = fppd.command("Run Script", "rec.sh", args, 'A=1,"B=x, y",FPP_TEST_KEEP=mine')
+    got = fppd.command("Run Script", "rec.sh", args, 'A=1,"B=x, y",FPP_TEST_KEEP=mine,FOO')
     assert got == "Script Started", got
     out = os.path.join(scripts, "rec.out")
     fppd.wait_for(lambda: os.path.exists(out), timeout=10, what="the script to run")
@@ -152,15 +155,18 @@ def test_run_script_passes_arguments_and_environment(fppd):
         "SCRIPT=rec.sh",
         "ARGS=" + args,
         "CWD=" + os.path.realpath(scripts),
+        "FOO=unset",
     ], lines
 
-    # The same with no arguments and no environment at all.
-    os.unlink(out)
-    fppd.command("Run Script", "rec.sh")
-    fppd.wait_for(lambda: os.path.exists(out), timeout=10, what="the script to run again")
-    with open(out) as f:
-        lines = f.read().splitlines()
-    assert lines[:3] == ["|", "A=", "B="], lines
+    # The same with no arguments and no environment at all, and with both
+    # empty, as the UI sends them.
+    for given in ((), ("", "")):
+        os.unlink(out)
+        fppd.command("Run Script", "rec.sh", *given)
+        fppd.wait_for(lambda: os.path.exists(out), timeout=10, what=f"the script to run with {given}")
+        with open(out) as f:
+            lines = f.read().splitlines()
+        assert lines[:3] == ["|", "A=", "B="], (given, lines)
 
     fppd.command("Run Script", "../outside.sh")
     fppd.wait_for(lambda: any("outside the scripts directory" in str(w)
