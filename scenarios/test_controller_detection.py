@@ -378,14 +378,14 @@ def test_experience_controllers_are_read_from_their_api(fppd):
       the controller's address;
     - no firmware string at all leaves the version Unknown.
 
-    Only the controller with nothing better asks /api/current_state.
+    Only the controller with nothing better asks /api/current_state. Each is
+    listed in bridge mode: HTTP can't tell, and one running as a player says
+    so in its own MultiSync pings, which win.
 
     Feature: c95af2370 (detection), b322335a7 (MAC over HTTP). Regression:
-    928d686cd (the 2.x version string).
-
-    Not checked: fppModeString. The detector never sets bridge mode, so an
-    Experience controller found only over HTTP is listed as "player" (see
-    ~/PROBLEMS.md, 16).
+    928d686cd (the 2.x version string), 863142972 (the detector never set
+    bridge mode, so an Experience controller found only over HTTP was listed
+    as "player").
     """
     devices = {
         "10.88.0.2": experience(
@@ -413,7 +413,8 @@ def test_experience_controllers_are_read_from_their_api(fppd):
             "<title>Genius Pixel 8</title>",
             state("GP8", "Genius Pixel 8", network={"wired": {"mac_address": "AA:BB:CC:00:10:07"}})),
     }
-    keys = ("type", "typeId", "model", "version", "majorVersion", "minorVersion", "uuid")
+    keys = ("type", "typeId", "model", "version", "majorVersion", "minorVersion", "uuid",
+            "fppModeString")
     with fake_devices(devices):
         got = discover(fppd, devices)
         seen = {a: requests_seen(a) for a in devices}
@@ -425,7 +426,7 @@ def test_experience_controllers_are_read_from_their_api(fppd):
         "10.88.0.6": ("Genius Pixel 8", "Unknown", 0, 0, "MAC:AABBCC001007"),
     }
     for a, w in want.items():
-        assert fields(got[a], *keys) == ("Genius Controller", 0xAF) + w, got[a]
+        assert fields(got[a], *keys) == ("Genius Controller", 0xAF) + w + ("bridge",), got[a]
         assert got[a]["hostname"] == a, got[a]
         assert "GET /api/state" in seen[a] and "GET /update/identity" in seen[a], seen[a]
     asked = {a for a in devices if "GET /api/current_state" in seen[a]}
