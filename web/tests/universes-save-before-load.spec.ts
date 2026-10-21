@@ -9,7 +9,7 @@ import { container } from './container';
 // finished, or after it failed, wrote no universes and output disabled over
 // the real config.  The Save button is a submit button, so Enter in any field
 // of the form saved too; a disabled default button stops that, and the submit
-// handlers refuse while Save is disabled for any other submit.  Fixed in fpp e2fc00594 ("fix(outputs): E1.31/DDP
+// handlers refuse while Save is disabled for any other submit.  Fixed in fpp 092fe577d ("fix(outputs): E1.31/DDP
 // Save waits for the saved universes").
 //
 // The config GET is held (or failed) by a route, and every POST of it is

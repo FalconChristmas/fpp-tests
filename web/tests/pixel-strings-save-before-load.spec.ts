@@ -3,7 +3,7 @@ import type { Page, Route } from '@playwright/test';
 import { container } from './container';
 
 // Save on the Pixel Strings page before the page has its config (issue #3124).
-// Fixed in fpp 16d5b4cfa ("fix(outputs): Pixel Strings Save waits for the
+// Fixed in fpp 1470ffeeb ("fix(outputs): Pixel Strings Save waits for the
 // saved config (#3124)").
 // loadPixelStringOutputs() draws the page from built-in defaults -- no strings,
 // "Enable" unchecked -- and only then asks for the real config, with no .fail
