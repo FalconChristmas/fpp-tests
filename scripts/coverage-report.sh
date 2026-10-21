@@ -21,7 +21,11 @@ cd "$TREE/src"
 FILTER='--filter '"$TREE"'/src/ --exclude '"$TREE"'/src/external/ --exclude .*fppversion\..*'
 if [ $# -gt 0 ]; then
     SOURCE=""
-    for t in "$@"; do SOURCE="$SOURCE --add-tracefile $t"; done
+    # Relative to where this was run from, not $TREE/src.
+    for t in "$@"; do
+        case "$t" in /*) ;; *) t="$OLDPWD/$t" ;; esac
+        SOURCE="$SOURCE --add-tracefile $t"
+    done
 else
     SOURCE="--gcov-ignore-errors=all --gcov-ignore-parse-errors=all -j $(nproc)"
 fi
