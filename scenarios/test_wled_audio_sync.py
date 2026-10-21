@@ -76,8 +76,8 @@ def show(frame):
                              for x in range(W)) for y in range(H))
 
 
-def start_geq(fppd):
-    effect(fppd, "M", "WLED♪ - GEQ", BufferMapping="Horizontal", brightness="128",
+def start_geq(fppd, mapping="Horizontal"):
+    effect(fppd, "M", "WLED♪ - GEQ", BufferMapping=mapping, brightness="128",
            palette="* Color 1", color1="#FF0000", color3="#000000",
            **{"Fade speed": "255", "Ripple decay": "255", "# of bands": "255"})
 
@@ -173,6 +173,31 @@ def test_audio_sync_packets_drive_a_sound_reactive_effect(fppd):
                 stream.send = []
                 fppd.wait_for(lambda: rx.last() != bars(SILENT), timeout=5, interval=0.05,
                               what="the effect to go back to its simulated sound")
+        finally:
+            sock.close()
+        stop_effects(fppd, "M")
+
+
+def test_an_unknown_buffer_mapping_draws_as_horizontal(fppd):
+    """A BufferMapping that names no mapping (empty, or the wrong case) draws
+    a 2D effect as Horizontal does: GEQ's stairs come out as 16 bars on the
+    16x5 matrix. Each mapping gets different bands, so a frame left from the
+    one before can't pass for it.
+
+    Regression: bd192875f. The effect's segment was built transposed (5
+    wide, 16 high) while its pixels were laid out as Horizontal, so the frame
+    showed 5 bars, 16 rows tall, wrapped across the matrix's 5 rows."""
+    setup(fppd, [matrix("M", width=W, height=H)], channels=CHANNELS)
+    fppd.settings(WLEDAudioSyncMode="receive")
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        sock = udp_socket(PEER)
+        try:
+            with Stream() as stream:
+                for mapping, heights in (("", STAIRS), ("horizontal", REVERSED)):
+                    stream.send = [(sock, packet(bands(heights)), PORT)]
+                    start_geq(fppd, mapping)
+                    wait_frame(fppd, rx, bars(heights), f"the bars with BufferMapping {mapping!r}")
         finally:
             sock.close()
         stop_effects(fppd, "M")
