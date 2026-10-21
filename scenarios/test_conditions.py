@@ -387,6 +387,15 @@ EXPRESSIONS = [
     ("=hsv(2/3,1,1)", "255"),  # blue
     ("=hsv(5/6,1,1)", "16711935"),  # magenta
     ("=hsv(0,1,0.5)", "8323072"),  # dark red
+    # The hue wraps round the wheel (regression: f44650e15, where 1.0 and
+    # past it came out magenta).
+    ("=hsv(1,1,1)", "16711680"),  # red again
+    ("=hsv(1.5,1,1)", "65535"),  # cyan, as 0.5
+    ("=hsv(-0.25,1,1)", "8323327"),  # violet, as 0.75
+    # A hue that isn't a number is red (f44650e15: it was cast from NaN to
+    # int, which is undefined; arm64 happens to give red, x86 does not).
+    ("=hsv(1/0,1,1)", "16711680"),
+    ("=hsv(0/0,1,1)", "16711680"),
     ("=if(1,5,6)", "5"),
     ("=if(0,5,6)", "6"),
     ("=if(count-5,5,6)", "6"),
