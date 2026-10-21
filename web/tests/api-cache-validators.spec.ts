@@ -116,3 +116,14 @@ test('API answers are not sent as immutable', async () => {
     expect(String(r.headers['cache-control'] ?? ''), `${route} is immutable`).not.toContain('immutable');
   }
 });
+
+// Regression: 3e13a03c4 ("stripping immutable no longer leaves "no-cache, "
+// on PHP answers"). The merge added immutable as a second Cache-Control header
+// beside PHP's no-cache, and the rule that takes it off left that one empty:
+// "Cache-Control: no-cache, ".
+test('the file-backed routes say no-cache and nothing after it', async () => {
+  for (const route of ROUTES) {
+    const r = await get(route);
+    expect(r.headers['cache-control'], route).toBe('no-cache');
+  }
+});
