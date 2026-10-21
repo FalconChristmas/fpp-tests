@@ -5,9 +5,6 @@ import os
 import subprocess
 import time
 
-import pytest
-
-from fppd import sanitizer
 from fseq import _sanitizer_flags
 from shims import build
 from test_plugin_scripts import plugin
@@ -31,11 +28,6 @@ def install_ping_plugin(fppd, name="fpp-pingtest"):
     return d
 
 
-# A preload puts the sanitizer runtime in LD_PRELOAD, which fppd's children
-# inherit, and a shell with libtsan preloaded segfaults: the plugin's
-# "callbacks.sh --list" comes back empty and the plugin is never loaded. The
-# red side of this needs ASan anyway (see the docstring).
-@pytest.mark.skipif(sanitizer() == "tsan", reason="a TSan-preloaded shell can't run the plugin's callbacks")
 def test_a_one_shot_ping_is_sent_before_the_ping_thread_can_free_it(fppd):
     """A one-shot ping whose sender is held up between publishing the target
     and sending it is still sent from live memory: the ping thread can't

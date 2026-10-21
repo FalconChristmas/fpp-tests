@@ -133,6 +133,14 @@ class Fppd:
             env["LD_PRELOAD"] = " ".join(have + list(preload))
         if extra_env:
             env.update(extra_env)
+        if "libtsan.so" in env.get("LD_PRELOAD", ""):
+            # The TSan runtime has to be preloaded ahead of the rest (see
+            # noinherit.c), but the processes fppd starts must not inherit
+            # it: a shell with libtsan preloaded segfaults, so a plugin's
+            # callbacks or a Run Script never ran. noinherit.so takes it
+            # out of fppd's LD_PRELOAD once fppd has loaded.
+            import shims
+            env["LD_PRELOAD"] += " " + shims.build("noinherit.c", libs=())
         shim = os.path.join(self.tree, "gcov-exit.so")
         if os.path.exists(shim):
             # The coverage flavor: write the counts on fppd's _exit().
