@@ -162,6 +162,29 @@ called_from_lib:libgio-2.0.so
 # tail call as pipewiresink above, attributed to this plugin when an Opus
 # send pipeline is built and torn down.
 called_from_lib:libgstopus.so
+# rtspsrc's RTP session manager and souphttpsrc (test_rtsp_inputs.py, the
+# YouTube source in test_video_input_sources.py): the same GLib-lock hand-offs
+# and g_rec_mutex_unlock() tail call as the plugins above.
+called_from_lib:libgstrtpmanager.so
+called_from_lib:libgstsoup.so
+called_from_lib:libsoup-3.0.so.0
+# VideoInputManager's RTSP stream filter (RtspStreamFilter) is allocated when
+# the pipeline is built, read by rtspsrc's select-stream and no-more-pads
+# handlers on its own threads, read again by the run thread after rtspsrc
+# posts an error, and freed with the element after the teardown thread has
+# set the pipeline to NULL, which joins rtspsrc's threads. Every hand-off is
+# a GObject signal connection, a bus message or a GstTask join, all inside
+# GLib/GStreamer where TSan can't see them. Only these handlers touch it.
+race:RtspSelectStream
+race:RtspNoMorePads
+race:RtspFailedForNoVideo
+# A pad probe's state is published to the streaming thread by
+# gst_pad_add_probe() and freed by the probe's destroy notify once the pad
+# can no longer call it; both under the pad's lock, unseen. The crop region
+# (VideoOutputManager's CropCapsProbe) is read only at the top of
+# ApplyCropForFrameSize(); a destroy notify always runs from g_hook_free().
+race_top:ApplyCropForFrameSize
+race:g_hook_free
 called_from_lib:libgstdebugutilsbad.so
 called_from_lib:libjpeg.so.62
 # kmssink (the HDMI groups), rtspsrc (cameras) and the RTSP server (playback
