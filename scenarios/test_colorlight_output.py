@@ -22,8 +22,9 @@ import time
 
 import pytest
 
+from ddp import DdpReceiver
 from fseq import write_fseq
-from show import playlist, sequence_entry
+from show import ddp_output, playlist, sequence_entry
 
 TX, RX = "fpptcl0", "fpptcl1"
 SRC_MAC = bytes.fromhex("222233445566")
@@ -427,3 +428,96 @@ def test_an_overlong_interface_name_is_refused(fppd):
                               fppd.get("/fppd/status").get("warnings", [])),
                   timeout=10, what="the could-not-initialize warning")
     time.sleep(1)
+
+
+def tc(*a):
+    return subprocess.run(["tc", *a], capture_output=True, text=True)
+
+
+def play_with_ddp(fppd, frames, cfg, step_ms=25):
+    """The ColorLight output plus a DDP output on the same channels, so the
+    output thread's pace can be read off a second output's frames."""
+    fppd.write("config/channeloutputs.json", cfg)
+    fppd.write("config/co-universes.json", ddp_output(150))
+    write_fseq(os.path.join(fppd.media, "sequences", "P.fseq"), frames, step_ms=step_ms)
+    fppd.write("playlists/P.json", playlist("P", [sequence_entry("P.fseq")]))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.command("Start Playlist", "P", "true", "false")
+
+
+def warnings(fppd):
+    return fppd.get("/fppd/warnings")
+
+
+def test_an_interface_that_goes_down_does_not_hold_up_the_other_outputs(fppd):
+    """The ColorLight interface going down mid-show (a USB NIC unplugged or
+    reset) leaves the output thread at the sequence's 40fps: a DDP output
+    beside it keeps its frame rate. A warning names the interface and the
+    error while it is down, and comes down once frames go out again.
+
+    Regression: 1fbc8cf33. Every failed send was retried, 500us apart, for
+    22ms, once for the rows and again for the display packet, all on the
+    output thread: with the interface down every frame lost ~45ms, and the
+    show ran at about 20fps.
+    """
+    w, h = 32, 16
+    frame = unique_frame(w, h)
+    with captured() as cap, DdpReceiver(150) as rx:
+        play_with_ddp(fppd, [frame] * 2400,
+                      panels_output([panel(0, 0, 0, 0)], channels=w * h * 3))
+        lit_frame(fppd, cap, h, w * 3)
+
+        subprocess.run(["ip", "link", "set", TX, "down"], check=True)
+        time.sleep(0.5)
+        t0 = time.monotonic()
+        time.sleep(3)
+        fps = rx.count(since=t0) / (time.monotonic() - t0)
+        assert fps >= 32, f"with the ColorLight interface down, the DDP output ran at {fps:.1f}fps, not 40"
+        assert any(f"Unable to send on interface {TX}" in m for m in warnings(fppd)), warnings(fppd)
+
+        subprocess.run(["ip", "link", "set", TX, "up"], check=True)
+        fppd.wait_for(lambda: not any("Unable to send" in m for m in warnings(fppd)),
+                      timeout=5, what="the unable-to-send warning to come down")
+        seen = len(cap.frames())
+        fppd.wait_for(lambda: len(cap.frames()) > seen + 5, timeout=5,
+                      what="frames on the wire again once the interface is back")
+
+
+def test_a_link_too_slow_for_the_frames_drops_them_whole(fppd):
+    """A ColorLight link that can't carry every frame (here a 4Mbit tbf on
+    the interface, against 40fps of 48KB frames) drops frames, but only
+    whole ones: every frame the receiver is told to show has all its rows.
+    A warning says frames are being dropped.
+
+    Regression: 1fbc8cf33. A send that didn't fit was retried for up to
+    22ms and then given up part way, and the display packet went out after
+    it anyway: the receiver showed torn frames, new rows over stale ones.
+    """
+    w, h = 64, 32
+    W, H = 4 * w, 2 * h
+    frame = unique_frame(W, H)
+    panels = [panel(o, i, i * w, o * h) for o in range(2) for i in range(4)]
+    with captured() as cap, DdpReceiver(150):
+        play_with_ddp(fppd, [frame] * 2400, panels_output(panels, w, h, channels=W * H * 3))
+        lit_frame(fppd, cap, H, W * 3)
+
+        r = tc("qdisc", "replace", "dev", TX, "root", "tbf", "rate", "4mbit", "burst", "16kb", "latency", "500ms")
+        if r.returncode:
+            pytest.skip(f"cannot shape {TX}: {r.stderr.strip()}")
+        try:
+            time.sleep(1)
+            with cap.lock:
+                cap.packets.clear()
+            time.sleep(4)
+            frames = cap.frames()
+            dropping = any("frames are being dropped" in m for m in warnings(fppd))
+        finally:
+            tc("qdisc", "del", "dev", TX, "root")
+
+    assert frames, "no frame reached the receiver over the slow link"
+    torn = [(i, len(rows)) for i, (_, rows) in enumerate(frames)
+            if sorted(rows) != list(range(H)) or any(len(b) != W * 3 for b in rows.values())]
+    assert not torn, f"{len(torn)} of {len(frames)} frames were shown with rows missing: (frame, rows) {torn[:5]}"
+    assert len(frames) < 4 * 40 * 0.6, f"{len(frames)} frames shown in 4s over a link that carries ~10fps"
+    assert dropping, "no dropped-frames warning"
