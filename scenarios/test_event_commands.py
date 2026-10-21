@@ -23,16 +23,28 @@ def counts(fppd, names):
     return {n: count(fppd, n) for n in names}
 
 
+def refused(fppd, *cmd):
+    """The body of the error a command answers; fails if it succeeds."""
+    try:
+        got = fppd.command(*cmd)
+    except urllib.error.HTTPError as e:
+        return e.body
+    raise AssertionError(f"{cmd} was answered {got!r}")
+
+
 def test_preset_slot_runs_every_preset_in_that_slot(fppd):
     """Trigger Command Preset Slot runs every preset assigned to that slot,
-    each once, and no other; a slot nothing is assigned to runs nothing.
+    each once, and no other; a slot nothing is assigned to runs nothing and
+    says so (not an error: button boxes point at empty slots). Slot "0"
+    (what a preset with no slot holds), 256, and a slot that isn't a whole
+    number are refused and run nothing; spaces round it and "3.0" are slot 3.
     Trigger Multiple Command Preset Slots does the same for each slot it is
-    given, skipping empty ones, and a slot named twice runs twice. A preset
-    that triggers its own slot runs once, not forever.
+    given, skipping empty and invalid ones, and a slot named twice runs
+    twice. A preset that triggers its own slot runs once, not forever.
 
-    Left out on purpose, as fpp master 69a734449 gets it wrong: slot "0",
-    or a slot that isn't a number, runs every preset that has no slot,
-    and a slot with nothing in it answers "Preset Triggered"."""
+    Regression: 32ebc1f40. Both commands read the slot with atoi(), so "0"
+    or "x" ran every preset with no slot, and an empty slot answered "Preset
+    Triggered"."""
     names = ["A", "B", "C", "D", "Loop"]
     fppd.write("config/commandPresets.json", {"commands": [
         slotted("A", 3), slotted("B", 3), slotted("C", 4), slotted("D", 0),
@@ -41,16 +53,26 @@ def test_preset_slot_runs_every_preset_in_that_slot(fppd):
     ]})
     fppd.start()
 
-    fppd.command("Trigger Command Preset Slot", "3")
+    got = fppd.command("Trigger Command Preset Slot", "3")
+    assert got == "Preset Triggered", got
     assert counts(fppd, names) == {"A": 1, "B": 1, "C": 0, "D": 0, "Loop": 0}
-    fppd.command("Trigger Command Preset Slot", "9")
+    got = fppd.command("Trigger Command Preset Slot", "9")
+    assert got == "No preset in slot 9", got
     assert counts(fppd, names) == {"A": 1, "B": 1, "C": 0, "D": 0, "Loop": 0}
+    for slot in ("0", "x", "", "3x", "3.5", "256"):
+        assert "Invalid preset slot" in refused(fppd, "Trigger Command Preset Slot", slot), slot
+    assert counts(fppd, names) == {"A": 1, "B": 1, "C": 0, "D": 0, "Loop": 0}
+    for slot in (" 3", "3 ", "3.0"):
+        got = fppd.command("Trigger Command Preset Slot", slot)
+        assert got == "Preset Triggered", (slot, got)
+    assert counts(fppd, names) == {"A": 4, "B": 4, "C": 0, "D": 0, "Loop": 0}
 
     fppd.command("Trigger Multiple Command Preset Slots", "4", "", "3", "4")
-    assert counts(fppd, names) == {"A": 2, "B": 2, "C": 2, "D": 0, "Loop": 0}
+    assert counts(fppd, names) == {"A": 5, "B": 5, "C": 2, "D": 0, "Loop": 0}
     fppd.command("Trigger Multiple Command Preset Slots", "", "", "", "")
     fppd.command("Trigger Multiple Command Preset Slots", "200")
-    assert counts(fppd, names) == {"A": 2, "B": 2, "C": 2, "D": 0, "Loop": 0}
+    fppd.command("Trigger Multiple Command Preset Slots", "0", "x", "", "")
+    assert counts(fppd, names) == {"A": 5, "B": 5, "C": 2, "D": 0, "Loop": 0}
 
     fppd.command("Trigger Command Preset Slot", "5", timeout=5)
     assert counts(fppd, names)["Loop"] == 1, "a preset triggering its own slot ran again"
@@ -61,7 +83,7 @@ def test_preset_slot_runs_every_preset_in_that_slot(fppd):
             raise AssertionError(f"{cmd} with no slot was accepted")
         except urllib.error.HTTPError:
             pass
-    assert counts(fppd, names) == {"A": 2, "B": 2, "C": 2, "D": 0, "Loop": 1}
+    assert counts(fppd, names) == {"A": 5, "B": 5, "C": 2, "D": 0, "Loop": 1}
 
 
 def test_trigger_multiple_presets_by_name(fppd):
