@@ -200,7 +200,12 @@ def test_play_media_default_video_output_follows_the_setting(fppd, audio):
 def test_a_live_test_pattern_reaches_an_overlay_model(fppd, audio):
     """A video input source (videotestsrc, SMPTE bars) and an overlay member
     of a group that takes its video from it: the model shows the bars with
-    nothing playing, and the input's preview is a JPEG of it."""
+    nothing playing, and the input's preview is a JPEG of it.
+
+    Feature: e7a72ce7a (the input's live preview, /videoinput/preview).
+    Regression: ad9acf54b. Nothing had called gst_init() when the source
+    was built at startup with no media played yet, and gst_parse_launch()
+    crashed fppd inside gst_value_deserialize() on every start."""
     setup(fppd, [overlay_consumer(SOURCE)], [source("videotestsrc", pattern="smpte")])
     fppd.start()
     wait_for_bars(fppd)
@@ -933,7 +938,11 @@ def test_an_rtsp_stream_of_a_playback_slot_shows_the_video(fppd, audio):
     there: a client pulling it gets the bars, not a flat frame.
 
     Regression: 3c3784f46. Playback never published its video on the slot's
-    channel, so an RTSP stream of a slot served black (luma 16, variance 0)."""
+    channel, so an RTSP stream of a slot served black (luma 16, variance 0).
+
+    Also covers bb2427000: the stream is an rtsp member of a video output
+    group (pipewire-video-consumers.json) aimed at a stream slot, not a
+    mount with its own source picker."""
     import statistics
     if not fppd.built_with("rtsp-server"):
         pytest.skip("fppd was built without gst-rtsp-server: it has no RTSP output")
