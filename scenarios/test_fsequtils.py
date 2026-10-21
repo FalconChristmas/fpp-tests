@@ -218,7 +218,11 @@ def test_ranges_write_a_sparse_file(src, tmp_path):
 
 def test_no_sparse_keeps_the_ranges_in_place(src, tmp_path):
     """-n with -r reads only the range but writes a full, non-sparse file:
-    the range's channels sit where they were."""
+    the range's channels sit where they were, and every other channel is 0.
+
+    Regression: 25414d96e. The frame buffer was never cleared, so the
+    channels outside the range were whatever the heap held (0xbe under
+    ASan; usually zeros otherwise, from a fresh mmap)."""
     path, frames = src
     out = str(tmp_path / "full.fseq")
     rc, stdout, err = fsequtils("-n", "-c", "none", "-r", "11-20", "-o", out, path)
@@ -227,6 +231,8 @@ def test_no_sparse_keeps_the_ranges_in_place(src, tmp_path):
     assert hdr["ranges"] == [] and hdr["channels"] == CHANNELS, hdr
     bad = [i for i in range(FRAMES) if got[i][10:20] != frames[i][10:20]]
     assert not bad, f"frames {bad}: the range moved or changed"
+    bad = [i for i in range(FRAMES) if any(got[i][:10] + got[i][20:])]
+    assert not bad, f"frames {bad}: channels outside the range aren't 0, first {list(got[bad[0]])}"
 
 
 def merge_inputs(tmp_path):
