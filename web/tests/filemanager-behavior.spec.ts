@@ -19,14 +19,9 @@ function exists(path: string): boolean {
   return sh(`test -e "${path}" && echo yes || echo no`).trim() === 'yes';
 }
 
-// filemanager.php asks for every listing from its <head>, and a listing that
-// answers before the parser has reached its table is dropped (the tab stays
-// empty until the next refresh).  These tests are not about that, so they
-// list again once the page has loaded.
 async function openFileManager(page: Page, hash = '') {
   await page.goto(`/filemanager.php${hash}`);
   await page.waitForLoadState('load');
-  await page.evaluate(() => (window as any).GetAllFiles());
 }
 
 async function openTab(page: Page, tab: string, table: string) {
@@ -45,7 +40,7 @@ async function setSetting(request: APIRequestContext, name: string, value: strin
   expect((await request.put(`/api/settings/${name}`, { data: value })).ok()).toBe(true);
 }
 
-test('Delete asks first, and No leaves the file alone', async ({ page }) => {
+test('Delete asks first, No leaves the file and its selection alone', async ({ page }) => {
   // Regression: 43b538317.  Delete removed the selected files the moment it
   // was clicked.
   const file = `${MEDIA}/music/fpp-tests-delete-me.mp3`;
@@ -64,8 +59,11 @@ test('Delete asks first, and No leaves the file alone', async ({ page }) => {
     await page.waitForTimeout(500);
     expect(exists(file), 'No deleted the file').toBe(true);
 
-    await openTab(page, 'audio', 'Music');
-    await row(page, 'Music', 'fpp-tests-delete-me.mp3').click();
+    // Regression: 545619cad.  The dialog coming and going redrew the table,
+    // which dropped the selection and left Delete enabled for nothing: a
+    // second click did nothing at all.  The selection survives the redraw.
+    await expect(row(page, 'Music', 'fpp-tests-delete-me.mp3')).toHaveClass(/selectedEntry/);
+    await expect(page.locator('#btnDeleteMusic')).toBeEnabled();
     await page.locator('#btnDeleteMusic').click();
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Yes' }).click();
@@ -261,4 +259,17 @@ test('a finished upload reads "Upload complete", not "Saving to disk"', async ({
   } finally {
     sh(`rm -f ${MEDIA}/music/${name} ${MEDIA}/upload/${name}`);
   }
+});
+
+test('the page reads disk usage without a PHP warning when the media is not on a /dev device', async ({ request }) => {
+  // Regression: 4c470535a.  The almost-full check took the df line matching
+  // "/dev/", which media on an overlay or tmpfs (as in this container) does
+  // not have, and indexed the empty result: a PHP warning on every load.
+  expect(sh(`df -kP ${MEDIA}/upload | awk 'NR==2 {print $1}'`).trim(), 'the control: media is not on a /dev device').not.toMatch(/^\/dev\//);
+  const LOG = `${MEDIA}/logs/apache2-error.log`;
+  const warnings = () => Number(sh(`grep -c 'filemanager.php' ${LOG} 2>/dev/null || true`).trim() || 0);
+  const before = warnings();
+  expect((await request.get('/filemanager.php')).status()).toBe(200);
+  await new Promise((r) => setTimeout(r, 500));
+  expect(warnings() - before, sh(`tail -3 ${LOG} 2>/dev/null || true`)).toBe(0);
 });
