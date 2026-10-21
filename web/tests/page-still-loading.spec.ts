@@ -1,6 +1,8 @@
 import http from 'http';
 import type { AddressInfo } from 'net';
 import { test, expect } from '@playwright/test';
+import { container } from './container';
+import { snapshotSettings } from './settings-file';
 
 // A dialog opened before the page has finished arriving. The template every
 // dialog is cloned from (#modalDialogBase) comes in with the footer, at the
@@ -54,8 +56,18 @@ async function startHoldingProxy(target: string, pagePath: string) {
 
 test.use({ timezoneId: 'America/Chicago', locale: 'en-US' });
 
+// A lookup that lands while the page is still loading runs the controls'
+// own change handlers, which save at once (the wizard's hold-until-Finish
+// ones are not in place yet), so the looked-up TimeZone, Locale and position
+// reach the settings file.  Put them back: a TimeZone left west of the one
+// the backups so far were named in makes every later backup look older than
+// those, and the 60-newest pruning deletes each new one as it is made.
+let restoreSettings: (() => void) | undefined;
+test.beforeEach(() => { restoreSettings = container ? snapshotSettings() : undefined; });
+
 test.afterEach(async ({ page }) => {
   await page.unrouteAll({ behavior: 'ignoreErrors' });
+  restoreSettings?.();
 });
 
 test('A dialog asked for while the page is still loading opens once it has', async ({ page, baseURL }) => {
