@@ -1,7 +1,8 @@
 # Sourced by run.sh and run-web.sh, with HERE, FPP, REF and FLAVOR set: builds
 # the image, picks the work tree for that commit and flavor, and exports the
 # commit into it unless it is already there. Sets SHA, TREE, DESCRIBE and DOCKER
-# (the docker run command with the work and ccache volumes mounted).
+# (the docker run command with the work and ccache volumes mounted), and
+# defines make_test_network.
 
 SHA=$(git -C "$FPP" rev-parse --verify "$REF^{commit}")
 TREE="/work/$(echo "$SHA" | cut -c1-12)-$FLAVOR"
@@ -47,3 +48,26 @@ if ! $DOCKER fpp-tests-env test -f "$TREE/src/Makefile"; then
             printf 'SOURCE_VERSION=%s\\nBRANCH=fpp-tests\\n' '$DESCRIBE' > '$TREE.tmp/src/EXPORTED_VERSION' &&
             mv '$TREE.tmp' '$TREE'"
 fi
+
+# The container a run's fppd runs in gets a bridge network of its own
+# (NETWORK, removed by remove_test_network). On Docker's default bridge every
+# run's container shares one subnet, and fppd's MultiSync broadcasts and
+# multicast reached the others: one run's fppd found another's over
+# MultiSync, which showed up as a stray system or an extra socket in tests
+# that count them. Networks a killed run left behind are pruned once they are
+# an hour old and have no container on them.
+make_test_network() {
+    docker network prune -f --filter label=fpp-tests --filter until=1h > /dev/null 2>&1 || true
+    NETWORK="fpp-tests-$$-$(date +%s)"
+    if ! docker network create --label fpp-tests "$NETWORK" > /dev/null; then
+        # Out of address pools, say: still run, but on the shared bridge.
+        echo "warning: could not create network $NETWORK; using the default bridge" >&2
+        NETWORK=bridge
+    fi
+}
+
+remove_test_network() {
+    if [ -n "$NETWORK" ] && [ "$NETWORK" != bridge ]; then
+        docker network rm "$NETWORK" > /dev/null 2>&1 || true
+    fi
+}

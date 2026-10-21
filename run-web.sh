@@ -57,8 +57,9 @@ fi
 
 # Not --rm: the container's exit code is fppd's verdict, read after it stops.
 NAME="fpp-tests-web-$$"
-trap 'docker rm -f "$NAME" > /dev/null 2>&1 || true' EXIT
-${DOCKER%%--rm*}${DOCKER#*--rm} -d --init --name "$NAME" -p "127.0.0.1:$PORT:80" \
+make_test_network
+trap 'docker rm -f "$NAME" > /dev/null 2>&1 || true; remove_test_network' EXIT
+${DOCKER%%--rm*}${DOCKER#*--rm} -d --init --name "$NAME" --network "$NETWORK" -p "127.0.0.1:$PORT:80" \
     -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" \
     -e FPP_TREE="$TREE" -e FPP_TESTS_ARTIFACTS=/artifacts \
     --cap-add SYS_PTRACE --cap-add SYS_NICE \
@@ -85,7 +86,7 @@ done
 if [ -n "$SERVE" ]; then
     echo "serving fpp $DESCRIBE at http://127.0.0.1:$PORT/ until Ctrl-C"
     echo "(container $NAME: FPP_TESTS_WEB_CONTAINER=$NAME for the tests that need it)"
-    trap 'docker stop -t 120 "$NAME" > /dev/null; docker rm -f "$NAME" > /dev/null 2>&1; exit 0' INT TERM
+    trap 'docker stop -t 120 "$NAME" > /dev/null; docker rm -f "$NAME" > /dev/null 2>&1; remove_test_network; exit 0' INT TERM
     docker wait "$NAME" > /dev/null
     exit 1
 fi

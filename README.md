@@ -59,6 +59,11 @@ The first build of a commit takes a few minutes; ccache makes later builds of ne
 commits take seconds. Builds are cached per commit and flavor in the `fpp-tests-work`
 Docker volume (`docker volume rm fpp-tests-work fpp-tests-ccache` to clear them).
 
+Each run's container is on a Docker bridge network of its own, labelled `fpp-tests`, so
+several runs at once (separate fpp-tests copies, or `run-web.sh --serve` left up) can't
+find each other's fppd over MultiSync. The run removes its network when it ends; one a
+killed run left behind is pruned by a later run once it is an hour old and unused.
+
 `--flavor coverage` builds fppd at -O0 with gcc's `--coverage` and, after the run, writes
 `artifacts/coverage/`: `summary.txt` (line and function coverage per source file, least
 covered first), `functions.csv` (every function with how often it was called) and `html/`

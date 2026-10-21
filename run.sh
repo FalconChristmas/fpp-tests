@@ -51,7 +51,8 @@ $DOCKER -v "$ARTIFACTS:/artifacts" fpp-tests-env \
 # copy of the file, mounted over the tree's, so one run's fppd can't be handed
 # another's media directory.
 MEDIA_ROOT=$(mktemp "${TMPDIR:-/tmp}/fpp-tests-media-root.XXXXXX")
-trap 'rm -f "$MEDIA_ROOT"' EXIT
+make_test_network
+trap 'rm -f "$MEDIA_ROOT"; remove_test_network' EXIT
 
 # The scenarios make network and mount namespaces (fake devices, fppinit),
 # which Docker's default AppArmor profile forbids even with SYS_ADMIN: on a
@@ -60,7 +61,7 @@ TTY=""
 [ -t 1 ] && TTY="-t"
 # The container runs as root; what it leaves in artifacts/ is handed back to
 # the caller (HOST_OWNER) when it finishes.
-$DOCKER $TTY -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" \
+$DOCKER $TTY --network "$NETWORK" -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" \
     -v "$MEDIA_ROOT:$TREE/www/media_root.txt" \
     -e FPP_TREE="$TREE" -e FPP_FLAVOR="$FLAVOR" -e FPP_TESTS_ARTIFACTS=/artifacts \
     -e HOST_OWNER="$(id -u):$(id -g)" \
