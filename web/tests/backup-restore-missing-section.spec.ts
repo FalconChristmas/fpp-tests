@@ -46,3 +46,35 @@ test('a settings restore from a backup with no proxies section restores the sub-
     inPlayer('rm', '-f', `${BACKUPS}/${BACKUP}`, '/fpp_restored');
   }
 });
+
+// Regression: 860150034 ("a settings restore from a backup with no command
+// presets keeps this player's"). A backup made on a player with no
+// commandPresets.json carries the section as [null], and restoring it wrote
+// "null" over this player's presets.
+test("a settings restore from a backup with no command presets keeps this player's", async ({ request }) => {
+  const restoreSettings = snapshotSettings();
+  const PRESETS = `${MEDIA}/config/commandPresets.json`;
+  const before = readFile(PRESETS);
+  expect(JSON.parse(before).commands?.length, 'the player has no presets to lose').toBeGreaterThan(0);
+  putFile(`${BACKUPS}/${BACKUP}`, JSON.stringify({
+    fpp_backup_version: '8.0', protected: false, backup_comment: 'fpp-tests no presets',
+    settings: {
+      system_settings: [{ HostDescription: 'fpp-tests-no-presets' }],
+      commandPresets: [null], pluginPrivacyAccepted: [null], proxies: [['']], timezone: [false],
+    },
+  }));
+  try {
+    const r = await request.post(`/api/backups/configuration/restore/JsonBackups/${BACKUP}`, { data: 'settings' });
+    const body = await r.text();
+    const reply = JSON.parse(body);
+    // The control: the restore ran.
+    expect(settingInFile('HostDescription')).toBe('fpp-tests-no-presets');
+    expect(readFile(PRESETS), 'the presets were overwritten').toBe(before);
+    expect(reply.Message.settings.commandPresets?.ATTEMPT, body).toBeUndefined();
+  } finally {
+    putFile(PRESETS, before);
+    restoreSettings();
+    inPlayer('rm', '-f', `${BACKUPS}/${BACKUP}`, '/fpp_restored');
+  }
+});
+
