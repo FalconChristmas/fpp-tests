@@ -163,3 +163,25 @@ def test_the_lights_wait_for_the_sound_to_start(fppd, audio):
     lead = resumed - first
     assert lead <= 0.1, \
         f"the sequence ran {first - t0:.2f} s after the start, {lead:.2f} s before the audio could run"
+
+
+def test_a_pw_link_that_never_answers_does_not_hold_up_shutdown(fppd, audio, tmp_path):
+    """While slot 1's output stream opens, fppd asks pw-link whether it is
+    linked yet. A pw-link that never answers (a wedged PipeWire) must not
+    hold the stream's worker, and with it fppd's shutdown, which joins it:
+    fppd still exits promptly on SIGTERM.
+
+    Regression: a32c56163. The popen of pw-link in
+    PipeWireOutputStream::StreamLinked() had no time limit."""
+    from test_crash_handler_privacy import stub_bin
+    calls = os.path.join(fppd.media, "tmp", "pw-link-calls")
+    hang = f'echo "$*" >> {calls}\nexec sleep 600\n'
+    fppd.settings(PipeWireKeepOutputOpen="1")
+    fppd.start(extra_env=stub_bin(tmp_path, **{"pw-link": hang}))
+    fppd.wait_for(lambda: os.path.exists(calls), timeout=20,
+                  what="the output stream to ask pw-link whether it is linked")
+    time.sleep(1)
+    started = time.monotonic()
+    fppd.exit_expected = True
+    fppd.stop(timeout=15)
+    assert time.monotonic() - started < 15
