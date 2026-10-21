@@ -2,12 +2,15 @@
 AM62x board, against PRUs that never answer (see bbcape.py).
 
 Device only: run with run-local.sh on a PocketBeagle2 (the panel cases need a
-cape whose EEPROM carries a "PocketScroller" panel config). The GPIO lines are
-the real ones, so stop the device's own fppd first. Skipped elsewhere.
+cape whose EEPROM carries a "PocketScroller" panel config, and skip on any
+other cape). The GPIO lines are the real ones, so stop the device's own fppd
+first. Skipped elsewhere.
 """
 
 import os
 import time
+
+import pytest
 
 from bbcape import fake_pru, pixel_output, strings_config, write_string_cape
 
@@ -28,6 +31,14 @@ def panel_config(**over):
     return {"channelOutputs": [c]}
 
 
+def needs_panel_config(fppd):
+    """Skip unless the cape's EEPROM carries the PocketScroller panel config
+    these scenarios use: panel configs come only from the cape, and on any
+    other the output is refused before it reaches what they test."""
+    if "Could not read panel pin configuration for PocketScroller" in fppd.log():
+        pytest.skip("the cape has no PocketScroller panel config (not a panel cape)")
+
+
 DP3364 = 6  # panelType: a PWM panel whose registers go up one word per PRU command
 
 
@@ -46,6 +57,7 @@ def test_a_pwm_panel_whose_pru_never_answers_does_not_hang_startup(fppd):
     fppd.settings(LogLevel_ChannelOut="info")
     fppd.write("config/channeloutputs.json", panel_config(panelType=DP3364))
     fppd.start(timeout=60)
+    needs_panel_config(fppd)
     assert fppd.get("/fppd/status").get("fppd") == "running"
     assert "PWM panel registers were not sent" in fppd.log()
 
@@ -67,6 +79,7 @@ def test_a_pwm_panel_on_a_pru_that_never_answers_keeps_fppd_responsive(fppd):
     fake_pru(fppd)
     fppd.write("config/channeloutputs.json", panel_config(panelType=FM6363C))
     fppd.start(timeout=60)
+    needs_panel_config(fppd)
     fppd.command("Test Start", "1000", "RGB Chase", "*", "FF0000-00FF00-0000FF")
     time.sleep(2)
     # A reload of the outputs, as an xLights upload does.
@@ -124,6 +137,7 @@ def test_a_full_height_panel_with_interleave_off_starts(fppd):
         ledPanelsHeight=64, panelHeight=64, ledPanelsScan=64, panelScan=64,
         ledPanelsSize="64x64x64", channelCount=12288, panelInterleave="0", panelDataLayout=1))
     status = fppd.start(timeout=60)
+    needs_panel_config(fppd)
     assert not any("BBShiftPanel" in w for w in status.get("warnings", [])), status
     fppd.command("Test Start", "1000", "RGB Chase", "*", "FF0000-00FF00-0000FF")
     time.sleep(6)
