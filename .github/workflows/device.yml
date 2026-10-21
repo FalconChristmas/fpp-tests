@@ -65,6 +65,11 @@ jobs:
       FLAVOR: ${{ github.event.inputs.flavor || 'debug' }}
       ALL_TESTS: ${{ github.event.inputs.tests == 'all' && '1' || '' }}
     steps:
+      # run-local.sh runs as root; anything of root's left in the workspace
+      # (a crashed run's files) would stop the checkout from cleaning it.
+      - name: Give the workspace back to the runner
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
       - name: Checkout fpp-tests
         uses: actions/checkout@v6
 
@@ -153,7 +158,9 @@ jobs:
         run: |
           TESTS=
           [ -f device-tests.txt ] && TESTS=$(cat device-tests.txt)
-          sudo ./run-local.sh --fpp fpp $HOST_AUDIO -v -rA --junitxml=artifacts/junit.xml $PYTEST_ARGS $TESTS
+          # No bytecode: as root it lands in scenarios/__pycache__, which the
+          # runner then cannot remove.
+          sudo env PYTHONDONTWRITEBYTECODE=1 ./run-local.sh --fpp fpp $HOST_AUDIO -v -rA --junitxml=artifacts/junit.xml $PYTEST_ARGS $TESTS
 
       - name: Start fppoled again
         if: always() && env.RESTART_FPPOLED == '1'
