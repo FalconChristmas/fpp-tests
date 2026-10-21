@@ -61,6 +61,11 @@ test('Update All reports a plugin whose upgrade script failed', async ({ page, b
     repo.commit({ 'pluginInfo.json': pluginInfo(NAME), 'version.txt': '1\n' }, 'v1');
     const r = await page.request.post('/api/plugin', { data: repo.body(), timeout: 120_000 });
     expect((await r.json()).Status).toBe('OK');
+    // The install records "no update" stamped with its second, and a check
+    // drops its own answer for the plugin when the recorded one is as new:
+    // a check started in the install's second (Update All below, on a fast
+    // run) left that answer standing, and Update All offered nothing.
+    await new Promise((res) => setTimeout(res, 1_100));
     const v2 = repo.commit({
       'version.txt': '2\n',
       'scripts/fpp_upgrade.sh': { content: '#!/bin/sh\necho fpp-tests upgrade script ran\nexit 3\n', mode: '755' },
