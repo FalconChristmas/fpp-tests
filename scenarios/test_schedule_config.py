@@ -40,6 +40,10 @@ def test_fixing_the_schedule_takes_its_warning_down(fppd):
     Regression: 7e4060ed5. Schedule configuration warnings were raised with
     no timeout and most had no matching removal, so they stayed on every page
     until fppd restarted, even after the schedule was fixed.
+
+    Also covers the negative-repeat half of 9fb7d59e2: before it the
+    occurrence expansion walked a negative interval backwards forever, and
+    fppd hung at startup in the Scheduler constructor.
     """
     def flagged():
         return any("negative repeat" in w for w in warnings(fppd))

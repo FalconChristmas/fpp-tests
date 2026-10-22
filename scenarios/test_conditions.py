@@ -88,7 +88,8 @@ GROUPS = [
 def test_groups_combine_their_conditions(fppd):
     """An If's Check with several conditions: ALL (AND) or ANY (OR) of
     them, NOT on a group or a leaf, groups nested in groups, and a child
-    that can't be read dropped rather than taken as true or false."""
+    that can't be read dropped rather than taken as true or false.
+    The If command itself is d7b5ecb51."""
     fppd.start()
     wrong = {}
     for i, (cond, want) in enumerate(GROUPS):
@@ -201,7 +202,10 @@ def test_formulas_and_variables_in_name_and_value(fppd):
 
 def test_status_sources(fppd):
     """Player Status, Is Playing, Current Playlist, a GPIO pin nothing has
-    set (not found: false, true with NOT) and an unknown source."""
+    set (not found: false, true with NOT) and an unknown source.
+
+    Covers 71b217e47, which added the Player Status, Is Playing and
+    Current Playlist sources."""
     fppd.start()
     assert check(fppd, leaf("", "equal to", "idle", source="Player Status")) == "yes"
     assert check(fppd, leaf("", "equal to", "0", source="Is Playing")) == "yes"
@@ -272,7 +276,12 @@ def test_sun_source_uses_the_location_and_time_zone(fppd, where, at, tz, utc_off
 def test_condition_preview(fppd):
     """GET /api/fppd/condition/preview: one source's value, or with a
     comparator the whole leaf -- both sides and the result, as If would
-    evaluate it."""
+    evaluate it.
+
+    Covers fc4b419eb: the comparator (whole-leaf) mode, and a name that is a
+    variable or a formula read as such rather than as text. Also covers
+    4a232b973: the Value side and the result come back when the source does
+    not resolve."""
     fppd.start()
     set_vars(fppd, Count="10")
     r = preview(fppd, source="Expression", name="Count")
@@ -315,7 +324,10 @@ VALIDATE = [
 def test_validate_expression(fppd):
     """GET /api/variables?validateExpression= says whether a field compiles
     and how it will be read: a variable, a formula, a template or plain
-    text."""
+    text.
+
+    Covers 4a232b973: conditionExpr=true classifies the If editor's fields
+    the way If reads them, where a bare compile called every name valid."""
     fppd.start()
     set_vars(fppd, Count="10")
     wrong = {}

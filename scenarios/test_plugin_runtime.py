@@ -48,7 +48,11 @@ def test_routes_of_a_plugin_loaded_at_runtime(fppd):
     the plugin loaded. Drogon's router is frozen once it runs: a late
     registration asserted where asserts are on, and otherwise edited the
     router unlocked and never compiled the family's regex route, so a
-    plugin installed without a restart had subpaths that answered 404."""
+    plugin installed without a restart had subpaths that answered 404.
+
+    Also covers 07f19dda1, the runtime load and unload, and the route half
+    of 1a5f596e1: registerPluginApi() routes a plugin gives back, which
+    answer 410 once it is gone."""
     fppd.start()
     load(fppd, "lateroutesplugin.cpp", "fpp-late")
     assert fppd.get("/late/ok") == "ok"

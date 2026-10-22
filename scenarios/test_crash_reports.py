@@ -119,6 +119,9 @@ def test_crash_report_redacts_credentials_and_the_cape_serial(fppd):
     Regression: 9e9db1297. The redactor let through a JSON "pw", curl -u
     user:pass, mosquitto_pub -P, cookies, AWS and sk- API keys and numeric
     lat/long, and the EEPROM was copied whatever SendVendorSerial said.
+    Also covers fec15ca35, which moved the report into
+    scripts/generate_crash_report: before it the crash handler zipped the
+    files itself, with nothing redacted.
     """
     crashes = os.path.join(fppd.media, "crashes")
     os.makedirs(crashes, exist_ok=True)

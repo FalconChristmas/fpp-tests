@@ -76,7 +76,7 @@ def fall_back():
 def test_calendar_range_matches_the_schedule(fppd):
     """Every occurrence the calendar shows for a week is one the entries
     really have -- no more, no fewer, at the right instants -- including on
-    the 25-hour day."""
+    the 25-hour day. Covers c0778b26f, which added the range API."""
     sched = entries()
     sunday = fall_back()
     first = sunday - datetime.timedelta(days=4)  # the Wednesday before

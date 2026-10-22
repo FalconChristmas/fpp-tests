@@ -74,7 +74,8 @@ WEATHER = json.dumps({"data": {"temperature": 21.5, "city": "Here"}, "list": [1,
 
 def test_command_task_fills_its_variable_through_each_filter(fppd, endpoint):
     """Each filter type pulls its piece out of the fetched JSON, and each
-    task's Status says it ran."""
+    task's Status says it ran. Covers d7b5ecb51, which added Recurring
+    Tasks (with Variables, Set Variable and If)."""
     ep = endpoint(WEATHER)
     tasks = [
         url_task("raw", ep.url),
@@ -98,6 +99,8 @@ def test_command_task_fills_its_variable_through_each_filter(fppd, endpoint):
 
 
 def test_preset_task_triggers_its_preset(fppd):
+    """A preset task runs its Command Preset: here a Set Variable (both
+    d7b5ecb51)."""
     fppd.write("config/commandPresets.json", {"commands": [{
         "name": "Mark", "command": "Set Variable",
         "args": ["mark", "Value", "7"], "multisyncCommand": False}]})

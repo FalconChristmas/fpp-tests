@@ -346,7 +346,8 @@ def test_if_compares_times_days_and_months_in_order(fppd):
 
     Regression: 92ddc059f. between needed numbers, so it was false for
     every time, day and month; text comparison put 15:06 before 9:00 and
-    the days in alphabetical order."""
+    the days in alphabetical order. Also covers 71b217e47, which added the
+    Day and Month sources."""
     fppd.start(fake_time=WHEN)
     got = {}
     for i, (src, cmp_, value, _) in enumerate(CONDITIONS):

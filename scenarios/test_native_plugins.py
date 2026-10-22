@@ -55,7 +55,12 @@ def test_a_plugin_setting_containing_equals_signs(fppd):
 
     Regression: 07a590559. Plugin settings files were split on every "="
     (the bug already fixed in FPP's own settings loader), so the value was
-    cut at its first "=": "ab==cd" came through as "ab"."""
+    cut at its first "=": "ab==cd" came through as "ab".
+
+    Also covers a1e9ac88c, through the shutdown every scenario ends with:
+    CommandManager deleted every command before the plugins were cleaned
+    up, and this plugin's destructor then removed and deleted its own
+    commands again (an ASan heap-use-after-free)."""
     install(fppd, features=["NATIVE_SETTING"])
     fppd.write("config/plugin.fpp-native", 'secret = "ab==cd"\nplain = "x"\n')
     fppd.start()

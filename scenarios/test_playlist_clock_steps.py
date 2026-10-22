@@ -43,7 +43,8 @@ def test_pause_between_sequences_across_a_clock_step(fppd, step_name):
     the wall clock steps an hour while it runs.
 
     Regression: cd9f8e63e. The pause between sequences measured its time
-    with the wall clock, as the pause entry did.
+    with the wall clock, as the pause entry did. The pause itself is
+    d97f7f934.
     """
     # The lead-in's reset is an entry too, so the pause comes before step 1.
     fppd.write("playlists/P.json", playlist("P", main=[step(1)], globalPauseBetweenSequencesMS=3000))

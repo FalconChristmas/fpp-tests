@@ -53,7 +53,11 @@ def fields(reply):
 
 def test_set_setting_takes_effect_at_once(fppd):
     """SetSetting changes the running value, and an empty value clears it
-    (the UI clears settings that way: "SetSetting,name,,")."""
+    (the UI clears settings that way: "SetSetting,name,,").
+
+    Regression: d14d35171. The value was read with strtok_r, which skips
+    empty fields, so "SetSetting,name,," never called SetSetting() and the
+    old value stayed."""
     fppd.start()
     send("SetSetting,TimeFormat,%Y,")
     year = time.strftime("%Y")
@@ -138,7 +142,10 @@ def test_stop_now_ends_a_lone_sequence(fppd):
 ], ids=lambda c: repr(c[:40]))
 def test_hostile_command_is_survived(fppd, cmd):
     """Whatever arrives on the socket, fppd answers it (possibly with an
-    empty datagram) and keeps running."""
+    empty datagram) and keeps running.
+
+    Regression: 79f087671 (its empty-command half). "," and ",,,," left
+    strtok_r with no token, and the NULL went to strncpy: SIGSEGV."""
     fppd.start()
     # An empty datagram has nothing to answer, and gets nothing.
     send(cmd, reply=bool(cmd))

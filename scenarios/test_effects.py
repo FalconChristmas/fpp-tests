@@ -221,7 +221,7 @@ def test_fseq_effect_start_options(fppd):
     """FSEQ Effect Start runs a sequence as an effect. Started twice it runs
     twice; "If Not Running" refuses the second start, and "Restart If
     Running" jumps the running one back to its first frame instead of
-    starting another (e0555f1d8)."""
+    starting another (e0555f1d8). If Not Running is 1c7641851."""
     frames = unique_frames(60, CHANNELS)  # 3 s
     write_fseq(os.path.join(fppd.media, "sequences", "Glow.fseq"), frames, step_ms=50)
     outputs_only(fppd)

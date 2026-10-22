@@ -30,6 +30,10 @@ def test_repeating_song_plays_every_pass(fppd, audio):
     11 ms after its media started, and the playlist ran through its entries
     endlessly without playing anything again. An entry with a media offset
     (as here) never started its sequence again: IsStarted() stayed true.
+
+    Also covers 331fe6e9e: starting a media entry held the entry's media
+    lock across the plugin media callback, which reads the entry's config
+    under the same lock, and the playlist thread deadlocked on itself.
     """
     index = {f: i for i, f in enumerate(song(fppd, 2))}
     # With a media offset the sequence is started from Process() once the

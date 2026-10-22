@@ -79,7 +79,11 @@ def test_edit_that_does_not_load_keeps_the_running_playlist(fppd):
     """An edit fppd can't use -- a half-written file, then one whose
     "repeat" is a word -- leaves the playing copy running: each is logged
     as such, and the next pass is still the old main section. A good edit
-    after them is picked up at the end of the next pass."""
+    after them is picked up at the end of the next pass.
+
+    Regression: 562b9710f. A file that did not load came back as an empty
+    playlist, and the reload installed it over the playing one: the show
+    stopped at the half-written edit."""
     fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(3)]))
     fppd.start()
     start(fppd, "P", repeat=True)

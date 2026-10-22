@@ -10,7 +10,10 @@ def only_thread_leaks(report):
 
 def test_starts_and_stops_cleanly(fppd):
     """fppd on an empty media directory comes up, answers, and shuts down
-    on SIGTERM with exit 0 and no sanitizer report."""
+    on SIGTERM with exit 0 and no sanitizer report.
+
+    Regression: 8daa788eb. With drogon's own SIGTERM handler only drogon
+    stopped, and fppd's main loop kept running."""
     status = fppd.start()
     assert status["fppd"] == "running", status
 

@@ -140,7 +140,9 @@ def test_playlist_start_and_stop_are_pushed(fppd):
     without polling: a snapshot naming the playlist and its sequence, then
     one that is idle again. While it plays, a snapshot arrives about once a
     second with the position moving on: at least 3 and at most 10 in 5 s,
-    which rules out both a stalled feed and a push storm."""
+    which rules out both a stalled feed and a push storm.
+
+    Covers 12e2ffb37, which added the push."""
     show(fppd)
     fppd.start()
     ws = WebSocket("/fppdws")
