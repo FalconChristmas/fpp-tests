@@ -117,16 +117,16 @@ def test_a_restarted_camera_does_not_share_the_framebuffer_outputs_fd(fppd, audi
     camera is restarted on a lease of its own, never on the card's shared fd
     the framebuffer output flips on, and comes back without stalling.
 
-    Media F1 (fpp 10.3 review). If the restart found the old consumer's lease
-    still held, DrmCards::AcquireLease() fell back to the card's master fd,
-    where the framebuffer outputs drain every page-flip event: kmssink could
-    lose its own event (a 3 s stall) or take theirs (SIGSEGV through their
-    flip token). 081ff8d9e stopped kmssink waiting for events at all.
-
-    Not a red-before-green test: on a Pi 5 the dead pipeline's teardown
-    releases its lease in the 12 ms before the restart asks for one, so the
-    restart got its own lease on every run, before 081ff8d9e and after. This
-    checks that stays so.
+    Regression: 4e06babd8. The dead pipeline's teardown runs on a thread of its
+    own and gives the lease back only once its kmssink is gone, but the
+    restart asked for the connector at once: on a Pi 5 it usually came 12 ms
+    after the release, and now and then before it. Found held, the
+    connector got no CRTC and DrmCards::AcquireLease() fell back to the
+    card's master fd, where the framebuffer outputs drain every page-flip
+    event: kmssink could lose its own event (a 3 s stall) or take theirs
+    (SIGSEGV through their flip token; 081ff8d9e stopped kmssink waiting for
+    events at all). failplane.so holds the teardown up for 300 ms, so the
+    restart always asks while the old lease is held.
 
     Device only: both HDMI connectors on one card, HDMI-A-2 reading
     "connected", and nothing else holding DRM master -- a kiosk's X server
@@ -156,7 +156,8 @@ def test_a_restarted_camera_does_not_share_the_framebuffer_outputs_fd(fppd, audi
         {"Name": "Keep", "Type": "FB", "Width": 64, "Height": 32, "Device": "HDMI-A-1"}]})
     log = os.path.join(fppd.media, "tmp", "failplane.log")
     fppd.start(preload=[shims.build("failplane.c")],
-               extra_env={"FAILPLANE_LOG": log, "FAILPLANE_SKIP": "60", "FAILPLANE_COUNT": "2"})
+               extra_env={"FAILPLANE_LOG": log, "FAILPLANE_SKIP": "60", "FAILPLANE_COUNT": "2",
+                          "FAILPLANE_STOP_DELAY_MS": "300"})
 
     def calls():
         try:
@@ -181,6 +182,7 @@ def test_a_restarted_camera_does_not_share_the_framebuffer_outputs_fd(fppd, audi
     # failed, and its consumer really was restarted.
     assert fb_fds, "the framebuffer output never updated its plane"
     assert failed, "kmssink never reached its failing frame"
+    assert [1 for w, _, _, _ in got if w == "c"], "the dead kmssink's teardown was never held up"
     assert "pipeline died" in out and out.count("kmssink on DRM") >= 2, fppd.tail()
     after = [(fd, t) for w, fd, t, rc in got if w == "k" and rc >= 0 and t > failed[-1]]
     assert after, fppd.tail()
