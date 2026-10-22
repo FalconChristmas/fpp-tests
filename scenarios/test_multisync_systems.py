@@ -10,6 +10,7 @@ commit's change to MultiSync.cpp on the current tree: its scenario fails.
 """
 
 import contextlib
+import os
 import socket
 import subprocess
 import time
@@ -313,3 +314,143 @@ def test_an_endless_reply_from_a_remote_is_cut_off(fppd):
                       what="fppd to hang up on the endless system info")
     read = info_read()[0] // (1024 * 1024)
     assert read <= 20, f"fppd read {read} MB of the endless system info before hanging up"
+
+
+def test_pings_that_arrive_while_the_main_loop_is_held_are_kept(fppd):
+    """Pings from 1000 systems that arrive while fppd's main loop is held
+    up -- an output reload, a large show's players all coming up at once --
+    are all there for it when it gets back to them: every system is listed.
+
+    Regression: 884431655. The receive socket kept the kernel's default
+    buffer, 212992 bytes, about 166 datagrams at ~1.3 KB each whatever
+    their size, so the rest of a burst was dropped in the kernel. Here
+    fppd is stopped (SIGSTOP) while the burst goes out.
+    """
+    import signal
+    fppd.start()
+    count = 1000
+    addresses = [f"10.40.{n // 250}.{n % 250 + 1}" for n in range(count)]
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    os.kill(fppd.proc.pid, signal.SIGSTOP)
+    try:
+        for n, ip in enumerate(addresses):
+            s.sendto(ping_packet(ip, f"burst-{n}"), ("127.0.0.1", PORT))
+    finally:
+        os.kill(fppd.proc.pid, signal.SIGCONT)
+        s.close()
+    wanted = set(addresses)
+
+    def listed():
+        return len(wanted & {r["address"] for r in remotes(fppd)})
+
+    seen = []
+
+    def settled():
+        seen.append(listed())
+        return len(seen) > 3 and seen[-1] == seen[-4]
+    fppd.wait_for(settled, timeout=20, interval=0.5, what="the system list to settle")
+    assert seen[-1] == count, f"{count - seen[-1]} of {count} systems' pings were dropped"
+
+
+def _ddp_universe(start, count, n):
+    return {"active": 1, "description": "", "id": 64001 + n, "startChannel": start + 1,
+            "channelCount": count, "type": 5, "address": "127.0.0.1", "priority": 0,
+            "monitor": 0, "deDuplicate": 0}
+
+
+def test_ranges_too_long_for_a_ping_merge_the_closest_pair(fppd):
+    """Output ranges that don't fit in a ping's 120-character field are
+    merged, closest pair first, until they do: a short first range far from
+    a long second one stays apart while ten ranges 1990 channels apart are
+    joined. (Gaps of up to 1025 channels are joined before any of this.)
+
+    Regression: a4ed6851d. The merge seeded its running end of range from
+    the second range's length instead of the first's, so with a long second
+    range the first pair always looked closest: the ping advertised
+    0-104999 and claimed the 4990 channels between them.
+    """
+    universes = [_ddp_universe(0, 10, 0), _ddp_universe(5000, 100000, 1)]
+    universes += [_ddp_universe(200000 + 2000 * k, 10, 2 + k) for k in range(10)]
+    fppd.write("config/co-universes.json", {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 220000,
+        "universes": universes}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(interface("10.77.0.1"))
+        fppd.start()
+        local = [s for s in fppd.get("/fppd/multiSyncSystems")["systems"] if s.get("local")]
+        assert local and local[0]["channelRanges"].startswith("0-9,5000-104999,200000-200009,"), local
+        cap = stack.enter_context(UdpCapture(PORT, "127.0.0.3"))
+        send(ping_packet("10.20.30.45", "peer-f", discover=True), src="127.0.0.3")
+        fppd.wait_for(lambda: [p for _, _, _, p in cap.snapshot() if p[4:5] == b"\x04"],
+                      timeout=5, interval=0.1, what="a ping back")
+        reply = next(p for _, _, _, p in cap.snapshot() if p[4:5] == b"\x04")
+    ranges = reply[166:287].split(b"\0")[0].decode()
+    assert len(ranges) <= 120, ranges
+    assert ranges.startswith("0-9,5000-104999,"), f"the ping advertises {ranges}"
+
+
+def test_an_external_address_that_is_not_ipv4_is_survived(fppd):
+    """In a container, MultiSyncExternalIPAddress names the address fppd
+    announces. One that isn't a dotted quad -- a host name -- doesn't stop
+    fppd, which lists itself under it.
+
+    Regression: a4ed6851d. The local system's address was split on dots
+    and the first four parts read without checking there were four: a
+    name with fewer dots read past the end of the parts (ASan: heap
+    overflow at startup).
+    """
+    if not os.path.exists("/etc/fpp/container"):
+        pytest.skip("MultiSyncExternalIPAddress is read only in a container")
+    fppd.settings(MultiSyncExternalIPAddress="fpp.example")
+    fppd.start()
+    local = [s["address"] for s in fppd.get("/fppd/multiSyncSystems")["systems"] if s.get("local")]
+    assert "fpp.example" in local, local
+    fppd.check_alive()
+
+
+def test_twinkly_replies_are_probed_a_few_at_a_time(fppd):
+    """Lights answering fppd's Twinkly discovery broadcast all at once are
+    probed over HTTP a few at a time -- no more than the 4 in flight the
+    periodic probes keep -- however many answer: 24 lights whose web servers
+    take 1 s to answer never see more than 4 probes open at once, and all 24
+    are probed.
+
+    Regression: 4be58fb6a. Each reply started its HTTP probe on the spot,
+    outside the in-flight cap: 24 replies, 24 probes at once (and a burst of
+    datagrams claiming to be replies, as many as it named).
+    """
+    import sys
+    import threading
+    from fake_devices import DEV_IF, HOST_ADDR, HOST_IF, NETNS, _ip, device_network
+
+    lights = [f"10.89.0.{i + 1}" for i in range(24)]
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "twinkly_held_replies.py")
+    with device_network(["10.88.0.2"]) as run:
+        # fppd sends its discovery to each interface's broadcast address
+        for args, ns in ((("addr", "del", HOST_ADDR + "/24", "dev", HOST_IF), None),
+                         (("addr", "add", HOST_ADDR + "/24", "brd", "+", "dev", HOST_IF), None),
+                         (("route", "add", "10.89.0.0/16", "dev", HOST_IF), None),
+                         (("addr", "add", "10.88.0.3/24", "brd", "+", "dev", DEV_IF), NETNS)):
+            r = _ip(*args, ns=ns)
+            assert r.returncode == 0, f"ip {' '.join(args)}: {r.stderr}"
+        batch = "".join(f"addr add {a}/16 dev {DEV_IF}\n" for a in lights)
+        r = subprocess.run(["ip", "-n", NETNS, "-batch", "-"], input=batch, capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        proc = run(sys.executable, "-I", script, ",".join(lights), "1")
+        lines = []
+
+        def read():
+            for line in proc.stdout:
+                lines.append(line)
+        threading.Thread(target=read, daemon=True).start()
+        fppd.wait_for(lambda: "ready\n" in lines, what="the fake lights to listen")
+        fppd.start()
+        fppd.wait_for(lambda: "sent\n" in lines, timeout=30, what="fppd's Twinkly discovery broadcast")
+
+        def probed():
+            return {line.split()[1] for line in lines if line.startswith("probe ")} & set(lights)
+        fppd.wait_for(lambda: len(probed()) == len(lights), timeout=60, interval=0.5,
+                      what="every light to be probed")
+    most = max([int(line.split()[1]) for line in lines if line.startswith("open ")], default=0)
+    assert most <= 4, f"{most} probes of the lights open at once"

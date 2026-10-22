@@ -68,6 +68,33 @@ def test_master_announces_what_it_plays(fppd):
     assert blanks, "no blanking packet after stop"
 
 
+def test_master_announces_back_to_back_sequences(fppd):
+    """A master playing one sequence after another announces each: open,
+    start, sync packets that begin again from the start of the second,
+    and stop, for both.
+    """
+    from show import playlist, sequence_entry
+    for name, first in (("A.fseq", 0), ("B.fseq", 5000)):
+        write_fseq(f"{fppd.media}/sequences/{name}", unique_frames(60, CHANNELS, first=first),
+                   step_ms=STEP_MS)
+    fppd.write("playlists/AB.json", playlist("AB", [
+        {"type": "sequence", "enabled": 1, "playOnce": 0, "sequenceName": n} for n in ("A.fseq", "B.fseq")]))
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(DisableFakeNetworkBridges="1", MultiSyncEnabled="1", MultiSyncRemotes=REMOTE)
+    with UdpCapture(PORT, REMOTE) as cap:
+        fppd.start()
+        fppd.command("Start Playlist", "AB", "false", "false")
+        fppd.wait_for(lambda: [s for s in (parse_sync(t, p) for t, _, _, p in cap.snapshot())
+                               if s and s.filename == "B.fseq" and s.action == "stop"],
+                      timeout=20, interval=0.2, what="the second sequence's stop")
+        syncs = [s for s in (parse_sync(t, p) for t, _, _, p in cap.snapshot()) if s]
+    for name in ("A.fseq", "B.fseq"):
+        actions = [s.action for s in syncs if s.filename == name]
+        assert actions[:2] == ["open", "start"] and actions[-1] == "stop", f"{name}: {actions}"
+        beats = [s.frame for s in syncs if s.filename == name and s.action == "sync"]
+        assert len(beats) >= 3 and beats[0] <= 10, f"{name}: sync frames {beats}"
+
+
 def test_remote_follows_its_master(fppd):
     """As remote, fppd plays what sync packets tell it to: it opens and
     starts the sequence, its output follows the master's frame numbers
@@ -149,6 +176,39 @@ def test_sync_destinations_change_without_a_restart(fppd):
     assert "127.0.0.2" in before, f"sync went to {before} before the change"
     assert "127.0.0.1" in after, f"sync went to {after} after the change to localhost"
     assert "127.0.0.2" not in after, "sync still went to the old remote after the change"
+
+
+def test_all_known_remotes_take_in_a_remote_found_while_running(fppd):
+    """With "send to all known remotes" (MultiSyncUnicast) on, an FPP remote
+    that announces itself while fppd runs is listed as a unicast target, and
+    a change to the remote list afterwards is taken in, fppd still
+    answering.
+
+    Regression: 9d210bbe9 (run with --flavor tsan). A ping from a new remote
+    rebuilt the unicast list with the system-list lock held, taking the
+    rebuild lock under it, while a settings reload took the two the other
+    way round: an ABBA deadlock between the probe threads and the reload,
+    which TSan reports as a lock-order inversion once both have run.
+
+    Regression: 3c14514f3. The ping handler held the (non-recursive) socket
+    lock across adding the system, and the unicast rebuild that follows
+    takes it again: the main loop deadlocked on the first ping from a
+    remote, and the next ping was never read.
+    """
+    from test_multisync_systems import interface, send, wait_listed
+    from multisync import ping_packet
+    fppd.settings(MultiSyncEnabled="1", MultiSyncUnicast="1", MultiSyncRemotes="127.0.0.2")
+    with interface("10.77.0.1"):
+        fppd.start()
+        send(ping_packet("10.77.0.9", "unicast-peer", mode=0x08))
+        wait_listed(fppd, "10.77.0.9")
+        # The main loop is still reading packets.
+        send(ping_packet("10.77.0.10", "later-peer"))
+        wait_listed(fppd, "10.77.0.10")
+        fppd.settings(MultiSyncRemotes="127.0.0.3")
+        time.sleep(1)
+        listed = [s for s in fppd.get("/fppd/multiSyncSystems")["systems"] if s["address"] == "10.77.0.9"]
+    assert listed and listed[0]["fppModeString"] == "remote", listed
 
 
 def test_settings_file_change_to_a_multisync_setting(fppd):
@@ -376,7 +436,13 @@ def test_master_announces_its_media(fppd, audio, entry_type):
 def test_remote_counts_what_it_receives(fppd):
     """GET /fppd/multiSyncStats reports, per sending address, how many of
     each sync packet a remote received -- refused ones as errors -- and
-    ?reset=1 zeroes them."""
+    ?reset=1 zeroes them.
+
+    Regression: ea217f439 (run with --flavor tsan). The counters were bumped
+    on the main loop outside the stats lock while the API thread read them:
+    a data race TSan reports on the read here. So did the sync master's
+    address, a string written by the sync-receive path and read for the
+    stats with no common lock until 9d210bbe9."""
     write_fseq(f"{fppd.media}/sequences/Show.fseq", unique_frames(100, CHANNELS), step_ms=STEP_MS)
     fppd.write("config/co-universes.json", ddp_output(CHANNELS))
     fppd.settings(DisableFakeNetworkBridges="1", fppMode="remote")

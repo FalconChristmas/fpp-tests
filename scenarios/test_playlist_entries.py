@@ -815,3 +815,26 @@ def test_instant_loop_warning_once_per_run(fppd):
     fppd.command("Stop Now")
     n = fppd.log().count(line)
     assert n == 1, f"the instant-loop warning was logged {n} times"
+
+
+def test_repeating_instant_playlist_runs_a_pass_a_second(fppd):
+    """A repeating playlist of command entries alone, where nothing takes
+    any time, runs about one pass a second.
+
+    Regression: 8249b670a. The pass wrapped and started again on every pass
+    of the main loop, about a thousand a second, running its commands each
+    time and flooding the CPU and the log.
+    """
+    count = {"type": "command", "enabled": 1, "playOnce": 0, "command": "Set Variable",
+             "args": ["passes", "Expression", "", "1", "0", "100", "=passes+1", "false"]}
+    zero = {"type": "command", "enabled": 1, "playOnce": 0, "command": "Set Variable",
+            "args": ["passes", "Value", "0"]}
+    fppd.write("playlists/P.json", playlist("P", lead_in=[zero], main=[count]))
+    fppd.start()
+    fppd.command("Start Playlist", "P", "true", "false")
+    time.sleep(5)
+    fppd.command("Stop Now")
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=10,
+                  what="P to stop")
+    n = int(float((fppd.get("/variables") or {}).get("passes", {}).get("value") or 0))
+    assert 2 <= n <= 10, f"{n} passes in 5 s"

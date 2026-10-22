@@ -214,18 +214,20 @@ def test_unreachable_remote_does_not_stall_output(fppd, remotes):
     Regression: d80973d93, which reworked a send loop that gave up on the
     whole batch -- or, on a LAN where a vanished remote answers with
     EAGAIN, never gave up at all and froze the output thread. On its
-    parent, in either order, the reachable remote got no sync packets. (A
-    network namespace fails an unroutable send at once, so the freeze
-    itself doesn't reproduce here.)
+    parent, in either order, the reachable remote got no sync packets.
+    (A send failed at once doesn't reproduce the freeze itself.)
     """
     from capture import UdpCapture
     from multisync import parse_sync
     frames = unique_frames(400, CHANNELS)
     with UdpCapture(PORT, "127.0.0.2") as cap, DdpReceiver(CHANNELS) as rx:
         install(fppd, frames, step_ms=STEP_MS)
-        # 10.x has no route in this network namespace: every send to it fails
+        # A run's network has a default route, so a send to 10.66.66.66 would
+        # go out; sendfail.so fails every send to it instead, as one with no
+        # route does.
+        import shims
         fppd.settings(MultiSyncEnabled="1", MultiSyncRemotes=remotes)
-        fppd.start()
+        fppd.start(preload=[shims.build("sendfail.c")], extra_env={"SENDFAIL_ADDR": "10.66.66.66"})
         fppd.command("Start Playlist", "Show", "false", "false")
         fppd.wait_for(lambda: rx.last() is not None, timeout=10, what="output to start")
         since = time.monotonic()

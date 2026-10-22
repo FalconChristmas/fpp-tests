@@ -111,3 +111,24 @@ def test_start_while_paused_stops_the_paused_playlist(fppd):
                   what="PLAYLIST_STOPPED for the paused playlist")
     fppd.command("Stop Now")
     wait_idle(fppd)
+
+
+def test_a_started_preset_that_starts_its_playlist_again_settles(fppd):
+    """A PLAYLIST_STARTED preset that starts the playlist again, so every
+    start fires it once more: the start command returns, the loop is cut off
+    with a warning after a bounded number of starts, and the playlist plays.
+
+    Regression: 339be2612. The preset ran inline from inside the start, so
+    its Start Playlist re-entered the start on the same stack and fired the
+    preset again: the command that began it never returned, and the
+    recursion ran on until the stack overflowed.
+    """
+    fppd.write("playlists/P.json", {"name": "P", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                    "mainPlaylist": [pause(30)], "leadOut": []})
+    fppd.write("config/commandPresets.json", {"commands": preset(
+        "PLAYLIST_STARTED", ("Start Playlist", "P", "false", "false"))})
+    fppd.start()
+    fppd.command("Start Playlist", "P", "false", "false", timeout=60)
+    fppd.wait_for(lambda: "notification cascade exceeded" in fppd.log(), timeout=30,
+                  what="the preset loop to be cut off")
+    fppd.wait_for(lambda: status_name(fppd) == "playing", timeout=10, what="P to play")

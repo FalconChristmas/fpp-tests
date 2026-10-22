@@ -10,6 +10,9 @@ import datetime
 import time
 from zoneinfo import ZoneInfo
 
+from fseq import solid_frames
+from show import CHANNELS, install, status
+
 ZONE = "America/New_York"
 TZ = ZoneInfo(ZONE)
 ODD_DAY, EVEN_DAY, SUNDAY, EVERY_DAY = 14, 15, 0, 7
@@ -120,3 +123,74 @@ def test_commands_after_the_clock_steps_back(fppd):
     fppd.set_clock(at(day, "20:29:45"))
     fppd.wait_for(lambda: (fppd.get("/variables") or {}).get("Ran", {}).get("value") == "yes",
                   timeout=45, interval=1, what="the 20:30 command to run after the clock stepped back")
+
+
+def fppd_clock(fppd):
+    """fppd's (faked) local wall clock, to the second, from its status."""
+    words = fppd.get("/fppd/status")["time"].split()  # "Tue Jun 01 20:29:02 EDT 2027"
+    return datetime.datetime.strptime(" ".join(words[:4] + words[5:]), "%a %b %d %H:%M:%S %Y")
+
+
+def crossover_at_sunday_half_past_midnight(fppd, day):
+    """The status a 22:00-02:00 entry for `day` leaves fppd in at 00:30 on a
+    Sunday, after a few seconds to start anything it is going to."""
+    install(fppd, solid_frames(40, CHANNELS, 55))
+    fppd.write("config/schedule.json", [entry(day, "22:00:00", "02:00:00")])
+    fppd.start(fake_time=at(nth_sunday(6, 1), "00:30:00"), tz=ZONE)
+    deadline = time.monotonic() + 8
+    while time.monotonic() < deadline and status(fppd).get("status_name") != "playing":
+        time.sleep(0.25)
+    return status(fppd)
+
+
+def test_monday_night_crossover_does_not_play_early_sunday(fppd):
+    """A Monday-only 22:00-02:00 entry doesn't play at 00:30 on a Sunday.
+
+    Regression: 921616bb5. On Sundays the scheduler pushed yesterday's
+    (Saturday's) occurrence of every entry that crosses midnight, whatever
+    its days, so a Monday-only show played from Sunday 00:00 to 02:00."""
+    s = crossover_at_sunday_half_past_midnight(fppd, 1)
+    assert s.get("status_name") == "idle", \
+        f"a Monday-only show is playing early Sunday: {s.get('current_playlist')}"
+
+
+def test_saturday_night_crossover_plays_into_sunday(fppd):
+    """A Saturday-only 22:00-02:00 entry is still playing at 00:30 on the
+    Sunday. (The control for the Monday-only case: the fix for that one
+    keeps this.)"""
+    s = crossover_at_sunday_half_past_midnight(fppd, 6)
+    assert s.get("status_name") == "playing", s
+
+
+def test_a_command_whose_second_the_clock_steps_over_still_runs(fppd):
+    """A scheduled command runs even when the scheduler never sees its exact
+    second -- here the clock steps about 4 s, over a 20:30:00 command (a
+    small NTP correction, or the scheduler's loop held up that long). Under
+    5 s, so the step doesn't also reload the schedule.
+
+    Regression: 921616bb5. A command ran only if a scheduler pass landed on
+    its second; one already in the past was marked ran without running,
+    silently (a 00:00:00 command behind the slow midnight reload, say)."""
+    day = datetime.date(YEAR, 6, 1)
+    command = entry(EVERY_DAY, "20:30:00", "20:30:00", playlist="", command="Set Variable",
+                    args=["Ran", "Value", "yes", "1", "0", "100", ""],
+                    multisyncCommand=False, multisyncHosts="", repeat=0)
+    fppd.write("config/schedule.json", [command])
+    fppd.start(fake_time=at(day, "20:29:00"), tz=ZONE)
+    # set_clock() can land seconds short of what it is asked for (libfaketime
+    # counts from its own start, a little after the process's), so measure
+    # how far short and ask for that much more.
+    def step(clock):
+        when = datetime.datetime.combine(day, datetime.time.fromisoformat(clock)) + short
+        fppd.set_clock(when.strftime("%Y-%m-%d %H:%M:%S"))
+        return fppd_clock(fppd)
+
+    short = datetime.timedelta(0)
+    short = datetime.datetime.combine(day, datetime.time(20, 29, 50)) - step("20:29:50")
+    before = step("20:29:57")
+    time.sleep(1)
+    after = step("20:30:02")
+    assert before.time() < datetime.time(20, 30) < after.time() and (after - before).seconds <= 5, \
+        f"the step went from {before} to {after}, not over 20:30:00 by at most 5 s"
+    fppd.wait_for(lambda: (fppd.get("/variables") or {}).get("Ran", {}).get("value") == "yes",
+                  timeout=10, interval=0.5, what="the 20:30:00 command the clock stepped over")
