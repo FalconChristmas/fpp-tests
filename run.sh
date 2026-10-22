@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build fpp at a given ref and run the scenario suite against it, in Docker.
 #
-#   ./run.sh [--fpp DIR] [--ref REF] [--flavor asan|tsan|debug|optimized|coverage] [--nopch] [-j N] [pytest args...]
+#   ./run.sh [--fpp DIR] [--ref REF] [--flavor asan|tsan|debug|optimized|coverage] [--nopch] [-j N] [--artifacts DIR] [pytest args...]
 #
 # With no pytest args it runs every scenario; otherwise pass paths or node ids
 # as usual, e.g. scenarios/test_playlists.py -k Restart -v
@@ -9,17 +9,21 @@
 # --fpp     the fpp git checkout to export from (default ../fpp)
 # --ref     any commit-ish in that checkout (default HEAD)
 # --flavor  make target to build (default asan); coverage also writes
-#           artifacts/coverage/ (scripts/coverage-report.sh)
+#           coverage/ in the artifacts (scripts/coverage-report.sh)
 # --nopch   fail if fpp doesn't build without its precompiled header, rather
 #           than falling back to it (which old commits need); CI uses it on
 #           fpp master
 # -j N      run the scenarios as N shards side by side (scripts/shard.py),
 #           each in a container and on a network of its own; a shard's
-#           output goes to artifacts/shard-N.log. Most of a scenario's time
-#           is waiting, so this goes about N times faster until the VM's
-#           memory runs out: an ASan shard peaks under 1GB.
+#           output goes to shard-N.log in the artifacts. Most of a
+#           scenario's time is waiting, so this goes about N times faster
+#           until the VM's memory runs out: an ASan shard peaks under 1GB.
+# --artifacts  where the results go (default artifacts/), emptied first.
+#           Runs side by side each need their own: one run's start would
+#           otherwise delete what another has written, a failed test's
+#           media directory included.
 #
-# The results, one entry per test, go to artifacts/junit.xml.
+# The results, one entry per test, go to junit.xml in the artifacts.
 #
 # Builds are cached per (commit, flavor) in the fpp-tests-work Docker volume
 # and object files in fpp-tests-ccache, so re-runs and nearby commits are fast.
@@ -30,6 +34,7 @@ FPP="$HERE/../fpp"
 REF=HEAD
 FLAVOR=asan
 JOBS=1
+ARTIFACTS="$HERE/artifacts"
 while [ $# -gt 0 ]; do
     case "$1" in
     -j) JOBS="$2"; shift 2 ;;
@@ -38,12 +43,16 @@ while [ $# -gt 0 ]; do
     --ref) REF="$2"; shift 2 ;;
     --flavor) FLAVOR="$2"; shift 2 ;;
     --nopch) export FPP_TESTS_NOPCH=require; shift ;;
+    --artifacts) ARTIFACTS="$2"; shift 2 ;;
     *) break ;;
     esac
 done
 case "$JOBS" in
 '' | *[!0-9]* | 0) echo "-j takes a number of shards, not '$JOBS'" >&2; exit 2 ;;
 esac
+# Absolute, as Docker mounts it: a relative --artifacts is from where run.sh ran.
+mkdir -p "$ARTIFACTS"
+ARTIFACTS=$(cd "$ARTIFACTS" && pwd)
 
 . "$HERE/scripts/prepare-tree.sh"
 
@@ -56,10 +65,12 @@ esac
 # leave that run's container writing to a directory no longer there.
 # It is emptied through the container: a run that was killed before handing
 # its files back (below) leaves them owned by the container's root.
-ARTIFACTS="$HERE/artifacts"
-mkdir -p "$ARTIFACTS"
+# A failure to empty it doesn't stop the run: it is another run sharing the
+# directory, deleting under the same find, and a run that stopped here would
+# fail before any test ran -- which verify-fix.sh would take for a red.
 $DOCKER -v "$ARTIFACTS:/artifacts" fpp-tests-env \
-    find /artifacts -mindepth 1 ! -path /artifacts/web ! -path "/artifacts/web/*" -delete
+    find /artifacts -mindepth 1 ! -path /artifacts/web ! -path "/artifacts/web/*" -delete ||
+    echo "warning: could not empty $ARTIFACTS; is another run using it? (--artifacts DIR)" >&2
 
 # fppd finds its media directory through www/media_root.txt in the tree, and
 # runs of the same commit and flavor share that tree: each run (each shard)
@@ -162,7 +173,7 @@ for i in $(seq 1 "$JOBS"); do
     run_scenarios --name "$NAME" -- "/artifacts/junit-$i.xml" no "$@" $FILES \
         > "$ARTIFACTS/shard-$i.log" 2>&1 &
     SHARDS="$SHARDS $i:$!"
-    echo "shard $i: $(echo "$FILES" | wc -l | tr -d ' ') files, artifacts/shard-$i.log"
+    echo "shard $i: $(echo "$FILES" | wc -l | tr -d ' ') files, $ARTIFACTS/shard-$i.log"
 done
 
 RC=0

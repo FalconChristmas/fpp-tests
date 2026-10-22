@@ -2,10 +2,11 @@
 # Build fpp at a given ref, serve its web UI from Docker, and run the
 # Playwright suite in web/ against it from this machine.
 #
-#   ./run-web.sh [--fpp DIR] [--ref REF] [--flavor asan|tsan|debug|optimized] [--nopch] [--port N] [playwright args...]
+#   ./run-web.sh [--fpp DIR] [--ref REF] [--flavor asan|tsan|debug|optimized] [--nopch] [--port N] [--artifacts DIR] [playwright args...]
 #
 # The options are run.sh's; --port is where the UI is published on 127.0.0.1
-# (default 8080). Anything else goes to `playwright test`, e.g.
+# (default 8080), and --artifacts where the results go (default
+# artifacts/web/), emptied first. Anything else goes to `playwright test`, e.g.
 #   ./run-web.sh tests/fpp.spec.ts -g "Unsaved"
 #
 # --serve only serves the UI, until Ctrl-C, for writing a test against it:
@@ -16,7 +17,7 @@
 # non-zero on SIGTERM or wrote a sanitizer report while the pages drove it.
 #
 # Needs Node.js 20+ here; the first run installs the suite's packages and its
-# Chromium. Results go to artifacts/web/: junit.xml, the HTML report, failed
+# Chromium. Results go to the artifacts: junit.xml, the HTML report, failed
 # tests' screenshots and traces, fppd.json (fppd's verdict) and, when fppd
 # failed, its media directory and Apache's logs.
 set -e
@@ -27,6 +28,7 @@ REF=HEAD
 FLAVOR=asan
 PORT=${FPP_TESTS_WEB_PORT:-8080}
 SERVE=
+ARTIFACTS="$HERE/artifacts/web"
 while [ $# -gt 0 ]; do
     case "$1" in
     --fpp) FPP="$2"; shift 2 ;;
@@ -35,20 +37,25 @@ while [ $# -gt 0 ]; do
     --port) PORT="$2"; shift 2 ;;
     --nopch) export FPP_TESTS_NOPCH=require; shift ;;
     --serve) SERVE=1; shift ;;
+    --artifacts) ARTIFACTS="$2"; shift 2 ;;
     *) break ;;
     esac
 done
+# Absolute, as Docker mounts it: a relative --artifacts is from where this ran.
+mkdir -p "$ARTIFACTS"
+ARTIFACTS=$(cd "$ARTIFACTS" && pwd)
 
 . "$HERE/scripts/prepare-tree.sh"
 
 docker build -q -t fpp-tests-web "$HERE/docker/web" > /dev/null
 
-ARTIFACTS="$HERE/artifacts/web"
-mkdir -p "$ARTIFACTS"
 # Emptied through a container: the web container runs as root, and a run that
 # stopped before handing its files back (below) leaves them owned by root,
 # e.g. apache2/, which the next run (and verify-fix.sh's second) can't delete.
-$DOCKER -v "$ARTIFACTS:/artifacts" fpp-tests-env find /artifacts -mindepth 1 -delete
+# As in run.sh, a failure here is another run sharing the directory, and
+# doesn't stop this one.
+$DOCKER -v "$ARTIFACTS:/artifacts" fpp-tests-env find /artifacts -mindepth 1 -delete ||
+    echo "warning: could not empty $ARTIFACTS; is another run using it? (--artifacts DIR)" >&2
 
 $DOCKER -v "$HERE:/tests:ro" fpp-tests-env /tests/scripts/build-fpp.sh "$TREE" "$FLAVOR"
 
@@ -104,7 +111,7 @@ fppd_rc=$(docker wait "$NAME")
 $DOCKER -v "$ARTIFACTS:/artifacts" fpp-tests-env chown -hR "$(id -u):$(id -g)" /artifacts
 if [ "$fppd_rc" != 0 ]; then
     docker logs "$NAME" 2>&1 | tail -60
-    echo "fppd failed under the web suite (exit $fppd_rc); see artifacts/web/fppd.json" >&2
+    echo "fppd failed under the web suite (exit $fppd_rc); see $ARTIFACTS/fppd.json" >&2
     [ $rc -ne 0 ] || rc=1
 fi
 exit $rc

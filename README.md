@@ -27,6 +27,7 @@ Requires Docker. From this directory, with fpp checked out next to it (`../fpp`)
 ./run.sh scenarios/test_playlists.py -v   # anything after the options goes to pytest
 ./run.sh --fpp ~/src/fpp -k presets       # a different fpp checkout
 ./run.sh -j 6                             # six shards side by side
+./run.sh --artifacts /tmp/mine ...        # results somewhere other than artifacts/
 ```
 
 A scenario spends most of its time waiting on fppd, so one run uses little of the
@@ -71,6 +72,11 @@ Each run's container is on a Docker bridge network of its own, labelled `fpp-tes
 several runs at once (separate fpp-tests copies, or `run-web.sh --serve` left up) can't
 find each other's fppd over MultiSync. The run removes its network when it ends; one a
 killed run left behind is pruned by a later run once it is an hour old and unused.
+
+Results are a different matter: every run writes to `artifacts/` and empties it first, so
+two runs at once from one checkout delete each other's, a failed test's media directory
+included. Give each its own with `--artifacts DIR` (run.sh, run-web.sh and verify-fix.sh
+all take it); only that directory is emptied, and the paths below are then under it.
 
 `--flavor coverage` builds fppd at -O0 with gcc's `--coverage` and, after the run, writes
 `artifacts/coverage/`: `summary.txt` (line and function coverage per source file, least
@@ -184,7 +190,9 @@ scripts/verify-fix.sh 7e171ae48 scenarios/test_command_presets.py -k reload
 ```
 
 It runs the scenario on the fix's parent and expects it to fail, then on the fix and
-expects it to pass. If an earlier change already hides the bug at the parent (a
+expects it to pass. The two runs' results go to `artifacts/before/` and `artifacts/after/`
+(or under `--artifacts DIR`), so the red side's failure is still there to read: check that
+it failed for the reason the fix is about, not on something else the parent lacks. If an earlier change already hides the bug at the parent (a
 general guard that landed first), pass `--base` with a commit from before both, and say
 so in the docstring. Name the fix commit in the scenario's docstring.
 
