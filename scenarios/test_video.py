@@ -1168,3 +1168,50 @@ def test_every_kmssink_skips_vsync(fppd, audio):
     waiting = [e for e in events if e[0] == "waitvsync"]
     assert len(starts) >= 2, f"expected the camera's and the video's sinks to start: {events}"
     assert not waiting, f"kmssinks started without skip-vsync: {waiting}"
+
+
+def test_two_videos_on_two_slots_each_drive_their_own_model(fppd, audio):
+    """Two videos played at once, on slots 1 and 2, each straight to an
+    overlay model of its own: both models show their own video.
+
+    Regression: 2f4c93d84. Frames went to the model of whichever stream
+    held slot 1 (the one current instance); slot 2's model was looked up,
+    logged and then never drawn."""
+    make_video(os.path.join(fppd.media, "videos", "Red.mkv"), seconds=8, pattern="red")
+    make_video(os.path.join(fppd.media, "videos", "Blue.mkv"), seconds=8, pattern="blue")
+    setup(fppd, [])
+    a, b = dict(model(), Name="VidA"), dict(model(), Name="VidB", StartChannel=W * H * 3 + 1)
+    fppd.write("config/co-universes.json", ddp_output(W * H * 6))
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [a, b]})
+    fppd.start()
+    fppd.command("Play Media", "Red.mkv", "1", "0", "1", "VidA")
+    fppd.command("Play Media", "Blue.mkv", "1", "0", "2", "VidB")
+
+    def colour(name):
+        d = fppd.get(f"/overlays/model/{name}/data").get("data") or []
+        lit = [tuple(d[i:i + 3]) for i in range(0, len(d), 3) if max(d[i:i + 3]) > 96]
+        return {(int(r > 96), int(g > 96), int(b > 96)) for r, g, b in lit}
+    seen = {}
+
+    def both():
+        seen.update(VidA=colour("VidA"), VidB=colour("VidB"))
+        return seen == {"VidA": {(1, 0, 0)}, "VidB": {(0, 0, 1)}}
+    try:
+        fppd.wait_for(both, timeout=15, interval=0.2, what="slot 1's model red and slot 2's blue")
+    except TimeoutError as e:
+        raise AssertionError(f"{e}; the models showed {seen}") from None
+
+
+
+def test_play_media_names_a_model_as_its_video_output(fppd, audio):
+    """Play Media's video output argument sends the video to an overlay
+    model, though the default video output (the setting) is a display: the
+    model shows the video's bars.
+
+    Feature: 198974f27 (before it, Play Media had no video output argument
+    and the video went to the default output)."""
+    make_video(os.path.join(fppd.media, "videos", "Bars.mkv"), seconds=8)
+    setup(fppd, [])
+    fppd.start()
+    fppd.command("Play Media", "Bars.mkv", "1", "0", "1", MODEL)
+    wait_for_bars(fppd)

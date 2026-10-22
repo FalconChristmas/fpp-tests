@@ -170,3 +170,20 @@ def test_effects_on_two_differently_shaped_models(fppd):
         return f[r * 96:(r + 1) * 96]
     frozen = [r for r in range(16) if row(first, r) == row(last, r)]
     assert not frozen, f"rows {frozen} of the 32x16 model stopped changing once the 64x8 effect started"
+
+
+@pytest.mark.parametrize("name", ["Shimmer", "Color Clouds", "PacMan", "Slow Transition"])
+def test_the_ported_fx_effects_are_offered_and_draw(fppd, name):
+    """Shimmer, Color Clouds, PacMan and Slow Transition, ported from
+    newer WLED, are offered with the other WLED effects and light a model.
+
+    Feature: f976e090f (before it, none of the four existed)."""
+    w, h = 32, 16
+    channels = w * h * 3
+    setup(fppd, [matrix("M", width=w, height=h)], channels=channels)
+    with DdpReceiver(channels) as rx:
+        fppd.start()
+        assert "WLED - " + name in fppd.get("/overlays/effects")
+        effect(fppd, "M", "WLED - " + name)
+        fppd.wait_for(lambda: rx.last() is not None and any(rx.last()), timeout=10,
+                      interval=0.1, what=f"{name} on the wire")

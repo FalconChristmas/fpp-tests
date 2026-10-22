@@ -324,6 +324,24 @@ def test_model_preview_numbers_points_by_node(fppd):
     assert pixels == [[10, 5, 0, 1], [20, 5, 0, 2], [30, 5, 0, 3], [40, 5, 0, 4]], pixels
 
 
+def test_model_preview_finds_its_layout_by_the_xlights_name(fppd):
+    """GET /overlays/model/<m>/preview answers with the model's points from
+    config/virtualdisplaymap, found under the name xLights gave the model
+    ("Arch 1 - Bottom" for the overlay model Arch_1_-_Bottom), and none of
+    any other model's.
+
+    Feature: 78230aec9 (the preview endpoint; before it, the page carried
+    every model's layout inline)."""
+    setup(fppd, [matrix("Arch_1_-_Bottom", start=31, width=3, height=1)])
+    lines = ["400,400", "# Model: 'Other'", "1,1,0,0,3,RGB",
+             "# Model: 'Arch 1 - Bottom'"]
+    lines += [f"{x},7,0,{30 + 3 * i},3,RGB" for i, x in enumerate((50, 60, 70))]
+    fppd.write("config/virtualdisplaymap", "\n".join(lines) + "\n")
+    fppd.start()
+    pixels = fppd.get("/overlays/model/Arch_1_-_Bottom/preview")["pixels"]
+    assert sorted(p[:2] for p in pixels) == [[50, 7], [60, 7], [70, 7]], pixels
+
+
 def test_a_large_model_preview_does_not_stall_its_effect(fppd):
     """Fetching the preview of a model with a very large layout doesn't
     freeze the effect running on it.
@@ -452,6 +470,36 @@ def install_submodels(fppd, submodels=(), groups=()):
                    {"source": "xlights", "version": 1, "modelgroups": list(groups)})
 
 
+def test_model_groups_are_typed_by_their_members(fppd):
+    """genXlightsModelGroups.php, run on an xLights layout, types a group
+    whose members are all submodels ("Model/SubModel") "submodel", and one
+    with a whole model among them "model", so the page can list the two
+    apart without the layout file.
+
+    Feature: 4e0ee753e (before it, a group had no GroupType)."""
+    import json
+    import subprocess
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [
+        matrix("A", start=1, width=4, height=1), matrix("B", start=13, width=4, height=1)]})
+    install_submodels(fppd, [grid_submodel("Left", "1,2", 2, 1, parent="A", parent_start=1),
+                             grid_submodel("Right", "3,4", 2, 1, parent="A", parent_start=1)])
+    fppd.write("config/virtualdisplaymap",
+               "".join(f"{10 * n},5,0,{3 * n},3,RGB\n" for n in range(8)))
+    fppd.write("config/xlights_rgbeffects.xml", """<xrgb><modelGroups>
+<modelGroup name="Halves" models="A/Left,A/Right"/>
+<modelGroup name="Both" models="A,B"/>
+<modelGroup name="Mixed" models="A/Left,B"/>
+</modelGroups></xrgb>""")
+    cfg = os.path.join(fppd.media, "config")
+    r = subprocess.run(["php", os.path.join(fppd.tree, "scripts", "genXlightsModelGroups.php"),
+                        os.path.join(cfg, "xlights_rgbeffects.xml"), cfg],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stdout + r.stderr
+    with open(os.path.join(cfg, "xlights-modelgroups.json")) as f:
+        groups = {g["DisplayName"]: g.get("GroupType") for g in json.load(f)["modelgroups"]}
+    assert groups == {"Halves": "submodel", "Both": "model", "Mixed": "model"}, groups
+
+
 # Both kinds are 3 x 2 with the same cells populated: (0,0), (2,0), (0,1)
 # and (1,1); (1,0) and (2,1) are holes. Each populated cell's 0-based
 # output channels:
@@ -545,6 +593,35 @@ def test_grid_submodel_scatters_its_cells_under_each_overlay_state(fppd, kind):
                           what=f"{name} filled")
         except TimeoutError:
             raise AssertionError(f"{name} filled: {diff(rx.last(), want)}")
+
+
+@pytest.mark.parametrize("kind", ["grid", "channelgrid"])
+def test_a_lazily_loaded_grid_submodel_fills_its_cells(fppd, kind):
+    """A grid submodel, or a channel-grid model group, known only from the
+    xLights export files, is found by name when first used: a Fill on it
+    lights each of its cells' channels and nothing else.
+
+    Feature: d2d577feb (xLights submodels and groups; before it, the export
+    files were not read)."""
+    setup(fppd, [grid_parent()], channels=GRID_CHANNELS)
+    if kind == "grid":
+        install_submodels(fppd, [grid_submodel("P_Grid", GRID, 3, 2)])
+        name, targets = "P_Grid", GRID_TARGETS
+    else:
+        install_submodels(fppd, groups=[channel_grid("Group", CHANNEL_GRID, 3, 2)])
+        name, targets = "Group", CHANNEL_GRID_TARGETS
+    want = bytearray(GRID_CHANNELS)
+    for chans in targets.values():
+        for ch in chans:
+            want[ch:ch + 3] = bytes(LIT)
+    with DdpReceiver(GRID_CHANNELS) as rx:
+        fppd.start()
+        fill(fppd, name, LIT)
+        try:
+            fppd.wait_for(lambda: rx.last() == bytes(want), timeout=10, interval=0.05,
+                          what=f"{name} filled")
+        except TimeoutError:
+            raise AssertionError(f"{name} filled: {diff(rx.last() or bytes(GRID_CHANNELS), want)}")
 
 
 def test_polar_mapping_on_a_grid_submodel(fppd):

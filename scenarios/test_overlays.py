@@ -3,6 +3,7 @@ driven through the overlay API and checked on the wire."""
 
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -244,6 +245,20 @@ def test_bad_model_definitions_do_not_stop_fppd_starting(fppd):
         wait_output(fppd, rx, lambda f: f[30:42] == bytes([1, 2, 3] * 4),
                     "the good model to reach the wire")
         keeps_sending(rx)
+
+
+def test_a_rejected_model_is_not_blamed_on_memory(fppd):
+    """A model definition fppd rejects is logged with what was wrong with
+    it, and not also as a failure to allocate memory.
+
+    Regression: 5a31620e3. Every model dropped at load was logged "could
+    not allocate memory", after the line giving the real reason."""
+    setup(fppd, [matrix("ZeroStart", start=0), dict(matrix("Negative"), StringCount=-5),
+                 matrix("Good", start=31, width=2, height=2)])
+    fppd.start()
+    assert "Good" in [m["Name"] for m in fppd.get("/overlays/models")]
+    blamed = [l for l in fppd.log().splitlines() if "could not allocate memory" in l]
+    assert not blamed, "a rejected model was blamed on memory:\n" + "\n".join(blamed)
 
 
 def test_post_models_refuses_a_body_it_could_not_load(fppd):
@@ -970,3 +985,359 @@ def test_overlay_commands_exist_with_no_models(fppd):
     except urllib.error.HTTPError as e:
         reply = e.body
     assert "No model found" in str(reply), reply
+
+
+def test_stop_effects_does_not_stall_the_output(fppd):
+    """Stopping a model's effect doesn't hold up the output: the frames on
+    the wire keep their cadence through the stop.
+
+    Regression: 9762c46d5. Stop Effects blanks the model and disables it
+    after the next output, on the output thread itself; disabling waited up
+    to 100 ms for the model's buffer, just blanked, to be flushed -- by the
+    output thread, which was the one waiting. Every such stop held the
+    output for the whole 100 ms.
+    """
+    setup(fppd, [matrix()])
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        rounds = []
+        for _ in range(5):
+            effect(fppd, "M", "Bars")
+            wait_output(fppd, rx, lambda f: any(f), "the bars")
+            since = time.monotonic()
+            rx.wait_frames(10, since=since)
+            stop_effects(fppd, "M")
+            effect_done(fppd, "M")
+            time.sleep(0.3)
+            t = [when for when, _ in rx.snapshot(since=since)]
+            gaps = sorted(b - a for a, b in zip(t, t[1:]))
+            rounds.append((gaps[len(gaps) // 2], gaps[-1]))  # cadence, worst
+        print("cadence, largest gap per stop (ms):",
+              [(round(c * 1000), round(w * 1000)) for c, w in rounds])
+        # The stall is 100 ms on every stop; one late frame is scheduling.
+        stalled = [r for r in rounds if r[1] > r[0] + 0.045]
+        assert len(stalled) <= 1, \
+            f"{len(stalled)} of {len(rounds)} stops held the output: {stalled}"
+
+
+def test_set_value_sets_the_channels_it_is_given(fppd):
+    """A plugin's PixelOverlayModel::setValue() sets the absolute channels
+    it names, clamped to the model, or all of the model's for -1, -1.
+
+    Regression: 61553e67d. setValue() looked the channels up in channelMap
+    (laid out by buffer cell) by channel number, worked out the end from its
+    own start argument, and made an omitted end a bound that set two
+    channels: a whole-model set lit two, a range lit the wrong one.
+    """
+    from native_plugin import install
+    install(fppd, features=["NATIVE_SETVALUE"])
+    model = matrix(start=31, width=4, height=2)  # channels 30-53, 0-based
+    setup(fppd, [model])
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        put(fppd, "model/M/state", {"State": 1})
+        assert fppd.command("Native Test Set Value", "M", "200", "-1", "-1") == "set"
+        wait_output(fppd, rx, lambda f: f[30:54] == bytes([200] * 24),
+                    "the whole model at 200", timeout=5)
+        assert fppd.command("Native Test Set Value", "M", "7", "40", "42") == "set"
+        assert fppd.command("Native Test Set Value", "M", "9", "50", "1000") == "set"
+        want = bytes(30) + bytes([200] * 10 + [7] * 3 + [200] * 7 + [9] * 4) + bytes(CHANNELS - 54)
+        wait_output(fppd, rx, lambda f: f == want, "the ranges, and nothing past the model",
+                    timeout=5)
+
+
+def test_a_bulk_pixel_put_whose_size_wraps_32_bits_is_refused(fppd):
+    """PUT .../data with a width and height whose product overflows 32
+    bits, and a body as long as the wrapped product, is refused; the model
+    and fppd carry on.
+
+    Regression: 66df390e2 (32-bit builds; on 64-bit the check never
+    wrapped). w=1073741825, h=4, mono came to 4 bytes in a 32-bit size_t, a
+    4-byte body passed, and the blit stepped a gigabyte through the request
+    per row: on a BeagleBone Black the request never came back.
+    """
+    setup(fppd, [matrix()])
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        with pytest.raises(urllib.error.HTTPError) as e:
+            put(fppd, "model/M/data?w=1073741825&h=4&fmt=mono", bytes([255] * 4))
+        assert e.value.code == 400, f"answered {e.value.code}"
+        fill(fppd, "M", [0, 0, 5])
+        wait_output(fppd, rx, lambda f: f[2] == 5, "a fill after the refused put")
+
+
+TW, TH = 48, 24
+
+
+def text_setup(fppd):
+    """A TW x TH model M, enabled, with output; return a plain font."""
+    setup(fppd, [matrix(width=TW, height=TH)], channels=TW * TH * 3)
+    fppd.start()
+    fppd.command("Overlay Model State", "M", "Enabled")
+    fonts = fppd.get("/overlays/fonts")
+    if not fonts:
+        pytest.skip("no fonts installed")
+    return next((f for f in fonts if f.lower() in ("dejavusans", "dejavu-sans")), fonts[0])
+
+
+def settled_rows(fppd, rx, what):
+    """The rows lit on the wire once the frames are lit and stop changing."""
+    seen = []
+
+    def still():
+        f = rx.last()
+        seen.append(f)
+        return f is not None and any(f) and seen[-3:] == [f] * 3
+    fppd.wait_for(still, timeout=10, interval=0.1, what=what)
+    f = seen[-1]
+    return [y for y in range(TH) if any(f[y * TW * 3:(y + 1) * TW * 3])]
+
+
+def bands(rows):
+    """Runs of consecutive rows."""
+    runs = []
+    for y in rows:
+        if runs and y == runs[-1][-1] + 1:
+            runs[-1].append(y)
+        else:
+            runs.append([y])
+    return runs
+
+
+def still_text(fppd, font, msg):
+    effect(fppd, "M", "Text", Color="#FFFFFF", Font=font, FontSize="10",
+           Position="Center", Text=msg)
+
+
+def test_a_typed_line_break_splits_the_text(fppd):
+    """A "\\n" typed into the text (backslash, n) starts a second line: the
+    ink is two bands of rows with a blank row between them.
+
+    Regression: b83d8b62d. The text was drawn as one line, the backslash
+    and the n with it."""
+    font = text_setup(fppd)
+    with DdpReceiver(TW * TH * 3) as rx:
+        still_text(fppd, font, "HH")
+        one = bands(settled_rows(fppd, rx, "one line"))
+        assert len(one) == 1, f"one line drew {len(one)} bands"
+        still_text(fppd, font, "HH\\nHH")
+        two = bands(settled_rows(fppd, rx, "two lines"))
+        assert len(two) == 2, f"\"HH\\nHH\" drew rows {two}, not two lines"
+
+
+def test_a_doubled_backslash_keeps_a_literal_backslash_n(fppd):
+    """A doubled backslash is one literal backslash, so "c:\\\\network"
+    stays one line rather than breaking at its "\\n".
+
+    Regression: 383f106dd. Only "\\n" was translated: the first backslash
+    went through as itself and the second, with the n, broke the line."""
+    font = text_setup(fppd)
+    with DdpReceiver(TW * TH * 3) as rx:
+        still_text(fppd, font, "HH\\\\nHH")
+        rows = bands(settled_rows(fppd, rx, "the text"))
+        assert len(rows) == 1, f"\"HH\\\\nHH\" broke into rows {rows}"
+
+
+def test_the_legacy_text_command_draws_its_text(fppd):
+    """The hidden "Overlay Model Text" command, kept for presets and MQTT
+    topics saved before the effects, still draws its text.
+
+    Regression: 5e5eaf360. It built the argument list "Overlay Model
+    Effect" takes and then passed on its own instead, so the colour was
+    read as the state and the font as the effect: nothing was drawn."""
+    font = text_setup(fppd)
+    with DdpReceiver(TW * TH * 3) as rx:
+        fppd.command("Overlay Model Text", "M", "#00FF00", font, "10", "false",
+                     "Center", "0", "true", "HH")
+        wait_output(fppd, rx, lambda f: any(f[1::3]) and not any(f[0::3]),
+                    "green text on the wire")
+
+
+def test_an_effect_ending_on_a_parentless_submodel_while_models_are_listed(fppd):
+    """An effect ending on a submodel whose parent can't be found, while
+    clients list the models, doesn't wedge fppd.
+
+    Regression: c0c70183d. The effect ends on the output thread, under the
+    submodel's effect lock, by disabling it; an unresolved parent was then
+    looked up under modelsLock. Listing the models takes modelsLock and
+    then each model's effect lock: the two waited on each other, and output
+    and the API stopped. (The listing walks many models here, so that
+    modelsLock is held most of the time.)
+    """
+    others = [matrix(f"P{i:03d}", start=1 + 3 * i, width=1, height=1) for i in range(200)]
+    orphan = submodel("Orphan", "NoSuchParent", 0, 0, 2, 2)
+    setup(fppd, others + [orphan], channels=600)
+    fppd.start()
+    stop = time.monotonic() + 15
+    errors = []
+
+    def lister():
+        while time.monotonic() < stop and not errors:
+            try:
+                fppd.get("/overlays/models", timeout=10)
+            except Exception as e:  # reported below
+                errors.append(e)
+    threads = [threading.Thread(target=lister) for _ in range(3)]
+    for t in threads:
+        t.start()
+    fades = 0
+    try:
+        while time.monotonic() < stop and not errors:
+            effect(fppd, "Orphan", "Color Fade", Color="#00FF00", fadeIn="0", fadeOut="0")
+            fades += 1
+            time.sleep(0.05)
+    finally:
+        stop = 0
+        for t in threads:
+            t.join()
+    assert not errors, f"after {fades} fades: {errors[0]}"
+    print(f"{fades} fades")
+
+
+def rgb_png(width, height, pixels):
+    """A PNG of width x height RGB pixels, row-major."""
+    import struct
+    import zlib
+
+    def chunk(kind, data):
+        return (struct.pack(">I", len(data)) + kind + data
+                + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff))
+    rows = b"".join(b"\0" + bytes(pixels[y * width * 3:(y + 1) * width * 3]) for y in range(height))
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
+
+
+def raw_data(model="M"):
+    from fppd import API
+    import urllib.request
+    with urllib.request.urlopen(f"{API}/overlays/model/{model}/data/raw", timeout=10) as r:
+        return r.read()
+
+
+def test_bulk_pixel_data_in_and_out(fppd):
+    """A whole frame of pixels goes into a model in one PUT .../data -- as
+    raw bytes, as a region hanging off the model's edge (clipped), as
+    base64 in JSON, or as a PNG -- and comes back from GET .../data/raw.
+
+    Feature: a17126050 (before it, neither endpoint existed)."""
+    w, h = 4, 2
+    setup(fppd, [matrix(width=w, height=h)])
+    fppd.start()
+    frame = bytes(range(10, 10 + w * h * 3))
+    put(fppd, "model/M/data", frame)
+    assert raw_data() == frame, "the raw frame did not read back"
+
+    # 2x2 at (3,1): only its top-left pixel lands on the model.
+    put(fppd, "model/M/data?x=3&y=1&w=2&h=2", bytes([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))
+    want = bytearray(frame)
+    want[(1 * w + 3) * 3:(1 * w + 3) * 3 + 3] = bytes([1, 2, 3])
+    assert raw_data() == bytes(want), "the clipped region read back wrong"
+
+    import base64
+    put(fppd, "model/M/data", {"X": 0, "Y": 0, "W": 1, "H": 1, "Format": "rgb",
+                               "Data": base64.b64encode(bytes([7, 8, 9])).decode()})
+    want[0:3] = bytes([7, 8, 9])
+    assert raw_data() == bytes(want), "the base64 JSON pixel read back wrong"
+
+    pixels = [200, 0, 0] * (w * h // 2) + [0, 0, 200] * (w * h // 2)
+    put(fppd, "model/M/data?fmt=image&scale=none", rgb_png(w, h, pixels))
+    assert raw_data() == bytes(pixels), "the PNG read back wrong"
+
+
+def test_an_rgbw_fill_takes_an_explicit_white(fppd):
+    """Overlay Model Fill with #RRGGBBWW on an RGBW model puts the white
+    value in each node's W channel.
+
+    Regression: ce0f4efcd. The colour was read as a 24-bit #RRGGBB number,
+    so its top byte was lost and the rest moved up a channel: R got G, G
+    got B, B got W, and W was 0."""
+    channels = WIDTH * HEIGHT * 4
+    setup(fppd, [matrix("W", cpn=4)], channels=channels)
+    with DdpReceiver(channels) as rx:
+        fppd.start()
+        fppd.command("Overlay Model Fill", "W", "Enabled", "#11223344")
+        wait_output(fppd, rx, lambda f: any(f), "the fill on the wire")
+        keeps_sending(rx)
+        assert rx.last() == bytes([0x11, 0x22, 0x33, 0x44]) * (WIDTH * HEIGHT), \
+            f"first node: {list(rx.last()[:4])}"
+
+
+def test_a_models_colour_order_is_its_channel_data_order(fppd):
+    """A model reports the order of fppd's channel data for its node width
+    (RGB, RGBW), whatever ColorOrder its saved definition carries: the
+    output applies the wire's order, so a model with its own would have it
+    applied twice by anything that honoured it.
+
+    Regression: 6ecdcd275. A saved ColorOrder was kept and reported as the
+    model's."""
+    channels = WIDTH * HEIGHT * 7
+    setup(fppd, [dict(matrix("A"), ColorOrder="GRB"),
+                 dict(matrix("B", start=WIDTH * HEIGHT * 3 + 1, cpn=4), ColorOrder="WGRB")],
+          channels=channels)
+    fppd.start()
+    orders = {m["Name"]: m.get("ColorOrder") for m in fppd.get("/overlays/models")}
+    assert orders == {"A": "RGB", "B": "RGBW"}, orders
+
+
+def test_a_wled_effect_on_an_rgbw_model_drives_the_white_channel(fppd):
+    """A WLED effect drawn in white on an RGBW model lights each node's W
+    channel with the white the RGB share (min of R, G and B), and writes
+    nothing past the model.
+
+    Regression: afc15745a. WLED's bus said it had no white channel, so
+    every RGBW node's W stayed 0 and white was R+G+B alone."""
+    nodes = WIDTH * HEIGHT
+    channels = nodes * 4 + 12
+    setup(fppd, [matrix("W", cpn=4)], channels=channels)
+    with DdpReceiver(channels) as rx:
+        fppd.start()
+        effect(fppd, "W", "WLED - Android", brightness="255", palette="* Color 1",
+               color1="#FFFFFF", color2="#FFFFFF")
+        wait_output(fppd, rx, lambda f: any(f), "the effect on the wire")
+        since = time.monotonic()
+        rx.wait_frames(20, since=since)
+        frames = [f for _, f in rx.snapshot(since=since)]
+        lit = [f[i:i + 4] for f in frames for i in range(0, nodes * 4, 4) if any(f[i:i + 3])]
+        assert lit, "the effect lit no node"
+        wrong = [list(n) for n in lit if n[3] != min(n[:3])]
+        assert not wrong, f"{len(wrong)} of {len(lit)} lit nodes' W is not min(R,G,B): {wrong[:5]}"
+        assert all(f[nodes * 4:] == bytes(12) for f in frames), "wrote past the model"
+
+
+def test_a_parentless_submodel_shown_while_states_change(fppd):
+    """A submodel whose parent can't be found, enabled, while clients
+    switch other models on and off for 20 s: every request is answered and
+    the output keeps going.
+
+    Regression: 37c8f92a8. The output thread resolved a submodel's parent
+    from doOverlay(), taking modelsLock under activeModelsLock, every frame
+    while it stayed unresolved; a state change takes the two the other way
+    round. The two threads waited on each other, and every overlay route
+    hung from then on (in about 12 s here)."""
+    others = [matrix(f"S{i}", start=1 + 3 * i, width=1, height=1) for i in range(8)]
+    setup(fppd, others + [submodel("Orphan", "NoSuchParent", 0, 0, 2, 2)], channels=60)
+    with DdpReceiver(60) as rx:
+        fppd.start()
+        fill(fppd, "Orphan", [0, 0, 9])
+        stop = time.monotonic() + 20
+        errors = []
+
+        def toggle(names):
+            on = 0
+            while time.monotonic() < stop and not errors:
+                on ^= 1
+                for n in names:
+                    try:
+                        put(fppd, f"model/{n}/state", {"State": on})
+                    except Exception as e:  # reported below
+                        errors.append(e)
+                        return
+        threads = [threading.Thread(target=toggle, args=([m["Name"] for m in others[i::4]],))
+                   for i in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert not errors, errors[0]
+        keeps_sending(rx)

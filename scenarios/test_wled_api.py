@@ -105,6 +105,26 @@ def _answers():
         return False
 
 
+def test_a_wled_app_lights_the_model(fppd):
+    """What a WLED app does first: it reads /json/info and the effect list,
+    then picks an effect and its colours through /json/state, and the
+    model lights on the wire.
+
+    Feature: 59c3c543a (the WLED-compatible API; before it, nothing
+    answered on this port)."""
+    with DdpReceiver(CHANNELS) as rx:
+        start(fppd)
+        info = json.loads(http("GET", "/json/info")[1])
+        assert info.get("name") and info.get("ver"), info
+        names = effects()
+        fx = next(i for i, n in enumerate(names) if "Android" in n)
+        code, _ = http("POST", "/json/state", {"on": True, "bri": 255, "seg": [
+            {"id": 0, "fx": fx, "col": [[255, 0, 0], [255, 0, 0], [255, 0, 0]]}]})
+        assert code == 200
+        fppd.wait_for(lambda: rx.last() is not None and any(rx.last()), timeout=10,
+                      interval=0.1, what="the effect on the wire")
+
+
 BAD_STATES = [
     {"seg": [{"id": "x"}]},
     {"on": "yes"},

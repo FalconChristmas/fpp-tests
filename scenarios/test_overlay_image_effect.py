@@ -190,7 +190,9 @@ def test_image_scrolls_across_the_model(fppd, direction):
     1, or column 3). Every lit frame on the wire is the image at one of those
     positions, in order. While it runs the model's effect is "Image"; at the
     end the effect is gone, the wire is black, and the model, which the
-    effect enabled, is disabled again."""
+    effect enabled, is disabled again.
+
+    Feature: afce7b609 (the Image effect; before it, there was none)."""
     img = distinct(4, 3)
     setup(fppd, [matrix()])
     write_png(fppd, "pic.png", img)

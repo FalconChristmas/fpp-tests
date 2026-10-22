@@ -10,6 +10,7 @@
 // writer keeps only those ranges, as fsequtils does.
 // COMPRESSION is none, zstd or zlib; LEVEL -99 means the writer's default.
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

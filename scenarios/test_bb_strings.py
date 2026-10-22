@@ -113,6 +113,28 @@ def test_a_pinout_naming_a_pru_that_does_not_exist_is_refused(fppd):
     fppd.command("Test Stop")
 
 
+def test_an_auto_created_model_spans_all_its_strings(fppd):
+    """The overlay model auto-created for a string output's virtual strings
+    named as xLights names a model's strings ("Arch-str-1", "Arch-str-2")
+    covers all of them, whatever order their channels are in: here string
+    2 sits below string 1.
+
+    Regression: d92ee4a3c. The model's end was the last string's end, not
+    the furthest: Arch came out 30 channels long, string 2 alone."""
+    fake_pru(fppd)
+    write_string_cape("TestTwoPins", {"outputs": [{"pin": "P2-02"}, {"pin": "P2-04"}]})
+    first, second = pixel_output(0, 10, 30), pixel_output(1, 10, 0)
+    first["virtualStrings"][0]["description"] = "Arch-str-1"
+    second["virtualStrings"][0]["description"] = "Arch-str-2"
+    fppd.write("config/co-bbbStrings.json", strings_config("BBB48String", "TestTwoPins", [first, second]))
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": []})
+    fppd.start(timeout=60)
+    models = {m["Name"]: m for m in fppd.get("/overlays/models")}
+    assert "Arch" in models, sorted(models)
+    arch = models["Arch"]
+    assert (arch["StartChannel"], arch["ChannelCount"]) == (1, 60), arch
+
+
 # ---- the receiver enable pin --------------------------------------------------
 
 PINCTRL_LOG = "/tmp/pinctrl.log"

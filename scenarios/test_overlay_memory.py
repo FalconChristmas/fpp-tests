@@ -140,3 +140,36 @@ def test_submodels_toggled_from_many_threads_while_output_runs(fppd):
         put(fppd, "model/P/fill", {"RGB": [9, 8, 7]})
         fppd.wait_for(lambda: rx.last() == bytes([9, 8, 7]) * (side * side),
                       timeout=10, interval=0.05, what="the parent's fill on the wire")
+
+
+def test_concurrent_first_uses_map_a_models_overlay_buffer_once(fppd):
+    """Several clients drawing into a model's overlay buffer at once, before
+    anything has made the buffer (it is made on first use), all get the one
+    buffer: fppd maps it once.
+
+    Regression: f532f96f5. Each thread that found no buffer made one, and
+    the last to finish replaced the rest: their mappings leaked, and on a
+    box without shared memory whatever they had drawn went with them. The
+    bulk pixel PUT draws into the overlay buffer with no model lock held.
+    shm_open() is slowed here so that every request is inside the creation
+    at once.
+    """
+    setup(fppd, [matrix("M", WIDTH, HEIGHT)], CHANNELS)
+    fppd.start(preload=[shims.build("slowshm.c")],
+               extra_env={"SLOWSHM_PREFIX": "/FPP-Model-Overlay-Buffer-", "SLOWSHM_MS": "500"})
+    errors = []
+
+    def draw():
+        try:
+            put(fppd, "model/M/data?target=overlay&stopEffect=false", bytes([9] * CHANNELS))
+        except Exception as e:  # reported below
+            errors.append(e)
+    threads = [threading.Thread(target=draw) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert not errors, errors
+    with open(f"/proc/{fppd.proc.pid}/maps") as f:
+        maps = [l for l in f if "FPP-Model-Overlay-Buffer-M" in l]
+    assert len(maps) == 1, f"the overlay buffer is mapped {len(maps)} times:\n" + "".join(maps)

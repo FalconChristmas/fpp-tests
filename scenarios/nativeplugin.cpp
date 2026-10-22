@@ -16,6 +16,9 @@
 //                          Unregister" likewise
 //   NATIVE_SETTINGS        a 2 s listener on setting fpptestWatched; "Native
 //                          Test Unregister Setting" likewise
+//   NATIVE_SETVALUE        "Native Test Set Value <model> <value> <start> <end>"
+//                          calls the model's protected setValue(), as a plugin
+//                          subclass would
 
 #include <atomic>
 #include <chrono>
@@ -39,6 +42,15 @@
 #endif
 #if defined(NATIVE_SETTINGS)
 #include "settings.h"
+#endif
+#if defined(NATIVE_SETVALUE)
+#include "overlays/PixelOverlay.h"
+#include "overlays/PixelOverlayModel.h"
+
+// setValue() is protected, for subclasses: reach it the way one would.
+struct SetValueAccess : public PixelOverlayModel {
+    using PixelOverlayModel::setValue;
+};
 #endif
 
 #ifdef FPP_PLUGIN_SUPPORTS_UNLOAD
@@ -140,6 +152,20 @@ public:
         });
         add("Native Test In Setting Listener", [this](const std::vector<std::string>&) {
             return std::string(inSettingListener ? "yes" : "no");
+        });
+#endif
+#if defined(NATIVE_SETVALUE)
+        add("Native Test Set Value", [](const std::vector<std::string>& a) {
+            if (a.size() < 4) {
+                return std::string("usage: <model> <value> <start> <end>");
+            }
+            PixelOverlayModel* m = PixelOverlayManager::INSTANCE.getModel(a[0]);
+            if (!m) {
+                return std::string("no model ") + a[0];
+            }
+            (m->*(&SetValueAccess::setValue))((uint8_t)std::atoi(a[1].c_str()),
+                                              std::atoi(a[2].c_str()), std::atoi(a[3].c_str()));
+            return std::string("set");
         });
 #endif
     }
