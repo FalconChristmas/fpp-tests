@@ -111,6 +111,7 @@ class Fppd:
                                f"suppressions={os.path.normpath(supp)}")
         if tz:
             env["TZ"] = tz
+        self.tz = tz
         if fake_time:
             env.update(faketime_env(os.path.join(src, "fppd"), fake_time))
             # Read from a file on every call, so set_clock() can step it.
@@ -167,18 +168,28 @@ class Fppd:
 
     def set_clock(self, when):
         """Step fppd's faked wall clock (started with fake_time=) so that it
-        reads about `when` ("YYYY-MM-DD HH:MM:SS") now. libfaketime counts
-        from the process's start, so the elapsed run time is subtracted."""
+        reads `when` ("YYYY-MM-DD HH:MM:SS", in fppd's time zone) now, and
+        runs on from there.
+
+        Written as an offset from the real clock, which fppd and this process
+        share. An "@" start time is restarted from the moment libfaketime sees
+        the file change, not from the process's start -- subtracting the
+        run time, as this used to, landed a step short by however long fppd
+        had been running -- and the same "@" time written twice is no change
+        at all."""
         import datetime
         target = datetime.datetime.strptime(when, "%Y-%m-%d %H:%M:%S")
-        base = target - datetime.timedelta(seconds=time.monotonic() - self.started)
+        if self.tz:
+            from zoneinfo import ZoneInfo
+            target = target.replace(tzinfo=ZoneInfo(self.tz))
+        offset = target.timestamp() - time.time()
         # Replaced in one rename, never rewritten in place: libfaketime reads
         # the file on every clock call, and a half-written one makes it call
         # exit() from inside gettimeofday(), whose exit handlers then deadlock
         # on libfaketime's own lock.
         tmp = self.clock_file + ".new"
         with open(tmp, "w") as f:
-            f.write("@" + base.strftime("%Y-%m-%d %H:%M:%S") + "\n")
+            f.write(f"{offset:+.3f}\n")
         os.replace(tmp, self.clock_file)
 
     def check_alive(self):

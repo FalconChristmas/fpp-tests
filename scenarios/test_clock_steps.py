@@ -25,6 +25,31 @@ def set_variable_preset(name, var, value):
             "args": [var, "Value", value, "1", "0", "100", ""], "presetSlot": 0}
 
 
+def fppd_clock(fppd):
+    """fppd's (faked) local wall clock, to the second, from its status."""
+    import datetime
+    words = fppd.get("/fppd/status")["time"].split()  # "Thu Dec 24 17:00:01 EST 2026"
+    return datetime.datetime.strptime(" ".join(words[:4] + words[5:]), "%a %b %d %H:%M:%S %Y")
+
+
+@pytest.mark.parametrize("tz", [None, "America/New_York"])
+def test_set_clock_lands_on_the_time_asked_for(fppd, tz):
+    """The harness itself: fppd.set_clock() puts fppd's clock where it was
+    asked to, however long fppd has run, in fppd's own zone, and asking for
+    the same time twice steps it back there again. It used to subtract the
+    run time from an "@" start time that libfaketime restarts on every
+    change, so each step landed short by the seconds fppd had been up."""
+    import datetime
+    fppd.start(fake_time="2026-12-24 18:00:00", tz=tz)
+    for when in ("2026-12-24 17:00:01", "2026-12-24 19:30:00", "2026-12-24 19:30:00"):
+        time.sleep(4)
+        fppd.set_clock(when)
+        got = fppd_clock(fppd)
+        want = datetime.datetime.strptime(when, "%Y-%m-%d %H:%M:%S")
+        assert datetime.timedelta(0) <= got - want <= datetime.timedelta(seconds=1), \
+            f"asked for {when}, fppd reads {got}"
+
+
 @pytest.mark.parametrize("step", list(STEPS))
 def test_preset_in_future_fires_on_time_across_a_clock_step(fppd, step):
     """"Trigger Command Preset In Future" with 3 s fires about 3 s later even

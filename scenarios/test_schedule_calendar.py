@@ -177,16 +177,10 @@ def test_a_command_whose_second_the_clock_steps_over_still_runs(fppd):
                     multisyncCommand=False, multisyncHosts="", repeat=0)
     fppd.write("config/schedule.json", [command])
     fppd.start(fake_time=at(day, "20:29:00"), tz=ZONE)
-    # set_clock() can land seconds short of what it is asked for (libfaketime
-    # counts from its own start, a little after the process's), so measure
-    # how far short and ask for that much more.
     def step(clock):
-        when = datetime.datetime.combine(day, datetime.time.fromisoformat(clock)) + short
-        fppd.set_clock(when.strftime("%Y-%m-%d %H:%M:%S"))
+        fppd.set_clock(at(day, clock))
         return fppd_clock(fppd)
 
-    short = datetime.timedelta(0)
-    short = datetime.datetime.combine(day, datetime.time(20, 29, 50)) - step("20:29:50")
     before = step("20:29:57")
     time.sleep(1)
     after = step("20:30:02")
