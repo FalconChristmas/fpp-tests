@@ -82,6 +82,23 @@ def main():
         "majorId": 1, "minorId": 1, "name": "fpp-tests event",
         "command": "Set Variable", "args": ["fppTestsEvent", "Value", "1", "1", "0", "100", ""],
     })
+    # An overlay model, and an xLights submodel and model group of it as
+    # xLights' FPP Connect exports them, for the Pixel Overlay Models page
+    # and the command pickers (tests/overlay-models-ui.spec.ts). fppd reads
+    # model-overlays.json only at start.
+    f.write("config/model-overlays.json", {"models": [{
+        "Name": "fpp-tests-matrix", "Type": "Channel", "StartChannel": 1, "ChannelCount": 150,
+        "ChannelCountPerNode": 3, "Orientation": "horizontal", "StartCorner": "TL",
+        "StringCount": 5, "StrandsPerString": 1, "xLights": True}]})
+    f.write("config/xlights-submodels.json", {"source": "xlights", "version": 1, "submodels": [{
+        "Name": "fpp-tests-matrix-cells", "DisplayName": "fpp-tests-matrix-cells", "Type": "Sub",
+        "SubType": "grid", "Parent": "fpp-tests-matrix", "ParentStartChannel": 1,
+        "ChannelCountPerNode": 3, "Width": 3, "Height": 2, "Grid": "1,2,3;11,12,13"}]})
+    f.write("config/xlights-modelgroups.json", {"source": "xlights", "version": 1, "modelgroups": [{
+        "Name": "fpp-tests-group", "DisplayName": "fpp-tests-group", "Type": "Sub",
+        "SubType": "channelgrid", "IsGroup": True, "ChannelCountPerNode": 3, "Width": 2,
+        "Height": 1, "Orientation": "horizontal", "StartCorner": "TL", "StringCount": 1,
+        "StrandsPerString": 1, "MemberCount": 1, "PixelCount": 2, "Grid": "1,4"}]})
     f.start(timeout=120)
 
     # The CSP is generated per device from its settings and cape; the pages

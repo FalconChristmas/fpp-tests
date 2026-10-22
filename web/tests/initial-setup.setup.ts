@@ -10,6 +10,23 @@ setup('finish the initial setup wizard', async ({ page }) => {
   // always has one; the container has none, so it waits out the whole time.
   setup.setTimeout(120_000);
   await page.goto('/initialSetup.php');
+  if (await page.locator('#setupNextBtn').count() === 0) {
+    // Before 0e5557818 (2026-09-08) the setup was one page, whose save of
+    // the UI password fails in this container on trees from before 2026-07.
+    // A test is still to be run on such a tree, so set the flag the page
+    // sets when it is done.
+    const r = await page.request.put('/api/settings/initialSetup-02', { data: '1' });
+    expect(r.ok()).toBe(true);
+  } else {
+    await finishWizard(page);
+  }
+
+  // The gate that sent every page here is off now.
+  const index = await (await page.request.get('/index.php')).text();
+  expect(index).not.toContain('url=initialSetup.php');
+});
+
+async function finishWizard(page) {
   // Step 1 can't be left until the jurisdiction is answered (0e5557818).
   page.once('dialog', (d) => d.accept());
   await page.click('#setupNextBtn');
@@ -23,8 +40,4 @@ setup('finish the initial setup wizard', async ({ page }) => {
   await page.selectOption('#passwordEnable', '0');
   await page.click('#finishSetupBtn');
   await expect(page).toHaveURL(/index\.php/, { timeout: 30_000 });
-
-  // The gate that sent every page here is off now.
-  const index = await (await page.request.get('/index.php')).text();
-  expect(index).not.toContain('url=initialSetup.php');
-});
+}
