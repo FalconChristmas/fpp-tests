@@ -26,7 +26,15 @@ Requires Docker. From this directory, with fpp checked out next to it (`../fpp`)
 ./run.sh --flavor tsan                    # asan (default), tsan, debug, optimized or coverage
 ./run.sh scenarios/test_playlists.py -v   # anything after the options goes to pytest
 ./run.sh --fpp ~/src/fpp -k presets       # a different fpp checkout
+./run.sh -j 6                             # six shards side by side
 ```
+
+A scenario spends most of its time waiting on fppd, so one run uses little of the
+machine. `-j N` splits the scenarios (or the files and node ids you name) into N shards
+balanced by `scripts/shard-weights.json`. Each shard runs in a container and on a
+network of its own, and writes its output to `artifacts/shard-N.log`. The shards'
+results are merged into `artifacts/junit.xml`. An ASan shard peaks under 1GB of the
+Docker VM's memory.
 
 On an FPP device (or any Debian box with a built fpp tree), run against the tree as
 it is built right now, uncommitted changes included, without Docker:

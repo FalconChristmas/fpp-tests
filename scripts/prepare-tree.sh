@@ -63,9 +63,10 @@ fi
 # MultiSync, which showed up as a stray system or an extra socket in tests
 # that count them. Networks a killed run left behind are pruned once they are
 # an hour old and have no container on them.
+# An argument tells apart the networks of one run (run.sh -j: one per shard).
 make_test_network() {
     docker network prune -f --filter label=fpp-tests --filter until=1h > /dev/null 2>&1 || true
-    NETWORK="fpp-tests-$$-$(date +%s)"
+    NETWORK="fpp-tests-$$-$(date +%s)${1:+-$1}"
     if ! docker network create --label fpp-tests "$NETWORK" > /dev/null; then
         # Out of address pools, say: still run, but on the shared bridge.
         echo "warning: could not create network $NETWORK; using the default bridge" >&2

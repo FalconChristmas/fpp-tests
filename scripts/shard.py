@@ -1,8 +1,12 @@
-"""Which scenario files shard INDEX of COUNT runs, for the CI workflow.
+"""Which scenario files shard INDEX of COUNT runs, for the CI workflow and
+run.sh -j.
 
-    python3 scripts/shard.py INDEX COUNT    (INDEX from 1)
+    python3 scripts/shard.py INDEX COUNT [ITEM...]    (INDEX from 1)
 
-Prints the files, one per line. Every file lands in exactly one shard, and
+Prints the files, one per line. With ITEMs (scenario files, directories of
+them, or pytest node ids such as scenarios/test_x.py::test_y) it splits those
+instead of every scenario file; a node id weighs what its file does, and a
+shard with nothing in it prints nothing. Every item lands in exactly one shard, and
 the shards are balanced by how long each file took (shard-weights.json, the
 seconds per file of a whole run; a file not listed counts as the median), the
 longest first onto whichever shard has the least so far. The split depends
@@ -34,17 +38,32 @@ def weights_from_junit(junit):
     return {f: round(s, 1) for f, s in sorted(seconds.items())}
 
 
-def shards(count):
+def expand(items):
+    """ITEMs as files and node ids, relative to the fpp-tests root."""
     root = os.path.dirname(HERE)
-    files = sorted(os.path.relpath(f, root) for f in glob.glob(os.path.join(root, "scenarios", "test_*.py")))
+    out = set()
+    for item in items or ["scenarios"]:
+        path = os.path.normpath(item.split("::")[0])
+        if os.path.isdir(os.path.join(root, path)):
+            out.update(os.path.relpath(f, root) for f in glob.glob(os.path.join(root, path, "**", "test_*.py"), recursive=True))
+        else:
+            out.add(path + item[len(item.split("::")[0]):])
+    return sorted(out)
+
+
+def shards(count, items=None):
     with open(WEIGHTS) as f:
         known = json.load(f)
     default = statistics.median(known.values()) if known else 1.0
+
+    def weight(item):
+        return known.get(item.split("::")[0], default)
+
     load = [0.0] * count
     out = [[] for _ in range(count)]
-    for f in sorted(files, key=lambda f: (-known.get(f, default), f)):
+    for f in sorted(expand(items), key=lambda f: (-weight(f), f)):
         i = load.index(min(load))
-        load[i] += known.get(f, default)
+        load[i] += weight(f)
         out[i].append(f)
     return [sorted(s) for s in out]
 
@@ -58,4 +77,6 @@ if __name__ == "__main__":
     index, count = int(sys.argv[1]), int(sys.argv[2])
     if not 1 <= index <= count:
         sys.exit(f"shard {index} of {count}?")
-    print("\n".join(shards(count)[index - 1]))
+    files = shards(count, sys.argv[3:])[index - 1]
+    if files:
+        print("\n".join(files))
