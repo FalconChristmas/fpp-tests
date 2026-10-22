@@ -13,6 +13,7 @@ import pytest
 import shims
 from ddp import DdpReceiver
 from eseq import model_frames, write_eseq
+from fppd import sanitizer
 from show import CHANNELS, ddp_output
 
 FX = 30  # the effect's model: channels 1-30
@@ -169,7 +170,12 @@ def test_fppd_stops_without_waiting_out_the_idle_window(fppd):
     polled for the thread to exit, but nothing woke the idle wait: every
     shutdown (and every restart from the UI) sat out the rest of it, about
     2.2 s here.
+
+    TSan's own exit (flushing its reports, tearing down its shadow memory)
+    takes 1.3-1.5 s on its own, so under TSan the limit is 2.5 s: still well
+    short of the 3.5 s or more the unfixed stop takes there.
     """
+    limit = 2.5 if sanitizer() == "tsan" else 1.0
     fppd.start()
     fppd.command("Test Start", "100", "RGB Cycle", "1-30", "R-G-B")
     time.sleep(1)
@@ -182,4 +188,4 @@ def test_fppd_stops_without_waiting_out_the_idle_window(fppd):
     assert rc == 0, f"fppd exited with {rc} on SIGTERM\n{fppd.tail()}"
     reports = fppd.sanitizer_reports()
     assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
-    assert took < 1.0, f"fppd took {took:.2f} s to exit on SIGTERM\n{fppd.tail()}"
+    assert took < limit, f"fppd took {took:.2f} s to exit on SIGTERM\n{fppd.tail()}"
