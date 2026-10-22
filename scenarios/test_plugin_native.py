@@ -29,6 +29,10 @@ def test_a_plugin_route_that_throws_answers_500(fppd, route):
     Regression: d9351bd70. Plugin routes are dispatched from drogon's
     default handler, which has no try/catch around it: the exception reached
     the event loop and terminated fppd.
+
+    Also covers 547a957ac, under TSan: drogon's quit() freed the router
+    whose default handler had just served these routes while that IO thread
+    had not been joined.
     """
     start(fppd)
     for _ in range(3):

@@ -52,7 +52,9 @@ def test_routes_of_a_plugin_loaded_at_runtime(fppd):
 
     Also covers 07f19dda1, the runtime load and unload, and the route half
     of 1a5f596e1: registerPluginApi() routes a plugin gives back, which
-    answer 410 once it is gone."""
+    answer 410 once it is gone. And, under TSan, 547a957ac: drogon's quit()
+    freed its router while an IO thread was still in it from the last
+    plugin route served."""
     fppd.start()
     load(fppd, "lateroutesplugin.cpp", "fpp-late")
     assert fppd.get("/late/ok") == "ok"
