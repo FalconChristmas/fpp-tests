@@ -64,7 +64,10 @@ def test_mix_bus_levels_are_restored_after_the_stack_starts(fppinit):
     Regression: da73dbec6. Only output group and member levels were
     restored (and not even those without an output groups file). PipeWire
     rebuilds the mix buses at full volume on every start, so a bus fader
-    lasted only until the next reboot."""
+    lasted only until the next reboot.
+
+    The precondition guards 84a42ddac: setupAudio restored no output group
+    levels at all, so WirePlumber's remembered ones stood."""
     cid, n = as_a_box(fppinit, "pipewire")
     fppinit.write("config/pipewire-audio-groups.json", {"groups": [
         {"id": 1, "name": "Main", "enabled": True, "channels": 2, "volume": 100,
