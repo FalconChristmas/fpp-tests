@@ -339,7 +339,9 @@ def test_a_multisync_command_too_big_for_a_packet_is_neither_sent_nor_run(fppd):
 def test_master_announces_its_media(fppd, audio, entry_type):
     """A master playing media tells its remotes about the media as well:
     open and start naming the file, sync packets whose position advances
-    with the clock, and stop when it ends."""
+    with the clock, and stop when it ends.
+
+    Feature: 4350f65d0 (GStreamer playback sends the media sync packets)."""
     import os
     from audio import write_tone_wav
     from show import playlist

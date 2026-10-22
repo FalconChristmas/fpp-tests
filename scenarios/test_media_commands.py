@@ -228,7 +228,8 @@ def test_play_media_status_moves_with_the_player_idle(fppd, audio):
     Regression: 3428bcfbb. Play Media's outputs were pumped only from a
     playing playlist's tick, so with the player idle their status sat at 0
     for the whole track (and the watchdogs that run from the same pump never
-    ran).
+    ran). 9ac5b7233 had pumped slots 2-5 from a playing playlist; before it
+    nothing pumped them at all.
     """
     fppd.start()
     play_and_check_status(fppd, 2)
@@ -369,7 +370,10 @@ def test_wled_audio_sync_follows_one_slot(fppd, audio):
 
     Regression: 1b9fa77b8. Every playing slot's sample tap wrote the one
     ring the WLED analysis reads, so the two streams interleaved in it and
-    the peak landed near neither (the commit measured 764 Hz)."""
+    the peak landed near neither (the commit measured 764 Hz).
+
+    Feature: bd1ca1cfb (the WLED sample tap), 228a7c2c4 (a second slot
+    plays beside the first)."""
     import struct
     from udp import Listener
     from test_video import free_udp_port

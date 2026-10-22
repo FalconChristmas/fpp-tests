@@ -64,7 +64,9 @@ def test_an_opus_sender_linked_as_it_appears_keeps_sending(fppd, audio):
     Regression: 5a98f1b0b. The send pipeline ran on pipewiresrc's
     GstPipeWireClock, which stops advancing for a follower stream once the
     graph's real driver takes it over: the sender passed its first packets
-    and then waited on that clock for good."""
+    and then waited on that clock for good.
+
+    Feature: 9a88f2bbd (Opus RTP streaming)."""
     from test_rtsp_outputs import link_as_it_appears
     advanced_backend(fppd)
     rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

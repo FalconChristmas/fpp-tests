@@ -66,7 +66,8 @@ def test_volume_pins_db_controls_at_0db_not_100_percent(fppd, monkeypatch):
     which is always -1 because fppd sets SA_NOCLDWAIT, so it followed every
     "0dB" with "100%". On a PCM512x that is +24 dB of digital gain: the card
     clipped, and a transmitter fed from it was overdriven by the same 24 dB.
-    Fixed by 8b99e23d0.
+    Fixed by 8b99e23d0. Feature: 1c563dcf7 (every playback volume control is
+    pinned, not only the AudioMixerDevice one, which is unset here).
     """
     bindir = tempfile.mkdtemp(prefix="fakebin-")
     amixer = os.path.join(bindir, "amixer")

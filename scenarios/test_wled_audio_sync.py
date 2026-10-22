@@ -153,7 +153,9 @@ def test_audio_sync_packets_drive_a_sound_reactive_effect(fppd):
     sends are what fppd's GEQ effect draws, exactly: stairs, then the stairs
     reversed, then silence (all black) as the packets change. When they stop,
     the cached frame expires (250 ms) and the effect goes back to its own
-    simulated sound."""
+    simulated sound.
+
+    Feature: 93907b1be (WLED audio sync over the network)."""
     setup(fppd, [matrix("M", width=W, height=H)], channels=CHANNELS)
     fppd.settings(WLEDAudioSyncMode="receive")
     with DdpReceiver(CHANNELS) as rx:

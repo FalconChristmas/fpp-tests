@@ -122,7 +122,9 @@ def test_a_cameras_audio_reaches_pipewire_when_enabled(fppd, audio):
 
     Feature/regression: 232de7878. audioEnabled was honoured for YouTube
     sources only: an RTSP camera was built video-only, its audio track was
-    refused, and no audio node ever appeared."""
+    refused, and no audio node ever appeared.
+
+    Feature: 09f7b56c1 (a video source's audio published as its own PipeWire node)."""
     import wave
     node = "fpp_cam_audio"
     with FakeCamera([JPEG, PCMU]) as cam:

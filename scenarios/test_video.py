@@ -151,7 +151,9 @@ def test_a_playing_video_reaches_an_overlay_model(fppd, audio):
 
     Regression: 3c3784f46. Nothing published playback's video on the slot's
     channel: the overlay member built intervideosrc with an empty channel
-    name, which doesn't parse, and the model never showed a frame."""
+    name, which doesn't parse, and the model never showed a frame.
+
+    Feature: 198974f27 (Play Media's video output argument)."""
     make_video(os.path.join(fppd.media, "videos", "Bars.mkv"))
     setup(fppd, [overlay_consumer()])
     fppd.start()
@@ -205,7 +207,9 @@ def test_a_live_test_pattern_reaches_an_overlay_model(fppd, audio):
     Feature: e7a72ce7a (the input's live preview, /videoinput/preview).
     Regression: ad9acf54b. Nothing had called gst_init() when the source
     was built at startup with no media played yet, and gst_parse_launch()
-    crashed fppd inside gst_value_deserialize() on every start."""
+    crashed fppd inside gst_value_deserialize() on every start.
+
+    Feature: c3a29a76c (video input sources and output consumers)."""
     setup(fppd, [overlay_consumer(SOURCE)], [source("videotestsrc", pattern="smpte")])
     fppd.start()
     wait_for_bars(fppd)
@@ -489,7 +493,9 @@ def test_a_video_played_to_an_rgbw_model(fppd, audio):
     Regression: 35c41e967. The frame, packed RGB at the model's size, was
     pushed with setData(), which reads width x height x 4 bytes for an RGBW
     model: a third past the end of every frame, an ASan heap-buffer-overflow
-    on the first one."""
+    on the first one.
+
+    Feature: 45c97a633 (playback video to a pixel overlay model via appsink)."""
     make_video(os.path.join(fppd.media, "videos", "Bars.mkv"), seconds=4)
     setup_rgbw(fppd, [])
     fppd.start()

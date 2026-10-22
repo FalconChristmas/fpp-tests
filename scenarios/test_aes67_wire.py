@@ -112,7 +112,7 @@ def test_stream_is_one_packet_per_ms_ahead_of_its_time(fppd, audio, channels):
     36d36f165 (timestamp steps wobbled by a sample around 48),
     cc1c90988 (paced packets left about 23.7 ms after their playout time),
     51f8b2046 / cdb9515d4 (the lead is measured and held, not set open-loop).
-    Feature: 312d823c6 (1 ms by default)."""
+    Feature: 312d823c6 (1 ms by default); 7cd75d11f (the GStreamer AES67 sender)."""
     with RtpCapture(5004) as cap:
         start_sender(fppd, audio, channels=channels)
         time.sleep(3)  # the servo steps the lead in on the first packets

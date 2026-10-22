@@ -80,7 +80,9 @@ def test_ptp4l_config_follows_the_ptp_settings(fppd, ptp):
     the DSCP marking and pmc's -d, without which ptp4l drops every management
     query on any domain but 0. ddc893f73: a linuxptp that knows clientOnly
     (the probe does not call it unknown) is given clientOnly, not the
-    deprecated slaveOnly."""
+    deprecated slaveOnly.
+
+    Feature: 79caf3748 (ptp4l in place of gst-ptp-helper)."""
     ptp.answer(port_state="LISTENING", gm_present="false")
     write_config(fppd, ptpDomain=5, ptpRole="follower")
     start(fppd, ptp)

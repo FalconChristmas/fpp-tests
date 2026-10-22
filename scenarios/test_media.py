@@ -27,7 +27,9 @@ def sounding(samples, threshold=0.1):
 def test_play_media_plays_the_whole_file(fppd, audio):
     """Play Media sends the whole file to the audio output at unity gain: a
     3 s, 1 kHz tone at half scale comes out 3 s long, at the same level and
-    pitch, then silence and an idle player."""
+    pitch, then silence and an idle player.
+
+    Feature: 7db716180 (Play Media through GStreamer)."""
     write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 3, freq=1000, amplitude=0.5)
     fppd.start()
     rec = audio.record()
@@ -67,7 +69,9 @@ def test_sequence_and_media_play_together(fppd, audio):
 
     Regression: 240c53472 (run with --flavor tsan). The media status was a
     plain int, set from GStreamer's bus thread as the media ended and read
-    by the playlist on the main loop: a data race TSan reports here."""
+    by the playlist on the main loop: a data race TSan reports here.
+
+    Feature: bd1ca1cfb (sequence audio through GStreamer)."""
     secs = 10
     frames = unique_frames(secs * 20, CHANNELS)
     lookup = {f: i for i, f in enumerate(frames)}
@@ -780,7 +784,9 @@ def test_a_wedged_audio_teardown_does_not_restart_fppd(fppd, audio):
     restarting fppd (and then rebooting), a ladder that exists only for a
     wedged hardware decoder: an audio track on a BeagleBone walked a show
     controller up to a restart. (The reboot rung is off here, so a device
-    run of the parent can't reboot the box.)"""
+    run of the parent can't reboot the box.)
+
+    Feature: 40aeed4e4 (the teardown is supervised and abandoned at 10 s)."""
     import shims
     write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 1)
     fppd.settings(GStreamerWedgeRestartLimit="1", GStreamerWedgeRebootLimit="0")

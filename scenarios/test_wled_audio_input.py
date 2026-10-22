@@ -57,7 +57,9 @@ def test_input_capture_is_scaled_like_media(fppd, audio):
     Regression: 888959191. The capture's S16 samples went to the analysis
     raw, 32768 times too large for the +/-1.0 it expects: volume and every
     FFT band sat at 255 whatever was playing, so reactive effects on the
-    receivers sat flat."""
+    receivers sat flat.
+
+    Feature: 981fe235c (audio input captured from PipeWire)."""
     write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 20, freq=1000, amplitude=0.25)
     fppd.settings(WLEDAudioSyncMode="send", WLEDAudioSyncDest="127.0.0.1",
                   WLEDAudioSyncPort=str(PORT), WLEDAudioInput=SINK)

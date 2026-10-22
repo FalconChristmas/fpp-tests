@@ -69,7 +69,9 @@ def test_play_media_again_on_a_slot_replaces_what_it_played(fppd, audio):
     Regression: 27360cd92. The second Play Media built another pipeline
     on the slot and left the first running; the slot tracked only the
     newer stream, so the first kept sounding where no command could stop
-    it (and the first's teardown could clear the newer stream's slot)."""
+    it (and the first's teardown could clear the newer stream's slot).
+
+    Feature: 17fea6d27 (Play Media into slots beyond 1)."""
     write_tone_wav(os.path.join(fppd.media, "music", "A.wav"), 15, freq=500)
     write_tone_wav(os.path.join(fppd.media, "music", "B.wav"), 15, freq=1500)
     fppd.start()
@@ -110,7 +112,9 @@ def test_output_stream_closes_after_the_track_when_not_kept_open(fppd, audio):
     seconds (the linger) after it.
 
     Feature: e4533d96d (the persistent output stream), 5a1b5092d (its
-    linger when not kept open)."""
+    linger when not kept open).
+
+    Feature: 24f11cb4a (the fppd_stream_N node name)."""
     write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 1)
     fppd.start()
     time.sleep(3)
