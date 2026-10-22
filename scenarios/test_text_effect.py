@@ -254,7 +254,8 @@ def test_per_letter_and_per_word(fppd):
 
 def test_per_line(fppd):
     """Per Line gives each line of a two-line message its own colour (a
-    "\\n" typed into the text is a line break)."""
+    "\\n" typed into the text is a line break: b83d8b62d, before which it
+    was drawn as it was typed, on one line)."""
     font = start(fppd, height=32)
     msg = "HH\\nHH"
     text(fppd, font, msg, colors=(WHITE,), size="10")

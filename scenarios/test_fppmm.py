@@ -51,6 +51,9 @@ def test_file_is_copied_into_a_model(fppd, tmp_path):
     for 3 bytes a pixel. For a model whose buffer fppd hadn't created yet it
     created an empty one and died of SIGBUS writing to it, and an RGBW
     model's data ran past the mapping.
+
+    The RGBW model takes four bytes a pixel because of f892bc19a; before it
+    an overlay model's buffer was RGB whatever its channels a node.
     """
     setup(fppd, [matrix("M"), matrix("W", start=151, width=4, height=2, cpn=4)], channels=200)
     fppd.start()

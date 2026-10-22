@@ -166,7 +166,8 @@ def test_every_effect_index_can_be_chosen(fppd):
     """A WLED app picks an effect by its index in /json/eff. Choosing any of
     them, the FPP-native effects (Bars, Text, ...) as well as the WLED
     ones, starts it (or, for one that needs what WLED doesn't send, refuses
-    it) and fppd carries on.
+    it) and fppd carries on. (The API is 59c3c543a's: without it nothing
+    listens.)
 
     Regression: d6494e109. The FPP-native effects aren't WLEDEffects, and
     a static_cast to one called getArgRoles() through a vtable slot they

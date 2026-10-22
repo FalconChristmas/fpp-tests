@@ -100,6 +100,10 @@ def test_generic_serial_sends_whole_frames_to_a_slow_reader(fppd):
     dropped and the next frame's header followed a truncated one, which a
     receiver can't resynchronise from.
 
+    Regression: 7d9819ba0. The footer was sized from the header, which Init()
+    had not read yet, so it was never sent: every frame ended at its last
+    channel.
+
     Regression: 01b575503 (verify with --flavor tsan). StartOutputThread()
     polled m_threadIsRunning and m_runThread with no lock while the new
     worker set them under m_sendLock; TSan reported it as the output

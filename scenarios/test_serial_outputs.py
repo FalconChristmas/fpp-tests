@@ -393,6 +393,10 @@ def test_serial_open_warning_comes_down_when_the_port_is_fixed(fppd):
     once co-other.json names a port that does, the output sends and the
     warning comes down.
 
+    Regression: fca20aaf5 (the warning half). A port that would not open
+    raised no warning at all: SerialOpen() failed silently and
+    setupSerialPort() reported success.
+
     Regression: 176d2d251. The serial Init() warnings (setupSerialPort()'s
     "could not open" and SerialOpen()'s id 38) were raised with plain
     AddWarning() and never retracted, so both stayed up until fppd

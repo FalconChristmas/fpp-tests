@@ -132,6 +132,10 @@ def test_the_output_ranges_map_is_built_once_at_startup(fppd):
     callback on the file, so the channel outputs' registration re-ran
     MultiSync's reload: a second read of the file and, before dff716566
     cached lookups, a second blocking lookup of every output hostname in it.
+
+    The map is 53185d08f's cache, built when the file is watched: without it
+    there is no startup build at all (the list rebuilt it on every request,
+    which this does not check).
     """
     trace = os.path.join(fppd.media, "tmp", "readtrace.log")
     fppd.write("config/co-universes.json", universes_to("10.20.30.90"))

@@ -84,7 +84,7 @@ def test_a_destination_over_its_pacing_rate_keeps_one_send_worker(fppd):
     """A controller paced at 4 Mbps whose frames need about five times that
     keeps a bounded number of send workers: every send runs to the 100 ms
     budget, and frames for it wait or fold into the pending send instead of
-    each getting a thread.
+    each getting a thread. The paced send path is 49366d8d0's.
 
     Regression: 1e9a2bbd2. SendData() queued a work item per frame for the
     destination and started a worker for each item past the worker count;

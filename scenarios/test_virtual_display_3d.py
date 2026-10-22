@@ -104,6 +104,7 @@ def test_lit_pixels_stream_by_colour_and_map_index(fppd):
     """Pixels whose channels start well past channel 1 show their own
     channels' colours, grouped by colour, listed by map line, dark pixels
     left out; the map's short (no z) lines count the same as full ones.
+    The display is 683fdb52d's.
 
     Regression: af5528025. Init() rebased every pixel's channel by the
     lowest channel in the map, but PrepData() is handed the whole sequence

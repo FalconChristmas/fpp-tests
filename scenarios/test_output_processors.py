@@ -149,7 +149,11 @@ CASES = {
 @pytest.mark.parametrize("what", list(CASES))
 def test_processor_output(fppd, what):
     """Each processor transforms the frame exactly as documented, and
-    nowhere else."""
+    nowhere else.
+
+    Regression: 476c9df96 (Fold by channel). The Fold copied three bytes a
+    node whatever its node size, so a By Channel fold read past the end of
+    its scratch copy: an ASan heap-buffer-overflow on the first frame."""
     processors, expect = CASES[what]
     with DdpReceiver(CHANNELS) as rx:
         frames = run(fppd, processors)

@@ -24,6 +24,11 @@ def test_sequence_keeps_playing_through_a_clock_step(fppd, step):
     wall clock. After a step back the next frame was due an hour later and
     the output thread slept that long: no frames at all. Fixed by 9924238da
     (the cadence on the monotonic clock).
+
+    Regression: c1c9ae59e. The playlist's sequence entry timed its frames
+    from a wall-clock start, so after a step it told the output thread it was
+    an hour ahead or behind: a step forward stopped the frames, a step back
+    held the sequence short of its end.
     """
     frames = unique_frames(400, CHANNELS)  # 20 s at 50 ms
     lookup = {f: i for i, f in enumerate(frames)}

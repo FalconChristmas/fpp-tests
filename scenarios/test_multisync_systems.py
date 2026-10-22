@@ -139,7 +139,8 @@ def test_discover_ping_is_answered(fppd):
 def test_backfilled_ranges_are_zero_based(fppd):
     """A non-FPP controller that advertises no channel ranges gets them from
     this box's own outputs to it -- zero-based like every other range in
-    the list, not one channel high (5b25d5a08)."""
+    the list, not one channel high (5b25d5a08). The backfill itself is
+    6d6db439f: before it such a controller was listed with no ranges."""
     fppd.write("config/co-universes.json", {"channelOutputs": [{
         "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 1020,
         "universes": [

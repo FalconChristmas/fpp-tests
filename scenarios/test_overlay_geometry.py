@@ -304,9 +304,9 @@ def test_polar_mapping_without_the_geometry_behaves_as_horizontal(fppd):
 
 
 def test_model_preview_numbers_points_by_node(fppd):
-    """GET /overlays/model/<m>/preview lists the model's points in node
-    order, each as [x, y, z, node], with the node number taken from the
-    point's channel, however the layout file orders them.
+    """GET /overlays/model/<m>/preview (78230aec9) lists the model's points
+    in node order, each as [x, y, z, node], with the node number taken from
+    the point's channel, however the layout file orders them.
 
     Regression: 7c6a64c98. xLights writes a model's points in spatial
     order, and the preview listed them in file order as [x, y, z]; the
@@ -551,7 +551,8 @@ def test_grid_submodel_scatters_its_cells_under_each_overlay_state(fppd, kind):
       - Disabled: the sequence alone;
     and nothing anywhere else: no hole's colour, no other parent node, none
     of the channels between. A Fill afterwards lights every cell's
-    channels and no others."""
+    channels and no others. Both kinds, and loading them from the xLights
+    JSON on first use, are d2d577feb's."""
     install(fppd, solid_frames(1200, GRID_CHANNELS, UNDER))  # 60 s
     fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [grid_parent()]})
     if kind == "grid":
