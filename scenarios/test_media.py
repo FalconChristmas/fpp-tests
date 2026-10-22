@@ -821,3 +821,59 @@ def test_volume_answers_while_pactl_is_slow(fppd):
     took = time.monotonic() - started
     assert took < 2, f"the volume change took {took:.1f} s to answer"
     assert fppd.get("/fppd/volume", timeout=3)["volume"] == 50
+
+
+def socket_inodes(pid):
+    """The sockets process `pid` holds, by inode."""
+    held = set()
+    fds = f"/proc/{pid}/fd"
+    for fd in os.listdir(fds):
+        try:
+            target = os.readlink(os.path.join(fds, fd))
+        except FileNotFoundError:
+            continue
+        if target.startswith("socket:["):
+            held.add(target)
+    return held
+
+
+def test_a_slow_pactl_does_not_hold_fppds_sockets(fppd):
+    """A shell fppd runs -- here the volume worker's pactl, slow to answer
+    as a wedged PipeWire makes it -- holds none of fppd's sockets.
+
+    Regression: 7c5ff539d. fppd opened its sockets without close-on-exec, so
+    everything it ran inherited them: MultiSync's 32320, the bridge's E1.31
+    and Art-Net ports, the command socket. A child still running when fppd
+    exited kept them, and the restarted fppd bound 32320 beside it
+    (SO_REUSEPORT): the kernel handed part of the MultiSync packets to the
+    orphan. In this suite the orphan of the scenario above made the next
+    scenario's pings vanish.
+    """
+    bindir = os.path.join(fppd.media, "tmp", "bin")
+    running = os.path.join(fppd.media, "tmp", "pactl.running")
+    os.makedirs(bindir)
+    with open(os.path.join(bindir, "pactl"), "w") as f:
+        f.write(f'#!/bin/sh\ntouch "{running}"\nsleep 30\n')
+    os.chmod(os.path.join(bindir, "pactl"), 0o755)
+    fppd.settings(MediaBackend="pipewire-simple", volume="70")
+    fppd.start(extra_env={"PATH": bindir + ":" + os.environ["PATH"]})
+    fppd.post("/fppd/volume/50", timeout=3)
+    fppd.wait_for(lambda: os.path.exists(running), what="the volume worker to run pactl")
+    ours = socket_inodes(fppd.proc.pid)
+    assert ours, "fppd holds no sockets?"
+    children = []
+    for p in os.listdir("/proc"):
+        if not p.isdigit() or int(p) == fppd.proc.pid:
+            continue
+        try:
+            with open(f"/proc/{p}/stat") as f:
+                pgrp = int(f.read().rsplit(")", 1)[1].split()[2])
+            with open(f"/proc/{p}/cmdline", "rb") as f:
+                cmd = f.read().replace(b"\0", b" ").decode(errors="replace").strip()
+            if pgrp == fppd.proc.pid:
+                children.append((p, cmd, socket_inodes(p) & ours))
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+    assert children, "found none of fppd's children"
+    leaks = [(p, cmd[:80], len(shared)) for p, cmd, shared in children if shared]
+    assert not leaks, f"fppd's children hold its sockets (pid, command, how many): {leaks}"
