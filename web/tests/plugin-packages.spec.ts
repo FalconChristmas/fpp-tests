@@ -57,7 +57,8 @@ test("a failed install releases the packages its other dependencies installed, a
 });
 
 test("the history records the packages FPP installed for a plugin's dependencies", async ({ request }) => {
-  // Feature: 597c10213.  An install's history entry carries 'fppPackages',
+  // Feature: e86b43642 (a plugin's declared packages are installed and
+  // claimed for it), 597c10213.  An install's history entry carries 'fppPackages',
   // what changed while FPP installed the declared dependencies, and
   // 'startedAt'; a plugin with no dependencies gets no package window; when
   // the package list can't be read the entry says 'unknown'.

@@ -26,7 +26,8 @@ test('a media directory that is not there is reported as missing, not as a full 
 });
 
 test('the kiosk opens the configured URL and turns the DPI output off', async ({ request }) => {
-  // Regression: 1d04161f3 (#2867).  start_kiosk.sh launched chromium on a
+  // Feature: 817897172 (the kiosk makes the first connected non-DPI output
+  // primary).  Regression: 1d04161f3 (#2867).  start_kiosk.sh launched chromium on a
   // hardcoded http://localhost/, which overrides the KioskUrl that fppinit
   // writes into chromium's policy; and it left the pixel DPI connector
   // enabled, so X sized its screen to it and the panel showed a corner.

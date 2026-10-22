@@ -16,6 +16,7 @@ const listedPlugin = (name: string, minFPPVersion: string) => ({
   versions: [{ minFPPVersion, maxFPPVersion: '0', branch: 'master', sha: '' }],
 });
 
+// The Popular strip is fpp ea919034f's ("feat(plugins): plugin page redesign").
 // fpp 1bcca1964 ("fix(plugins): don't recommend plugins not updated for this
 // FPP release"): the Popular strip, the page's recommendations, took any
 // plugin it could install, so one whose only version was built for an older

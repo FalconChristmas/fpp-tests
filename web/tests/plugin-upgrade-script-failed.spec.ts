@@ -9,6 +9,10 @@ import { PluginRepo, PLUGINS, pluginInfo, restoreState, saveState, sh } from './
 // git pull", so a plugin whose fpp_upgrade.sh failed looked like a git
 // problem.  Now the code phase and the script phase are told apart.
 //
+// The install it starts from is a non-streaming POST /api/plugin read with
+// .json(): fpp ebcc539e0 ("fix(api): return valid JSON from non-streaming POST
+// /api/plugin") stopped progress messages being echoed ahead of that JSON.
+//
 // (Update All's report of the same failure, on the Plugins page, is in
 // plugins-page.spec.ts.)
 

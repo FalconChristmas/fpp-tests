@@ -1,6 +1,11 @@
 import { expect, test } from './fixtures';
 import type { Page, TestInfo } from '@playwright/test';
 
+// The Theme setting: fpp 8a0c52584 ("feat: add themeOverride setting to control
+// user interface theme") sets the page's data-bs-theme from it, and 7367c09a4
+// ("fix: enhance theme application by driving CSS color-scheme for native
+// controls") sets the root's color-scheme to match.
+
 async function gotoPage(page: Page, path: string) {
   let lastError: unknown;
 

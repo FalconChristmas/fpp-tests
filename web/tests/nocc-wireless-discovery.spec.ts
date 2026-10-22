@@ -7,6 +7,9 @@ import { container, inPlayer } from './container';
 // across Wireless Networks\" (off by default)") gives discovery
 // NOCC_DISCOVER_TIMEOUT=3500ms when NoccDiscoverWireless is set.
 //
+// DiscoverNoccHosts itself, asking nocc-daemon for the helpers it found over
+// mDNS, is fpp 77a650c75's ("Add a \"nocc + mdns\" distributed compile mode").
+//
 // nocc-daemon is a stub here that answers with the timeout it was given.
 
 const STUB_DIR = '/tmp/fpp-tests-nocc';

@@ -15,6 +15,9 @@ import type { APIRequestContext } from '@playwright/test';
 // - fpp a0ba5016a ("www.w3.org is not needed in CSP"): default-src and img-src
 //   allowed http://www.w3.org.
 
+// The API docs page itself, Scalar rendering /api/openapi.json, is fpp
+// 9bab76c81's ("feat: add scalar for API documentation").
+
 async function cspOf(request: APIRequestContext, path: string) {
   const res = await request.get(path);
   expect(res.status()).toBe(200);

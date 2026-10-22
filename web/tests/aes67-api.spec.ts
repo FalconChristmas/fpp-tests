@@ -26,7 +26,8 @@ test.afterAll(async ({ request }) => {
 });
 
 test('a send instance is applied and exported as SDP through the API', async ({ request }) => {
-  // Feature: a33868385 (SDP export).  87594a379: the apply reaches fppd
+  // Feature: df5fd77b1 (the AES67 instance API), a33868385 (SDP export).
+  // 87594a379: the apply reaches fppd
   // directly and reports its success as success.
   const save = await request.post('/api/pipewire/aes67/instances', {
     data: { ptpEnabled: false, ptpInterface: 'lo', instances: [INSTANCE] },
@@ -67,6 +68,7 @@ test('a failed apply reports fppd\'s own error, not an unreachable fppd', async 
 });
 
 test('an instance stored without a packet time shows 1 ms, as fppd uses', async ({ page }) => {
+  // Feature: e3545378c (the page's packet-time field).
   // Regression: a6a6ba663.  The page showed 4 ms for an instance stored with
   // no ptime, while fppd falls back to 1 ms (312d823c6).
   test.skip(!container, 'writes the stored config inside the run-web.sh container');

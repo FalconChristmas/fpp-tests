@@ -13,7 +13,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('vendor panel settings apply the version tiers this player has reached, in order', async ({ page }) => {
-  // Feature: fd8a4c7b0.  Vendor panel data is fetched live by every FPP
+  // Feature: 1ac10c187 (the -v<major> tiers), fd8a4c7b0 (-v<major>.<minor>).
+  // Vendor panel data is fetched live by every FPP
   // version, so settings an older one cannot represent go in "<subType>-v<N>"
   // tiers; "-v<major>.<minor>" tiers gate support added within a major.  A
   // player applies every tier at or below its own version, lowest first, and
