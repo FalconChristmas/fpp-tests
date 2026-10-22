@@ -801,6 +801,40 @@ def test_a_wedged_audio_teardown_does_not_restart_fppd(fppd, audio):
     fppd.get("/fppd/status", timeout=10)
 
 
+def test_stuck_teardowns_restart_fppd_before_they_pile_up(fppd, audio):
+    """Teardowns that wedge and never let go (a shim holds every NULL
+    transition for ten minutes) are abandoned one by one, and once four are
+    stuck fppd restarts, whether or not a hardware decoder was involved.
+
+    Regression: 907c12048. Each abandoned teardown keeps its pipeline, its
+    streaming threads and its reaper for good, and nothing bounded them: a
+    pipeline without a hardware decoder never counts toward the wedge
+    restart, and that count resets whenever a clip plays. A 32-bit Pi whose
+    every teardown wedged abandoned 226 pipelines until fppd could not start
+    a thread, and std::thread's throw aborted it. (The reboot rung is off
+    here, so a device run of the parent can't reboot the box.)"""
+    import shims
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 1)
+    fppd.settings(GStreamerWedgeRebootLimit="0")
+    fppd.start(preload=[shims.build("slownull.c")], extra_env={"SLOWNULL_MS": "600000"})
+    for n in range(1, 5):
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=30,
+                      interval=0.5, what="fppd to be idle")
+        fppd.command("Play Media", "Tone.wav", "1", "0", "1")
+        fppd.wait_for(lambda: fppd.log().count("teardown wedged") >= n, timeout=40,
+                      interval=0.5, what=f"teardown {n} to be abandoned")
+    fppd.wait_for(lambda: "Restart: " in fppd.log(), timeout=30, interval=0.5,
+                  what="fppd to restart once four teardowns were stuck")
+    assert "4 abandoned pipeline teardowns are still stuck, restarting fppd" in fppd.log()
+
+    def answers():
+        try:
+            return bool(fppd.get("/fppd/status", timeout=5))
+        except Exception:
+            return False  # still coming back up
+    fppd.wait_for(answers, timeout=60, interval=1, what="the restarted fppd to answer")
+
+
 def test_volume_answers_while_pactl_is_slow(fppd):
     """With pactl slow to answer (a stand-in that takes 5 s, as a wedged
     PipeWire makes it), a volume change still answers at once and reads
