@@ -789,7 +789,9 @@ def test_an_overlay_member_stops_while_its_model_is_recreated(fppd, audio):
     the member's state lock, and the listener runs under the overlay
     manager's models lock and takes that state lock: a lock-order inversion
     that could deadlock the two. TSan's deadlock detector reports it once
-    both orders have run; ASan can't see it, so run with --flavor tsan."""
+    both orders have run; ASan can't see it, so run with --flavor tsan.
+    Proved by reverting it on 0ec85d6ae: under TSan the source never
+    reaches the panel on its parent or on the fix itself."""
     from test_command_socket import send
     from test_overlays import PANEL_CHANNELS, colorlight_panel, resave_outputs
     consumer = overlay_consumer(SOURCE)

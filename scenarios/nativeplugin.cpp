@@ -19,6 +19,9 @@
 //   NATIVE_SETVALUE        "Native Test Set Value <model> <value> <start> <end>"
 //                          calls the model's protected setValue(), as a plugin
 //                          subclass would
+//   NATIVE_LEAKCHECK       "Native Test Leak Check" runs LeakSanitizer now
+//                          (fppd _exit()s, so its check at exit never runs):
+//                          "leaks" or "clean", the report going to log_path
 
 #include <atomic>
 #include <chrono>
@@ -51,6 +54,11 @@
 struct SetValueAccess : public PixelOverlayModel {
     using PixelOverlayModel::setValue;
 };
+#endif
+
+#if defined(NATIVE_LEAKCHECK)
+// Weak, so the plugin still loads into an fppd without the ASan runtime.
+extern "C" int __lsan_do_recoverable_leak_check() __attribute__((weak));
 #endif
 
 #ifdef FPP_PLUGIN_SUPPORTS_UNLOAD
@@ -166,6 +174,14 @@ public:
             (m->*(&SetValueAccess::setValue))((uint8_t)std::atoi(a[1].c_str()),
                                               std::atoi(a[2].c_str()), std::atoi(a[3].c_str()));
             return std::string("set");
+        });
+#endif
+#if defined(NATIVE_LEAKCHECK)
+        add("Native Test Leak Check", [](const std::vector<std::string>&) {
+            if (!__lsan_do_recoverable_leak_check) {
+                return std::string("no LeakSanitizer");
+            }
+            return std::string(__lsan_do_recoverable_leak_check() ? "leaks" : "clean");
         });
 #endif
     }

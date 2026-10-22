@@ -492,9 +492,9 @@ def test_auto_model_in_use_survives_an_output_reload(fppd):
     running-effects list read -- survives the outputs being saved under it
     again and again.
 
-    Regression: 021b1d200. Removal freed the model while those callers
-    still held it after dropping the models lock (and 0a3840413: its effect
-    leaked)."""
+    Coverage for 021b1d200 (removal freed the model while those callers
+    still held it after dropping the models lock) and 0a3840413 (its effect
+    leaked); the two tests below are what fail without them."""
     import http.client
     import threading
     from fppd import API
@@ -542,6 +542,88 @@ def test_auto_model_in_use_survives_an_output_reload(fppd):
         effect_done(fppd, "Panel")
         fill(fppd, "Panel", [0, 0, 22])
         wait_output(fppd, rx, lambda f: f[2] == 22, "the panel model to fill afterwards")
+
+
+def test_an_output_reload_during_an_image_put_to_its_model(fppd):
+    """An image PUT to an output's own model decodes without the models
+    lock; the outputs reloaded meanwhile remove that model, and the PUT
+    still draws into it safely afterwards.
+
+    Regression: 021b1d200. Removal deleted the model outright, so the PUT
+    blitted into freed memory. PUTs of a large image back to back spend
+    nearly all their time decoding, so each reload lands inside one."""
+    import http.client
+    from fppd import API
+    fppd.write("config/channeloutputs.json", colorlight_panel())
+    fppd.write("config/co-universes.json", ddp_output(PANEL_CHANNELS))
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": []})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    side = 3000
+    png = rgb_png(side, side, bytes([0, 40, 0]) * (side * side))
+    stop = threading.Event()
+    answers = []
+
+    def put_images():
+        host, port = urllib.parse.urlsplit(API).netloc.split(":")
+        while not stop.is_set():
+            try:
+                conn = http.client.HTTPConnection(host, int(port), timeout=30)
+                conn.request("PUT", "/overlays/model/Panel/data?fmt=image&stopEffect=false", body=png,
+                             headers={"Content-Type": "image/png"})
+                answers.append(conn.getresponse().status)
+                conn.close()
+            except Exception:
+                time.sleep(0.01)
+
+    fppd.start()
+    fppd.wait_for(lambda: "Panel" in [m.get("Name") for m in fppd.get("/models") or []],
+                  what="the panel's own model")
+    t = threading.Thread(target=put_images, daemon=True)
+    t.start()
+    try:
+        fppd.wait_for(lambda: answers, timeout=30, what="the first image PUT")
+        for _ in range(4):
+            resave_outputs(fppd)
+    finally:
+        stop.set()
+        t.join(60)
+    assert 200 in answers, f"no image PUT succeeded: {sorted(set(answers))}"
+
+
+def test_an_output_reload_frees_the_effect_running_on_its_model(fppd):
+    """An effect running on an output's own model when the outputs are
+    reloaded goes with the model: LeakSanitizer finds nothing an effect
+    allocated left behind.
+
+    Regression: 0a3840413. ~PixelOverlayModel never deleted the running
+    effect, so each reload leaked it."""
+    from fppd import sanitizer
+    from native_plugin import install
+    if sanitizer() != "asan":
+        pytest.skip("needs LeakSanitizer (an ASan build)")
+    install(fppd, features=["NATIVE_LEAKCHECK"])
+    fppd.write("config/channeloutputs.json", colorlight_panel())
+    fppd.write("config/co-universes.json", ddp_output(PANEL_CHANNELS))
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": []})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    # fppd is not leak-clean, so leaks are written apart from the reports the
+    # fixture fails on, and only the effects' are counted here.
+    lsan = os.path.join(fppd.media, "logs", "lsan")
+    fppd.start(extra_env={"ASAN_OPTIONS": (
+        f"halt_on_error=1:detect_leaks=1:abort_on_error=0:log_path={lsan}")})
+    fppd.wait_for(lambda: "Panel" in [m.get("Name") for m in fppd.get("/models") or []],
+                  what="the panel's own model")
+    for _ in range(3):
+        effect(fppd, "Panel", "Bars")
+        resave_outputs(fppd)
+    found = fppd.command("Native Test Leak Check", timeout=60)
+    assert found in ("leaks", "clean"), found
+    leaks = ""
+    if found == "leaks":
+        with open(f"{lsan}.{fppd.proc.pid}", errors="replace") as f:
+            leaks = f.read()
+    ours = [b for b in leaks.split("\n\n") if "PixelOverlayModel::applyEffect" in b]
+    assert not ours, "the reloads leaked their effects:\n" + "\n\n".join(ours)[:6000]
 
 
 def test_submodel_of_a_reloaded_auto_model(fppd):
