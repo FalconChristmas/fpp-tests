@@ -783,3 +783,52 @@ def test_a_network_output_ending_on_the_last_channel_keeps_the_udp_outputs(fppd,
         fppd.write("config/co-universes.json", cfg)
         fppd.settings(DisableFakeNetworkBridges="1")
     ddp_still_sends(fppd)
+
+
+@pytest.mark.parametrize("pin", [{"pin": "P9-99"}, {"gpio": 9999}], ids=["by-name", "by-number"])
+def test_disabling_a_gpio_output_on_a_missing_pin_takes_its_warning_down(fppd, pin):
+    """A GPIO output naming a pin this board doesn't have raises warning 51;
+    saving the output disabled takes the warning down.
+
+    Regression: 9806ee594. GPIOOutput::Init() raised "GPIO Pin '...' not found"
+    with a plain AddWarning() that nothing removed, so the banner outlived
+    the config that caused it until fppd restarted.
+    """
+    def gpio(enabled):
+        return {"channelOutputs": [dict({
+            "type": "GPIO", "enabled": enabled, "startChannel": 1, "channelCount": 1,
+            "invert": 0, "pwm": 0}, **pin)]}
+
+    fppd.write("config/co-other.json", gpio(1))
+    fppd.start()
+    fppd.wait_for(lambda: warning_ids(fppd, 51), timeout=10, what="the pin-not-found warning")
+    time.sleep(1.1)  # a save in a later second, as a person makes it
+    fppd.write("config/co-other.json", gpio(0))
+    fppd.wait_for(lambda: not warning_ids(fppd, 51), timeout=15, interval=0.5,
+                  what=f"the pin-not-found warning to come down (still: {warning_ids(fppd, 51)})")
+
+
+def test_fixing_a_dmx_output_wider_than_a_universe_takes_its_warning_down(fppd):
+    """A DMX-Pro output of 600 channels is cut to 512 with a warning; saving
+    it at 512 takes the warning down.
+
+    Regression: 9806ee594. The warning is raised from the output's
+    constructor with a plain AddWarning(), and the loader collected an
+    output's config warnings only around Init(), so it stayed up until fppd
+    restarted.
+    """
+    def dmx(count):
+        return {"channelOutputs": [{
+            "type": "DMX-Pro", "enabled": 1, "startChannel": 1, "channelCount": count,
+            "device": "ttyUSB99"}]}
+
+    def wide():
+        return [w for w in warnings(fppd) if "exceeds the DMX universe size" in w]
+
+    fppd.write("config/co-other.json", dmx(600))
+    fppd.start()
+    fppd.wait_for(wide, timeout=10, what="the channel-count warning")
+    time.sleep(1.1)  # a save in a later second, as a person makes it
+    fppd.write("config/co-other.json", dmx(512))
+    fppd.wait_for(lambda: not wide(), timeout=15, interval=0.5,
+                  what=f"the channel-count warning to come down (still: {wide()})")
