@@ -30,6 +30,10 @@ def test_an_hdmi_output_with_no_display_still_comes_up(fppd):
 
     Regression: 62ed3f548. A disconnected connector was skipped and its
     output never created.
+
+    Also guards c80ce6cc7: KMSFrameBuffer was built only where kms++'s
+    headers were installed, and current images have none, so the model fell
+    back to fbdev and warned that /dev/fb0 could not be opened.
     """
     empty_connector()
     fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [
