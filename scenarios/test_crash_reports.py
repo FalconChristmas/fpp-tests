@@ -291,3 +291,36 @@ def test_crash_report_drops_the_cape_serial_from_logs(fppd, tmp_path):
             f"{name} with the serial's line isn't in the report, so this proves nothing: {sorted(texts)}"
     leaks = sorted(n for n, t in texts.items() if "LEAK-sn" in t)
     assert not leaks, f"the cape serial ships in: {leaks}"
+
+
+def test_crash_report_checks_the_crashing_code_against_the_disk(fppd):
+    """The crash context carries the instruction bytes around the faulting
+    pc, and module_integrity.json says those bytes are what the file on disk
+    holds, that the packaged libraries fppd had mapped match what dpkg
+    installed, and gives a sha256 for the files no package owns.
+
+    Added in b6579e1d2. A SIGILL at an instruction that is valid in the
+    packaged library means the library was damaged on disk or replaced under
+    fppd, and a report could only show that by inference from the stack.
+    """
+    import re
+    crashes = os.path.join(fppd.media, "crashes")
+    os.makedirs(crashes, exist_ok=True)
+    run_crash_handler(fppd)
+    texts = report_texts(fppd, crashes)
+    context = next((t for n, t in texts.items() if n.endswith("fppd_crash_context.log")), "")
+    # Only the code section has lines of an address and sixteen hex bytes
+    code = re.findall(r"^0x[0-9a-f]+:((?: [0-9a-f]{2}){16})$", context, re.M)
+    assert len(code) == 2, f"no code bytes around pc in the crash context:\n{context[:1500]}"
+    name = next((n for n in texts if n.endswith("module_integrity.json")), None)
+    assert name, f"no module_integrity.json in the report: {sorted(texts)}"
+    integrity = json.loads(texts[name])
+    results = [c.get("result") for c in integrity["code_at_pc"]]
+    assert results == ["matches file", "matches file"], \
+        f"the code at pc was not checked against the disk: {integrity['code_at_pc']}"
+    assert integrity["summary"].get("ok", 0) > 0, \
+        f"no mapped library was checked against its package: {integrity['summary']}"
+    assert not integrity["differs_from_package"], integrity["differs_from_package"]
+    ours = [m for m in integrity["modules"] if m["path"].endswith("/libfpp.so")]
+    assert ours and re.fullmatch(r"[0-9a-f]{64}", ours[0].get("sha256", "")), \
+        f"libfpp.so has no sha256: {ours}"

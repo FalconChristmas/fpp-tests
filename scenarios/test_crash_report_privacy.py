@@ -8,6 +8,8 @@ Levels: 1 = stack traces only, 2 = and settings, 3 = and configuration and
 logs. "manual" is a report asked for with no crash (a Diagnostic Report)."""
 
 import base64
+import hashlib
+import json
 import os
 import random
 import subprocess
@@ -320,3 +322,34 @@ def test_no_media_is_zipped_when_the_working_directory_is_gone(fppd, tmp_path):
     media = sorted(n for n in texts if n.lstrip("./").startswith(("sequences/", "music/")))
     assert not media, f"the media directory was zipped into the report: {media}"
     assert r.returncode != 0, f"the script reported success:\n{r.stdout[-2000:]}"
+
+
+def test_plugin_binaries_are_hashed_and_upgrade_logs_ship_at_level_3(fppd):
+    """plugins.json gives the sha256 of each .so a plugin ships, at every
+    level and for a plugin with no git checkout (a prebuilt one); a level-3
+    crash report carries the upgrade and plugin-manager logs, redacted.
+
+    Added in b6579e1d2. A plugin's commit says which source it came from, not
+    which binary it runs, and a prebuilt plugin's binary comes from a release.
+    The upgrade and plugin-manager logs went only into manual reports, so a
+    crash after a failed upgrade said only that it had failed.
+    """
+    blob = random.Random(7).randbytes(4096)
+    fppd.write("plugins/fpp-prebuilt/libfpp-prebuilt.so", blob)
+    fppd.write("logs/fpp_system_upgrades.log",
+               "fpp-update START: v10.3\nmake: *** [fppd] Error 1\npassword=LEAK-upgrade\n")
+    fppd.write("logs/fpp_plugin_manager.log",
+               "install START: fpp-prebuilt\nlinker failed\ntoken=LEAK-plugin\n")
+    want = hashlib.sha256(blob).hexdigest()
+    for level in (1, 3):
+        r, texts = build_report(fppd, level)
+        built(r, texts)
+        plugins = json.loads(file_named(texts, "plugins.json"))["plugins"]
+        entry = next((p for p in plugins if p["name"] == "fpp-prebuilt"), {})
+        assert entry.get("libs") == {"libfpp-prebuilt.so": want}, \
+            f"level {level}: the plugin binary is not hashed: {entry}"
+    upgrades = file_named(texts, "fpp_system_upgrades.log")
+    manager = file_named(texts, "fpp_plugin_manager.log")
+    assert upgrades and "Error 1" in upgrades and manager and "linker failed" in manager, \
+        f"a level-3 crash report lacks the upgrade logs: {sorted(texts)}"
+    assert not leaks(texts), leaks(texts)
