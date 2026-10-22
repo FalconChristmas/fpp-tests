@@ -222,6 +222,16 @@ class Fppd:
     def cleanup(self):
         try:
             self.kill()
+            if self.proc is not None:
+                # fppd runs in a process group of its own (start_new_session),
+                # and anything it started that is still running -- a shell
+                # it left waiting on a slow pactl, say -- is still in it.
+                # Left alone, that would hold whatever it inherited (fppd's
+                # ports among them) into the next scenario.
+                try:
+                    os.killpg(self.proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
         finally:
             if self.proc is not None:
                 self.out.close()
