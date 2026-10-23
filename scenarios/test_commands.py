@@ -476,7 +476,9 @@ def test_run_script_refuses_a_path_outside_the_scripts_directory(fppd):
     so in a warning; a script in the scripts directory still runs.
 
     Regression: 2494f1e34. The name was appended to the scripts directory
-    and run (as root), so "../anything" ran any file on the box."""
+    and run (as root), so "../anything" ran any file on the box.
+    Also d10733a39: the warning raised here needs Warnings.h, which only
+    the precompiled header supplied (red on its parent with --nopch)."""
     escaped = os.path.join(fppd.media, "tmp", "escaped")
     ok = os.path.join(fppd.media, "tmp", "ok")
     for rel, marker in (("escape.sh", escaped), ("scripts/ok.sh", ok)):
