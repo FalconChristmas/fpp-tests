@@ -10,6 +10,7 @@ import time
 import pytest
 
 import shims
+from fppd import sanitizer
 from udp import Listener
 
 GENERIC_PORT = 5000
@@ -83,6 +84,49 @@ def test_generic_udp_survives_config_saves(fppd):
         fppd.write("config/co-other.json", generic_udp("c", enabled=0))
         rate = steady_rate(listener)
         assert rate == 0, f"a disabled GenericUDP output still sends {rate:.1f} packets/s"
+
+
+@pytest.mark.skipif(sanitizer() is not None,
+                    reason="needs a build without a sanitizer: ASan and TSan intercept "
+                           "dlopen(), so fppd finds its plugins only through "
+                           "LD_LIBRARY_PATH, which then finds their dependencies too")
+def test_generic_udp_loads_without_the_universes_output_loaded_first(fppd):
+    """A GenericUDP output that is the only output when fppd starts, with no
+    LD_LIBRARY_PATH (as systemd starts fppd on a player), still loads, and
+    once an E1.31 config is saved it sends.
+
+    Regression: 9d5a7708e. libfpp-co-GenericUDP.so links
+    libfpp-co-UDPOutput.so but had no RUNPATH of its own, and a dlopen()ed
+    library finds its dependencies only through its own RUNPATH, never
+    fppd's. It loaded only when the E1.31/DDP config had already pulled
+    UDPOutput into the process; on its own, dlopen failed ("Could not create
+    output type GenericUDP"), and saving an E1.31 config later did not bring
+    it back, since co-other.json is not reloaded. GenericUDP's packets go out
+    through the UDP output, so it only sends once there is one.
+
+    The harness puts the build directory on LD_LIBRARY_PATH, which hides
+    this, so the scenario clears it. That only works without a sanitizer:
+    an ASan fppd won't start without its directory there, and under TSan
+    the dlopen() interceptor stops fppd's own RUNPATH from finding even
+    libfpp-co-GenericUDP.so. So it runs in the debug, optimized and coverage
+    builds and skips in the ASan and TSan ones. Proved by reverting the fix
+    on master: the parent also fails the load check, but its GenericUDP could
+    not join a UDP output that came later (that is e2422ff8e).
+    """
+    with Listener(GENERIC_PORT) as listener:
+        fppd.write("config/co-other.json", generic_udp("alone"))
+        fppd.start(extra_env={"LD_LIBRARY_PATH": ""})
+        # fppd loads its outputs before its API answers, so any load
+        # failure is already a warning by now.
+        warnings = fppd.get("/fppd/status").get("warnings", [])
+        failed = [line for line in fppd.log().splitlines() if "Failed to load shlib" in line]
+        assert not any("Could not create output type GenericUDP" in w for w in warnings), \
+            f"GenericUDP did not load on its own: {warnings} {failed}"
+
+        start_test_mode(fppd)
+        fppd.write("config/co-universes.json", universes("added later"))
+        fppd.wait_for(lambda: listener.count_since(0) > 0, timeout=15,
+                      what="GenericUDP's first packet after the E1.31 config was saved")
 
 
 def test_controller_that_comes_up_late_gets_the_show(fppd):
