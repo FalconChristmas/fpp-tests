@@ -149,6 +149,27 @@ class Viewer:
             while self._frame():
                 pass
 
+    def closed_within(self, timeout):
+        """True once the server closes this connection (EOF or a reset),
+        reading and skipping whatever it sends until then; False if it is
+        still open after `timeout` seconds."""
+        deadline = time.monotonic() + timeout
+        while True:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                return False
+            if not select.select([self.s], [], [], min(left, 1))[0]:
+                continue
+            try:
+                chunk = self.s.recv(65536)
+            except (ConnectionResetError, BrokenPipeError):
+                return True
+            if not chunk:
+                return True
+            self.buf += chunk
+            while self._frame():
+                pass
+
     def vanish(self):
         """Go away as a killed app does: no TEARDOWN, the connection reset."""
         self.s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
@@ -374,3 +395,69 @@ def test_an_rtsp_session_whose_viewer_vanished_expires(fppd):
         dead.close()
         rtp.close()
         rtcp.close()
+
+
+@pytest.mark.parametrize("disabled", [False, True], ids=["reloaded", "disabled"])
+def test_rtsp_viewers_are_disconnected_when_the_server_stops(fppd, disabled):
+    """Two viewers are connected to the RTSP server: one has SET UP and is
+    PLAYing the stream over TCP (RTP is reaching it), the other has only
+    asked for OPTIONS. Then the RTSP outputs are reloaded
+    (reloadRTSPOutputs, as the UI sends when the config is saved), with the
+    config unchanged or with the output disabled. That stops the server,
+    and the server closes both viewers' connections within 30s. Reloaded,
+    the restarted server serves a new viewer the stream; disabled, nothing
+    accepts a connection on the port any more.
+
+    Regression: 95150b12b. Stopping the server quit its loop and dropped it
+    but left its clients and sessions alone: both viewers stayed connected
+    after the reload, the playing one still getting the old stream's RTP
+    and the idle one still answered, by a server that was meant to be gone.
+    (The checks after the disconnects passed before the fix too; they are
+    there so that closing the clients is not paid for with a server that
+    fails to restart or to let go of its port.)"""
+    from test_command_socket import send
+    needs_rtsp(fppd)
+    port = 18561
+    url = serve_one_mount(fppd, port, "/stop")
+    base = url.rsplit("/", 1)[0]
+    playing, idle = Viewer(port), Viewer(port)
+    try:
+        assert playing.setup(url) == 200
+        assert playing.request("PLAY", base, "Range: npt=0-")[0] == 200
+        fppd.wait_for(lambda: playing.drain() or playing.rtp > 0, timeout=30, interval=0.2,
+                      what="RTP on the playing viewer's connection")
+        assert idle.request("OPTIONS", base, session=False)[0] == 200
+
+        if disabled:
+            fppd.write("config/pipewire-rtsp-outputs.json", {"enabled": False, "port": port})
+        reply = send("reloadRTSPOutputs", timeout=30)
+        assert "RTSP outputs reloaded" in reply, reply
+        before = playing.rtp
+        assert playing.closed_within(30), \
+            ("the playing viewer is still connected 30s after the RTSP server stopped "
+             f"({playing.rtp - before} RTP packets reached it after the reload)")
+        assert idle.closed_within(30), \
+            "the idle viewer is still connected 30s after the RTSP server stopped"
+    finally:
+        playing.close()
+        idle.close()
+
+    if disabled:
+        assert fppd.get("/rtspoutput")["active"] is False
+        with pytest.raises(ConnectionRefusedError):
+            socket.create_connection(("127.0.0.1", port), timeout=10).close()
+        return
+    def offered():
+        try:
+            return "m=video" in describe(port, "/stop")[1]
+        except OSError:
+            return False
+    fppd.wait_for(offered, timeout=60, interval=0.5, what="an SDP from the restarted RTSP server")
+    fresh = Viewer(port)
+    try:
+        assert fresh.setup(url) == 200
+        assert fresh.request("PLAY", base, "Range: npt=0-")[0] == 200
+        fppd.wait_for(lambda: fresh.drain() or fresh.rtp > 0, timeout=30, interval=0.2,
+                      what="RTP from the restarted RTSP server")
+    finally:
+        fresh.close()
