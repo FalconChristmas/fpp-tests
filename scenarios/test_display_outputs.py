@@ -1,7 +1,9 @@
 """Virtual Matrix outputs and FB models on a fake framebuffer
-(framebuffer.py), and the HTTP Virtual Display's map: models re-created
-under an output, page counts, and map pixels outside the preview."""
+(framebuffer.py), and the HTTP Virtual Display's map and background
+image: models re-created under an output, page counts, map pixels outside
+the preview, and a background image GraphicsMagick fails on."""
 
+import json
 import os
 import time
 
@@ -116,3 +118,45 @@ def test_http_virtual_display_skips_a_pixel_with_no_position(fppd):
     msgs = sse_messages(3)
     assert any(m.startswith(want + ":") for m in msgs), f"no {want!r} pixel in {msgs[-3:]}"
     assert "lie outside the 100x100 preview and were skipped" in fppd.log()
+
+
+def test_http_virtual_display_skips_a_background_image_it_cannot_convert(fppd):
+    """A background image GraphicsMagick reads but then fails to convert
+    for the display is skipped with a log line; the display streams its
+    pixel and fppd lives.
+
+    Regression: 6ed6169b2. The exception handler only logged, and the copy
+    went ahead with what the failed conversion left: here a 300x300 scaled
+    image and a blob GraphicsMagick never filled (64 KiB, length 0),
+    which it read 360000 bytes out of: an ASan heap-buffer-overflow in
+    LoadBackgroundImage() as the output starts. GraphicsMagick's width
+    limit (MAGICK_LIMIT_WIDTH; fppd sets only the pixel limit itself) is
+    what fails the conversion: the 100x100 image reads under it, and the
+    scale up to fit the 400x300 preview goes over it. A truncated or
+    corrupt image, the other case the fix is about, makes GraphicsMagick
+    (as Debian 13 ships it) return no image at all, which the old copy
+    already survived, so it can't show the fix.
+    """
+    from test_output_config import virtual_display as http_display
+    name = f"fpp-tests-bg-{os.getpid()}-{time.monotonic_ns()}.ppm"
+    path = os.path.join("/home/fpp/media/images", name)  # LoadBackgroundImage's fixed dir
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    pix = bytes(v for y in range(100) for x in range(100) for v in (x * 2, y * 2, 128))
+    with open(path, "wb") as f:
+        f.write(b"P6\n100 100\n255\n" + pix)
+    try:
+        http_display(fppd, ["400,300", "2,2,0,3,RGB"], 3)
+        with open(os.path.join(fppd.media, "config/co-other.json")) as f:
+            co = json.load(f)
+        co["channelOutputs"][0]["backgroundFilename"] = name
+        fppd.write("config/co-other.json", co)
+        fppd.start(extra_env={"MAGICK_LIMIT_WIDTH": "200"})
+        wait_for_display(fppd)
+        assert f"GraphicsMagick exception reading {path}" in fppd.log(), \
+            "the background image did not fail to convert, so this tested nothing"
+        fppd.request("PUT", "/overlays/range/1-3", {"Value": 200})
+        want = B64[200 >> 2] * 3
+        msgs = sse_messages(3)
+        assert any(m.startswith(want + ":") for m in msgs), f"no {want!r} pixel in {msgs[-3:]}"
+    finally:
+        os.remove(path)
