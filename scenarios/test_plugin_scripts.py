@@ -528,9 +528,9 @@ def test_shutdown_waits_for_a_playlist_callback_on_a_command_thread(fppd):
 
     Other threads that run playlist callbacks: an HTTP request's is drained
     when the API server stops, before Cleanup(); an MQTT message's is the
-    case of the next test (a callback ending inside the wait on mosquitto's
-    thread trips a separate race in the MQTT client's own shutdown, so that
-    case is not run there)."""
+    case of the next test, and of
+    test_shutdown_while_mqtts_thread_finishes_a_playlist_callback_inside_the_wait
+    for one that ends inside the wait."""
     from test_scheduler import window
     d = slow_stop_plugin(fppd, 3.5)
     fppd.write("playlists/P.json", playlist("P", main=[pause(60)]))
@@ -597,5 +597,44 @@ def test_shutdown_leaves_a_plugin_whose_playlist_callback_outlasts_the_wait(fppd
         f"the plugin was destroyed while its stop callback was still running: {after}"
     assert LEFT_ALIVE in fppd.log(), fppd.tail()
     assert took < 10, f"shutdown took {took:.1f} s: it waited on the 15 s callback"
+    assert rc == 0, f"fppd exited {rc} when stopped mid-callback\n{fppd.tail()}"
+    assert not fppd.sanitizer_reports(), fppd.sanitizer_reports()[0][:4000]
+
+
+def test_shutdown_while_mqtts_thread_finishes_a_playlist_callback_inside_the_wait(fppd):
+    """fppd stopped (SIGTERM) while a script plugin's 1.5 s playlist "stop"
+    callback -- a stop that came in over MQTT, so on the MQTT client's
+    network thread -- is running exits 0 with no sanitizer report. The
+    callback ends inside PluginManager::Cleanup()'s 2 s wait, and the
+    network thread goes from that message straight into the disconnect the
+    MQTT client's destructor queued, so it is busy, not waiting in select,
+    when the destructor stops it.
+
+    Regression: f88bf9826. The MQTT client stopped libmosquitto's own
+    thread with mosquitto_loop_stop(), which joins only while libmosquitto
+    still sees that thread running; the thread clears that itself on the way
+    out, and when it got there first loop_stop returned MOSQ_ERR_INVAL and
+    joined nothing, so mosquitto_destroy() freed the client under the
+    exiting thread (under TSan, pthread_mutex_destroy racing its last locks:
+    fppd exited 66)."""
+    from test_mqtt_control import HOST, PORT, broker, publish
+    d = slow_stop_plugin(fppd, 1.5)
+    fppd.write("playlists/P.json", playlist("P", main=[pause(60)]))
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    with broker():
+        fppd.start()
+        fppd.wait_for(lambda: "lifecycle startup" in events(d), timeout=10, what="startup")
+        time.sleep(2)  # connected and subscribed
+        fppd.command("Start Playlist", "P", "false", "false", timeout=30)
+        fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "playing",
+                      timeout=20, what="the playlist to start")
+        n = len(events(d))
+        publish("set/playlist/P/stop/now")
+        fppd.wait_for(lambda: any('"stop"' in l for l in events(d)[n:]), timeout=10,
+                      interval=0.02, what="the plugin's stop callback to start")
+        rc = fppd.stop(timeout=60)
+        fppd.exit_expected = True
+    after = events(d)[n:]
+    assert "stop callback done" in after, after
     assert rc == 0, f"fppd exited {rc} when stopped mid-callback\n{fppd.tail()}"
     assert not fppd.sanitizer_reports(), fppd.sanitizer_reports()[0][:4000]
