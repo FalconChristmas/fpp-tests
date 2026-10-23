@@ -622,7 +622,7 @@ test('Checked checkbox survives auto-refresh', async ({ page }) => {
 });
 
 test('A checked row stays checked when a filter is typed', async ({ page }) => {
-    // Regression: 8f21c2e0d.  The filter-control extension re-renders the
+    // Regression: 4e013a0c2.  The filter-control extension re-renders the
     // table itself, 500 ms after a filter keystroke (and after every table
     // load), without going through safeInitBody(), which was the only render
     // that kept the row checkboxes.  Checking rows and then narrowing the list
