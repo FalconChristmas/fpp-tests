@@ -163,12 +163,15 @@ def test_media_details_are_cleared_for_each_entry(fppd, audio):
     """A plugin's media callback for each media entry of a playlist carries
     that entry's own details, never the entry before's:
 
-    - Song.wav, 4 s, which TagLib reads: length 4, 48000 Hz, mono.
+    - Song.wav, 4 s, which TagLib reads: length 4, seconds 4, 48000 Hz,
+      mono.
     - Missing.wav, a file that isn't there, played next: no details at all.
     - Tone.au, 2 s, a Sun audio file fppd plays but TagLib cannot open,
       with a duration of 2.0 s in config/media_durations.cache (what the
       file manager's ffprobe leaves there): length 2 and seconds 2 from
-      the cache, and nothing else.
+      the cache, and nothing else. While it plays, fppd's status counts
+      down from its own 2 s: elapsed plus remaining is 1 or 2 s (each is
+      whole seconds, rounded down), and time_remaining says the same.
 
     Regression: 1a98c6014. ParseMedia() returned before clearing the shared
     details when the file was missing, so the plugin got Song.wav's length,
@@ -178,9 +181,16 @@ def test_media_details_are_cleared_for_each_entry(fppd, audio):
     length was reported. The same uncleared field, on a fresh object, gave
     a media entry's duration and time remaining stack garbage; that is not
     checked, as what the stack holds varies (it was harmless in the runs
-    tried). Time remaining is left out
-    for another reason too: after Song.wav, Tone.au reports Song.wav's
-    length on master (PROBLEMS.md 25).
+    tried).
+
+    Regression: be1f0c19c. ParseMedia() worked out
+    seconds and minutes into locals that shadowed the members, so for a
+    file TagLib reads they stayed at 0 and the plugin got no "seconds".
+
+    Regression: 560224349. The media entry took the
+    slot's media position as a lower bound for its length, and nothing
+    reset it between entries, so Tone.au took Song.wav's 4 s end position
+    as its length: 3 or 4 s for elapsed plus remaining.
     """
     d = plugin(fppd, types="media")
     write_tone_wav(os.path.join(fppd.media, "music", "Song.wav"), 4)
@@ -194,18 +204,35 @@ def test_media_details_are_cleared_for_each_entry(fppd, audio):
     fppd.command("Start Playlist", "Songs", "false", "false")
     fppd.wait_for(lambda: len(media_callbacks(d)) >= 3, timeout=20, interval=0.1,
                   what="the media callback for Tone.au")
-    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=20,
-                  interval=0.1, what="the playlist to end")
+    # Tone.au's status, sampled until the playlist ends.
+    playing = []
+
+    def ended():
+        st = status(fppd)
+        if st.get("status_name") == "playing" and st.get("current_song") == "Tone.au":
+            playing.append(st)
+        return st.get("status_name") == "idle"
+
+    fppd.wait_for(ended, timeout=20, interval=0.1, what="the playlist to end")
     calls = media_callbacks(d)
     assert [c.get("Media") for c in calls] == ["Song.wav", "Missing.wav", "Tone.au"], calls
     song, missing, tone = calls
-    # Not "seconds": ParseMedia() never sets it for a file TagLib reads
-    # (PROBLEMS.md 24), so the plugin gets none.
-    assert (song.get("length"), song.get("sampleRate"), song.get("channels")) \
-        == ("4", "48000", "1"), song
+    # No "minutes": the plugin is only given the fields that aren't 0.
+    assert (song.get("length"), song.get("seconds"), song.get("minutes"),
+            song.get("sampleRate"), song.get("channels")) \
+        == ("4", "4", None, "48000", "1"), song
     assert missing == {"type": "media", "Sequence": "", "Media": "Missing.wav"}, missing
     assert tone == {"type": "media", "Sequence": "", "Media": "Tone.au",
                     "length": "2", "seconds": "2"}, tone
+    assert playing, "no status while Tone.au played"
+    # 0 + 0 before the length is known; Song.wav's stale 4 s gives 3 or 4.
+    totals = []
+    for st in playing:
+        elapsed, remaining = int(st["seconds_played"]), int(st["seconds_remaining"])
+        totals.append(elapsed + remaining)
+        assert elapsed + remaining in (0, 1, 2), (elapsed, remaining, st.get("time_remaining"))
+        assert st.get("time_remaining") == f"00:{remaining:02d}", st.get("time_remaining")
+    assert any(totals), f"Tone.au never showed its length: {totals}"
 
 
 def write_fragmented_m4a(path, seconds):
