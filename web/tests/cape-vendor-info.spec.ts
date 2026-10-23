@@ -193,9 +193,11 @@ test('the cape/firmware mismatch is read from its own lines, whatever comes befo
 // parser closes an open <a> at the end of its table cell, so the page that
 // results is the same either way and there is nothing a browser can tell.
 //
-// The capes here have no description: Cape Info still prints a cape's
-// description as markup when the cape names a vendor, on master as well
-// (PROBLEMS.md #22).
+// The description sits in the table beside the vendor block and was missed:
+// Cape Info printed it as markup whenever the cape named a vendor (or was
+// called "Unknown"), and escaped it otherwise.  Fixed separately
+// (9ab8c9e9f); the Cape Info test below carries a description payload,
+// so it fails on 9d00d30ad itself and passes with that fix.
 
 const SETTINGS = '/home/fpp/media/settings';
 const SAVED = '/tmp/fpp-tests-cape-vendor-settings.saved';
@@ -306,6 +308,8 @@ test.describe('cape vendor URLs from a crafted EEPROM', () => {
   }
 
   test('Cape Info shows what the EEPROM says about the vendor as text', async ({ page, request }) => {
+    // Regression: 9ab8c9e9f for the description, beside the vendor block.
+    const description = `<img src=x onerror=${run('description')}><b id="fpp-tests-description">d</b>`;
     const vendor = {
       name: `<img src=x onerror=${run('name')}>`,
       url: `${VENDOR}/?"><img src=x onerror=${run('url')}>`,
@@ -315,13 +319,16 @@ test.describe('cape vendor URLs from a crafted EEPROM', () => {
       forum: `${VENDOR}/forum?x="><img src=x onerror=${run('forum')}>`,
       image: `${VENDOR}/logo.png?x="><img src=x onerror=${run('image')}>`,
     };
-    writeCapeInfo({ ...BASE, vendor });
+    writeCapeInfo({ ...BASE, description, vendor });
     await privacy(request, 1, 0);
     const asked = await vendorHost(page);
     // An <img>'s error event comes before the page's load event.
     await load(page, '/cape-info.php', asked);
     await expect(page.locator('#eeprom-about .aboutRight')).toHaveCount(1);
     expect(await ran(page), 'vendor fields ran as markup').toEqual([]);
+    await expect(page.locator('#fpp-tests-description')).toHaveCount(0);
+    // The control: the description is on the page, whole, as text.
+    await expect(page.locator('#eeprom-about .aboutLeft td[colspan="2"]')).toHaveText(description);
 
     // The control: each field is on the page, whole, where it belongs.
     await expect(vendorRow(page, 'Vendor Name').locator('td').nth(1)).toHaveText(vendor.name);
