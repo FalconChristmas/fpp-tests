@@ -15,6 +15,9 @@ flock -s 8
 # once, and each build sizes -j to the whole VM's memory.
 exec 9> "$(dirname "$TREE")/.build.lock"
 flock 9
+# A build that fails exits 10, which run.sh and run-web.sh pass on: outside
+# pytest's 0-5, so verify-fix.sh can tell a tree that never built from a test
+# that failed.
 # FPP_TESTS_NOPCH (run.sh --nopch): "require" makes the build without the
 # precompiled header the only one -- if a file doesn't include what it uses,
 # the build fails. Anything else falls back to a PCH build when that one fails
@@ -88,7 +91,7 @@ if ! eval make -j"$JOBS" DISTRIBUTED_COMPILE=1 $TARGET > "$TREE/build.log" 2>&1;
         grep -E "error|Error" "$TREE/build.log" | tail -40
         echo "NOPCH build failed (FPP_TESTS_NOPCH=require, so no fallback to the" \
             "precompiled header); full log in $TREE/build.log" >&2
-        exit 1
+        exit 10
     fi
     echo "NOPCH build failed, retrying with the precompiled header (pass --nopch to" \
         "fail here instead):" >&2
@@ -97,7 +100,7 @@ if ! eval make -j"$JOBS" DISTRIBUTED_COMPILE=1 $TARGET > "$TREE/build.log" 2>&1;
     if ! eval make -j"$JOBS" $TARGET >> "$TREE/build.log" 2>&1; then
         grep -E "error|Error" "$TREE/build.log" | tail -40
         echo "build failed; full log in $TREE/build.log" >&2
-        exit 1
+        exit 10
     fi
 fi
 printf '%s' "$PCHMODE" > .fpp-tests-pch

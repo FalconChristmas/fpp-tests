@@ -92,7 +92,7 @@ trap 'exit 130' INT TERM
 # The container runs as root; what it leaves in artifacts/ is handed back to
 # the caller (HOST_OWNER) when it finishes.
 INNER='exec 8< "$FPP_TREE" && flock -s 8 || exit 1
-    /tests/scripts/build-fpp.sh "$FPP_TREE" "$FPP_FLAVOR" || exit 1
+    /tests/scripts/build-fpp.sh "$FPP_TREE" "$FPP_FLAVOR" || exit $?
     cd /tests || exit 1
     junit="$1"; report="$2"; shift 2
     if [ $# -eq 0 ]; then set -- scenarios; fi
