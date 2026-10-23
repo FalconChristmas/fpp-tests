@@ -106,12 +106,13 @@ def test_generic_udp_loads_without_the_universes_output_loaded_first(fppd):
 
     The harness puts the build directory on LD_LIBRARY_PATH, which hides
     this, so the scenario clears it. That only works without a sanitizer:
-    an ASan fppd won't start without its directory there, and under TSan
-    the dlopen() interceptor stops fppd's own RUNPATH from finding even
-    libfpp-co-GenericUDP.so. So it runs in the debug, optimized and coverage
-    builds and skips in the ASan and TSan ones. Proved by reverting the fix
-    on master: the parent also fails the load check, but its GenericUDP could
-    not join a UDP output that came later (that is e2422ff8e).
+    an ASan or TSan fppd won't start without its directory there, since
+    their dlopen() interceptor stops fppd's own RUNPATH from finding even
+    libfpp-co-GenericUDP.so (test_startup.py checks that refusal). So it
+    runs in the debug, optimized and coverage builds and skips in the ASan
+    and TSan ones. Proved by reverting the fix on master: the parent also
+    fails the load check, but its GenericUDP could not join a UDP output that
+    came later (that is e2422ff8e).
     """
     with Listener(GENERIC_PORT) as listener:
         fppd.write("config/co-other.json", generic_udp("alone"))

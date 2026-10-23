@@ -91,3 +91,34 @@ def test_failed_startup_after_media_init_exits(fppd):
         assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
     finally:
         shutil.rmtree(server, ignore_errors=True)
+
+
+def test_a_sanitizer_build_refuses_to_start_without_its_library_path(fppd):
+    """An ASan or TSan fppd started with no LD_LIBRARY_PATH (as systemd starts
+    fppd) exits 1 at once, saying LD_LIBRARY_PATH must include fppd's
+    directory, rather than coming up with every output plugin missing.
+
+    Both sanitizers intercept dlopen(), which makes their runtime the caller,
+    so fppd's RUNPATH no longer finds the libfpp-co-*.so it opens by name.
+
+    Regression: 265cd5c50. The check was ASan's only: a TSan fppd started
+    and failed every output ("Failed to load shlib: libfpp-co-GenericUDP.so:
+    cannot open shared object file", "Could not create output type ...").
+    Builds without a sanitizer skip it."""
+    import pytest
+
+    from fppd import FppdDied, sanitizer
+
+    if sanitizer() not in ("asan", "tsan"):
+        pytest.skip("only ASan and TSan builds need LD_LIBRARY_PATH")
+    try:
+        fppd.start(timeout=30, extra_env={"LD_LIBRARY_PATH": ""})
+    except FppdDied:
+        pass
+    else:
+        raise AssertionError("fppd started with no LD_LIBRARY_PATH\n" + fppd.tail())
+    fppd.exit_expected = True
+    assert fppd.proc.returncode == 1, fppd.tail()
+    with open(os.path.join(fppd.media, "logs", "fppd.stdout"), errors="replace") as f:
+        out = f.read()
+    assert "LD_LIBRARY_PATH must be set to include the path to fppd" in out, fppd.tail()
