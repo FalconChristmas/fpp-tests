@@ -298,3 +298,82 @@ def test_rgb_strings_on_a_four_byte_model_keep_its_pixel_stride(fppd):
              for i in range(0, cells, 4) if got[i:i + 4] != want[i:i + 4]]
     assert not wrong, ("pixels out of place (row,pixel got != want): "
                        + "; ".join(f"{r},{p} {g} != {w}" for r, p, g, w in wrong[:8]))
+
+
+def test_a_zigzag_folds_only_its_own_virtual_string(fppd):
+    """A zigzag setting folds only the virtual string it is set on, counted
+    from that string's own first pixel.
+
+    Port 0 carries a 7-pixel string (no zigzag) and then a 10-pixel string
+    with zigzag 4; port 1 carries 2 null nodes and then the same 10-pixel
+    zigzag string. Read back from the model, row 0 holds the first string's
+    7 pixels in order, then the second string with only its pixels 4-7
+    reversed; row 1 holds 2 dark pixels and then the same fold. Input
+    channel n carries the value n, so a pixel out of place shows.
+
+    Regression: 5e4cafd23. The fold was counted from the start of the port,
+    not of the string, so the second string's zigzag reversed pixels 4-6 of
+    the first string (with its own first pixel), and the folds of both
+    zigzag strings were shifted by whatever came before them on the port.
+    """
+    model(fppd)
+    zig = dict(start=30, pixels=10, zigZag=4)
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "ModelPixelStrings", "enabled": 1, "startChannel": 1, "channelCount": 240,
+        "description": "zigzag", "modelName": MODEL,
+        "outputs": [
+            {"portNumber": 0, "protocol": "ws2811",
+             "virtualStrings": [vstring(start=0, pixels=7), vstring(**zig)]},
+            {"portNumber": 1, "protocol": "ws2811",
+             "virtualStrings": [vstring(nullNodes=2, **zig)]}]}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: "Calling Init() on ModelPixelStrings output" in fppd.log(),
+                  timeout=10, what="the ModelPixelStrings output to load")
+    for ch in range(1, 61):
+        set_range(fppd, ch, ch, ch)
+
+    def settled():
+        # The ranges went in 1 to 60 and every frame lays all of them at
+        # once, so once 60 shows (wherever it lands) they all have.
+        d = fppd.get(f"/overlays/model/{MODEL}/data").get("data") or []
+        return d if 60 in d else None
+
+    got = fppd.wait_for(settled, timeout=10, what="the last channel set to reach the model")
+    cells = WIDTH * HEIGHT * 3
+    assert len(got) == cells, f"read back {len(got)} bytes, want {cells}"
+
+    # rows[r][p]: the 1-based input channel of that pixel's R, or 0 if dark
+    folded = [31 + 3 * q for q in (0, 1, 2, 3, 7, 6, 5, 4, 8, 9)]
+    rows = [[3 * p + 1 for p in range(7)] + folded, [0, 0] + folded]
+    want = [0] * cells
+    for r, row in enumerate(rows):
+        for p, red in enumerate(row):
+            at = (r * WIDTH + p) * 3
+            want[at:at + 3] = [red, red + 1, red + 2] if red else [0, 0, 0]
+    wrong = [(i // 3 // WIDTH, i // 3 % WIDTH, got[i:i + 3], want[i:i + 3])
+             for i in range(0, cells, 3) if got[i:i + 3] != want[i:i + 3]]
+    assert not wrong, ("pixels out of place (row,pixel got != want): "
+                       + "; ".join(f"{r},{p} {g} != {w}" for r, p, g, w in wrong[:10]))
+
+
+def test_a_reversed_single_colour_string_loads_without_reading_past_its_map(fppd):
+    """A reversed 10-pixel single colour string ("W", one channel a node),
+    the last on its port, loads without reading past its channel map, and
+    fppd lives. (The output then refuses the string as not 8 bit RGB, so
+    its order can't be read back here; the map is built before that.)
+
+    Regression: 5e4cafd23. FlipPixels() swapped three channels a node
+    whatever the node's width, so reversing a one-channel string swapped
+    the last node and the two entries after it, past the end of
+    m_outputMap: a heap-buffer-overflow at startup under ASan. (TSan does
+    not see it.) At 5e4cafd23 itself the output still took the string and
+    then over-read it in PrepData(), which 3710f07ca stopped, so this is
+    shown red by reverting FlipPixels() alone on master.
+    """
+    model(fppd)
+    fppd.write("config/co-other.json", mps([vstring(order="W", pixels=10, reverse=1)]))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: warned(fppd, "not 8 bit RGB"), timeout=10,
+                  what="the not-8-bit-RGB warning, after the string's map is built")
