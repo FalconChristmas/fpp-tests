@@ -1,7 +1,8 @@
 """Media through the PipeWire backend, heard on the audio fixture's null
 sink: what the status says about media outside a playlist, what a media
-start logs, a slot played twice, the persistent output stream kept open or
-closed, and a sequence held back until its media sounds."""
+start logs, a slot played twice (and the new stream's length kept), the
+persistent output stream kept open or closed, and a sequence held back
+until its media sounds."""
 
 import os
 import signal
@@ -91,6 +92,41 @@ def test_play_media_again_on_a_slot_replaces_what_it_played(fppd, audio):
         if heard >= 0.1:
             fppd.command("Stop All Media", timeout=10)
         assert heard < 0.1, f"round {rnd}: {heard:.2f} s still sounding after Stop Media Slot"
+
+
+def test_a_replaced_streams_teardown_leaves_the_new_streams_duration(fppd, audio):
+    """Play Media on a slot that is still playing replaces its stream, and
+    Media Slot Status, read as soon as the command answers, gives the new
+    file's length (1:15), round after round.
+
+    Regression: 1a862f9e6. The old stream's Close() runs on the main loop a
+    moment after its Stop(), while the new stream's Start() is under way on
+    the command's thread. Start() writes the slot's duration from the file
+    early and registers as the slot's output only at its end, so the old
+    Close() found nobody on the slot and wiped its status: the new stream
+    read "playing" with a length of 0:00 until its first position came in
+    (TSan also reported the two writes racing)."""
+    write_tone_wav(os.path.join(fppd.media, "music", "A.wav"), 15, freq=500)
+    write_tone_wav(os.path.join(fppd.media, "music", "B.wav"), 75, freq=1500)
+    fppd.start()
+    wiped = []
+    for rnd in range(12):
+        fppd.command("Play Media", "A.wav", "1", "0", "2", timeout=15)
+        fppd.wait_for(lambda: (slot_status(fppd, 2) or {}).get("mediaFilename", "").endswith("A.wav"),
+                      timeout=10, what=f"round {rnd}: slot 2 to play A.wav")
+        time.sleep(0.3)
+        fppd.command("Play Media", "B.wav", "1", "0", "2", timeout=15)
+        s = slot_status(fppd, 2) or {}
+        assert s.get("status") == "playing" and s.get("mediaFilename", "").endswith("B.wav"), \
+            f"round {rnd}: slot 2 after the second Play Media: {s}"
+        total = s.get("minutesTotal", 0) * 60 + s.get("secondsTotal", 0)
+        if not 74 <= total <= 75:
+            wiped.append((rnd, s.get("minutesTotal"), s.get("secondsTotal")))
+        fppd.command("Stop Media Slot", "2", timeout=10)
+        fppd.wait_for(lambda: (slot_status(fppd, 2) or {}).get("status") == "idle",
+                      timeout=10, what=f"round {rnd}: slot 2 to stop")
+    assert not wiped, \
+        f"the new stream's length (1:15) was gone (round, minutes, seconds): {wiped}"
 
 
 def test_keep_audio_output_open(fppd, audio):
