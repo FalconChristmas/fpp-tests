@@ -248,3 +248,53 @@ def test_strings_still_draw_after_the_model_is_recreated(fppd):
         time.sleep(3)
         fppd.wait_for(lambda: row0_lit(cap), timeout=10, interval=0.2,
                       what="the strings on the panel after the save")
+
+
+def test_rgb_strings_on_a_four_byte_model_keep_its_pixel_stride(fppd):
+    """Two 10-pixel RGB strings drawing into a model of four channels a
+    node (an RGBW model, four bytes a pixel) put each string pixel in its
+    own model pixel. Read back, row s pixel p holds that pixel's R, G and
+    B in its first three bytes and 0 in its fourth, and every other pixel
+    is 0. Input channel n carries the value n, so a pixel out of place
+    shows.
+
+    Regression: cb3f6e987. PrepData() packed each row at three bytes a
+    pixel, with a row stride of width * 3, whatever the model's layout, so
+    the model read the string's bytes four at a time: pixel 0 came out as
+    R0 G0 B0 R1, and the second string landed part way along row 0.
+    """
+    cells = WIDTH * HEIGHT * 4
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [{
+        "Name": MODEL, "Type": "Channel", "StartChannel": MODEL_START,
+        "ChannelCount": cells, "ChannelCountPerNode": 4,
+        "Orientation": "horizontal", "StartCorner": "TL",
+        "StringCount": HEIGHT, "StrandsPerString": 1}]})
+    fppd.write("config/co-other.json", mps([vstring(start=0, pixels=10),
+                                            vstring(start=30, pixels=10)]))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: "Calling Init() on ModelPixelStrings output" in fppd.log(),
+                  timeout=10, what="the ModelPixelStrings output to load")
+    for ch in range(1, 61):
+        set_range(fppd, ch, ch, ch)
+
+    def settled():
+        # The ranges went in 1 to 60, and each frame is laid from all the
+        # channels at once, so once 60 shows (wherever it lands) they all have.
+        d = fppd.get(f"/overlays/model/{MODEL}/data").get("data") or []
+        return d if 60 in d else None
+
+    got = fppd.wait_for(settled, timeout=10, what="the last channel set to reach the model")
+    # width * height * 4: the model really is four bytes a pixel
+    assert len(got) == cells, f"read back {len(got)} bytes, want {cells}"
+
+    want = [0] * cells
+    for s in range(2):
+        for p in range(10):
+            red = 30 * s + 3 * p + 1  # the 1-based channel of the pixel's R
+            at = (s * WIDTH + p) * 4
+            want[at:at + 3] = [red, red + 1, red + 2]
+    wrong = [(i // 4 // WIDTH, i // 4 % WIDTH, got[i:i + 4], want[i:i + 4])
+             for i in range(0, cells, 4) if got[i:i + 4] != want[i:i + 4]]
+    assert not wrong, ("pixels out of place (row,pixel got != want): "
+                       + "; ".join(f"{r},{p} {g} != {w}" for r, p, g, w in wrong[:8]))
