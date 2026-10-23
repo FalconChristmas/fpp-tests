@@ -289,6 +289,48 @@ def test_brightness_with_a_blank_or_bad_value(fppd, what):
     assert expected in warnings, f"no warning {expected!r}; warnings: {warnings}"
 
 
+FOLD_BAD_START = {
+    "source 0 by channel": {"source": 0, "count": 30, "node": 0},
+    "source 0 by RGB pixel": {"source": 0, "count": 30, "node": 1},
+    "negative source": {"source": -5, "count": 30, "node": 0},
+}
+
+
+@pytest.mark.parametrize("what", list(FOLD_BAD_START))
+def test_fold_with_a_start_before_channel_1(fppd, what):
+    """A Fold whose start channel is 0 or negative is switched off with a
+    warning naming that start: the whole frame reaches the wire as the
+    sequence has it, and a processor after it still applies.
+
+    Regression: cc321b2d1. The 1-based start had 1 taken off unchecked, so
+    a start of 0 folded the span from one channel before the sequence
+    buffer: channels 1-29 went out folded around a byte that is not in the
+    buffer (channel 1 carried channel 2's value, and so on), and a negative
+    start read and wrote further before it. No warning was raised. ASan
+    sees none of this, because the buffer is mmap()ed and has no redzone.
+    Since 8173f97c7 the chain's range check refuses such a Fold too, with
+    a different warning, so with this fix reverted on master the frame is
+    right and only the warning is missing.
+    """
+    fold = proc("Fold", **FOLD_BAD_START[what])
+    marker = proc("Set Value", start=150, count=1, value=7)
+    with DdpReceiver(CHANNELS) as rx:
+        frames = run(fppd, [fold, marker])
+        want = frames[0][:149] + b"\x07"
+        # The marker is set on the blank frames before the sequence's data is
+        # in, too, so also wait for channels 31-149, which no Fold here can
+        # reach, to hold the sequence's values.
+        got = latest(fppd, rx, lambda f: f[149] == 7 and f[30:149] == want[30:149],
+                     "the sequence through the processor after the Fold")
+        diff = [(i + 1, frames[0][i], want[i], got[i]) for i in range(CHANNELS) if want[i] != got[i]]
+        assert not diff, f"{what}: channel (in, expected, got): {diff[:12]}"
+    expected = ("Fold output processor has an invalid start channel (%d), disabling it"
+                % FOLD_BAD_START[what]["source"])
+    # Raised when the processor is built, before the first frame goes out.
+    warnings = fppd.get("/fppd/status").get("warnings", [])
+    assert expected in warnings, f"no warning {expected!r}; warnings: {warnings}"
+
+
 def test_reload_never_drops_the_chain(fppd):
     """A brightness limit stays on through reloads of outputprocessors.json:
     a file caught half-written keeps the running chain, and rewriting the
