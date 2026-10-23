@@ -490,3 +490,112 @@ def test_load_route_refuses_a_dot_name(fppd, name):
     time.sleep(1)
     assert not os.path.exists(ran), f"loading plugin {name!r} ran a callbacks script"
     assert code == 400, f"loading plugin {name!r} answered {code}"
+
+
+def slow_stop_plugin(fppd, seconds):
+    """A script plugin (playlist and lifecycle events) whose playlist "stop"
+    callback takes `seconds` and then logs "stop callback done"; returns its
+    directory."""
+    d = plugin(fppd, types="playlist,lifecycle")
+    with open(os.path.join(d, "callbacks.sh"), "w") as f:
+        f.write(CALLBACKS.replace("LIST_DELAY", ":").replace("LIST", "playlist,lifecycle")
+                .replace('echo "$*" >> "$LOG"',
+                         'echo "$*" >> "$LOG"; case "$*" in *\\"stop\\"*) sleep %s; '
+                         'echo "stop callback done" >> "$LOG";; esac' % seconds))
+    return d
+
+
+LEFT_ALIVE = "Plugin fpp-test is still in a playlist callback at shutdown; leaving it"
+
+
+def test_shutdown_waits_for_a_playlist_callback_on_a_command_thread(fppd):
+    """fppd stopped (SIGTERM) while a scheduled "Stop Now" -- run on the
+    scheduler's own command thread, not the main loop -- is inside a script
+    plugin's 3.5 s playlist "stop" callback waits for the callback before it
+    destroys the plugin, and exits 0 with no sanitizer report: the plugin's
+    "lifecycle shutdown" event, which its destructor sends, comes after the
+    callback's last line, and no plugin is reported left behind.
+
+    Shutdown first waits up to 2 s for scheduled commands
+    (Scheduler::WaitForCommandThreads), which this one outlasts; the rest
+    of the callback (about 1.4 s) ends inside PluginManager::Cleanup()'s own
+    2 s wait.
+
+    Regression: 2867c832e. Cleanup() deleted every plugin at once, without
+    waiting for the playlist callbacks in flight: the plugin's "lifecycle
+    shutdown" came while its stop callback was still in its script, and
+    under TSan the delete raced the call.
+
+    Other threads that run playlist callbacks: an HTTP request's is drained
+    when the API server stops, before Cleanup(); an MQTT message's is the
+    case of the next test (a callback ending inside the wait on mosquitto's
+    thread trips a separate race in the MQTT client's own shutdown, so that
+    case is not run there)."""
+    from test_scheduler import window
+    d = slow_stop_plugin(fppd, 3.5)
+    fppd.write("playlists/P.json", playlist("P", main=[pause(60)]))
+    when, _ = window(8, 9)
+    today = when.strftime("%Y-%m-%d")
+    fppd.write("config/schedule.json", [{
+        "enabled": 1, "day": 7, "playlist": "", "command": "Stop Now", "args": [],
+        "multisyncCommand": False, "multisyncHosts": "",
+        "startTime": when.strftime("%H:%M:%S"), "endTime": when.strftime("%H:%M:%S"),
+        "startDate": today, "endDate": today, "repeat": 0, "stopType": 0}])
+    fppd.start()
+    fppd.wait_for(lambda: "lifecycle startup" in events(d), timeout=10, what="startup")
+    fppd.command("Start Playlist", "P", "false", "false", timeout=30)
+    fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "playing",
+                  timeout=20, what="the playlist to start")
+    n = len(events(d))
+    fppd.wait_for(lambda: any('"stop"' in l for l in events(d)[n:]), timeout=30,
+                  interval=0.02, what="the scheduled stop's plugin callback to start")
+    rc = fppd.stop(timeout=60)
+    fppd.exit_expected = True
+    after = events(d)[n:]
+    assert "stop callback done" in after and "lifecycle shutdown" in after, after
+    assert after.index("stop callback done") < after.index("lifecycle shutdown"), \
+        f"the plugin was destroyed while its stop callback was still running: {after}"
+    assert LEFT_ALIVE not in fppd.log()
+    assert rc == 0, f"fppd exited {rc} when stopped mid-callback\n{fppd.tail()}"
+    assert not fppd.sanitizer_reports(), fppd.sanitizer_reports()[0][:4000]
+
+
+def test_shutdown_leaves_a_plugin_whose_playlist_callback_outlasts_the_wait(fppd):
+    """fppd stopped (SIGTERM) while a script plugin's playlist "stop"
+    callback is running on another thread -- a stop that came in over
+    MQTT, so it runs on mosquitto's thread -- and runs on past shutdown's
+    2 s wait for it (15 s here) leaves that plugin alive, with a warning
+    naming it, rather than destroying it under the call: no "lifecycle
+    shutdown" event from its destructor. Shutdown waits the 2 s, not the
+    whole callback, and fppd exits 0 with no sanitizer report.
+
+    Regression: 2867c832e. PluginManager::Cleanup() deleted every plugin at
+    once, without waiting for the playlist callbacks in flight: the plugin's
+    "lifecycle shutdown" came while its stop callback was still in its
+    script, and under TSan the delete raced the call (fppd exited 66)."""
+    from test_mqtt_control import HOST, PORT, broker, publish
+    d = slow_stop_plugin(fppd, 15)
+    fppd.write("playlists/P.json", playlist("P", main=[pause(60)]))
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    with broker():
+        fppd.start()
+        fppd.wait_for(lambda: "lifecycle startup" in events(d), timeout=10, what="startup")
+        time.sleep(2)  # connected and subscribed
+        fppd.command("Start Playlist", "P", "false", "false", timeout=30)
+        fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "playing",
+                      timeout=20, what="the playlist to start")
+        n = len(events(d))
+        publish("set/playlist/P/stop/now")
+        fppd.wait_for(lambda: any('"stop"' in l for l in events(d)[n:]), timeout=10,
+                      interval=0.02, what="the plugin's stop callback to start")
+        began = time.monotonic()
+        rc = fppd.stop(timeout=60)
+        took = time.monotonic() - began
+        fppd.exit_expected = True
+    after = events(d)[n:]
+    assert "lifecycle shutdown" not in after, \
+        f"the plugin was destroyed while its stop callback was still running: {after}"
+    assert LEFT_ALIVE in fppd.log(), fppd.tail()
+    assert took < 10, f"shutdown took {took:.1f} s: it waited on the 15 s callback"
+    assert rc == 0, f"fppd exited {rc} when stopped mid-callback\n{fppd.tail()}"
+    assert not fppd.sanitizer_reports(), fppd.sanitizer_reports()[0][:4000]
