@@ -1,6 +1,7 @@
 """Channel output configs fppd can only partly use, warnings that must come
 down with a fix, and serial outputs written into a pty."""
 
+import json
 import os
 import time
 
@@ -836,3 +837,61 @@ def test_fixing_a_dmx_output_wider_than_a_universe_takes_its_warning_down(fppd):
     fppd.write("config/co-other.json", dmx(512))
     fppd.wait_for(lambda: not wide(), timeout=15, interval=0.5,
                   what=f"the channel-count warning to come down (still: {wide()})")
+
+
+def save_in_place(path, content, gap=0.3):
+    """Save a file the way a script or a plugin does, over the old one: an
+    open with O_TRUNC, then the content in two writes, then a close. Each
+    step is `gap` apart, so fppd has read one inotify event before the next
+    arrives (the kernel merges identical events still queued)."""
+    data = json.dumps(content, indent=4).encode()
+    fd = os.open(path, os.O_WRONLY | os.O_TRUNC)
+    try:
+        time.sleep(gap)
+        os.write(fd, data[:len(data) // 2])
+        time.sleep(gap)
+        os.write(fd, data[len(data) // 2:])
+        time.sleep(gap)
+    finally:
+        os.close(fd)
+
+
+def test_a_save_in_place_reloads_the_outputs_once(fppd):
+    """Five saves of co-other.json, each written in place (truncate, two
+    writes, close), reload its outputs five times, once per save, and fppd
+    never tries to read the file half written.
+
+    Regression: 6005f8af7. FileMonitor watched with IN_MODIFY, and the
+    truncate and each write are an IN_MODIFY of their own, so one save
+    reloaded the outputs once per event (up to three times here, as the
+    kernel merges events still queued), the first time on the empty file
+    and the next on the half-written one ("Error parsing"). It now watches IN_CLOSE_WRITE: one event per save, once the
+    file is complete.
+    """
+    path = os.path.join(fppd.media, "config", "co-other.json")
+
+    def udp(port):
+        return {"channelOutputs": [{
+            "type": "GenericUDP", "enabled": 1, "startChannel": 1, "channelCount": 10,
+            "address": "127.0.0.1", "port": port, "tokens": "{data}"}]}
+
+    def reloads():
+        return sum(1 for line in fppd.log().splitlines()
+                   if "Reloading Channel Outputs for " in line and line.rstrip().endswith("/co-other.json"))
+
+    fppd.write("config/co-other.json", udp(9000))
+    fppd.settings(LogLevel_ChannelOut="debug")
+    fppd.start()
+    # fppd loads every output config once at startup through the same callback
+    fppd.wait_for(lambda: reloads() >= 1, timeout=10, what="the startup load of co-other.json")
+    base = reloads()
+    saves = 5
+    for i in range(1, saves + 1):
+        save_in_place(path, udp(9000 + i))
+        fppd.wait_for(lambda: reloads() >= base + i, timeout=10,
+                      what=f"the reload for save {i}")
+    time.sleep(2)  # room for any late, extra reload to show
+    assert reloads() - base == saves, f"{reloads() - base} reloads for {saves} saves"
+    parse_errors = [line for line in fppd.log().splitlines()
+                    if "Error parsing" in line and "co-other.json" in line]
+    assert not parse_errors, parse_errors
