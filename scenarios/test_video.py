@@ -660,6 +660,90 @@ def test_a_video_input_uri_never_reaches_yt_dlp_as_an_option(fppd, audio):
             assert url > 0 and c[url - 1] == "--", f"the URL does not follow --: {c}"
 
 
+def input_warnings(fppd):
+    """fppd's video input warnings (id 56, all "Video input '...'") up now."""
+    return {w for w in fppd.get("/fppd/warnings") if w.startswith("Video input '")}
+
+
+def named_source(i, name, kind, **extra):
+    s = source(kind, **extra)
+    s.update(id=i, name=name, pipeWireNodeName=f"fpp_video_src_{i}_{name.lower()}")
+    return s
+
+
+def test_video_input_config_warnings_come_down_at_the_next_reload(fppd, audio):
+    """Video input sources that can't start for their config each raise a
+    warning: an RTSP source and a URI source with no URI, a capture source
+    with no device, an unknown type, a URI with a control character in it,
+    and YouTube URLs yt-dlp can't resolve (without and with audio). The
+    sources are then fixed or removed, all but the unknown type, and the
+    inputs reloaded (the Video Input page's Apply): every fixed one's
+    warning comes down, and the unknown type's is up again.
+
+    Regression: 229008529. These warnings had no removal at all, so they
+    stayed up until fppd restarted, after the config was fixed."""
+    from test_command_socket import send
+    env = ytdlp_stand_in(fppd, "exit 1")
+    bad = [named_source(1, "Cam", "rtspsrc", uri=""),
+           named_source(2, "Clip", "urisrc", uri=""),
+           named_source(3, "Webcam", "v4l2src", device=""),
+           named_source(4, "Odd", "bogus"),
+           named_source(5, "Ctl", "urisrc", uri="file:///tmp/a\x01b.mkv"),
+           named_source(6, "Tube", "urisrc", uri="https://www.youtube.com/watch?v=x"),
+           named_source(7, "TubeA", "urisrc", uri="https://www.youtube.com/watch?v=y",
+                        audioEnabled=True)]
+    fixed = {"Video input 'Cam' (RTSP) has no URI configured",
+             "Video input 'Clip' has no URI configured",
+             "Video input 'Webcam' has no capture device path configured",
+             "Video input 'Ctl' has an invalid URI",
+             "Video input 'Tube': yt-dlp could not resolve the YouTube URL - it may need updating",
+             "Video input 'TubeA': could not resolve the video URL",
+             # TubeA falls back to video only, which fails in turn.
+             "Video input 'TubeA': yt-dlp could not resolve the YouTube URL - it may need updating"}
+    still = "Video input 'Odd' has unknown source type 'bogus'"
+    setup(fppd, [overlay_consumer(SOURCE)], bad)
+    fppd.start(extra_env=env)
+    fppd.wait_for(lambda: input_warnings(fppd) >= fixed | {still}, timeout=30,
+                  what=f"every config warning (have {sorted(input_warnings(fppd))})")
+
+    # Cam becomes a test pattern, Odd stays as it was, the rest go.
+    fppd.write("config/pipewire-video-input-sources-gen.json",
+               [named_source(1, "Cam", "videotestsrc", pattern="smpte"), bad[3]])
+    send("reloadVideoInputs")
+    fppd.wait_for(lambda: input_warnings(fppd) == {still}, timeout=20,
+                  what=f"only the unknown type's warning to be up after the reload "
+                       f"(have {sorted(input_warnings(fppd))})")
+
+
+def test_a_video_input_that_failed_to_start_loses_its_warning_when_removed(fppd, audio):
+    """A URI source whose file doesn't exist fails to start and says so in
+    a warning; removing it and reloading the inputs takes the warning down.
+    (A file, not a missing capture device: GStreamer's v4l2 plugin trips
+    TSan with a mutex unlock it can't follow.)
+
+    Regression: 229008529. "Failed to start" came down only when that
+    source reached PLAYING, so a source removed (or renamed) while failing
+    left it up until fppd restarted."""
+    from test_command_socket import send
+    gone = "Video input 'Gone' failed to start"
+    setup(fppd, [overlay_consumer(SOURCE)],
+          [named_source(1, "Gone", "urisrc", uri="file:///nonexistent/gone.mkv")])
+    fppd.start()
+    # Polled closely and reloaded at once: fppd retries the source 2 s after
+    # it fails, and a retry's pipeline that fails just as the reload starts
+    # can raise the warning again behind it, a separate fppd bug.
+    fppd.wait_for(lambda: gone in input_warnings(fppd), timeout=20, interval=0.05,
+                  what=f"the failed-to-start warning (have {sorted(input_warnings(fppd))})")
+    fppd.write("config/pipewire-video-input-sources-gen.json",
+               [named_source(2, "Cam", "videotestsrc", pattern="smpte")])
+    send("reloadVideoInputs")
+    # Cam starts after Gone's pipeline is torn down, so nothing of Gone's
+    # can raise a warning from here on.
+    fppd.wait_for(lambda: "Source 'Cam' thread starting pipeline" in fppd.log(), timeout=20,
+                  what="the reloaded source to start")
+    assert gone not in input_warnings(fppd), "the failed-to-start warning stayed up"
+
+
 def hdmi_consumer(i, source=SOURCE, connector_id=None, card="/dev/dri/card0", group=10):
     c = {"groupId": group, "groupName": f"Wall {group}", "groupNodeName": f"fpp_video_group_{group}_wall",
          "type": "hdmi", "pipeWireNodeName": f"fpp_video_group_{group}_wall_m{i}_hdmi",
