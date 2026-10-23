@@ -592,8 +592,8 @@ test('Checked checkbox survives auto-refresh', async ({ page }) => {
     //   "<input type='checkbox' class='…multisyncRowCheckbox' name='{ip}'>"
     // bt.initBody() renders this string verbatim every poll, always producing an
     // unchecked box — discarding whatever the user had selected.
-    // FIX: safeInitBody() snapshots checked states (keyed by name=ip) before
-    // initBody() and re-applies them to the freshly rendered checkboxes after.
+    // FIX: the patched initBody() snapshots checked states (keyed by name=ip)
+    // before each render and re-applies them to the freshly rendered checkboxes.
 
     await loadMultisync(page);
 
@@ -619,6 +619,28 @@ test('Checked checkbox survives auto-refresh', async ({ page }) => {
     await poll2;
 
     await expect(checkbox).toBeChecked();
+});
+
+test('A checked row stays checked when a filter is typed', async ({ page }) => {
+    // Regression: 8f21c2e0d.  The filter-control extension re-renders the
+    // table itself, 500 ms after a filter keystroke (and after every table
+    // load), without going through safeInitBody(), which was the only render
+    // that kept the row checkboxes.  Checking rows and then narrowing the list
+    // with a filter cleared them; so did checking a row just after the table
+    // was built (seen as a flaky multisync-new-systems.spec.ts).
+    await loadMultisync(page);
+
+    const box = page.locator('input.multisyncRowCheckbox[name="192.168.0.14"]');
+    await box.check();
+    const search = page.waitForFunction(() => {
+        const t = document.querySelector('#fppSystemsTable tbody');
+        return t && !t.textContent!.includes('JUPITER');
+    });
+    // A filter that keeps SATURN in the list.
+    await page.locator('#fppSystemsTable thead input.bootstrap-table-filter-control-hostname').pressSequentially('SAT');
+    await search;
+    await expect(page.locator('tr.systemRow', { hasText: 'SATURN' })).toBeVisible();
+    await expect(box).toBeChecked();
 });
 
 test('Page scroll survives auto-refresh with logs open', async ({ page }) => {

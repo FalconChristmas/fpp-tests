@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import type { Page } from '@playwright/test';
+import type { Page, Request } from '@playwright/test';
 
 // Regression: 0d1e698d2.  GH #3126: the Port Status page (currentmonitor.php)
 // stopped test mode every time it was left, so a port test started on Channel
@@ -11,13 +11,18 @@ import type { Page } from '@playwright/test';
 
 async function stopsSentOnLeave(page: Page, countPixels: boolean): Promise<number> {
   let stops = 0;
-  // Answered here, so a Count Pixels starts nothing in the player.
-  await page.context().route('**/api/fppd/ports/**', async (route) => {
-    if (new URL(route.request().url()).pathname.endsWith('/ports/stop')) {
+  // Counted as the browser sends it, not where it is routed: the stop leaves
+  // the page as it unloads, and a request from a page that is going away can
+  // miss the route (seen in a nightly: sent, never handed to the handler).
+  const onRequest = (request: Request) => {
+    if (new URL(request.url()).pathname.endsWith('/ports/stop')) {
       stops++;
     }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
-  });
+  };
+  page.context().on('request', onRequest);
+  // Answered here, so a Count Pixels starts nothing in the player.
+  await page.context().route('**/api/fppd/ports/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   try {
     await page.goto('/currentmonitor.php');
     await page.waitForFunction(() => typeof (window as any).StopPixelCount === 'function');
@@ -31,6 +36,7 @@ async function stopsSentOnLeave(page: Page, countPixels: boolean): Promise<numbe
     await page.waitForTimeout(1000);
     return stops;
   } finally {
+    page.context().off('request', onRequest);
     await page.context().unrouteAll({ behavior: 'ignoreErrors' });
   }
 }
