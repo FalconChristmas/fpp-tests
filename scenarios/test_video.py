@@ -723,15 +723,17 @@ def test_a_video_input_that_failed_to_start_loses_its_warning_when_removed(fppd,
 
     Regression: 229008529. "Failed to start" came down only when that
     source reached PLAYING, so a source removed (or renamed) while failing
-    left it up until fppd restarted."""
+    left it up until fppd restarted.
+
+    The reload lands well inside the 2 s before the source's first retry,
+    so no pipeline of Gone's is running when it starts. A warning raised by
+    one that is still running as a reload starts is the next scenario's."""
     from test_command_socket import send
     gone = "Video input 'Gone' failed to start"
     setup(fppd, [overlay_consumer(SOURCE)],
           [named_source(1, "Gone", "urisrc", uri="file:///nonexistent/gone.mkv")])
     fppd.start()
-    # Polled closely and reloaded at once: fppd retries the source 2 s after
-    # it fails, and a retry's pipeline that fails just as the reload starts
-    # can raise the warning again behind it, a separate fppd bug.
+    # Polled closely and reloaded at once, before the 2 s retry.
     fppd.wait_for(lambda: gone in input_warnings(fppd), timeout=20, interval=0.05,
                   what=f"the failed-to-start warning (have {sorted(input_warnings(fppd))})")
     fppd.write("config/pipewire-video-input-sources-gen.json",
@@ -742,6 +744,77 @@ def test_a_video_input_that_failed_to_start_loses_its_warning_when_removed(fppd,
     fppd.wait_for(lambda: "Source 'Cam' thread starting pipeline" in fppd.log(), timeout=20,
                   what="the reloaded source to start")
     assert gone not in input_warnings(fppd), "the failed-to-start warning stayed up"
+
+
+def test_a_warning_raised_as_a_reload_starts_comes_down_with_its_source(fppd, audio):
+    """An RTSP camera whose stream turns out to have no video track, on a
+    source with audio on, says so in a warning from rtspsrc's own thread
+    (no-more-pads). The camera here holds its DESCRIBE answer until the
+    inputs are reloaded with that source removed, and answers just as the
+    reload stops the old sources: the warning, raised by a pipeline that is
+    still running, comes down with the reload all the same. Three test
+    pattern sources ahead of the camera keep it running for a while into
+    the reload, each stop waiting out its bus poll, and it is repeated so
+    the answer lands in that window near-certainly.
+
+    Regression: 688cf66b9. Reload() cleared the source warnings before
+    it stopped the old sources, so one raised in between -- "no video
+    track" here, or "failed to start" from a retry whose pipeline failed
+    just then -- stayed up after it, for a source the new config no longer
+    had, until the next reload."""
+    import threading
+    from test_command_socket import send
+    from vid_rtsp import FakeCamera
+
+    PCMU = {"media": "audio", "codec": "PCMU"}
+
+    class HeldCamera(FakeCamera):
+        """Answers each DESCRIBE only once `release` is set."""
+        def __init__(self, tracks):
+            self.asked = threading.Event()
+            self.release = threading.Event()
+            super().__init__(tracks)
+
+        def _answer(self, conn, lock, request, headers, channels):
+            if request.startswith("DESCRIBE"):
+                self.asked.set()
+                self.release.wait(30)
+            try:
+                super()._answer(conn, lock, request, headers, channels)
+            except OSError:  # fppd tore the connection down first
+                pass
+
+    after = [named_source(9, "After", "videotestsrc", pattern="smpte")]
+    started = "Source 'After' thread starting pipeline"
+    with HeldCamera([PCMU]) as cam:
+        mic = named_source(4, "Mic", "rtspsrc", uri=cam.url, latency=100, audioEnabled=True,
+                           audioPipeWireNodeName="fpp_mic_audio")
+        warning = "Video input 'Mic': the RTSP stream contains no video track"
+        before = [named_source(i, f"Bars{i}", "videotestsrc", pattern="smpte")
+                  for i in (1, 2, 3)] + [mic]
+        setup(fppd, [overlay_consumer(SOURCE)], before)
+        fppd.start()
+        for attempt in range(5):
+            if attempt:
+                cam.asked.clear()
+                cam.release.clear()
+                fppd.write("config/pipewire-video-input-sources-gen.json", before)
+                send("reloadVideoInputs")
+            fppd.wait_for(cam.asked.is_set, timeout=20, what="the camera to be asked for its SDP")
+            assert warning not in input_warnings(fppd)
+            runs = fppd.log().count(started)
+            fppd.write("config/pipewire-video-input-sources-gen.json", after)
+            send("reloadVideoInputs")
+            # Past the reload's start, and well inside the Bars sources' stops.
+            time.sleep(0.05)
+            cam.release.set()
+            # After starts once every old source is stopped and torn down.
+            fppd.wait_for(lambda: fppd.log().count(started) > runs, timeout=20,
+                          what="the reloaded source to start")
+            assert warning not in input_warnings(fppd), \
+                f"attempt {attempt + 1}: the removed camera's no-video warning stayed up"
+        assert "offers no video track" in fppd.log(), \
+            "the camera's answer never reached rtspsrc: this proves nothing"
 
 
 def hdmi_consumer(i, source=SOURCE, connector_id=None, card="/dev/dri/card0", group=10):
