@@ -493,7 +493,8 @@ def test_command_media_freed_while_its_slot_is_still_called(fppd, audio):
 
     Each play is left to end by itself, and the next starts only once the
     slot is idle, so that no HTTP thread stops an output while another sets
-    its volume: that is a race of its own on master (PROBLEMS.md #26).
+    its volume: that was a race of its own, fixed in 7698ba351
+    (test_media_slot_volume_stop.py).
     """
     write_tone_wav(os.path.join(fppd.media, "music", "Blip.wav"), 0.3)
     write_tone_wav(os.path.join(fppd.media, "music", "After.wav"), 1.2)
