@@ -21,6 +21,7 @@ a release branch counts), an area, and where a test would most likely run.
 """
 
 import argparse
+import ast
 import collections
 import os
 import re
@@ -157,15 +158,44 @@ def test_refs(tests_dir, rows):
     return found
 
 
+_py_tests = {}
+
+
+def py_tests(f, lines):
+    """[(first, last, name)] 0-based line spans of a module's top-level
+    functions, decorators included, from its syntax tree; and of each
+    module-level table that exactly one test reads, under that test's name."""
+    if f not in _py_tests:
+        try:
+            tree = ast.parse("\n".join(lines))
+        except SyntaxError:
+            tree = ast.Module(body=[], type_ignores=[])
+        funcs = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        spans = [(min([n.lineno] + [d.lineno for d in n.decorator_list]) - 1, n.end_lineno - 1, n.name)
+                 for n in funcs]
+        for n in tree.body:
+            if isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name):
+                users = [fn.name for fn in funcs if fn.name.startswith("test") and any(
+                    isinstance(x, ast.Name) and x.id == n.targets[0].id for x in ast.walk(fn))]
+                if len(users) == 1:
+                    spans.append((n.lineno - 1, n.end_lineno - 1, users[0]))
+        _py_tests[f] = spans
+    return _py_tests[f]
+
+
 def test_name(f, lines, i):
     """'::name' of the test a line at index i belongs to, or '' for the file."""
     if f.endswith(".py"):
-        for j in range(i, -1, -1):
-            m = re.match(r"\s*(?:async\s+)?def\s+(\w+)", lines[j])
-            if m:
-                return "::" + m.group(1) if m.group(1).startswith("test") else ""
-            if re.match(r"class\s", lines[j]):
-                return ""
+        # A hash in a test's decorators (a parametrize list) is that test's,
+        # as is one in a module-level table only that test reads; one in a
+        # helper, or a table more tests share, is the file's. A comment block
+        # just above a test or table goes with it.
+        while lines[i].strip().startswith("#") and i + 1 < len(lines) and \
+                not any(a <= i <= b for a, b, _ in py_tests(f, lines)):
+            i += 1
+        for a, b, name in py_tests(f, lines):
+            if a <= i <= b:
+                return "::" + name if name.startswith("test") else ""
         return ""
     title = re.compile(r"""\btest(?:\.(?:describe|skip|fixme|only))?\(\s*(['"`])(.+?)\1""")
     # The comment above a test names its commit, so look ahead first.
