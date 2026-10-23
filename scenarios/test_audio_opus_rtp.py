@@ -2,9 +2,12 @@
 with an instances file, against the audio fixture's PipeWire."""
 
 import os
+import shutil
 import socket
 import threading
 import time
+
+import pytest
 
 from audio import write_tone_wav
 
@@ -93,3 +96,124 @@ def test_an_opus_sender_linked_as_it_appears_keeps_sending(fppd, audio):
     finally:
         rx.close()
     assert packets >= 100, f"{packets} RTP packets in 3 s (one per 20 ms is 150)"
+
+
+CONFIG = "config/pipewire-opus-rtp-instances.json"
+SEND_FAILED = "Opus RTP: audio send stream failed to start"
+RECV_FAILED = "Opus RTP: audio receive stream failed to start"
+
+
+def opus_warnings(fppd):
+    """The Opus RTP warnings in fppd's warnings API."""
+    return {w for w in fppd.get("/fppd/warnings") if w.startswith("Opus RTP:")}
+
+
+def opus_apply(fppd):
+    """"Opus RTP Apply", and wait for it to have built its streams."""
+    n = fppd.log().count("OpusRTPManager: Applied config")
+    fppd.command("Opus RTP Apply", timeout=60)
+    fppd.wait_for(lambda: fppd.log().count("OpusRTPManager: Applied config") > n, timeout=30,
+                  what="the apply to finish")
+
+
+def failing_tx_and_rx(fppd):
+    """A send instance "tx" and a receive instance "rx" that both fail to
+    start, as at boot, because no PipeWire is running; fppd started, and
+    both warnings up. Returns the receive port."""
+    if not shutil.which("pipewire") or not shutil.which("wireplumber"):
+        pytest.skip("PipeWire and WirePlumber are not installed")
+    advanced_backend(fppd)
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.bind(("0.0.0.0", 0))
+        rx_port = s.getsockname()[1]
+    fppd.write(CONFIG, {"requireGroupSource": False, "instances": [
+        {"id": 1, "name": "tx", "mode": "send", "enabled": True, "destIP": "127.0.0.1",
+         "port": 15010, "channels": 2},
+        {"id": 2, "name": "rx", "mode": "receive", "enabled": True, "destIP": "127.0.0.1",
+         "port": rx_port, "channels": 2}]})
+    fppd.start()
+    fppd.wait_for(lambda: opus_warnings(fppd) >= {SEND_FAILED, RECV_FAILED}, timeout=30,
+                  what=f"both failed-to-start warnings (precondition; have {sorted(opus_warnings(fppd))})")
+    return rx_port
+
+
+def running_modes(fppd):
+    """The modes of the streams /opusrtp/status lists as running, asked
+    again while it answers "status unavailable" (a watchdog pass holds the
+    pipeline lock)."""
+    def modes():
+        pipelines = fppd.get("/opusrtp/status")["pipelines"]
+        if any(p["mode"] == "unknown" for p in pipelines):
+            return None
+        return (sorted(p["mode"] for p in pipelines if p["running"]),)
+    return fppd.wait_for(modes, timeout=10, interval=0.1, what="the Opus RTP status")[0]
+
+
+class Feeder:
+    """Keeps a node fed from the test sink's monitor, linking it each time
+    it appears, as an Audio Output Group targeting it does on a device. A
+    sender nothing feeds blocks its apply for 30 s and then fails."""
+
+    def __init__(self, node):
+        from test_rtsp_outputs import link_monitor_to
+        self.stop = threading.Event()
+
+        def spin():
+            while not self.stop.wait(0.01):
+                link_monitor_to(node)
+        self.thread = threading.Thread(target=spin, daemon=True)
+        self.thread.start()
+
+    def close(self):
+        self.stop.set()
+        self.thread.join()
+
+
+def test_opus_stream_failed_warnings_come_down_when_the_streams_start(fppd):
+    """An Opus RTP send and receive stream fail to start (no PipeWire yet),
+    and the warnings API shows both "failed to start" warnings. With
+    PipeWire up and the receive port held by another socket, an apply
+    starts the send stream but not the receive one: the send warning comes
+    down and the receive one stays. With the port free again, the next
+    apply starts both and no Opus RTP warning is left.
+
+    Regression: ccee8eb3a. Nothing removed these warnings, so they stayed
+    up until fppd restarted, through applies that started every stream."""
+    from audio import AudioServer
+    rx_port = failing_tx_and_rx(fppd)
+    blocker = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    blocker.bind(("0.0.0.0", rx_port))  # no SO_REUSEADDR, so udpsrc's bind fails
+    server = feeder = None
+    try:
+        server = AudioServer()
+        feeder = Feeder("opusrtp_tx_send")
+        opus_apply(fppd)
+        assert running_modes(fppd) == ["send"], "expected only the send stream to start"
+        assert opus_warnings(fppd) == {RECV_FAILED}, \
+            f"after an apply that started the send stream: {sorted(opus_warnings(fppd))}"
+
+        blocker.close()
+        opus_apply(fppd)
+        assert running_modes(fppd) == ["receive", "send"], "expected both streams to start"
+        assert opus_warnings(fppd) == set(), \
+            f"after an apply that started both streams: {sorted(opus_warnings(fppd))}"
+    finally:
+        blocker.close()
+        if feeder:
+            feeder.close()
+        if server:
+            server.close()
+
+
+def test_opus_stream_failed_warnings_come_down_at_cleanup(fppd):
+    """Both Opus RTP streams fail to start (no PipeWire) and both warnings
+    are up; with the instances file gone, "Opus RTP Cleanup" (what the
+    Opus RTP page's Apply sends when there is no instances file) stops
+    everything and takes both warnings down.
+
+    Regression: ccee8eb3a. Cleanup() left the warnings up, so the banner
+    still said a stream had failed with nothing configured to run."""
+    failing_tx_and_rx(fppd)
+    os.unlink(os.path.join(fppd.media, CONFIG))
+    fppd.command("Opus RTP Cleanup", timeout=60)
+    assert opus_warnings(fppd) == set(), f"after the cleanup: {sorted(opus_warnings(fppd))}"
