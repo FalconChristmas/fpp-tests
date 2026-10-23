@@ -15,6 +15,7 @@ first seeks to it, then slews the rest.
 """
 
 import os
+import re
 import shutil
 import socket
 import statistics
@@ -26,10 +27,19 @@ import pytest
 from bursts import StreamRecorder, burst_tone, card_ppm, card_status, offsets_against
 from multisync import PORT, sync_packet
 
+# The remote's resync seek (GStreamerOut::AdjustFeedSpeed, LogInfo): each one
+# is an audible dropout.
+RESYNC_SEEK = re.compile(r"GStreamer feed sync: [+-]?\d+ ms from the master .*seeking to")
 
-def _remote_follows(fppd, audio, master_name, settle_s=20):
+
+def _remote_follows(fppd, audio, master_name, settle_s=20, delay=None, seen=None):
     """Play as the master for the remote set up in fppd; the remote's sound
-    against the master's timeline, ms, per burst from settle_s on."""
+    against the master's timeline, ms, per burst from settle_s on.
+
+    delay(k) -> seconds to hold back the k-th media sync (1-based): it goes
+    out that late still carrying the position it was due with, as a packet
+    the network held does. seen, a dict, gets seeks_before_late: the resync
+    seeks fppd had logged when the first held-back packet went out."""
     secs = int(os.environ.get("FPP_TESTS_REMOTE_SECONDS", "120"))
     rec = StreamRecorder(audio.card_sink)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -43,10 +53,22 @@ def _remote_follows(fppd, audio, master_name, settle_s=20):
         send("start", "media", 0, 0.0, master_name)
         t0 = time.monotonic()
         nxt = t0 + 0.5
+        k = 0
+        held = None  # (send at, position it was due with)
         while time.monotonic() < t0 + secs:
             now = time.monotonic()
+            if held and now >= held[0]:
+                send("sync", "media", 0, held[1], master_name)
+                held = None
             if now >= nxt:
-                send("sync", "media", 0, now - t0, master_name)
+                k += 1
+                hold = delay(k) if delay else 0.0
+                if hold > 0:
+                    if seen is not None and "seeks_before_late" not in seen:
+                        seen["seeks_before_late"] = len(RESYNC_SEEK.findall(fppd.log()))
+                    held = (nxt + hold, nxt - t0)
+                else:
+                    send("sync", "media", 0, now - t0, master_name)
                 nxt += 0.5
                 st = card_status()
                 if st:
@@ -87,6 +109,46 @@ def test_remote_audio_follows_the_master(fppd, audio):
                int(os.environ.get("FPP_TESTS_REMOTE_SECONDS", "120")) + 5)
     fppd.settings(fppMode="remote")
     late = _remote_follows(fppd, audio, "Song.wav")
+    assert max(abs(o) for o in late) <= 50, f"the remote's sound strayed {max(abs(o) for o in late):.0f} ms from the master"
+    assert max(late) - min(late) <= 30, f"the remote's sound wandered {max(late) - min(late):.0f} ms"
+
+
+def test_remote_audio_rides_out_late_packets(fppd, audio):
+    """Sync packets that arrive late don't make a remote's audio seek: with
+    one media sync in twenty (every 10 s, from 30 s) held back 100 ms -- what
+    a 2.4 GHz Wi-Fi link does to some of them -- the remote makes no resync
+    seek after the first late packet, and its sound stays within 50 ms of the
+    master's.
+
+    Regression: e2c824e2b. AdjustFeedSpeed() steered by every packet as it
+    arrived. A late one carries a position the master has moved past, so it
+    read as the remote ~100 ms ahead, past the 50 ms seek threshold: the
+    seek pulled the sound back by the delay, the landing taught the next
+    seek to aim that much further ahead, and each late packet cost two or
+    three audible seeks (22 in one five-minute song on a Pi 5 remote on
+    2.4 GHz Wi-Fi). Now it decides on the lowest reading of the last two
+    seconds, the rule MasterFrame0() steers a remote's lights by
+    (d9b8f5d3b).
+
+    Needs a real card: run-local.sh --host-audio, on each side of the fix
+    (verify-fix.sh builds in Docker, which has none). Verified with
+    run-local.sh --host-audio on a Pi 5 with a USB card: on 10.3
+    (da997bd61), 27 resync seeks after the late packets began, three per
+    late packet (the run stopped first on its burst count, 28 of 48 heard,
+    the seeks' dropouts taking the rest); passed with the fix on 10.3
+    (81e7b4fae, the same change as e2c824e2b)."""
+    if not os.environ.get("FPP_TESTS_HOST_AUDIO"):
+        pytest.skip("needs a real sound card: run-local.sh --host-audio")
+    secs = int(os.environ.get("FPP_TESTS_REMOTE_SECONDS", "120"))
+    assert secs >= 60, "FPP_TESTS_REMOTE_SECONDS must leave room for late packets after 30 s"
+    burst_tone(os.path.join(fppd.media, "music", "Song.wav"), secs + 5)
+    fppd.settings(fppMode="remote")
+    seen = {}
+    late = _remote_follows(fppd, audio, "Song.wav", seen=seen,
+                           delay=lambda k: 0.1 if k >= 50 and k % 20 == 0 else 0.0)
+    assert "seeks_before_late" in seen, "no late packet was sent"
+    seeks = len(RESYNC_SEEK.findall(fppd.log())) - seen["seeks_before_late"]
+    assert seeks == 0, f"{seeks} resync seeks after the late packets began (each an audible dropout)"
     assert max(abs(o) for o in late) <= 50, f"the remote's sound strayed {max(abs(o) for o in late):.0f} ms from the master"
     assert max(late) - min(late) <= 30, f"the remote's sound wandered {max(late) - min(late):.0f} ms"
 
