@@ -238,6 +238,57 @@ def test_bad_processor_is_refused_or_survived(fppd, bad):
         assert status(fppd).get("status_name") == "playing"
 
 
+def half(v):
+    return int(127.5 * v / 255 + 0.5)
+
+
+BRIGHTNESS_DEFAULTS = {
+    "gamma blank": ({"brightness": 50, "gamma": None}, half,
+                    "has no gamma value, using 1.0"),
+    "gamma missing": ({"brightness": 100}, lambda v: v,
+                      "has no gamma value, using 1.0"),
+    "gamma 0": ({"brightness": 100, "gamma": 0}, lambda v: v,
+                "has an invalid gamma (0.000000), using 1.0"),
+    "brightness blank": ({"brightness": None, "gamma": 1.0}, lambda v: v,
+                         "has no brightness value, using 100"),
+    "brightness missing": ({"gamma": 1.0}, lambda v: v,
+                           "has no brightness value, using 100"),
+    "brightness over 100": ({"brightness": 150, "gamma": 1.0}, lambda v: v,
+                            "has an invalid brightness (150), clamping"),
+    "brightness below 0": ({"brightness": -20, "gamma": 1.0}, lambda v: 0,
+                           "has an invalid brightness (-20), clamping"),
+}
+
+
+@pytest.mark.parametrize("what", list(BRIGHTNESS_DEFAULTS))
+def test_brightness_with_a_blank_or_bad_value(fppd, what):
+    """A Brightness processor with a blank (null) or missing brightness or
+    gamma uses the UI's defaults, 100 and 1.0, and one out of range is
+    clamped: dark channels stay dark, lit ones get the brightness asked
+    for, and a warning names the processor.
+
+    Regression: c595ea4a5. Both values were read unchecked, so a blank or
+    missing one read as 0. A gamma of 0 made every entry of the table
+    pow(x, 0) = 1 times the brightness, so dark channels lit up (at 100%
+    with brightness 100); a brightness of 0 blacked the range out; 150
+    scaled the range by 1.5. No warning was raised for any of them.
+    """
+    values, fn, message = BRIGHTNESS_DEFAULTS[what]
+    p = proc("Brightness", start=1, count=60, description="Porch")
+    p.update(values)
+    with DdpReceiver(CHANNELS) as rx:
+        frames = run(fppd, [p])
+        want = per_channel(1, 60, fn)(frames[0])
+        latest(fppd, rx)
+        time.sleep(0.3)
+        got = rx.last()
+        diff = [(i + 1, frames[0][i], want[i], got[i]) for i in range(CHANNELS) if want[i] != got[i]]
+        assert not diff, f"{what}: channel (in, expected, got): {diff[:12]}"
+    expected = "Brightness output processor 'Porch' " + message
+    warnings = fppd.get("/fppd/status").get("warnings", [])
+    assert expected in warnings, f"no warning {expected!r}; warnings: {warnings}"
+
+
 def test_reload_never_drops_the_chain(fppd):
     """A brightness limit stays on through reloads of outputprocessors.json:
     a file caught half-written keeps the running chain, and rewriting the
