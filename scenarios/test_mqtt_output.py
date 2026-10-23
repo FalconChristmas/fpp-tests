@@ -7,13 +7,11 @@ standard RGB to HSV/HSI formulas.
 A topic carries one message per change of the output's own channels: the
 output remembers the last values it published (all zero to begin with) and
 publishes only when they differ.
-
-Not checked: DumpConfig() logs the topic on its "Payload" line (PROBLEMS.md
-13); it is only a debug log line.
 """
 
 import contextlib
 import os
+import re
 import subprocess
 import threading
 import time
@@ -358,3 +356,36 @@ def test_mqtt_output_needs_a_broker(fppd):
     fppd.command("Start Playlist", "Show", "false", "false")
     fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", timeout=10,
                   interval=0.1, what="the playlist to start")
+
+
+def test_mqtt_output_config_dump_logs_its_payload(fppd):
+    """With channel output logging at debug, each MQTT output's config dump
+    at start logs its own topic on the "Topic" line and its own payload
+    template on the "Payload" line: the template configured for one output,
+    and the default "%R%,%G%,%B%" for one with none.
+
+    Regression: c719be44a. DumpConfig() printed the topic on the "Payload"
+    line as well, so the log never showed the payload template.
+    """
+    fppd.settings(LogLevel_ChannelOut="debug")
+    with broker_and_subscriber():
+        start_show(fppd, [bytes(3)] * 20, [
+            mqtt_output(f"{PREFIX}/custom", 1, "RGB", "red=%R% sw=%SW%"),
+            mqtt_output(f"{PREFIX}/plain", 1),
+        ])
+    log = fppd.log()
+    # The dump's lines in order, each Topic line followed by its Payload line
+    lines = re.findall(r"^.*?MQTTOutput::DumpConfig\(\)$|^.*?\s(Topic|Payload)\s+: (.*)$", log, re.M)
+    dumps, current = [], None
+    for kind, value in lines:
+        if not kind:
+            current = {}
+            dumps.append(current)
+        elif current is not None and kind not in current:
+            current[kind] = value
+    # Each output dumps its config more than once at start (ChannelOutput and
+    # ThreadedChannelOutput both call DumpConfig() from Init()); every dump
+    # must be one of the two.
+    got = {(d.get("Topic"), d.get("Payload")) for d in dumps}
+    assert got == {(f"{PREFIX}/custom", "red=%R% sw=%SW%"),
+                   (f"{PREFIX}/plain", "%R%,%G%,%B%")}, dumps
