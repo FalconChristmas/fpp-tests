@@ -1,15 +1,22 @@
 """Opus RTP audio streaming (OpusRTPManager), under MediaBackend "pipewire"
-with an instances file, against the audio fixture's PipeWire."""
+with an instances file, against the audio fixture's PipeWire (or, for the
+warning scenario, with no PipeWire at all, so every stream fails to start)."""
 
 import os
 import shutil
 import socket
 import threading
 import time
+import urllib.error
 
 import pytest
 
 from audio import write_tone_wav
+
+CONFIG = "config/pipewire-opus-rtp-instances.json"
+SEND_FAILED = "Opus RTP: audio send stream failed to start"
+RECV_FAILED = "Opus RTP: audio receive stream failed to start"
+CONFIG_UNREADABLE = "Opus RTP: pipewire-opus-rtp-instances.json could not be read, so no stream is running"
 
 
 def advanced_backend(fppd):
@@ -20,6 +27,73 @@ def advanced_backend(fppd):
     lines.append('MediaBackend = "pipewire"\n')
     with open(path, "w") as f:
         f.writelines(lines)
+
+
+def opus_instance(id, name, mode, port, enabled=True):
+    return {"id": id, "name": name, "mode": mode, "enabled": enabled, "destIP": "127.0.0.1",
+            "port": port, "channels": 2}
+
+
+@pytest.mark.parametrize("how", ["empty", "disabled", "deleted", "unreadable"])
+def test_failure_warnings_come_down_when_nothing_is_left_to_run(fppd, how):
+    """A send and a receive stream that cannot start (no PipeWire) each raise
+    their warning; an "Opus RTP Apply" after every instance was removed
+    (the page saves {"instances": []}), every instance was disabled, the
+    instances file was deleted, or it no longer reads as JSON takes both
+    down: the old streams are stopped and nothing is left trying to start.
+    An unreadable file puts up its own warning instead, which the next apply
+    of a good file takes down.
+    AES67 does the same for the first three (see
+    test_aes67_config.py::test_stream_failure_warnings_come_down_when_fixed).
+
+    Regression: d6556c059. ccee8eb3a retracted the warnings on an apply
+    where a kind's streams all started and in Cleanup(), but
+    ApplyConfigLocked() returned early on "No enabled instances", "No config
+    file" and a config it couldn't load before it got there, so the banners
+    stayed up, about streams no longer configured, until fppd restarted; and
+    nothing said the config was unreadable."""
+    advanced_backend(fppd)
+    instances = [opus_instance(1, "tx", "send", 15004), opus_instance(2, "rx", "receive", 15006)]
+    fppd.write(CONFIG, {"requireGroupSource": False, "instances": instances})
+    fppd.start()
+    fppd.wait_for(lambda: "OpusRTPManager: Applied config" in fppd.log(), timeout=60,
+                  what="the Opus RTP config to be applied at startup")
+
+    def warnings():
+        return fppd.get("/fppd/status").get("warnings", [])
+    w = warnings()
+    assert SEND_FAILED in w and RECV_FAILED in w, f"precondition: both warnings up, got {w}"
+
+    if how == "empty":
+        fppd.write(CONFIG, {"requireGroupSource": False, "instances": []})
+        done = "OpusRTPManager: No enabled instances"
+    elif how == "disabled":
+        for inst in instances:
+            inst["enabled"] = False
+        fppd.write(CONFIG, {"requireGroupSource": False, "instances": instances})
+        done = "OpusRTPManager: No enabled instances"
+    elif how == "deleted":
+        os.unlink(os.path.join(fppd.media, CONFIG))
+        done = "OpusRTPManager: No config file, nothing to apply"
+    else:
+        with open(os.path.join(fppd.media, CONFIG), "w") as f:
+            f.write('{"instances": [')
+        done = "OpusRTPManager: Failed to load config"
+    if how == "unreadable":
+        # The apply fails, and says so.
+        with pytest.raises(urllib.error.HTTPError):
+            fppd.command("Opus RTP Apply", timeout=60)
+    else:
+        fppd.command("Opus RTP Apply", timeout=60)
+    fppd.wait_for(lambda: done in fppd.log(), timeout=30, what=repr(done))
+    w = warnings()
+    assert SEND_FAILED not in w and RECV_FAILED not in w, w
+    assert (CONFIG_UNREADABLE in w) == (how == "unreadable"), w
+    if how == "unreadable":
+        fppd.write(CONFIG, {"requireGroupSource": False, "instances": []})
+        fppd.command("Opus RTP Apply", timeout=60)
+        fppd.wait_for(lambda: CONFIG_UNREADABLE not in warnings(), timeout=30,
+                      what="the unreadable-config warning to come down")
 
 
 def test_opus_rtp_applies_at_once_from_two_clients(fppd, audio):
