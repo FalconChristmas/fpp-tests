@@ -195,3 +195,39 @@ def test_a_restarted_camera_does_not_share_the_framebuffer_outputs_fd(fppd, audi
     assert not shared, f"the restarted kmssink drew on the framebuffer outputs' fd {shared}"
     gaps = [b - a for (_, a), (_, b) in zip(after, after[1:])]
     assert max(gaps, default=0) < 1.0, f"the restarted camera stalled {max(gaps):.1f} s"
+
+
+@pytest.mark.parametrize("edid", [True, False], ids=["display-prefers-1080p", "no-edid"])
+def test_an_hdmi_output_runs_the_forced_resolution(fppd, edid):
+    """A Virtual Matrix on an HDMI connector forced to 1280x720@60 on the
+    kernel command line (what Force HDMI Resolution writes) runs 1280x720,
+    both when the display's EDID prefers 1920x1080 and when there is no EDID.
+
+    Regression: a69456a6a (issue #3082). KMSFrameBuffer took the display's
+    preferred mode, or with no display a stand-in 1920x1080, and never the
+    forced one. Two displays that prefer different modes got different pixel
+    sizes for the same matrix; on 10.2 the modeset also failed, so the plane
+    was placed for 1080p on a CRTC still running 720p: zoomed and cropped.
+
+    Device only: run with run-local.sh on a Pi with HDMI-A-2 empty and nothing
+    else holding DRM master. cmdlinemode.so makes the connector look as it
+    does with video=HDMI-A-2:1280x720@60e, which can't be set without a reboot.
+    """
+    import shims
+    empty_connector()
+    path = glob.glob(f"/sys/class/drm/card*-{CONNECTOR}/connector_id")[0]
+    with open(path) as f:
+        connector_id = f.read().strip()
+    fppd.write("config/co-other.json", {"channelOutputs": [
+        {"enabled": 1, "type": "VirtualMatrix", "startChannel": 1, "channelCount": 448 * 252 * 3,
+         "device": CONNECTOR, "width": 448, "height": 252}]})
+    fppd.settings(DisableFakeNetworkBridges="1", LogLevel_ChannelOut="info")
+    fppd.start(preload=[shims.build("cmdlinemode.c", libs=("-ldl", "-I/usr/include/libdrm"))],
+               extra_env={"CMDLINEMODE_CONNECTOR_ID": connector_id, "CMDLINEMODE_EDID": "1" if edid else "0"})
+    fppd.wait_for(lambda: f"KMSFrameBuffer: {CONNECTOR} mode" in fppd.log() or
+                  f"no display on {CONNECTOR} yet" in fppd.log(), timeout=20)
+    out = fppd.log()
+    if "refused (Permission denied)" in out:
+        pytest.skip("another process holds DRM master (a kiosk's X server?)")
+    assert f"KMSFrameBuffer: {CONNECTOR} mode 1280x720 @ 60Hz" in out, fppd.tail()
+    assert "modeset failed" not in out, fppd.tail()
