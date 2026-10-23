@@ -183,8 +183,15 @@ def test_a_command_whose_second_the_clock_steps_over_still_runs(fppd):
 
     before = step("20:29:57")
     time.sleep(1)
+    # The jump to 20:29:57 reloaded the schedule; the step under test must not.
+    # Judged from fppd's log, not by differencing two status reads: a read
+    # just after a step can come back a second short, which made a 4 s step
+    # look like 6.
+    reloads = fppd.log().count("Current Schedule:")
     after = step("20:30:02")
-    assert before.time() < datetime.time(20, 30) < after.time() and (after - before).seconds <= 5, \
-        f"the step went from {before} to {after}, not over 20:30:00 by at most 5 s"
+    assert before.time() < datetime.time(20, 30) < after.time(), \
+        f"the step went from {before} to {after}, not over 20:30:00"
     fppd.wait_for(lambda: (fppd.get("/variables") or {}).get("Ran", {}).get("value") == "yes",
                   timeout=10, interval=0.5, what="the 20:30:00 command the clock stepped over")
+    assert fppd.log().count("Current Schedule:") == reloads, \
+        "the step reloaded the schedule, so the command may have run from the reload, not the stepped-over second"
