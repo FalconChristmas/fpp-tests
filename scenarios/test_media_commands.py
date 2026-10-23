@@ -473,3 +473,66 @@ def test_a_resumed_vbr_mp3_comes_back_where_it_left_off(fppd, audio):
             bursts += 1
         quiet = 0 if abs(x) > 0.1 else quiet + 1
     assert bursts >= 4, f"heard {bursts} bursts in the 6 s after the resume"
+
+
+def test_command_media_freed_while_its_slot_is_still_called(fppd, audio):
+    """Play Media of a 0.3 s file on slot 1, 40 times over, each left to end
+    by itself, while three clients keep sending Set Slot Volume for slot 1:
+    fppd stays clean (no race, no memory error) and the media still plays
+    afterwards.
+
+    Regression: 0d21c6e70. A Play Media output that has ended is freed on
+    the main loop a moment later, but it stayed in slot 1's table until
+    ~GStreamerOutput's Close(), after GStreamerPlayData's members were
+    already destroyed and its vtable gone. The slot manager's calls into it
+    from the HTTP threads (SetVolume(), RequestStop()) went on reaching it
+    all that time: under TSan, a race between the virtual call and the
+    destructor's vtable switch. Shown red on master with the fix's Close()
+    taken out: the fix's parent shows the same race, but its TSan run is red
+    either way, from races later commits fixed.
+
+    Each play is left to end by itself, and the next starts only once the
+    slot is idle, so that no HTTP thread stops an output while another sets
+    its volume: that is a race of its own on master (PROBLEMS.md #26).
+    """
+    write_tone_wav(os.path.join(fppd.media, "music", "Blip.wav"), 0.3)
+    write_tone_wav(os.path.join(fppd.media, "music", "After.wav"), 1.2)
+    fppd.start()
+    done = threading.Event()
+    errors = []
+    calls = [0]
+
+    def hammer(seed):
+        rnd = random.Random(seed)
+        while not done.is_set():
+            try:
+                fppd.command("Set Slot Volume", "1", str(rnd.randint(40, 90)), timeout=15)
+            except TimeoutError as e:
+                errors.append(str(e))
+                return
+            except Exception:  # refused while the slot is idle (before 6f875034b)
+                pass
+            calls[0] += 1
+
+    def idle():
+        s = slot_status(fppd, 1)
+        return s and s.get("status") == "idle"
+
+    threads = [threading.Thread(target=hammer, args=(s,)) for s in range(3)]
+    for t in threads:
+        t.start()
+    try:
+        for _ in range(40):
+            fppd.command("Play Media", "Blip.wav", "1", "0", "1", timeout=15)
+            fppd.wait_for(idle, timeout=10, interval=0.02, what="the 0.3 s play to end")
+    finally:
+        done.set()
+        for t in threads:
+            t.join()
+    assert not errors, errors[0]
+    assert calls[0] >= 200, f"only {calls[0]} volume calls during the 40 plays"
+    rec = audio.record()
+    fppd.command("Play Media", "After.wav", "1", "0", "1", timeout=10)
+    time.sleep(2)
+    heard = sounding_seconds(rec.stop())
+    assert heard >= 0.8, f"after the plays a 1.2 s file played {heard:.2f} s"
