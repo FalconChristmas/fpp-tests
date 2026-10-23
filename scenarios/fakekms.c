@@ -7,15 +7,27 @@
  *                       event start, frame or stop, appended per event.
  *   FAKEKMS_FAIL_AFTER  n: after n frames, post an error and return
  *                       GST_FLOW_ERROR, as a display that went away does.
+ *   FAKEKMS_SETPLANE    "1": put each frame on the sink's plane with
+ *                       drmModeSetPlane() on its fd, as the real sink does --
+ *                       scaled to fit the connector's mode, and on failure
+ *                       once more unscaled, centred, before giving up with
+ *                       the real sink's error.  For a fake card (fakedrm.c)
+ *                       to see the plane: the frame is a framebuffer of the
+ *                       negotiated format and size, with nothing in it.
  *
  * Loaded by pointing GST_PLUGIN_SYSTEM_PATH_1_0 at a directory holding it
  * and every system plugin except libgstkms.so (video.fake_kms_env()).
  */
+#include <drm_fourcc.h>
+#include <errno.h>
 #include <gst/base/gstbasesink.h>
 #include <gst/gst.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
+#include <xf86drm.h>
+#include <xf86drmMode.h>
 
 #define GST_TYPE_FAKE_KMS (gst_fake_kms_get_type())
 G_DECLARE_FINAL_TYPE(GstFakeKms, gst_fake_kms, GST, FAKE_KMS, GstBaseSink)
@@ -32,6 +44,10 @@ struct _GstFakeKms {
     gboolean force_modesetting;
     gboolean can_scale;
     guint frames;
+    // FAKEKMS_SETPLANE: the negotiated frame, and its framebuffer on fd.
+    guint32 format;
+    gint width, height;
+    guint32 fb_id;
 };
 
 G_DEFINE_TYPE(GstFakeKms, gst_fake_kms, GST_TYPE_BASE_SINK)
@@ -84,12 +100,85 @@ static gboolean gst_fake_kms_stop(GstBaseSink* sink) {
     return TRUE;
 }
 
+static guint32 drm_format(const gchar* f) {
+    if (!f) return DRM_FORMAT_XRGB8888;
+    if (!strcmp(f, "I420")) return DRM_FORMAT_YUV420;
+    if (!strcmp(f, "YV12")) return DRM_FORMAT_YVU420;
+    if (!strcmp(f, "NV12")) return DRM_FORMAT_NV12;
+    if (!strcmp(f, "NV21")) return DRM_FORMAT_NV21;
+    if (!strcmp(f, "RGB16")) return DRM_FORMAT_RGB565;
+    if (!strcmp(f, "RGB") || !strcmp(f, "BGR")) return DRM_FORMAT_RGB888;
+    return DRM_FORMAT_XRGB8888;
+}
+
+static gboolean gst_fake_kms_set_caps(GstBaseSink* sink, GstCaps* caps) {
+    GstFakeKms* self = GST_FAKE_KMS(sink);
+    GstStructure* s = gst_caps_get_structure(caps, 0);
+    self->format = drm_format(gst_structure_get_string(s, "format"));
+    gst_structure_get_int(s, "width", &self->width);
+    gst_structure_get_int(s, "height", &self->height);
+    self->fb_id = 0;  // a new one for the new shape, on the next frame
+    return TRUE;
+}
+
+// The real sink's drmModeSetPlane(): the frame fitted to the mode keeping its
+// shape, or where the driver refused that, at its own size in the middle.
+static gboolean show_frame(GstFakeKms* self) {
+    drmModeConnectorPtr conn = drmModeGetConnector(self->fd, (uint32_t)self->connector_id);
+    if (!conn || !conn->count_modes || !conn->encoder_id) {
+        if (conn) drmModeFreeConnector(conn);
+        errno = ENODEV;
+        return FALSE;
+    }
+    gint dw = conn->modes[0].hdisplay, dh = conn->modes[0].vdisplay;
+    drmModeEncoderPtr enc = drmModeGetEncoder(self->fd, conn->encoder_id);
+    drmModeFreeConnector(conn);
+    guint32 crtc = enc ? enc->crtc_id : 0;
+    if (enc) drmModeFreeEncoder(enc);
+    if (!self->fb_id) {
+        guint32 handles[4] = { 1, 1, 1, 0 }, pitches[4] = { 0 }, offsets[4] = { 0 };
+        if (drmModeAddFB2(self->fd, self->width, self->height, self->format, handles, pitches, offsets,
+                          &self->fb_id, 0)) {
+            return FALSE;
+        }
+    }
+    for (;;) {
+        gint w = self->width, h = self->height;
+        if (self->can_scale) {
+            if ((gint64)w * dh > (gint64)h * dw) {
+                h = (gint)((gint64)h * dw / w), w = dw;
+            } else {
+                w = (gint)((gint64)w * dh / h), h = dh;
+            }
+        } else {
+            w = MIN(w, dw), h = MIN(h, dh);
+        }
+        gint sw = self->can_scale ? self->width : w, sh = self->can_scale ? self->height : h;
+        if (!drmModeSetPlane(self->fd, (uint32_t)self->plane_id, crtc, self->fb_id, 0, (dw - w) / 2, (dh - h) / 2,
+                             w, h, 0, 0, (uint32_t)sw << 16, (uint32_t)sh << 16)) {
+            return TRUE;
+        }
+        if (!self->can_scale) {
+            return FALSE;
+        }
+        self->can_scale = FALSE;
+    }
+}
+
 static GstFlowReturn gst_fake_kms_render(GstBaseSink* sink, GstBuffer* buf) {
     GstFakeKms* self = GST_FAKE_KMS(sink);
     const char* fail = getenv("FAKEKMS_FAIL_AFTER");
+    const char* setplane = getenv("FAKEKMS_SETPLANE");
     (void)buf;
     if (fail && self->frames >= (guint)atoi(fail)) {
         GST_ELEMENT_ERROR(self, RESOURCE, WRITE, ("fakekms: display gone"), (NULL));
+        return GST_FLOW_ERROR;
+    }
+    if (setplane && !strcmp(setplane, "1") && self->fd >= 0 && self->plane_id > 0 && !show_frame(self)) {
+        int err = errno;
+        record(self, "refused");
+        GST_ELEMENT_ERROR(self, RESOURCE, FAILED, (NULL),
+                          ("drmModeSetPlane failed: %s (%d)", g_strerror(err), err));
         return GST_FLOW_ERROR;
     }
     self->frames++;
@@ -170,6 +259,7 @@ static void gst_fake_kms_class_init(GstFakeKmsClass* klass) {
     base->start = gst_fake_kms_start;
     base->stop = gst_fake_kms_stop;
     base->render = gst_fake_kms_render;
+    base->set_caps = gst_fake_kms_set_caps;
 }
 
 static void gst_fake_kms_init(GstFakeKms* self) {

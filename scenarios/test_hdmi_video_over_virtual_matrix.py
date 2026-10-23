@@ -1,16 +1,21 @@
 """A video on an HDMI port with a Virtual Matrix on it, on a Pi 0-3.
 
-Hardware-only: needs a Raspberry Pi 0-3 on full KMS (vc4, "brcm,bcm2835-vc4")
-with a display on HDMI-A-1 running 1920x1080 @ 60Hz, and the card's DRM
-master free -- stop the device's own fppd for the run if it drives a display
-(`sudo systemctl stop fppd`). The video plays on the real display. Verified
-with run-local.sh on a Pi 3 Model B: fails at c7a2fca, passes at 27872fa1c.
-
 The vc4 kernel driver on a Pi 0-3 adds up what every enabled plane costs the
 display controller (HVS) and refuses a plane commit over 240M cycles/s, with
 ENOSPC and nothing in dmesg. A 288x168 Virtual Matrix at 6x is a 1728x1008
 plane scaled to 1920x1080: 62.2M. A full-screen 1080p I420 video plane:
 186.6M. Together they are over the limit.
+
+Two cases:
+- fake: anywhere, Docker included. fppd drives a fake Pi 3 card (fakedrm.c)
+  with the kernel's load limit, and plays into the stand-in kmssink
+  (fakekms.c), which puts each frame on its plane of that card.
+- device: a real Raspberry Pi 0-3 on full KMS ("brcm,bcm2835-vc4") with a
+  display on HDMI-A-1 running 1920x1080 @ 60Hz, and the card's DRM master
+  free -- stop the device's own fppd for the run if it drives a display
+  (`sudo systemctl stop fppd`). The video plays on the real display.
+  Skipped elsewhere. Verified with run-local.sh on a Pi 3 Model B: fails at
+  c7a2fca, passes at 27872fa1c.
 """
 
 import fcntl
@@ -21,8 +26,10 @@ import time
 
 import pytest
 
+import fakedrm
+from test_video import make_video
+
 CONNECTOR = "HDMI-A-1"
-VIDEO = "Full1080.mp4"
 ENOSPC = "No space left on device"
 
 DRM_IOCTL_SET_MASTER = 0x641E
@@ -37,8 +44,8 @@ def read(path):
         return ""
 
 
-def why_not():
-    """Why this device can't run the scenario, or None."""
+def why_not_device():
+    """Why this device can't run the device case, or None."""
     if "brcm,bcm2835-vc4" not in read("/proc/device-tree/soc/gpu/compatible"):
         return "not a Raspberry Pi 0-3 on full KMS (the load limit is only enforced there)"
     status = glob.glob(f"/sys/class/drm/card*-{CONNECTOR}/status")
@@ -62,11 +69,7 @@ def why_not():
     return None
 
 
-REASON = why_not()
-pytestmark = pytest.mark.skipif(REASON is not None, reason=REASON or "")
-
-
-def make_video(path, seconds=10):
+def make_h264(path, seconds=10):
     """Full-frame 1920x1080 H.264, no audio, no letterbox bars: decoded on
     the Pi's hardware decoder to an I420 plane covering the whole screen."""
     r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
@@ -88,7 +91,27 @@ def setup(fppd):
         "scaling": "Hardware", "colorOrder": "RGB", "invert": 0, "xoff": 0, "yoff": 0,
         "startChannel": 1, "channelCount": w * h * 3}]})
     fppd.settings(DisableFakeNetworkBridges="1", LogLevel_ChannelOut="info", LogLevel_MediaOut="debug")
-    make_video(os.path.join(fppd.media, "videos", VIDEO))
+
+
+def start(fppd, card):
+    """Start fppd on the card, with a full-frame 1080p video to play. Returns
+    the video's name."""
+    setup(fppd)
+    if card == "fake":
+        # The image has no H.264 decoder; a VP8 one decodes to I420 as well.
+        video = "Full1080.mkv"
+        make_video(os.path.join(fppd.media, "videos", video), seconds=10, width=1920, height=1080,
+                   fps=10, audio=False)
+        preload, env = fakedrm.start_env(fppd)
+        fppd.start(preload=preload, extra_env=env)
+    else:
+        reason = why_not_device()
+        if reason:
+            pytest.skip(reason)
+        video = "Full1080.mp4"
+        make_h264(os.path.join(fppd.media, "videos", video))
+        fppd.start()
+    return video
 
 
 def mode_line(fppd):
@@ -100,7 +123,12 @@ def count(fppd, text):
     return fppd.log().count(text)
 
 
-def test_a_1080p_video_plays_over_a_virtual_matrix_on_its_port(fppd, audio):
+def details(fppd, card):
+    return fppd.tail() + (f"\n--- fake card:\n{fakedrm.log(fppd)[-3000:]}" if card == "fake" else "")
+
+
+@pytest.mark.parametrize("card", ["fake", "device"])
+def test_a_1080p_video_plays_over_a_virtual_matrix_on_its_port(fppd, audio, card):
     """A full-screen 1080p video plays to HDMI with a Virtual Matrix on the
     same port, and the matrix is back once the video is over. Twice, so a
     video that takes the port after another gave it back is covered too.
@@ -112,8 +140,7 @@ def test_a_1080p_video_plays_over_a_virtual_matrix_on_its_port(fppd, audio):
     "drmModeSetPlane failed: No space left on device (28)", and the video
     never started.
     """
-    setup(fppd)
-    fppd.start()
+    video = start(fppd, card)
     fppd.wait_for(lambda: mode_line(fppd), timeout=15, what=f"the Virtual Matrix to light {CONNECTOR}")
     if "1920x1080 @ 60Hz" not in mode_line(fppd):
         pytest.skip(f"the display runs {mode_line(fppd).split('mode', 1)[-1].strip()}; "
@@ -122,17 +149,17 @@ def test_a_1080p_video_plays_over_a_virtual_matrix_on_its_port(fppd, audio):
     for run in (1, 2):
         aside = count(fppd, "media is playing here, standing aside")
         back = count(fppd, "media finished, showing output again")
-        fppd.command("Play Media", VIDEO, "1", "0", "1", CONNECTOR)
+        fppd.command("Play Media", video, "1", "0", "1", CONNECTOR)
         # Past the first frame: before the fix the pipeline gave up within
         # a few hundred milliseconds of it.
         time.sleep(4)
         st = fppd.get("/fppd/status")
         assert ENOSPC not in fppd.log(), \
-            f"run {run}: the display refused the video's plane\n{fppd.tail()}"
+            f"run {run}: the display refused the video's plane\n{details(fppd, card)}"
         assert st.get("status_name") != "idle", \
-            f"run {run}: the video is not playing 4s in (status {st.get('status_name')!r})\n{fppd.tail()}"
+            f"run {run}: the video is not playing 4s in (status {st.get('status_name')!r})\n{details(fppd, card)}"
         assert count(fppd, "media is playing here, standing aside") > aside, \
-            f"run {run}: the Virtual Matrix did not stand aside for the video\n{fppd.tail()}"
+            f"run {run}: the Virtual Matrix did not stand aside for the video\n{details(fppd, card)}"
 
         fppd.command("Stop Now")
         fppd.wait_for(lambda: count(fppd, "media finished, showing output again") > back, timeout=10,
