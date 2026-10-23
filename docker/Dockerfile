@@ -8,6 +8,10 @@ ARG DEBIAN_FRONTEND=noninteractive
 # and every scenario that renders text skips.
 # libav*-dev: fpp before e8279e3cc built its SDL video output on ffmpeg,
 # so trees from before then don't build without it. Nothing later uses it.
+# avahi-daemon, avahi-utils: test_mdns.py starts a daemon of its own (on a
+# system bus of its own) for fppd's mDNS backend, and reads what it publishes
+# with avahi-browse. Nothing starts them otherwise, so fppd elsewhere still
+# runs without a daemon, as it always has here.
 # xxd, device-tree-compiler: what FPP's own scripts call (the PocketBeagle2
 # EEPROM repair, the Pi overlay upgrade steps); without them the scenarios
 # for those fall back to stand-ins.
@@ -26,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         pipewire pipewire-bin pipewire-pulse wireplumber pulseaudio-utils \
         python3 python3-pytest python3-zstandard faketime tzdata procps iproute2 gdb patch zip \
         mosquitto mosquitto-clients gcovr qrencode \
-        xxd device-tree-compiler \
+        xxd device-tree-compiler avahi-daemon avahi-utils \
         fonts-dejavu-core \
         libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev \
     && rm -rf /var/lib/apt/lists/*
