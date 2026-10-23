@@ -1,11 +1,16 @@
 """Playlist entries that play media, against a PipeWire null sink (the
 `audio` fixture): the sequence+media ("both") entry's media offset and
-media that fails to start, random media across pause and resume, and the
-media details each entry hands to plugins."""
+media that fails to start, random media across pause and resume, the
+media details each entry hands to plugins, and the length of a fragmented
+MP4."""
 
 import json
 import os
+import struct
+import subprocess
 import time
+
+import pytest
 
 from audio import write_tone_wav
 from capture import UdpCapture
@@ -201,3 +206,70 @@ def test_media_details_are_cleared_for_each_entry(fppd, audio):
     assert missing == {"type": "media", "Sequence": "", "Media": "Missing.wav"}, missing
     assert tone == {"type": "media", "Sequence": "", "Media": "Tone.au",
                     "length": "2", "seconds": "2"}, tone
+
+
+def write_fragmented_m4a(path, seconds):
+    """`seconds` of a 48 kHz mono tone as MP3 in a fragmented MP4: an ftyp,
+    a moov with no samples and a length of zero, then moof/mdat pairs of
+    0.5 s each, and nothing else that gives the length away. GStreamer's
+    mp4mux writes it, and also writes the length in an mehd box in the moov
+    and in an mfra index at the end, which some muxers leave out (ffmpeg's
+    empty_moov, a live recording); the mehd is renamed to a free box and the
+    mfra cut off. Returns the top-level boxes."""
+    r = subprocess.run(["gst-launch-1.0", "-q", "audiotestsrc", f"num-buffers={seconds * 48000 // 1024}",
+                        "samplesperbuffer=1024", "!", "audio/x-raw,rate=48000,channels=1", "!",
+                        "audioconvert", "!", "lamemp3enc", "!", "mpegaudioparse", "!",
+                        "mp4mux", "fragment-duration=500", "streamable=true", "!",
+                        "filesink", f"location={path}"], capture_output=True, text=True, timeout=120)
+    if r.returncode:
+        pytest.skip(f"cannot make a fragmented MP4 (lamemp3enc, mp4mux): {r.stderr.strip()[-300:]}")
+    with open(path, "rb") as f:
+        data = bytearray(f.read())
+    boxes, i = [], 0
+    while i + 8 <= len(data):
+        size, kind = struct.unpack(">I4s", data[i:i + 8])
+        if kind == b"mfra":
+            del data[i:]
+            break
+        boxes.append(kind.decode("latin-1"))
+        i += size
+    assert data.count(b"mehd") == 1, "no single mehd box in the moov"
+    at = data.index(b"mehd")
+    data[at:at + 4] = b"free"
+    with open(path, "wb") as f:
+        f.write(data)
+    return boxes
+
+
+def test_a_fragmented_mp4s_length_comes_from_the_duration_cache(fppd, audio):
+    """A media entry playing Frag.m4a, an 8 s fragmented MP4 (an empty moov,
+    then moof/mdat fragments, with no mehd or mfra to give the length)
+    whose length is 8.0 s in config/media_durations.cache (what the file
+    manager's ffprobe leaves there), has its time remaining counted down
+    from 8 s: once 2 s have played, elapsed plus remaining in fppd's status
+    is 7 or 8 s (each is whole seconds, rounded down).
+
+    Regression: e52e22cad. The header, all TagLib reads, gives a fragmented
+    file a length of zero, and GStreamer learns the length only as it reads
+    the fragments, so the entry's length followed its position and the time
+    remaining sat at 0 for the whole track.
+    """
+    m4a = os.path.join(fppd.media, "music", "Frag.m4a")
+    boxes = write_fragmented_m4a(m4a, 8)
+    assert boxes[:3] == ["ftyp", "moov", "moof"] and "mdat" in boxes, boxes
+    fppd.write("config/media_durations.cache",
+               {"Frag.m4a": {"filesize": os.path.getsize(m4a), "duration": "8.000000"}})
+    fppd.write("playlists/Frag.json", playlist("Frag", [
+        {"type": "media", "enabled": 1, "playOnce": 0, "mediaName": "Frag.m4a"}]))
+    fppd.start()
+    fppd.command("Start Playlist", "Frag", "false", "false")
+
+    def two_seconds_in():
+        st = status(fppd)
+        return st if st.get("status_name") == "playing" and int(st.get("seconds_elapsed", 0)) >= 2 else None
+
+    st = fppd.wait_for(two_seconds_in, timeout=15, interval=0.1, what="2 s of Frag.m4a to play")
+    fppd.command("Stop Now")
+    assert st.get("current_song") == "Frag.m4a", st
+    elapsed, remaining = int(st["seconds_elapsed"]), int(st["seconds_remaining"])
+    assert elapsed + remaining in (7, 8), (elapsed, remaining, st.get("time_remaining"))

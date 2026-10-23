@@ -223,6 +223,11 @@ called_from_lib:libgstrtspserver-1.0.so
 called_from_lib:libgstaudioparsers.so
 called_from_lib:libgstmpg123.so
 called_from_lib:libmpg123.so.0
+# qtdemux (MP4/M4A, test_playlist_media.py's fragmented MP4): the same
+# g_rec_mutex_unlock() tail call as pipewiresink above, and its sample tables,
+# grown on the streaming thread, freed by the pipeline teardown
+# (FPP-GstReaper) under GStreamer's stream lock.
+called_from_lib:libgstisomp4.so
 # The overlay member's appsink callback reads the state pointer it was given
 # through gst_app_sink_set_callbacks(), whose lock is inside libgstapp and so
 # ignored above: TSan loses that hand-off and reports the read against the
