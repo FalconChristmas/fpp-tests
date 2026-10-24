@@ -104,3 +104,33 @@ def test_bad_panel_geometry_is_refused(type_, w, h, scan):
         handler_map(type_, w, h, scan, timeout=5)
     except subprocess.TimeoutExpired:
         pytest.fail(f"{type_} {w}x{h} 1/{scan}: createHandler() never returned")
+
+
+def test_doublez_interleave_maps_every_pixel_once():
+    """The DoubleZ interleave ("RPi21" on a Pi, as the LED Panels page saves
+    it) is refused or maps the panel one to one at every size and scan the
+    UI offers. On a 32x16 1/4 panel each 8-column block of the scanned
+    half becomes 16 columns of 4 rows: its rows 4-7 in the first 8 columns
+    and its rows 0-3 in the next 8, both left to right.
+
+    Regression: 1686dd7f1 added the interleave. Before it there was no
+    21st Pi mapper: "RPi21" left the mapper unset and the handler
+    dereferenced it, a SIGSEGV building the handler.
+    """
+    bad = []
+    mapped = 0
+    for w, h, scan in UI_SIZES:
+        m = handler_map("RPi21", w, h, scan)
+        if m is None:
+            continue
+        mapped += 1
+        if len(set(m.values())) != len(m):
+            bad.append(f"{w}x{h} 1/{scan}: {len(m) - len(set(m.values()))} pixels share a place")
+    assert not bad, "; ".join(bad)
+    assert mapped, "DoubleZ was refused at every size"
+
+    m = handler_map("RPi21", 32, 16, 4)
+    want = {(x, y): (16 * (x // 8) + (8 if y < 4 else 0) + x % 8, y % 4)
+            for y in range(8) for x in range(32)}
+    diff = [k for k in want if m.get(k) != want[k]]
+    assert not diff, f"{len(diff)} pixels misplaced, first {diff[0]}: {m.get(diff[0])} != {want[diff[0]]}"
