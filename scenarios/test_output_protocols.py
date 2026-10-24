@@ -619,6 +619,81 @@ def test_generic_udp_to_a_multicast_group_keeps_sending(fppd):
         ip("link", "del", ADDR_IFACE)
 
 
+def test_generic_udp_multicast_leaves_by_the_output_interface(fppd):
+    """A Generic UDP output to a multicast group sends out of the UDP
+    output's interface (fpptd0), not by the default route.
+
+    Regression: 394680df9. Generic UDP packets were grouped by their
+    destination address, not with the other multicast, so the socket they
+    went out on had no IP_MULTICAST_IF and followed the default route:
+    devices on the show network never saw them.
+    """
+    from capture import UdpCapture
+
+    group, port = "239.255.50.1", 9124
+    address_less_interface()
+    try:
+        ip("addr", "add", "10.66.0.1/24", "dev", ADDR_IFACE)
+        entry = output(1, 1, 1, 10)  # the UDP output Generic UDP sends through
+        entry["address"] = "10.66.0.2"
+        fppd.write("config/co-universes.json", {"channelOutputs": [{
+            "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 10,
+            "interface": ADDR_IFACE, "universes": [entry]}]})
+        fppd.write("config/co-other.json", {"channelOutputs": [{
+            "type": "GenericUDP", "enabled": 1, "startChannel": 1, "channelCount": 30,
+            "description": "group", "address": group, "port": port, "tokens": "{data}"}]})
+        fppd.settings(DisableFakeNetworkBridges="1")
+        with UdpCapture(port, dst_ip=group, iface=ADDR_IFACE) as show:
+            fppd.start()
+            fppd.command("Test Start", "100", "RGB Cycle", "1-30", "R-G-B")
+            fppd.wait_for(lambda: len(show.snapshot()) >= 5, timeout=10,
+                          what=f"Generic UDP packets to {group} on {ADDR_IFACE}")
+    finally:
+        ip("link", "del", ADDR_IFACE)
+
+
+def test_an_unreachable_generic_udp_controller_is_flagged_until_its_output_goes(fppd):
+    """A Generic UDP output to a unicast address nothing answers raises the
+    unreachable-controller warning, as an E1.31 or DDP output to it would,
+    and deleting the output takes the warning down.
+
+    Regression: e801353d8. Since e2422ff8e Generic UDP outputs attach to the
+    UDP output after it has collected the controllers it pings, so theirs
+    were never pinged: one that went offline was never flagged, nor taken
+    out of the frame.
+    """
+    target, port = "10.66.0.9", 9124
+    address_less_interface()
+    try:
+        ip("addr", "add", "10.66.0.1/24", "dev", ADDR_IFACE)
+        entry = output(1, 1, 1, 10)
+        entry["address"] = "10.66.0.2"
+        entry["active"] = 0  # the UDP output Generic UDP sends through; nothing of its own
+        fppd.write("config/co-universes.json", {"channelOutputs": [{
+            "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 10,
+            "interface": ADDR_IFACE, "universes": [entry]}]})
+        fppd.write("config/co-other.json", {"channelOutputs": [{
+            "type": "GenericUDP", "enabled": 1, "startChannel": 1, "channelCount": 30,
+            "description": "offline", "address": target, "port": port, "tokens": "{data}"}]})
+        fppd.settings(DisableFakeNetworkBridges="1")
+
+        def unreachable():
+            return [w for w in fppd.get("/fppd/status").get("warningInfo", [])
+                    if w.get("id") == 27 and target in str(w)]
+
+        fppd.start()
+        fppd.command("Test Start", "100", "RGB Cycle", "1-30", "R-G-B")
+        # three pings 15 s apart and an HTTP probe between them have to fail
+        fppd.wait_for(unreachable, timeout=75, interval=1,
+                      what=f"the unreachable-controller warning for {target}")
+        time.sleep(1.1)  # a save in a later second, as a person makes it
+        fppd.write("config/co-other.json", {"channelOutputs": []})
+        fppd.wait_for(lambda: not unreachable(), timeout=10,
+                      what="the warning to come down with the output")
+    finally:
+        ip("link", "del", ADDR_IFACE)
+
+
 def e131_sync_capture(fppd, seconds=3):
     """Play a sequence to an E1.31 universe with sync universe 7, unicast
     to a Listener here; return (data packets, sync packets). The sync

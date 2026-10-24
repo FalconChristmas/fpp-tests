@@ -367,6 +367,43 @@ def test_outputs_saved_while_the_output_thread_is_inside_a_slow_send(fppd):
         fppd.command("Test Stop")
 
 
+def test_outputs_saved_while_every_cycle_runs_over_its_frame_time(fppd):
+    """Saving the outputs while every output cycle takes longer than its
+    frame time still reloads them: three saves, each replaced within a few
+    seconds, and the new output sends after each.
+
+    As above, but each send takes 300 ms against the default 50 ms bridging
+    interval, so the thread is always behind and never waits between frames.
+
+    Regression: f2e1e39b2. The output thread let go of outputThreadLock
+    only in its wait for the next frame, which it skips while it is behind,
+    so the reload's lock() in ReloadChannelOutputsForFile() waited for as
+    long as the outputs stayed slow: the main loop stopped there, and the
+    outputs could not be replaced to fix them short of restarting fppd.
+    """
+    def config(description):
+        c = ddp_output(CHANNELS)
+        c["channelOutputs"][0]["threaded"] = 0
+        c["channelOutputs"][0]["universes"][0]["description"] = description
+        return c
+
+    fppd.write("config/co-universes.json", config("a"))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start(preload=[shims.build("co_slowsendmmsg.c")], extra_env={
+            "CO_SLOWSENDMMSG_THREAD": "FPP-ChannelOut", "CO_SLOWSENDMMSG_MS": "300"})
+        fppd.command("Test Start", "100", "RGB Cycle", f"1-{CHANNELS}", "R-G-B")
+        assert rx.wait_frames(2, timeout=10), "test mode sent nothing"
+        for i in range(3):
+            time.sleep(1.1)  # a save in a later second, as a person makes it
+            fppd.write("config/co-universes.json", config(f"save {i}"))
+            fppd.wait_for(lambda: fppd.log().count("Calling Init() on UDPOutput output") >= i + 2,
+                          timeout=10, what=f"the outputs to reload for save {i + 1}")
+            assert rx.wait_frames(2, timeout=10, since=time.monotonic()), \
+                f"nothing on the wire after save {i + 1}"
+        fppd.command("Test Stop")
+
+
 def test_an_outputs_disabled_preset_that_enables_an_overlay_model(fppd):
     """An OUTPUTS_DISABLED command preset that enables an overlay model,
     fired as the output thread idles out after startup, brings output back:
