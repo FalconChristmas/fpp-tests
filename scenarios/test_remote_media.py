@@ -120,7 +120,7 @@ def test_remote_audio_rides_out_late_packets(fppd, audio):
     seek after the first late packet, and its sound stays within 50 ms of the
     master's.
 
-    Regression: e2c824e2b. AdjustFeedSpeed() steered by every packet as it
+    Regression: 7f573e2d3. AdjustFeedSpeed() steered by every packet as it
     arrived. A late one carries a position the master has moved past, so it
     read as the remote ~100 ms ahead, past the 50 ms seek threshold: the
     seek pulled the sound back by the delay, the landing taught the next
@@ -132,17 +132,19 @@ def test_remote_audio_rides_out_late_packets(fppd, audio):
 
     Needs a real card: run-local.sh --host-audio, on each side of the fix
     (verify-fix.sh builds in Docker, which has none). Verified with
-    run-local.sh --host-audio on a Pi 5 with a USB card: on 10.3
-    (da997bd61), 27 resync seeks after the late packets began, three per
-    late packet (the run stopped first on its burst count, 28 of 48 heard,
-    the seeks' dropouts taking the rest); passed with the fix on 10.3
-    (81e7b4fae, the same change as e2c824e2b)."""
+    run-local.sh --host-audio on a Pi 5 with an I2S DAC, optimized builds:
+    on the parent, 04ee4931e, 27 resync seeks after the late packets began,
+    three per late packet, and the sound settled ~100 ms ahead of the
+    master; on 7f573e2d3, no seek, -3..+8 ms (2 of 2). (Also on a Pi 5
+    with a USB card against 10.3: 27 seeks without the fix, a pass with
+    it.)"""
     if not os.environ.get("FPP_TESTS_HOST_AUDIO"):
         pytest.skip("needs a real sound card: run-local.sh --host-audio")
     secs = int(os.environ.get("FPP_TESTS_REMOTE_SECONDS", "120"))
     assert secs >= 60, "FPP_TESTS_REMOTE_SECONDS must leave room for late packets after 30 s"
     burst_tone(os.path.join(fppd.media, "music", "Song.wav"), secs + 5)
-    fppd.settings(fppMode="remote")
+    # The seeks are counted from their LogInfo line: below info, none would be.
+    fppd.settings(fppMode="remote", LogLevel_MediaOut="info")
     seen = {}
     late = _remote_follows(fppd, audio, "Song.wav", seen=seen,
                            delay=lambda k: 0.1 if k >= 50 and k % 20 == 0 else 0.0)
