@@ -214,3 +214,82 @@ def test_test_pattern_keeps_cycling_through_a_clock_step(fppd):
         time.sleep(2)
         seen = {f[:9] for _, f in rx.snapshot(since)}
         assert len(seen) >= 3, f"the chase stopped moving after the clock stepped back: {len(seen)} frame(s)"
+
+
+def advertised_range(fppd):
+    """The channel range Test Start's argument list offers by default: the
+    outputs' channels, as the channel tester page fills it in."""
+    info = fppd.get("/fppd/testing/tests/RGB%20Chase")
+    return [a for a in info["args"] if a.get("name") == "ChannelRange"][0]["contents"]
+
+
+def test_the_outputs_range_survives_an_output_config_reload(fppd):
+    """After co-universes.json is saved again, the channel range test mode
+    offers is still the outputs' channels, not the 1-8 placeholder for no
+    outputs at all.
+
+    Regression: fc72e4196. Recomputing the ranges checked each new range
+    against the previous computation's list instead of the one being built,
+    so on every reload each range looked covered already, the list came out
+    empty and the {0,8} default went in: test mode and the debug output saw
+    channels 1-8 until fppd restarted."""
+    setup(fppd)
+    fppd.settings(LogLevel_ChannelOut="debug")
+    fppd.start()
+    before = advertised_range(fppd)
+    assert before and before != ["1-8"], f"the outputs' range at startup: {before}"
+
+    def computed():
+        # logged as the new list is put in place
+        return fppd.log().count("Determined range needed")
+    base = computed()
+    time.sleep(1.1)  # a save in a later second, as a person makes it
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.wait_for(lambda: computed() > base, timeout=10,
+                  what="the ranges recomputed for the reload of co-universes.json")
+    time.sleep(0.5)
+    after = advertised_range(fppd)
+    assert after == before, f"the range offered after the reload: {after}, at startup: {before}"
+
+
+RW, GW, BW, WW = b"\xff\x00\x00\x00", b"\x00\xff\x00\x00", b"\x00\x00\xff\x00", b"\x00\x00\x00\xff"
+
+
+@pytest.mark.parametrize("pattern", ["RGB Single Color", "RGB Chase", "RGB Cycle"])
+def test_rgbw_patterns_step_by_whole_four_channel_nodes(fppd, pattern):
+    """The RGBW forms of the patterns lay four channels a node over 16
+    channels (four RGBW nodes): an 8-digit single colour with W at 0 repeats
+    all four of its bytes; the R-G-B-W chase shows R, G, B and W nodes,
+    each in its own node, moving one node a cycle; the R-G-B-W cycle shows
+    every node the same one of the four colours, through all four. Nothing
+    past channel 16 lights.
+
+    Regression: 5bcd75820. The fill only stepped by four when W was not 0,
+    so #11223300 went out as 11 22 33 11 22 33...; the R-G-B-W chase and
+    cycle patterns were three-channel triplets ("FF000000FF000000FFFF"),
+    stepped by three, so W never lit and every node was misaligned."""
+    setup(fppd)
+    rotations = {RW + GW + BW + WW, WW + RW + GW + BW, BW + WW + RW + GW, GW + BW + WW + RW}
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        if pattern == "RGB Single Color":
+            start_test(fppd, 200, pattern, "1-16", "#11223300")
+            frame = wait_output(fppd, rx, lambda f: any(f), "the test colour")
+            time.sleep(0.5)
+            frame = last(rx)
+            assert frame[:16] == b"\x11\x22\x33\x00" * 4, frame[:16].hex(" ")
+            assert not any(frame[16:]), "the fill spilled past channel 16"
+            return
+        start_test(fppd, 200, pattern, "1-16", "R-G-B-W")
+        wait_output(fppd, rx, lambda f: any(f), "the pattern")
+        since = time.monotonic()
+        time.sleep(2)
+        frames = [f for _, f in rx.snapshot(since)]
+        seen = {f[:16] for f in frames}
+        if pattern == "RGB Chase":
+            want = rotations
+        else:
+            want = {node * 4 for node in (RW, GW, BW, WW)}
+        assert seen <= want, f"frames that are not whole RGBW nodes: {[s.hex(' ') for s in seen - want][:4]}"
+        assert seen == want, f"the {pattern} did not step through all four: {[s.hex(' ') for s in seen]}"
+        assert all(not any(f[16:]) for f in frames), "the pattern spilled past channel 16"
