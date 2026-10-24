@@ -463,7 +463,12 @@ def test_send_mode_with_a_destination_that_is_not_an_address(fppd):
     fppd.wait_for(lambda: warning in warnings(), what="the warning for 300.1.2.3")
     fppd.settings(WLEDAudioSyncMode="receive")
     fppd.wait_for(lambda: warnings() == [], what="the warning to clear in receive mode")
-    assert udp_bound(PORT)
+    # Reconfigure() clears the warnings before it binds the receive socket,
+    # and the reload of a settings file with repeated keys runs it once per
+    # key that changed (Mode, then Dest), unbinding and rebinding: the port
+    # is bound shortly after the warning goes, not with it.
+    fppd.wait_for(lambda: udp_bound(PORT), what="the receive socket to be bound")
+    assert warnings() == [], warnings()
 
 
 def test_send_mode_and_a_sound_reactive_effect_share_the_sound_source(fppd):
