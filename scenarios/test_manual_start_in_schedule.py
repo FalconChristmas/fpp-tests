@@ -196,6 +196,73 @@ def test_schedule_returns_when_an_mqtt_started_playlist_ends(fppd):
                       what="the scheduled playlist to return after the started one ended")
 
 
+def test_an_entry_already_due_waits_for_an_mqtt_started_playlist(fppd):
+    """Two schedule entries are open; the first plays and the second waits
+    behind it. A playlist started over MQTT replaces the first and keeps
+    playing: the waiting entry does not take over from it. Stopped, the
+    schedule's first entry plays again.
+
+    Regression: the waiting entry had never run, so the next scheduler pass
+    took the MQTT-started playlist (manual priority, below every entry) for one
+    to pre-empt, and stopped it within a second -- what the reporter of #3140
+    would see before 23:00, with HalloweenCalmTime.fseq and
+    TestingBarsRGBVertical.fseq both open. Fixed by 9819f7f8c.
+    """
+    install(fppd, solid_frames(40, CHANNELS, SHOW))
+    add_show(fppd, "Low", LOW)
+    add_show(fppd, "Other", OTHER)
+    start, end = window(-60, 600)
+    fppd.write("config/schedule.json", [schedule_entry("Show", start, end),
+                                        schedule_entry("Low", start, end)])
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    with broker():
+        fppd.start()
+        fppd.wait_for(lambda: current(fppd) == ("playing", "Show"), timeout=30, interval=0.5,
+                      what="the scheduled playlist to start")
+        connect_mqtt(fppd)
+        time.sleep(1.5)
+        publish("set/playlist/Other/start")
+        seen = watch(fppd, 4)
+        assert ("playing", "Other") in seen, f"the MQTT-started playlist never played: {sorted(set(seen))}"
+        after = seen[seen.index(("playing", "Other")):]
+        assert set(after) == {("playing", "Other")}, \
+            f"a schedule entry that was already due took over: {sorted(set(after))}"
+        fppd.command("Stop Now")
+        fppd.wait_for(lambda: current(fppd) == ("playing", "Show"), timeout=10, interval=0.2,
+                      what="the first schedule entry to play again")
+
+
+def _entry_comes_due_over(fppd, start_manual):
+    """Boot idle, start a playlist by hand (start_manual), then open a
+    schedule window: [(status, playlist)] seen from just before it opens."""
+    from test_scheduler import wall_of
+    install(fppd, solid_frames(40, CHANNELS, SHOW))
+    add_show(fppd, "Other", OTHER)
+    start, end = window(25, 600)
+    fppd.write("config/schedule.json", [schedule_entry("Show", start, end)])
+    fppd.start()
+    start_manual()
+    fppd.wait_for(lambda: current(fppd) == ("playing", "Other"), timeout=10, interval=0.2,
+                  what="the playlist started by hand to play")
+    lead = wall_of(start) - time.monotonic()
+    assert lead > 2, f"setup took too long: the window opens in {lead:.1f}s"
+    time.sleep(lead - 1)
+    return watch(fppd, 6)
+
+
+def test_an_entry_coming_due_still_pre_empts_an_mqtt_started_playlist(fppd):
+    """A schedule entry whose window opens while a playlist started over MQTT
+    plays takes over from it, as it always has: only an entry already due
+    waits (guards the other side of 9819f7f8c)."""
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    with broker():
+        def start():
+            connect_mqtt(fppd)
+            publish("set/playlist/Other/start")
+        seen = _entry_comes_due_over(fppd, start)
+    assert seen[-1] == ("playing", "Show"), f"the entry coming due didn't take over: {sorted(set(seen))}"
+
+
 def test_a_hung_plugin_callback_does_not_hold_the_schedule_back(fppd):
     """A script plugin's "stop" callback hangs for 30 s while Start Playlist
     replaces one playlist with another. A schedule entry that comes due 8 s
