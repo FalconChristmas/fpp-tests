@@ -420,3 +420,101 @@ def test_serial_open_warning_comes_down_when_the_port_is_fixed(fppd):
         fppd.wait_for(lambda: pty.messages(), timeout=10, what="LOR data on the real port")
         fppd.wait_for(lambda: not stale(), timeout=5, interval=0.5,
                       what=f"the warnings for the missing port to come down (still: {stale()})")
+
+
+def ch340_commands(data):
+    """The CH340 relay commands in `data`, as (relay, state): A0, relay,
+    state, checksum. Anything that doesn't parse is returned as None."""
+    out = []
+    for i in range(0, len(data) - len(data) % 4, 4):
+        a, r, s, c = data[i:i + 4]
+        out.append((r, s) if a == 0xA0 and c == (a + r + s) & 0xFF and s in (0, 1) else None)
+    return out
+
+
+def test_ch340_relays_send_only_what_changes(fppd):
+    """An 8-relay CH340 USB relay board gets every relay on the first frame,
+    off ones included, and after that only a relay whose state changes:
+    nothing at all while the relays hold, and one command each when relays
+    2 and 5 switch on.
+
+    Regression: 234a66c86. Every relay's 4-byte command went out every
+    frame, 1280 bytes a second of repeated state at 40 fps through a port
+    that carries 960.
+    """
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", {"channelOutputs": [{
+            "type": "USBRelay", "subType": "CH340", "enabled": 1, "startChannel": 1,
+            "channelCount": 8, "device": pty.device}]})
+        fppd.start()
+        set_range(fppd, 9, 9, 0)  # keeps the output thread sending; the relays stay off
+
+        def sent():
+            with pty.lock:
+                return bytes(pty.data)
+
+        fppd.wait_for(lambda: len(sent()) >= 32, what="the first frame's relay commands")
+        time.sleep(1)
+        first = ch340_commands(sent())
+        assert first[:8] == [(r, 0) for r in range(1, 9)], f"first frame: {first[:8]}"
+
+        time.sleep(2)
+        held = ch340_commands(sent())[8:]
+        assert not held, f"{len(held)} more commands while no relay changed: {held[:10]}"
+
+        mark = len(sent())
+        set_range(fppd, 2, 2, 255)
+        set_range(fppd, 5, 5, 255)
+        fppd.wait_for(lambda: len(sent()) - mark >= 8, what="commands for relays 2 and 5")
+        time.sleep(2)
+        changed = ch340_commands(sent()[mark:])
+        assert sorted(changed) == [(2, 1), (5, 1)], f"after switching relays 2 and 5 on: {changed[:10]}"
+
+
+def test_usb_pixelnet_with_an_unknown_dongle_type_is_refused(fppd):
+    """A USB Pixelnet output whose type names no dongle FPP knows (the
+    library's own name, "USBPixelnet", rather than Pixelnet-Lynx or
+    Pixelnet-Open) is refused with a warning, and fppd lives through
+    channel data on its channels.
+
+    Regression: fe2519218. The type chain had no else, so Init() reported
+    success with the packet pointer still NULL, and the first frame
+    memcpy()'d the channels to it: a SEGV.
+    """
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", {"channelOutputs": [{
+            "type": "USBPixelnet", "enabled": 1, "startChannel": 1, "channelCount": 300,
+            "device": pty.device}]})
+        fppd.start()
+        range_on(fppd, 300, 0x40)
+        fppd.wait_for(lambda: [w for w in fppd.get("/fppd/warnings") if "Unknown dongle type" in str(w)],
+                      what="the unknown-dongle-type warning")
+        time.sleep(2)
+        with pty.lock:
+            assert not pty.data, f"the refused output wrote {len(pty.data)} bytes"
+
+
+@pytest.mark.parametrize("start", [0, None], ids=["zero", "blank"])
+def test_lor_enhanced_unit_without_a_start_channel_is_dropped(fppd, start):
+    """A LOR Enhanced unit whose FPP start channel is 0, or blank (saved as
+    null), is dropped at load with a warning naming it; the unit beside it
+    still gets its pixels.
+
+    Regression: 3260e692c. The start channel is 1-based and both read as 0,
+    so the unit loaded and every frame sent it the channels from one below
+    its output's first, starting a byte before the channel data.
+    """
+    with PtyReader() as pty:
+        fppd.write("config/co-other.json", {"channelOutputs": [{
+            "type": "LOREnhanced", "enabled": 1, "startChannel": 1, "channelCount": 60,
+            "device": pty.device, "speed": 1000000,
+            "units": [{"unitId": 1, "numOfPixels": 10, "lorStartPixel": 1, "fppStartAddr": 1},
+                      {"unitId": 2, "numOfPixels": 10, "lorStartPixel": 1, "fppStartAddr": start}],
+        }]})
+        fppd.start()
+        range_on(fppd, 60, 0x40)
+        fppd.wait_for(lambda: lor_enhanced_state(pty.messages()).get(1), what="unit 1's pixels")
+        time.sleep(2)
+        assert 2 not in lor_enhanced_state(pty.messages()), "the unit with no start channel was sent"
+        warned = [w for w in fppd.get("/fppd/warnings") if "LOR unit 2" in str(w)]
+        assert warned, "no warning names unit 2"
