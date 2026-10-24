@@ -3,6 +3,7 @@ import { container, inPlayer } from './container';
 import { CONFIG, cleanupPipeWire, writeFile } from './pw-helpers';
 import { bursts, nodeProps, nullSink, readBinary, record, startPipeWire, stopPipeWire, wavSamples } from './pw-live';
 import { putFile } from './settings-file';
+import { callPhp, cleanupAsound, fakeCards, standInAplay } from './fake-asound';
 
 // Sync calibration for audio output groups: the click track the audio groups
 // page plays into one group's sink to line up its cards' delays, and the
@@ -20,6 +21,7 @@ test.afterEach(async ({ request }) => {
   stopPipeWire();
   cleanupPipeWire();
   inPlayer('rm', '-f', CLICK);
+  cleanupAsound();
 });
 
 function groupsNamed(...names: string[]) {
@@ -126,4 +128,57 @@ test("a card's delay is changed on its running filter-chain without a restart", 
   expect(r.ok(), await r.text()).toBe(true);
   expect((await r.json()).status).toBe('OK');
   await expect.poll(delays).toMatchObject({ 'delay_l:Delay (s)': 0.25, 'delay_r:Delay (s)': 0.25 });
+});
+
+// Generate the output groups conf for a group whose one card has EQ and a
+// delay, with the generator Apply runs (GeneratePipeWireGroupsConfig, under
+// PHP's CLI with the card in a fake /proc/asound: fake-asound.ts), and load
+// it into the test's PipeWire as a player's does at its restart.  The card
+// is card 1, "S3"; its sink is both FPP's own adapter (fpp_alsa_s3 at hw:S3,
+// what Apply resolves it to now) and the older alsa_output.fpp_card1 name
+// the generator looked for before -- null sinks either way.  The member's
+// filter-chain was fpp_eq_g<group>_<card> until it took on the delay and
+// became fpp_fx_.  Returns its node name and a reader for its controls.
+async function generateFilterChain() {
+  const groups = [{ id: 1, name: 'Yard', enabled: true, channels: 2, members: [{ cardId: 'S3', cardName: 'S3', channels: 2, delayMs: 100,
+    eq: { enabled: true, bands: [{ type: 'bq_peaking', freq: 1000, q: 1, gain: 0 }] } }] }];
+  const sinks = [nullSink('fpp_alsa_s3', { 'api.alsa.path': 'hw:S3' }), nullSink('alsa_output.fpp_card1')];
+  fakeCards();
+  standInAplay();
+  startPipeWire({ objects: sinks });
+  const generated = callPhp('GeneratePipeWireGroupsConfig', groups);
+  const conf: string = typeof generated === 'string' ? generated : generated.conf;
+  const fx = conf.match(/node\.name = "(fpp_(?:fx|eq)_g1_s3)"/)?.[1];
+  expect(fx, `no filter-chain for the card in the generated conf:\n${conf}`).toBeTruthy();
+  writeFile('/etc/pipewire/pipewire.conf.d/97-fpp-tests-groups.conf', conf);
+  startPipeWire({ objects: sinks, waitFor: ['fpp_group_yard', fx!] });
+  const params = () => {
+    const list: unknown[] = nodeProps(fx!).params ?? [];
+    const out: Record<string, number> = {};
+    for (let i = 0; i + 1 < list.length; i += 2) out[String(list[i])] = Math.round(Number(list[i + 1]) * 1000) / 1000;
+    return out;
+  };
+  return { fx: fx!, params };
+}
+
+test("the EQ filter-chain FPP generates for a card loads in PipeWire and is tuned live", async ({ request }) => {
+  // Feature: 7a5b37368. A member's EQ is a filter-chain in the generated
+  // conf, between the group and the card, and eq/update tunes it live.
+  const { params } = await generateFilterChain();
+  expect(params()).toMatchObject({ 'eq_l_0:Freq': 1000, 'eq_r_0:Freq': 1000, 'eq_l_0:Gain': 0 });
+  const eq = await request.post('/api/pipewire/audio/eq/update', {
+    data: { groupId: 1, cardId: 'S3', channels: 2, bands: [{ freq: 2500, q: 2, gain: 6 }] } });
+  expect((await eq.json()).status).toBe('OK');
+  await expect.poll(params).toMatchObject({ 'eq_l_0:Freq': 2500, 'eq_l_0:Gain': 6, 'eq_r_0:Gain': 6 });
+});
+
+test("the card's generated filter-chain carries its delay, and delay/update moves it live", async ({ request }) => {
+  // Feature: 5fa712a8a. Every member's filter-chain gets a delay stage at
+  // its saved delay, so calibration can move it without a restart.
+  const { fx, params } = await generateFilterChain();
+  expect(fx).toBe('fpp_fx_g1_s3');
+  expect(params()).toMatchObject({ 'delay_l:Delay (s)': 0.1, 'delay_r:Delay (s)': 0.1 });
+  const d = await request.post('/api/pipewire/audio/delay/update', { data: { groupId: 1, cardId: 'S3', delayMs: 250, channels: 2 } });
+  expect((await d.json()).status).toBe('OK');
+  await expect.poll(params).toMatchObject({ 'delay_l:Delay (s)': 0.25, 'delay_r:Delay (s)': 0.25 });
 });

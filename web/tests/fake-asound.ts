@@ -94,7 +94,8 @@ stream_wrapper_register('file', 'FppTestsAsound');
 
 $out = call_user_func_array($fn, $args);
 stream_wrapper_restore('file');
-echo "\n@@fpp-tests@@" . $out;
+// A json() answer is JSON already; anything else (a conf, an array) is encoded.
+echo "\n@@fpp-tests@@" . (getenv('FPP_TESTS_ENCODE') ? json_encode($out) : $out);
 `;
 
 // Write /proc/asound/cards and /proc/asound/pcm for `cards` under the fake root.
@@ -130,8 +131,17 @@ case "$loc" in C|C.*|POSIX) cat /tmp/fpp-tests-aplay-en.txt ;; *) cat /tmp/fpp-t
 // Call an API controller function (by name, with JSON-able arguments) against
 // the fake /proc/asound; what it returned, parsed as JSON.
 export function callApi(fn: string, ...args: unknown[]): any {
+  return run(fn, args, false);
+}
+
+// The same for a function that returns a plain PHP value (a conf, an array).
+export function callPhp(fn: string, ...args: unknown[]): any {
+  return run(fn, args, true);
+}
+
+function run(fn: string, args: unknown[], encode: boolean): any {
   writeFile(HARNESS, PHP);
-  const out = inPlayer('php', HARNESS, ROOT, fn, JSON.stringify(args));
+  const out = inPlayer('env', `FPP_TESTS_ENCODE=${encode ? 1 : ''}`, 'php', HARNESS, ROOT, fn, JSON.stringify(args));
   const i = out.lastIndexOf('@@fpp-tests@@');
   if (i < 0) throw new Error(`${fn} did not return:\n${out}`);
   return JSON.parse(out.slice(i + '@@fpp-tests@@'.length));
