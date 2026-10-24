@@ -263,6 +263,42 @@ def test_an_entry_coming_due_still_pre_empts_an_mqtt_started_playlist(fppd):
     assert seen[-1] == ("playing", "Show"), f"the entry coming due didn't take over: {sorted(set(seen))}"
 
 
+def test_mqtt_start_runs_the_stopped_preset_before_the_new_playlist(fppd):
+    """A PLAYLIST_STOPPED preset turns the "relay" off; the playlist started
+    over MQTT turns it on in its lead-in. Started over a playing playlist, the
+    relay is on: the stop's preset ran first, as it does for Start Playlist.
+
+    Regression: the MQTT start left the running playlist for the start to
+    stop, inside the playlist transition. Its PLAYLIST_STOPPED preset and
+    plugin "stop" callback were deferred to after the new playlist's Start(),
+    so they undid its lead-in. Fixed by 04ee4931e.
+    """
+    install(fppd, solid_frames(40, CHANNELS, SHOW))
+    write_fseq(os.path.join(fppd.media, "sequences", "Lit.fseq"),
+               solid_frames(40, CHANNELS, OTHER), step_ms=50)
+    fppd.write("playlists/Lit.json", playlist(
+        "Lit", [sequence_entry("Lit.fseq")], repeat=1,
+        lead_in=[command_entry("Set Variable", "Relay", "Value", "on", "1", "0", "100", "")]))
+    fppd.write("config/commandPresets.json", {"commands": [{
+        "name": "PLAYLIST_STOPPED", "command": "Set Variable",
+        "args": ["Relay", "Value", "off", "1", "0", "100", ""], "presetSlot": 0}]})
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    with broker():
+        fppd.start()
+        connect_mqtt(fppd)
+        for i in range(3):
+            fppd.command("Start Playlist", "Show", "true", "false")
+            fppd.wait_for(lambda: current(fppd) == ("playing", "Show"), timeout=10, interval=0.2,
+                          what=f"Show to play (round {i + 1})")
+            publish("set/playlist/Lit/start")
+            fppd.wait_for(lambda: current(fppd) == ("playing", "Lit"), timeout=5, interval=0.1,
+                          what=f"the MQTT-started playlist to play (round {i + 1})")
+            time.sleep(1)
+            relay = fppd.get("/variables", timeout=5).get("Relay", {}).get("value")
+            assert relay == "on", \
+                f"round {i + 1}: the stopped playlist's preset ran after the new one's lead-in (Relay={relay})"
+
+
 def test_a_hung_plugin_callback_does_not_hold_the_schedule_back(fppd):
     """A script plugin's "stop" callback hangs for 30 s while Start Playlist
     replaces one playlist with another. A schedule entry that comes due 8 s
