@@ -505,6 +505,41 @@ def test_virtual_display_with_an_empty_map_is_refused(fppd):
     time.sleep(2)
 
 
+@pytest.mark.parametrize("low, high", [(100000, 50000), (100000, -100)],
+                         ids=["inverted", "negative end"])
+def test_an_output_reporting_a_bad_range_is_ignored(fppd, low, high):
+    """A plugin output that reports an inverted channel range, or one
+    ending at a negative channel, has that range ignored with an error, and
+    a sequence plays, stops and plays again on the DDP output beside it.
+
+    Regression: 9d535e473. Range lengths are max - min + 1 in unsigned
+    arithmetic, so either range went into the read list about 4 GB long,
+    and the output thread's first blanking of the sequence buffer memset()
+    that far from channel 100001: fppd died as it started.
+    """
+    from native_plugin import install as install_plugin
+    from show import install
+    install(fppd, [bytes([9] * 30)] * 200)
+    install_plugin(fppd, name="fpp-range", source="rangeoutputplugin.cpp")
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "fpp-range", "enabled": 1, "startChannel": 100001, "channelCount": 10,
+        "rangeMin": low, "rangeMax": high}]})
+    with DdpReceiver(30) as rx:
+        fppd.start()
+        fppd.wait_for(lambda: "Calling Init() on fpp-range output" in fppd.log(),
+                      timeout=10, what="the plugin's output to load")
+        fppd.command("Start Playlist", "Show", "false", "false")
+        fppd.wait_for(lambda: rx.last() == bytes([9] * 30), timeout=10,
+                      what="the sequence on the DDP output")
+        fppd.command("Stop Now")
+        fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "idle",
+                      timeout=10, what="the playlist to stop")
+        fppd.command("Start Playlist", "Show", "false", "false")
+        fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "playing",
+                      timeout=10, what="the playlist to play again")
+    assert "Ignoring invalid channel range" in fppd.log(), "no error for the bad range"
+
+
 def test_virtual_display_skips_a_short_custom_colour(fppd):
     """A map line whose custom colour is not a whole "#RRGGBB" is skipped;
     the display opens its port and streams the other pixels.
