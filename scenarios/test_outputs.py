@@ -734,3 +734,75 @@ def test_output_comes_back_once_sockets_can_be_opened_again(fppd):
         since = time.monotonic()
         assert rx.wait_frames(5, timeout=10, since=since), \
             "no DDP frames within 10 s of sockets becoming available again"
+
+
+def test_channel_outputs_enabled_means_universe_outputs(fppd):
+    """channelOutputsEnabled, in /fppd/status and in the local system's
+    /fppd/multiSyncSystems entry, says whether there are E1.31/DDP/Art-Net
+    outputs (what the MultiSync page shows it for): false with only an Other
+    output loaded, true once a co-universes.json output is saved.
+
+    Regression: 6cc92025f. It reported any channel output at all, so a
+    player driving only a serial or control channel output showed as
+    sending universes.
+    """
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "ControlChannel", "enabled": 1, "startChannel": 1, "channelCount": 1,
+        "values": []}]})
+    fppd.start()
+
+    def enabled():
+        local = [s for s in fppd.get("/fppd/multiSyncSystems")["systems"] if s.get("local")]
+        return (fppd.get("/fppd/status").get("channelOutputsEnabled"),
+                local[0].get("channelOutputsEnabled") if local else "no local system")
+
+    fppd.wait_for(lambda: "Calling Init() on ControlChannel output" in fppd.log(),
+                  what="the control channel output to load")
+    assert enabled() == (False, False), f"with only a control channel output: {enabled()}"
+    fppd.write("config/co-universes.json", universes("added"))
+    fppd.wait_for(lambda: enabled() == (True, True), timeout=10,
+                  what="channelOutputsEnabled once a universe output is loaded")
+
+
+def test_control_channel_hands_its_value_to_the_preset(fppd):
+    """A control channel's preset can use the value that fired it: setting
+    the channel to 128 runs a URL command whose URL carries
+    %CHANNEL_VALUE%, %CHANNEL_VALUE255% and %CHANNEL_VALUE100%, and the
+    request arrives as 128, 128 and 50.
+
+    Regression: 18bd13458 (the feature). Before it the preset ran with no
+    keywords, so the URL went out with the placeholders as written.
+    """
+    import http.server
+    import threading
+
+    paths = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            paths.append(self.path)
+            self.send_response(200)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    port = srv.server_address[1]
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "ControlChannel", "enabled": 1, "startChannel": 1, "channelCount": 1,
+        "values": [{"value": 128, "preset": "Level"}]}]})
+    fppd.write("config/commandPresets.json", {"commands": [{
+        "name": "Level", "command": "URL", "presetSlot": 0,
+        "args": [f"http://127.0.0.1:{port}/level?v=%CHANNEL_VALUE%&raw=%CHANNEL_VALUE255%"
+                 "&pct=%CHANNEL_VALUE100%", "GET", ""]}]})
+    try:
+        fppd.start()
+        fppd.request("PUT", "/overlays/range/1-1", {"Value": 128})
+        fppd.wait_for(lambda: paths, timeout=10, what="the preset's URL request")
+        assert paths[0] == "/level?v=128&raw=128&pct=50", f"the preset requested {paths[0]}"
+    finally:
+        srv.shutdown()
+        srv.server_close()
