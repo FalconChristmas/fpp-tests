@@ -325,6 +325,11 @@ def test_pings_that_arrive_while_the_main_loop_is_held_are_kept(fppd):
     buffer, 212992 bytes, about 166 datagrams at ~1.3 KB each whatever
     their size, so the rest of a burst was dropped in the kernel. Here
     fppd is stopped (SIGSTOP) while the burst goes out.
+
+    On a host where net.core.rmem_max is still the kernel's default (fppinit
+    raises it on a player; a stock Docker host leaves it), it also needs
+    1ef7def6d: before it the 1 MB request was clamped to the default, and
+    667 of the 1000 pings were dropped.
     """
     import signal
     fppd.start()
