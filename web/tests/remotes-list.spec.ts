@@ -2,6 +2,7 @@ import { execFileSync } from 'child_process';
 import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
 import { answerUpdateCheck } from './standin-http';
+import { SecondPlayer } from './second-player';
 
 // GET /api/remotes, the MultiSync hosts a command can be sent to, and the
 // checkbox list the command editor builds from it.  The systems are put in
@@ -60,13 +61,23 @@ test.describe(() => {
   test.use({ bypassCSP: true });
   test('a command\'s MultiSync hosts are picked with checkboxes', async ({ page, request }) => {
     // Regression: 01ce4cc4b (#2733).  The hosts field was a text box with a
-    // datalist, which offers nothing to pick on a touch screen.
-    sendPings();
-    await expect.poll(() => listed(request), { timeout: 10_000 }).toEqual(expect.arrayContaining([BOTH.routable]));
+    // datalist, which offers nothing to pick on a touch screen.  Besides the
+    // pinged systems, a second real player (second-player.ts) is on the
+    // network, found by fppd's own discovery, and is one of the hosts picked.
+    test.setTimeout(240_000);
+    const peer = new SecondPlayer('remotes').start();
     const name = 'fpp-tests-remotes-list';
-    await request.post(`/api/playlist/${name}`, { data: { name, version: 4, leadIn: [], mainPlaylist: [], leadOut: [], playlistInfo: {} } });
     try {
+      sendPings();
+      await expect.poll(() => listed(request), { timeout: 30_000 }).toEqual(expect.arrayContaining([BOTH.routable, peer.address]));
+      await request.post(`/api/playlist/${name}`, { data: { name, version: 4, leadIn: [], mainPlaylist: [], leadOut: [], playlistInfo: {} } });
       await answerUpdateCheck(page);
+      // Picking a host makes the editor ask it, through this player's
+      // /proxy/<host>/, for its playlists, at http://<server name>/ on port 80,
+      // which a browser reaching the player through run-web.sh's published
+      // port can't reach; and the pinged hosts never answer.  The lookups
+      // aren't what this tests, so they are answered here.
+      await page.route(/\/proxy\/[^/]+\//, (route) => route.fulfill({ json: [] }));
       await page.goto('/playlists.php');
       await page.locator('.playlistCard h3', { hasText: new RegExp(`^${name}$`) }).click();
       await expect(page.locator('#playlistEditor')).toHaveClass(/hasPlaylistDetailsLoaded/);
@@ -77,13 +88,16 @@ test.describe(() => {
       const boxes = page.locator('#playlistEntryCommandOptions_multisyncHostsSelect input.multisyncHostCheckbox');
       await expect(boxes.first()).toBeVisible();
       const values = await boxes.evaluateAll((bs) => bs.map((b) => (b as HTMLInputElement).value));
-      expect(values).toEqual(expect.arrayContaining([BOTH.routable, ONLY.apipa]));
+      expect(values).toEqual(expect.arrayContaining([BOTH.routable, ONLY.apipa, peer.address]));
       expect(values).not.toContain(BOTH.apipa);
-      await boxes.and(page.locator(`[value="${BOTH.routable}"]`)).check();
+      await boxes.and(page.locator(`[value="${peer.address}"]`)).check();
       await boxes.and(page.locator(`[value="${ONLY.apipa}"]`)).check();
-      await expect(page.locator('#playlistEntryCommandOptions_multisyncHosts')).toHaveValue(`${BOTH.routable},${ONLY.apipa}`);
+      const hosts = page.locator('#playlistEntryCommandOptions_multisyncHosts');
+      await expect.poll(async () => (await hosts.inputValue()).split(',').sort()).toEqual([peer.address, ONLY.apipa].sort());
     } finally {
       await request.delete(`/api/playlist/${name}`);
+      const verdict = peer.stop();
+      expect(verdict.ok, verdict.detail).toBe(true);
     }
   });
 });
