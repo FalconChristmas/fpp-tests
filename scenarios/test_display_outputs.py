@@ -7,6 +7,8 @@ import json
 import os
 import time
 
+import pytest
+
 from framebuffer import FakeFb
 from test_fbdev import fb_model, image, send, shows, virtual_display
 from test_output_config import B64, sse_messages, wait_for_display
@@ -160,3 +162,190 @@ def test_http_virtual_display_skips_a_background_image_it_cannot_convert(fppd):
         assert any(m.startswith(want + ":") for m in msgs), f"no {want!r} pixel in {msgs[-3:]}"
     finally:
         os.remove(path)
+
+
+def test_virtual_matrix_flips_horizontally(fppd):
+    """A Virtual Matrix saved with Flip Horizontal draws each row mirrored:
+    its first pixel lit, and only that one, comes out at the right-hand end
+    of the top row of the device.
+
+    Regression: 53462480f. FBMatrix read only "invert" (the vertical flip),
+    so a horizontally flipped matrix drew its first pixel at the top left,
+    as if the box were not ticked.
+    """
+    fb = FakeFb(fppd, width=W, height=H, bpp=32)
+    out = virtual_matrix(W, H)
+    out["flipHorizontal"] = True  # as the output page saves the box
+    fppd.write("config/co-other.json", {"channelOutputs": [out]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fb.start()
+    fppd.command("Test Start", 1000, "RGB Single Color", "1-3", "#FF8001")
+
+    def lit():
+        if fb.mode() is None:
+            return []
+        return [(x, y) for y, row in enumerate(fb.pixels()) for x, p in enumerate(row) if p != (0, 0, 0)]
+    fppd.wait_for(lit, timeout=10, what="the matrix's first pixel on the device")
+    time.sleep(0.5)  # a frame or two more, in case anything else lights
+    assert lit() == [(W - 1, 0)], f"lit at {lit()}, expected only the top right ({W - 1}, 0)"
+    assert fb.pixels()[0][W - 1] == (255, 128, 1)
+
+
+def map_files_open(fppd):
+    """fppd's open descriptors on the virtual display map."""
+    path = os.path.realpath(os.path.join(fppd.media, "config", "virtualdisplaymap"))
+    fds = []
+    for fd in os.listdir(f"/proc/{fppd.proc.pid}/fd"):
+        try:
+            if os.readlink(f"/proc/{fppd.proc.pid}/fd/{fd}") == path:
+                fds.append(fd)
+        except OSError:
+            pass
+    return fds
+
+
+def output_reloads(fppd, name="co-other.json"):
+    return sum(1 for line in fppd.log().splitlines()
+               if "Reloading Channel Outputs for " in line and line.rstrip().endswith("/" + name))
+
+
+def save_http_display_again(fppd, times):
+    """Save the HTTP Virtual Display's config `times` more times, a second
+    apart as a person makes them, waiting for fppd to reload it each time."""
+    path = os.path.join(fppd.media, "config", "co-other.json")
+    for i in range(times):
+        base = output_reloads(fppd)
+        with open(path) as f:
+            co = json.load(f)
+        co["channelOutputs"][0]["description"] = f"save {i}"
+        time.sleep(1.1)
+        fppd.write("config/co-other.json", co)
+        fppd.wait_for(lambda: output_reloads(fppd) > base, timeout=10, what=f"the reload for save {i}")
+    time.sleep(1)  # the last reload's display is up
+
+
+def test_virtual_display_reload_closes_its_map(fppd):
+    """Saving an HTTP Virtual Display's config five times re-reads its map
+    five times, and fppd holds the map open none of those times.
+
+    Regression: 240ed5db6. InitializePixelMap() never closed the map it
+    read, so every load of a virtual display leaked a descriptor on it:
+    six open here, one for the startup load and one for each save.
+    """
+    from test_output_config import virtual_display as http_display
+    http_display(fppd, ["100,100", "2,2,0,3,RGB", "5,5,3,3,RGB"], 6)
+    fppd.settings(LogLevel_ChannelOut="debug")
+    fppd.start()
+    wait_for_display(fppd)
+    fppd.wait_for(lambda: output_reloads(fppd) >= 1, timeout=10, what="the startup load of co-other.json")
+    save_http_display_again(fppd, 5)
+    open_maps = map_files_open(fppd)
+    assert not open_maps, f"fppd holds the map open {len(open_maps)} times after 6 loads (fds {open_maps})"
+
+
+def listeners(port):
+    """Listening TCP sockets on `port`, IPv4 and IPv6."""
+    count = 0
+    for table in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            with open(table) as f:
+                rows = f.read().splitlines()[1:]
+        except OSError:
+            continue
+        for row in rows:
+            cols = row.split()
+            if int(cols[1].rsplit(":", 1)[1], 16) == port and cols[3] == "0A":
+                count += 1
+    return count
+
+
+def test_http_virtual_display_reload_closes_its_socket(fppd):
+    """Saving an HTTP Virtual Display's config four times leaves one socket
+    listening on its port, the new display's, and every one of 20 browsers
+    connecting afterwards gets the event stream.
+
+    Regression: 132a13101. The display's destructor never closed its
+    listening socket. With SO_REUSEPORT, as then, the next display could
+    still bind the port, so the kernel spread new connections over all five
+    sockets listening on it, and the ones it gave to the four old sockets,
+    which no thread accepted from any more, were left hanging with no reply.
+    (With the fix reverted on today's code, which binds with SO_REUSEADDR
+    only, the new display can't bind at all, and every connection goes to
+    the first display's dead socket.)
+    """
+    import socket
+    from test_output_config import VD_PORT, virtual_display as http_display
+    http_display(fppd, ["100,100", "2,2,0,3,RGB"], 3)
+    fppd.settings(LogLevel_ChannelOut="debug")
+    fppd.start()
+    wait_for_display(fppd)
+    fppd.wait_for(lambda: output_reloads(fppd) >= 1, timeout=10, what="the startup load of co-other.json")
+    save_http_display_again(fppd, 4)
+    wait_for_display(fppd)
+    assert listeners(VD_PORT) == 1, f"{listeners(VD_PORT)} sockets listening on {VD_PORT} after 4 saves"
+    unanswered = 0
+    for _ in range(20):
+        try:
+            with socket.create_connection(("127.0.0.1", VD_PORT), timeout=1) as s:
+                if not s.recv(64).startswith(b"HTTP/1.1 200"):
+                    unanswered += 1
+        except TimeoutError:  # in connect() too, once a dead socket's backlog is full
+            unanswered += 1
+    assert not unanswered, f"{unanswered} of 20 connections got no event stream"
+
+
+def x11_frame(path):
+    """The last image the X11 output put (fakex11.c), as rows of (r, g, b),
+    or None before the first."""
+    try:
+        with open(path, "rb") as f:
+            head = f.readline().split()
+            data = f.read()
+    except FileNotFoundError:
+        return None
+    w, h = int(head[0]), int(head[1])
+    return [[(data[(y * w + x) * 4 + 2], data[(y * w + x) * 4 + 1], data[(y * w + x) * 4])
+             for x in range(w)] for y in range(h)]
+
+
+@pytest.mark.parametrize("submatrix", [False, True], ids=["plain", "submatrix"])
+def test_x11_panel_matrix_past_channel_1_draws_its_own_channels(fppd, submatrix):
+    """An X11 panel matrix (one 32x16 panel, on fakex11.c's stand-in for an
+    X server) starting at channel 1537 puts up its own first pixel, and
+    nothing else, without reading outside its buffer; with a 2x1 submatrix
+    drawn from channels 1-6 at x = 4, the submatrix's two pixels as well.
+
+    Regression: a00278ee1. RawSendData() is handed the double-buffered copy
+    of just this output's 1536 channels, yet it moved on by the start
+    channel before reading pixels, and ran the submatrix overlay on that
+    copy too, whose source channels and enable flags are absolute sequence
+    channels the copy does not hold: an ASan heap-buffer-overflow on the
+    first frame, in the pixel loop (plain) or in the overlay's copy of the
+    matrix out of channel 1537 (submatrix).
+    """
+    import shims
+    if not os.path.exists(os.path.join(fppd.tree, "src", "libfpp-co-matrix-X11PanelMatrix.so")):
+        pytest.skip("no X11PanelMatrix output in this build (no X11 headers)")
+    pw, ph, start = 32, 16, 1537
+    fppd.write("config/channeloutputs.json", {"channelOutputs": [{
+        "type": "LEDPanelMatrix", "subType": "X11PanelMatrix", "enabled": 1,
+        "startChannel": start, "channelCount": pw * ph * 3, "panelWidth": pw, "panelHeight": ph,
+        "colorOrder": "RGB", "invertedData": 0, "scale": 1, "title": "fpp-tests",
+        "panels": [{"outputNumber": 0, "panelNumber": 0, "colorOrder": "", "xOffset": 0,
+                    "yOffset": 0, "orientation": "N"}],
+        "subMatrices": [{"enabled": 1, "startChannel": 1, "width": 2, "height": 1,
+                         "xOffset": 4, "yOffset": 0}] if submatrix else []}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    frame_file = os.path.join(fppd.media, "tmp", "x11-frame")
+    fppd.start(preload=[shims.build("fakex11.c")], extra_env={"FAKEX11_FILE": frame_file})
+    fppd.request("PUT", "/overlays/range/1-6", {"Value": 255})            # the submatrix's source, or no output's
+    fppd.request("PUT", f"/overlays/range/{start}-{start + 2}", {"Value": 255})  # the output's first pixel
+
+    def lit():
+        frame = x11_frame(frame_file)
+        if frame is None:
+            return None
+        return sorted((x, y) for y, row in enumerate(frame) for x, p in enumerate(row) if p != (0, 0, 0))
+    want = [(0, 0), (4, 0), (5, 0)] if submatrix else [(0, 0)]
+    fppd.wait_for(lambda: lit() == want, timeout=10, what=f"pixels {want} lit (last: {lit()})")
+    assert all(p == (255, 255, 255) for p in (x11_frame(frame_file)[0][x] for x, _ in want))
