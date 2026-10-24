@@ -13,7 +13,7 @@ import time
 import pytest
 
 from fseq import unique_frames, write_fseq
-from packets import ARTNET_PORT, DDP_PORT, E131_PORT, parse_artdmx, parse_e131
+from packets import ACN_ID, ARTNET_PORT, DDP_PORT, E131_PORT, Sender, parse_artdmx, parse_e131
 from show import playlist, sequence_entry
 from udp import Listener
 
@@ -545,3 +545,184 @@ def test_invalid_interface_warning_comes_down_when_the_address_arrives(fppd):
                           what="the invalid-interface warning to come down")
     finally:
         ip("link", "del", ADDR_IFACE)
+
+
+def default_route_interface():
+    r = ip("-o", "route", "show", "default")
+    words = r.stdout.split()
+    if "dev" not in words:
+        pytest.skip("no default route")
+    return words[words.index("dev") + 1]
+
+
+def test_generic_udp_to_a_multicast_group_keeps_sending(fppd):
+    """A Generic UDP output to a multicast group (239.255.50.1) is not
+    pinged when the output interface loses its address and gets it back (a
+    DHCP renewal, a cable pulled and replaced), which pings every
+    controller: 40 s on it still sends every frame and raises no
+    unreachable-controller warning. (At the fix's parent it was dropped
+    within 20 s.)
+
+    The group's packets leave by whichever interface the socket's source
+    address picks, so both the output interface and the default route's
+    are captured.
+
+    Regression: bd0bc3c9f. The multicast check could never match (first
+    octet >= 239 and <= 224, read from the wrong end of the address), so the
+    group was pinged like a controller; nothing answers a ping to a group,
+    and once three pings and an HTTP probe had failed the output was marked
+    invalid and stopped sending. Since e2422ff8e GenericUDP outputs are
+    attached after the UDP output collects its ping hosts and are never
+    pinged at all, so on master this passes with the fix reverted: it is
+    red only at the fix's parent.
+    """
+    from capture import UdpCapture
+
+    group, port = "239.255.50.1", 9124
+    address_less_interface()
+    try:
+        entry = output(1, 1, 1, 10)  # the UDP output Generic UDP sends through
+        entry["address"] = "10.66.0.2"
+        fppd.write("config/co-universes.json", {"channelOutputs": [{
+            "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 10,
+            "interface": ADDR_IFACE, "universes": [entry]}]})
+        fppd.write("config/co-other.json", {"channelOutputs": [{
+            "type": "GenericUDP", "enabled": 1, "startChannel": 1, "channelCount": 30,
+            "description": "group", "address": group, "port": port, "tokens": "{data}"}]})
+        fppd.settings(DisableFakeNetworkBridges="1")
+
+        def unreachable():
+            return [w for w in fppd.get("/fppd/status").get("warningInfo", [])
+                    if w.get("id") == 27 and group in str(w)]
+
+        with UdpCapture(port, dst_ip=group, iface=ADDR_IFACE) as show, \
+                UdpCapture(port, dst_ip=group, iface=default_route_interface()) as other:
+            def sent_since(t):
+                return sum(1 for cap in (show, other) for at, *_ in cap.snapshot() if at >= t)
+
+            ip("addr", "add", "10.66.0.1/24", "dev", ADDR_IFACE)
+            fppd.start()
+            fppd.command("Test Start", "100", "RGB Cycle", "1-30", "R-G-B")
+            time.sleep(1)
+            ip("addr", "del", "10.66.0.1/24", "dev", ADDR_IFACE)
+            time.sleep(1)
+            ip("addr", "add", "10.66.0.1/24", "dev", ADDR_IFACE)  # pings every controller
+            fppd.wait_for(lambda: sent_since(time.monotonic() - 1) >= 5, timeout=15,
+                          what=f"Generic UDP packets to {group} once the interface is up")
+            end = time.monotonic() + 40
+            while time.monotonic() < end:
+                time.sleep(1)
+                assert not unreachable(), f"the multicast group was pinged and dropped: {unreachable()}"
+                recent = sent_since(time.monotonic() - 1)
+                assert recent >= 5, f"{recent} Generic UDP packets to {group} in the last second"
+    finally:
+        ip("link", "del", ADDR_IFACE)
+
+
+def e131_sync_capture(fppd, seconds=3):
+    """Play a sequence to an E1.31 universe with sync universe 7, unicast
+    to a Listener here; return (data packets, sync packets). The sync
+    packets leave by the default route (no output interface is set), where
+    they are captured."""
+    from capture import UdpCapture
+
+    frames = unique_frames(80, 510)
+    with Listener(E131_PORT) as rx, \
+            UdpCapture(E131_PORT, dst_ip="239.255.0.7", iface=default_route_interface()) as sync:
+        play(fppd, frames, [output(1, 1, 1, 510, syncUniverse=7)])
+        time.sleep(seconds)
+        data = [p for p in packets(rx) if parse_e131(p)]
+        captured = [p for _, _, _, p in sync.snapshot()]
+    # off a real interface each packet shows twice, leaving and looped back
+    return data, [p for i, p in enumerate(captured) if i == 0 or p != captured[i - 1]]
+
+
+def test_e131_sync_universe_on_the_wire(fppd):
+    """An E1.31 output with a sync universe (7) names it in every data
+    packet's synchronization address, and sends E1.31 synchronization
+    packets to 239.255.0.7, about one a frame: 49 bytes, root vector
+    VECTOR_ROOT_E131_EXTENDED, framing vector
+    VECTOR_E131_EXTENDED_SYNCHRONIZATION, flags and lengths that cover the
+    packet, and the sync address 7.
+
+    Regression: 8d7929296 (the feature). Before it the sync address was
+    always 0 and no sync packet was sent.
+    """
+    data, syncs = e131_sync_capture(fppd)
+    assert len(data) > 30, f"only {len(data)} E1.31 data packets arrived"
+    addrs = {struct.unpack(">H", p[109:111])[0] for p in data}
+    assert addrs == {7}, f"data packets' synchronization addresses: {sorted(addrs)}"
+    assert len(syncs) > 30, f"only {len(syncs)} sync packets to 239.255.0.7"
+    for p in syncs:
+        assert len(p) == 49, f"a {len(p)}-byte sync packet: {p.hex()}"
+        assert p[4:16] == ACN_ID, p.hex()
+        assert struct.unpack(">H", p[16:18])[0] == 0x7000 | (49 - 16), p.hex()
+        assert struct.unpack(">I", p[18:22])[0] == 0x00000008, p.hex()
+        assert struct.unpack(">H", p[38:40])[0] == 0x7000 | (49 - 38), p.hex()
+        assert struct.unpack(">I", p[40:44])[0] == 0x00000001, p.hex()
+        assert struct.unpack(">H", p[45:47])[0] == 7, p.hex()
+
+
+def test_e131_sync_sequence_counts_by_one(fppd):
+    """E1.31 sync packets' sequence number counts up by exactly one per
+    packet, like a universe's, from the start of playback.
+
+    Regression: 256b0cf8e (its sync half). The sync sequence number was
+    advanced when the frame was prepared, so a frame prepared twice as
+    playback started skipped one (1, 3, 4, 5, 7, ...).
+    """
+    _, syncs = e131_sync_capture(fppd)
+    assert len(syncs) > 30, f"only {len(syncs)} sync packets to 239.255.0.7"
+    check_sequence_numbers([p[44] for p in syncs], "sync universe 7")
+
+
+def test_bridge_joins_the_sync_universe_its_senders_name(fppd):
+    """E1.31 data arriving unicast for an input universe, naming sync
+    universe 9 (which is not an input universe), makes the bridge join
+    239.255.0.9, so the sender's multicast sync packets reach it: the
+    bridge's stats count them as "E1.31 Sync".
+
+    The sync packets are sent out of the default route's interface with
+    multicast loopback on, which delivers them to this machine's members of
+    the group; the bridge joins on every interface but loopback.
+
+    Regression: 8d7929296 (the input half of the feature). The bridge
+    joined only its input universes' groups, so sync sent to another
+    universe never arrived and was never counted.
+    """
+    import socket
+
+    from test_bridge_inputs import inputs, raw_output, udp_outputs
+    from packets import e131 as e131_packet
+
+    fppd.write("config/co-universes.json", udp_outputs())
+    fppd.write("config/co-other.json", raw_output())
+    fppd.write("config/ci-universes.json", inputs())
+    iface = default_route_interface()
+    addr = ip("-o", "-4", "addr", "show", "dev", iface).stdout.split()
+    local = addr[addr.index("inet") + 1].split("/")[0]
+
+    def sync_packet(seq):
+        return (struct.pack(">HH", 0x0010, 0) + ACN_ID + struct.pack(">HI", 0x7000 | 33, 8)
+                + b"fpp-tests-cid-01" + struct.pack(">HIBH", 0x7000 | 11, 1, seq & 0xFF, 9) + b"\0\0")
+
+    def synced():
+        return next((int(u["packetsReceived"]) for u in fppd.get("/fppd/e131stats")["universes"]
+                     if u["id"] == "E1.31 Sync"), 0)
+
+    mc = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    mc.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(local))
+    mc.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
+    try:
+        fppd.start()
+        data = bytes([0x20]) * 100
+        with Sender(lambda n: [(e131_packet(10, data, seq=n, sync_universe=9), E131_PORT)]):
+            n = 0
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline and not synced():
+                mc.sendto(sync_packet(n), ("239.255.0.9", E131_PORT))
+                n += 1
+                time.sleep(0.05)
+            assert synced(), f"none of {n} sync packets to 239.255.0.9 reached the bridge"
+    finally:
+        mc.close()
