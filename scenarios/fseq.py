@@ -104,12 +104,18 @@ def write_fseq(path, frames, step_ms=50, version=2, compression=None, level=-99,
 
 
 def write_fseq_reference(path, frames, step_ms=50, version=2, compression=None, blocks=1,
-                         sparse=None, media=None, streams=1):
+                         sparse=None, media=None, streams=1, sr=None, range_count=None):
     """The same file written independently of FPP (see the module docs).
 
     blocks:  number of compression blocks the frames are split into.
     streams: compressed streams each block is made of, back to back (the
              format allows several; FPP's writer makes one).
+    sparse:  more than 255 ranges are stored as FSEQ 2.3 stores them: the
+             first 255 in the header, counted as 255, and the whole table in
+             an 'SR' header kept as extended data after the channel data.
+    sr:      the 'SR' table to write in place of `sparse` (a stale one).
+    range_count: the header's range count, with all of `sparse` in the
+             header's table: how writers before 2.3 stored a longer table.
     """
     if sparse:
         frames = [b"".join(f[s:s + n] for s, n in sparse) for f in frames]
@@ -134,6 +140,12 @@ def write_fseq_reference(path, frames, step_ms=50, version=2, compression=None, 
     if ctype == 0:
         blocks = 0
     sparse = sparse or []
+    table = sparse
+    if range_count is None:
+        if sr is None and len(sparse) > 255:
+            sr = sparse
+        table = sparse[:255]
+        range_count = len(table)
     if ctype:
         per = -(-count // blocks)
         chunks = [(i, frames[i:i + per]) for i in range(0, count, per)]
@@ -153,15 +165,26 @@ def write_fseq_reference(path, frames, step_ms=50, version=2, compression=None, 
         blobs = []
         nblocks = 0
 
+    def pack_ranges(rs):
+        return b"".join(struct.pack("<I", s)[:3] + struct.pack("<I", n)[:3] for s, n in rs)
+
     index = b"".join(struct.pack("<II", first, len(b)) for first, b in blobs)
-    ranges = b"".join(struct.pack("<I", s)[:3] + struct.pack("<I", n)[:3] for s, n in sparse)
+    ranges = pack_ranges(table)
     header_len = V2_HEADER + len(index) + len(ranges)
+    body = b"".join(b for _, b in blobs) if ctype else b"".join(frames)
+    extended = b""
+    minor = 0
+    if sr is not None:
+        extended = pack_ranges(sr)
+        minor = 3
+        # 'ED' entry: inner code, then the 64-bit offset and 32-bit length of the data.
+        offset = header_len + len(vheaders) + 18 + len(body)
+        vheaders += struct.pack("<H", 18) + b"EDSR" + struct.pack("<QI", offset, len(extended))
     data_offset = header_len + len(vheaders)
     header = b"PSEQ" + struct.pack(
-        "<HBBHIIBBBBBBQ", data_offset, 0, 2, header_len, channels, count, step_ms,
-        0, ctype | ((nblocks >> 8) << 4), nblocks & 0xFF, len(sparse), 0,
+        "<HBBHIIBBBBBBQ", data_offset, minor, 2, header_len, channels, count, step_ms,
+        0, ctype | ((nblocks >> 8) << 4), nblocks & 0xFF, range_count & 0xFF, 0,
         0x5EED)
-    body = b"".join(b for _, b in blobs) if ctype else b"".join(frames)
     with open(path, "wb") as f:
-        f.write(header + index + ranges + vheaders + body)
+        f.write(header + index + ranges + vheaders + body + extended)
     return path

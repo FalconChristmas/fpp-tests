@@ -61,7 +61,11 @@ def _decompress(ctype, blob):
 
 def read_fseq(path):
     """(header, frames) of a v1 or v2 FSEQ file. Frames are the stored
-    channels only: for a sparse file, its ranges back to back."""
+    channels only: for a sparse file, its ranges back to back.
+
+    header["ranges"] is the whole sparse range table: from 2.3, an 'SR'
+    variable header holds it when it is longer than the 255 the header can
+    count, and header["header_ranges"] is then the header's own table."""
     with open(path, "rb") as f:
         data = f.read()
     assert data[:4] == b"PSEQ", f"{path} is not an FSEQ file: {data[:4]!r}"
@@ -87,6 +91,24 @@ def read_fseq(path):
         n = int.from_bytes(data[pos + 3:pos + 6], "little")
         hdr["ranges"].append((start, n))
         pos += 6
+    hdr["header_ranges"] = list(hdr["ranges"])
+    hdr["vheaders"] = {}
+    pos = header_len
+    while pos + 4 <= data_offset:
+        length = struct.unpack_from("<H", data, pos)[0]
+        if length < 4:
+            break
+        code, payload = data[pos + 2:pos + 4].decode(errors="replace"), data[pos + 4:pos + length]
+        if code == "ED":
+            code = payload[:2].decode(errors="replace")
+            off, n = struct.unpack_from("<QI", payload, 2)
+            payload = data[off:off + n]
+        hdr["vheaders"][code] = payload
+        pos += length
+    if "SR" in hdr["vheaders"]:
+        sr = hdr["vheaders"]["SR"]
+        hdr["ranges"] = [(int.from_bytes(sr[i:i + 3], "little"), int.from_bytes(sr[i + 3:i + 6], "little"))
+                         for i in range(0, len(sr) - 5, 6)]
     if ctype == 0:
         raw = data[data_offset:]
     else:

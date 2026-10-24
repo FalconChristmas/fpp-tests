@@ -55,6 +55,7 @@
  "scenarios/test_fpprtc_settings.py": 0.0,
  "scenarios/test_framebuffer.py": 0.0,
  "scenarios/test_fseq_bulk_read.py": 1.7,
+ "scenarios/test_fseq_many_ranges.py": 32.6,
  "scenarios/test_fseq_robustness.py": 117.1,
  "scenarios/test_fseq_writers.py": 1.1,
  "scenarios/test_fsequtils.py": 10.2,
