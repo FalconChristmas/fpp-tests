@@ -381,3 +381,64 @@ def test_playlist_remap_remove_then_saving_the_processors(fppd):
         write_processors(fppd, [proc("Set Value", start=1, count=3, value=22)])
         fppd.command("Start Playlist", "Show", "false", "false")
         latest(fppd, rx, lambda f: f[:3] == b"\x16\x16\x16", "the saved chain", timeout=15)
+
+
+def test_hold_value_starts_dark(fppd):
+    """Hold Value over channels that are dark from the first frame keeps
+    them dark: there is nothing to hold yet, so they go out as 0 until they
+    first light. Channels after the held span light as the sequence has
+    them, so frames are known to be arriving.
+
+    Regression: cb744c57b. The held values were allocated uninitialized, and
+    a 0 in the frame means "send the held value", so every held channel that
+    had not yet gone non-zero carried heap garbage (an ASan build's 0xbe
+    malloc fill here) on the wire."""
+    frame = bytes(15) + bytes([60] * 15) + bytes(CHANNELS - 30)
+    with DdpReceiver(CHANNELS) as rx:
+        run(fppd, [proc("Hold Value", start=1, count=15)], frames=[frame] * 600)
+        latest(fppd, rx, lambda f: f[15:30] == bytes([60] * 15), "the sequence's lit channels")
+        since = time.monotonic()
+        time.sleep(1)
+        frames = [f for _, f in rx.snapshot(since)]
+        assert frames, "no frames in a second of playback"
+        held = {f[:15] for f in frames}
+        assert held == {bytes(15)}, f"held channels that were never lit went out as {[h.hex() for h in held]}"
+
+
+MODEL_START, MODEL_PIXELS = 31, 8
+
+
+def span_model(fppd):
+    """A Channel model of 8 RGB pixels over channels 31-54."""
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [{
+        "Name": "Span", "Type": "Channel", "StartChannel": MODEL_START,
+        "ChannelCount": MODEL_PIXELS * 3, "ChannelCountPerNode": 3,
+        "Orientation": "horizontal", "StartCorner": "TL",
+        "StringCount": 1, "StrandsPerString": 1}]})
+
+
+@pytest.mark.parametrize("start, count", [(10, 20), (1, 30)],
+                         ids=["from mid-model", "from the model's first channel"])
+def test_a_model_processor_running_past_the_model_is_clamped_to_it(fppd, start, count):
+    """A Set Value on a model whose channel count runs past the model's end
+    sets the model's channels from its start up to and including the
+    model's last channel, and none of the channels after the model.
+
+    Regression: 32282dbe0. Only the count was compared with the model's
+    size, ignoring where in the model it started, so 20 channels from the
+    model's 10th (of 24) ran 5 channels past the model; and when the clamp
+    did fire (30 from the first) it cut one short, leaving the model's last
+    channel unset."""
+    span_model(fppd)
+    model_end = MODEL_START + MODEL_PIXELS * 3 - 1
+    with DdpReceiver(CHANNELS) as rx:
+        frames = run(fppd, [proc("Set Value", model="Span", start=start, count=count, value=200),
+                            proc("Set Value", start=150, count=1, value=7)])
+        want = per_channel(MODEL_START + start - 1, model_end - (MODEL_START + start - 1) + 1,
+                           lambda v: 200)(frames[0][:149] + b"\x07")
+        got = latest(fppd, rx, lambda f: f[149] == 7 and f[:MODEL_START - 1] == want[:MODEL_START - 1],
+                     "the sequence through the processors")
+        time.sleep(0.3)
+        got = rx.last()
+        diff = [(i + 1, frames[0][i], want[i], got[i]) for i in range(CHANNELS) if want[i] != got[i]]
+        assert not diff, f"channel (in, expected, got): {diff[:12]}"
