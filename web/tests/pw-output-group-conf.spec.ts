@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test, expect as hardExpect } from './fixtures';
 import type { APIRequestContext } from '@playwright/test';
 import { container, inPlayer } from './container';
 import { stopPipeWire } from './pw-live';
@@ -8,6 +8,10 @@ import {
   CONFIG, cleanupPipeWire, fakeSoundCards, hwParams, readFile, sinkNode, standInAplay,
   standInCommand, standInPwDump, writeFile,
 } from './pw-helpers';
+
+// FPP_TESTS_SOFT=1 makes every check soft, so a run on a fix's parent shows
+// the real-PipeWire half failing as well as the PHP half before it.
+const expect = process.env.FPP_TESTS_SOFT === '1' ? hardExpect.configure({ soft: true }) : hardExpect;
 
 // What Save & Apply of PipeWire audio output groups generates
 // (97-fpp-audio-groups.conf) for the cards behind its members: which sink

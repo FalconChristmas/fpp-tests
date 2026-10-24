@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test, expect as hardExpect } from './fixtures';
 import type { APIRequestContext } from '@playwright/test';
 import { container, inPlayer } from './container';
 import { settleAfterApply } from './pipewire-conf';
@@ -7,6 +7,10 @@ import {
 } from './pw-helpers';
 import { listen, pw, sinkVolume, startPipeWire, stopPipeWire } from './pw-live';
 import { describe, graph, loadGeneratedConf, reaches, standInNode } from './pw-load';
+
+// FPP_TESTS_SOFT=1 makes every check soft, so a run on a fix's parent shows
+// the real-PipeWire half failing as well as the PHP half before it.
+const expect = process.env.FPP_TESTS_SOFT === '1' ? hardExpect.configure({ soft: true }) : hardExpect;
 
 // What Save & Apply of PipeWire audio output groups does besides writing the
 // config: which sink fppd is pointed at (PipeWireSinkName), the volumes and
@@ -84,6 +88,23 @@ test('with an input group taking the media stream, fppd is pointed at the input 
   loadGeneratedConf([standInNode('alsa_output.x')], ['fpp_input_show_bus', 'fpp_group_out']);
   await expect.poll(() => reaches(graph(), 'fpp_input_show_bus', 'alsa_output.x'),
     { timeout: 10_000, message: describe(graph()) }).toBe(true);
+  // fppd's side: media it plays now goes into the bus.  (fppd was restarted
+  // by the Apply, and so reads the new PipeWireSinkName.)
+  writeFile('/home/fpp/media/music/fpp-tests-tone.wav', '');
+  inPlayer('sh', '-c', `python3 -c "import math,struct,wave; w=wave.open('/home/fpp/media/music/fpp-tests-tone.wav','wb'); ` +
+    `w.setnchannels(2); w.setsampwidth(2); w.setframerate(48000); w.writeframes(b''.join(struct.pack('<hh', *(2*[int(16384*` +
+    `math.sin(2*math.pi*440*i/48000))])) for i in range(48000*10)))"`);
+  try {
+    const play = await request.post('/api/command', { data: { command: 'Play Media', args: ['fpp-tests-tone.wav', '1', '0', '1'] } });
+    expect(play.ok(), await play.text()).toBe(true);
+    await expect.poll(() => {
+      const g = graph();
+      return g.links.filter(([, b]) => b === 'fpp_input_show_bus').map(([a]) => a);
+    }, { timeout: 15_000, message: describe(graph()) }).toContainEqual(expect.stringMatching(/fppd/));
+  } finally {
+    await request.post('/api/command', { data: { command: 'Stop Media', args: [] } });
+    inPlayer('rm', '-f', '/home/fpp/media/music/fpp-tests-tone.wav');
+  }
   stopPipeWire();
 
   // The control: with no input groups the first enabled output group with

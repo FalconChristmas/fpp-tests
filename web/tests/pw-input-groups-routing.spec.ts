@@ -1,10 +1,14 @@
-import { test, expect } from './fixtures';
+import { test, expect as hardExpect } from './fixtures';
 import type { APIRequestContext } from '@playwright/test';
 import { container, inPlayer } from './container';
 import { settleAfterApply } from './pipewire-conf';
 import { CONFIG, cleanupPipeWire, commandLog, fakeSoundCards, readFile, standInCommand, standInPwDump, writeFile } from './pw-helpers';
 import { listen, stopPipeWire } from './pw-live';
 import { channels, describe, graph, linked, loadGeneratedConf, props, reaches, standInNode } from './pw-load';
+
+// FPP_TESTS_SOFT=1 makes every check soft, so a run on a fix's parent shows
+// the real-PipeWire half failing as well as the PHP half before it.
+const expect = process.env.FPP_TESTS_SOFT === '1' ? hardExpect.configure({ soft: true }) : hardExpect;
 
 // Input groups (mix buses) as the API saves them and as Apply generates them
 // into 96-fpp-input-groups.conf: each bus is a combine-stream sink whose

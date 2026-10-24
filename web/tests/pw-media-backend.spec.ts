@@ -1,9 +1,13 @@
-import { test, expect } from './fixtures';
+import { test, expect as hardExpect } from './fixtures';
 import type { APIRequestContext } from '@playwright/test';
 import { container, inPlayer } from './container';
 import { CONFIG, cleanupPipeWire, commandLog, fakeSoundCards, hwParams, readFile, standInAplay, standInAt, writeFile } from './pw-helpers';
 import { filterParams, stopPipeWire } from './pw-live';
 import { describe, graph, loadGeneratedConf, reaches } from './pw-load';
+
+// FPP_TESTS_SOFT=1 makes every check soft, so a run on a fix's parent shows
+// the real-PipeWire half failing as well as the PHP half before it.
+const expect = process.env.FPP_TESTS_SOFT === '1' ? hardExpect.configure({ soft: true }) : hardExpect;
 
 // Changing the Media Backend setting through the settings API: the PHP
 // writes the PipeWire config for the new mode itself and leaves restarting
