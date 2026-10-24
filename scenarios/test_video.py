@@ -1163,10 +1163,10 @@ def fake_kms_env(fppd, **extra):
     core = glob.glob("/usr/lib/*/gstreamer-1.0/libgstcoreelements.so")
     if not core:
         pytest.skip("GStreamer's system plugin directory was not found")
-    flags = subprocess.run(["pkg-config", "--cflags", "--libs", "gstreamer-1.0", "gstreamer-base-1.0"],
+    flags = subprocess.run(["pkg-config", "--cflags", "--libs", "gstreamer-1.0", "gstreamer-base-1.0", "libdrm"],
                            capture_output=True, text=True)
     if flags.returncode:
-        pytest.skip("the GStreamer development files are not installed")
+        pytest.skip("the GStreamer or libdrm development files are not installed")
     so = shims.build("fakekms.c", libs=("-ldl", *flags.stdout.split()))
     farm = os.path.join(fppd.media, "tmp", "gst-plugins")
     os.makedirs(farm)
