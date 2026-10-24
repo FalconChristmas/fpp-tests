@@ -9,6 +9,8 @@ channels 1001 on, and a DDP output carries those channels to a receiver.
 
 import time
 
+import pytest
+
 from ddp import DdpReceiver
 
 MODEL = "MPS"
@@ -377,3 +379,68 @@ def test_a_reversed_single_colour_string_loads_without_reading_past_its_map(fppd
     fppd.start()
     fppd.wait_for(lambda: warned(fppd, "not 8 bit RGB"), timeout=10,
                   what="the not-8-bit-RGB warning, after the string's map is built")
+
+
+def model_data(fppd):
+    return fppd.get(f"/overlays/model/{MODEL}/data").get("data") or []
+
+
+@pytest.mark.parametrize("per_node", [3, 4], ids=["RGB model", "RGBW model"])
+def test_rows_no_string_draws_stay_dark(fppd, per_node):
+    """One string drawing into a four-row model (three or four channels a
+    node) lights its row, and the three rows no string draws read back as
+    0 from the model, with fppd's sanitizer clean.
+
+    Regression: 6c03fe4b8. The frame buffer handed to the model was
+    malloc()ed and only the strings' rows were ever written, so the other
+    rows went to the model as heap garbage (an ASan build's 0xbe fill), and
+    it was sized at three bytes a pixel while the model reads four on an
+    RGBW model: an ASan heap-buffer-overflow on the first frame.
+    """
+    cells = WIDTH * HEIGHT * per_node
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [{
+        "Name": MODEL, "Type": "Channel", "StartChannel": MODEL_START,
+        "ChannelCount": cells, "ChannelCountPerNode": per_node,
+        "Orientation": "horizontal", "StartCorner": "TL",
+        "StringCount": HEIGHT, "StrandsPerString": 1}]})
+    fppd.write("config/co-other.json", mps([vstring(pixels=10)]))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: "Calling Init() on ModelPixelStrings output" in fppd.log(),
+                  timeout=10, what="the ModelPixelStrings output to load")
+    set_range(fppd, 1, 30, 0x40)
+    got = fppd.wait_for(lambda: (d := model_data(fppd)) and 0x40 in d and d,
+                        timeout=10, what="the string's row in the model")
+    time.sleep(0.5)
+    got = model_data(fppd)
+    assert len(got) == cells, f"read back {len(got)} bytes, want {cells}"
+    row = WIDTH * per_node
+    dark = got[row:]
+    assert not any(dark), ("rows no string draws read back as "
+                           + " ".join(f"{v:02x}" for v in sorted(set(dark))))
+
+
+def test_more_strings_than_the_model_has_rows_are_refused(fppd):
+    """Five strings drawing into a four-row model: the fifth is refused with
+    a warning, the four rows draw their strings, and fppd's sanitizer stays
+    clean.
+
+    Regression: 6c03fe4b8. Each string is laid on its own row of the
+    frame buffer, and a string past the model's last row wrote past the end
+    of it: an ASan heap-buffer-overflow on the first frame.
+    """
+    model(fppd)
+    fppd.write("config/co-other.json", mps([vstring(start=30 * s, pixels=10) for s in range(5)]))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: "Calling Init() on ModelPixelStrings output" in fppd.log(),
+                  timeout=10, what="the ModelPixelStrings output to load")
+    set_range(fppd, 1, 150, 0x40)
+    got = fppd.wait_for(lambda: (d := model_data(fppd)) and 0x40 in d and d,
+                        timeout=10, what="the strings in the model")
+    time.sleep(1)
+    got = model_data(fppd)
+    row = WIDTH * 3
+    for r in range(HEIGHT):
+        assert got[r * row:r * row + 30] == [0x40] * 30, f"row {r} did not draw its string"
+    assert warned(fppd, "has fewer rows than the configured strings"), "no too-many-strings warning"
