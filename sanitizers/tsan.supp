@@ -115,6 +115,12 @@ race:libc.so.6
 # that also hides its mutex calls, and fppd's own unlock of one at startup
 # then reads as unbalanced.
 race:libGraphicsMagick-Q16.so.3
+# OpenSSL 3.5 (SHA1() for the WLED API's WebSocket handshake): two first
+# handshakes at once fill libcrypto's algorithm cache, one under its rwlock,
+# the other reading without it through lookups whose atomics, in an
+# uninstrumented libcrypto, TSan can't see. The block is libcrypto's own
+# (CRYPTO_malloc), not fppd's (test_wled_api.py's stalled client).
+race:libcrypto.so.3
 called_from_lib:liborc-0.4.so
 
 # trantor: TcpServer::stop's promise/future (synchronised in libstdc++,
@@ -209,10 +215,13 @@ called_from_lib:libsoup-3.0.so.0
 # posts an error, and freed with the element after the teardown thread has
 # set the pipeline to NULL, which joins rtspsrc's threads. Every hand-off is
 # a GObject signal connection, a bus message or a GstTask join, all inside
-# GLib/GStreamer where TSan can't see them. Only these handlers touch it.
+# GLib/GStreamer where TSan can't see them. Only these handlers touch it,
+# including pad-added (RtspLinkPadToBranch), connected when the camera's
+# audio is used (test_video.py's reload-warning scenario).
 race:RtspSelectStream
 race:RtspNoMorePads
 race:RtspFailedForNoVideo
+race:RtspLinkPadToBranch
 # A pad probe's state is published to the streaming thread by
 # gst_pad_add_probe() and freed by the probe's destroy notify once the pad
 # can no longer call it; both under the pad's lock, unseen. The crop region
