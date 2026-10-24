@@ -521,3 +521,44 @@ def test_a_link_too_slow_for_the_frames_drops_them_whole(fppd):
     assert not torn, f"{len(torn)} of {len(frames)} frames were shown with rows missing: (frame, rows) {torn[:5]}"
     assert len(frames) < 4 * 40 * 0.6, f"{len(frames)} frames shown in 4s over a link that carries ~10fps"
     assert dropping, "no dropped-frames warning"
+
+
+@pytest.mark.parametrize("test_type, colour", [(4, "red"), (5, "green"), (6, "blue"), (7, "white")])
+def test_output_specific_colour_fade_ramps_the_whole_panel(fppd, test_type, colour):
+    """The LED Panels page's colour fade tests fill the whole panel with
+    one colour whose level ramps up and down over each cycle: every pixel of
+    a frame is the same, only the channels of the fade's colour are lit
+    (all three, equally, for white), and over a cycle the level runs from
+    near dark to near full through many steps.
+
+    Regression: fea43549f added the fades. Before it a panel drew its
+    layout pattern for every test type: a solid colour per cycle with the
+    panel's numbers on it, never a ramp."""
+    w, h = 32, 16
+    lit = {"red": (0,), "green": (1,), "blue": (2,), "white": (0, 1, 2)}[colour]
+    with captured() as cap:
+        fppd.write("config/channeloutputs.json",
+                   panels_output([panel(0, 0, 0, 0)], channels=w * h * 3))
+        fppd.settings(DisableFakeNetworkBridges="1")
+        fppd.start()
+        fppd.command("Test Start", "2000", "Output Specific", "--ALL--", str(test_type))
+        try:
+            time.sleep(0.5)
+            with cap.lock:
+                cap.packets.clear()
+            time.sleep(4.5)  # over two whole cycles
+            frames = [rows for _, rows in cap.frames()
+                      if sorted(rows) == list(range(h)) and all(len(rows[r]) == w * 3 for r in rows)]
+        finally:
+            fppd.command("Test Stop")
+    assert len(frames) >= 10, f"only {len(frames)} whole frames in 4.5 s"
+    levels = set()
+    for rows in frames:
+        px = rows[0][0:3]
+        pixels = {rows[r][i:i + 3] for r in rows for i in range(0, w * 3, 3)}
+        assert pixels == {px}, f"a {colour} fade frame is not one colour: {sorted(p.hex() for p in pixels)[:6]}"
+        assert all(px[c] == 0 for c in range(3) if c not in lit), f"{colour} fade lit {px.hex()}"
+        assert len({px[c] for c in lit}) == 1, f"{colour} fade lit {px.hex()}"
+        levels.add(px[lit[0]])
+    assert len(levels) >= 6 and min(levels) < 96 and max(levels) > 160, \
+        f"the {colour} fade did not ramp: levels {sorted(levels)}"
