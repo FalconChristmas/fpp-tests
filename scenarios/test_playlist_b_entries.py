@@ -217,6 +217,13 @@ def test_image_entries_free_their_buffers(fppd):
     of a playlist with an image entry kept one. 40 loads of four entries
     kept 75 MB; with the fix fppd grows by a few MB. ASan's quarantine is
     off so freed memory is reused as it would be in a normal build.
+
+    Measured after a warm-up, against half the leak's own size: each load
+    starts and joins four prep threads, and the thread-stack and allocator
+    caches that fills grow with the machine (an ASan build on 16 cores grew
+    35 MB over the first 40 loads and 0.46 MB a load after, a debug build
+    24 MB and then nothing), so a fixed cap from the first loads failed on
+    a large host with no leak.
     """
     from test_overlays import matrix, setup
     w = h = 400
@@ -238,15 +245,18 @@ def test_image_entries_free_their_buffers(fppd):
         fppd.command("Stop Now")
         wait_idle(fppd)
 
-    for _ in range(5):
+    loads = 40
+    for _ in range(loads):
         load_and_stop()
     time.sleep(1)
     before = rss_kb(fppd.proc.pid)
-    for _ in range(40):
+    for _ in range(loads):
         load_and_stop()
     time.sleep(1)
     grew_mb = (rss_kb(fppd.proc.pid) - before) / 1024
-    assert grew_mb < 30, f"fppd grew {grew_mb:.0f} MB over 40 loads of four image entries"
+    leak_mb = loads * 4 * w * h * 3 / (1024 * 1024)
+    assert grew_mb < leak_mb / 2, \
+        f"fppd grew {grew_mb:.0f} MB over {loads} loads of four image entries (a buffer each would be {leak_mb:.0f} MB)"
 
 
 # --- companion media -----------------------------------------------------------
