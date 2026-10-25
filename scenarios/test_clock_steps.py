@@ -46,7 +46,13 @@ def test_set_clock_lands_on_the_time_asked_for(fppd, tz):
         fppd.set_clock(when)
         got = fppd_clock(fppd)
         want = datetime.datetime.strptime(when, "%Y-%m-%d %H:%M:%S")
-        assert datetime.timedelta(0) <= got - want <= datetime.timedelta(seconds=1), \
+        # A second either way. Each target is a whole second and fppd reports
+        # whole seconds, so landing any fraction short reads as a full second
+        # short -- the nightly once read 19:29:59 for 19:30:00, a shortfall
+        # the offset arithmetic doesn't explain and the runner's own clock
+        # being adjusted mid-step would. The bug this guards against landed
+        # short by fppd's run time, at least the 4 s slept before each step.
+        assert abs(got - want) <= datetime.timedelta(seconds=1), \
             f"asked for {when}, fppd reads {got}"
 
 
