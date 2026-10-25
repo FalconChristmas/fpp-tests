@@ -3,7 +3,7 @@ import type { APIRequestContext } from '@playwright/test';
 import { container, inPlayer } from './container';
 import { settleAfterApply } from './pipewire-conf';
 import { CONFIG, cleanupPipeWire, commandLog, fakeSoundCards, readFile, standInCommand, standInPwDump, writeFile } from './pw-helpers';
-import { listen, stopPipeWire } from './pw-live';
+import { dump, listen, startPipeWire, stopPipeWire } from './pw-live';
 import { channels, describe, graph, linked, loadGeneratedConf, props, reaches, standInNode } from './pw-load';
 
 // FPP_TESTS_SOFT=1 makes every check soft, so a run on a fix's parent shows
@@ -301,4 +301,60 @@ test('the routing matrix saves a level and a mute per path, and Apply honours th
   loadGeneratedConf([standInNode('fpp_group_front'), standInNode('fpp_group_back')], ['fpp_input_bus']);
   await expectReaches([['fpp_input_bus', 'fpp_group_front']]);
   expect(reaches(graph(), 'fpp_input_bus', 'fpp_group_back'), 'the muted path is linked').toBe(false);
+});
+
+// Every port-to-port link in the real graph, as "node:channel > node:channel".
+function portLinks(): string[] {
+  const all = dump();
+  const nodeName = new Map<number, string>();
+  for (const o of all) if (o.type === 'PipeWire:Interface:Node') nodeName.set(o.id, o.info?.props?.['node.name']);
+  const port = new Map<number, string>();
+  for (const o of all) {
+    if (o.type !== 'PipeWire:Interface:Port') continue;
+    port.set(o.id, `${nodeName.get(o.info?.props?.['node.id'])}:${o.info?.props?.['audio.channel'] ?? '?'}`);
+  }
+  return all.filter((o) => o.type === 'PipeWire:Interface:Link')
+    .map((o) => `${port.get(o.info['output-port-id'])} > ${port.get(o.info['input-port-id'])}`);
+}
+
+test("a loopback's capture end takes its source's channel layout, so each channel is linked to its own", async ({ request }) => {
+  // Regression: a loopback's capture end named no channel layout when its
+  // source was as wide as the bus (and a tee's loopbacks never did).  With
+  // stream.dont-remix its ports were unpositioned, channel UNK: linked to the
+  // source by port order, not by channel, and drawn as UNK in the graph.  The
+  // capture end now takes the source's own layout: the tee's from its conf, a
+  // device's from the pw-dump Apply reads (a real PipeWire here).
+  const mic = 'alsa_input.usb-fpp_tests_mic-00.analog-stereo';
+  // Audio/Source/Virtual: a null node of class Audio/Source gets one port
+  // (capture_FR) in this PipeWire, so its other channel could never link.
+  const micNode = () => standInNode(mic, { mediaClass: 'Audio/Source/Virtual' });
+  startPipeWire({ objects: [micNode()] });
+  seedOutputGroups([{ id: 1, name: 'Out' }]);
+  const conf = await applyInputGroups(request, [
+    { id: 1, name: 'Bus A', enabled: true, channels: 2, outputs: [1],
+      members: [{ type: 'fppd_stream', sourceId: 'fppd_stream_1' }, { type: 'capture', name: 'Mic', cardId: 'Mic', nodeName: mic }] },
+    { id: 2, name: 'Bus B', enabled: true, channels: 2, outputs: [1], members: [{ type: 'fppd_stream', sourceId: 'fppd_stream_1' }] },
+  ]);
+  const loop = block(conf, 'Loopback: Mic');
+  const capture = loop.slice(loop.indexOf('capture.props'), loop.indexOf('playback.props'));
+  expect(value(capture, 'audio.position'), loop).toBe('[ FL FR ]');
+
+  // The receiving end: the loopbacks' capture ports are FL and FR in the
+  // real graph, and each channel of a source goes to the same channel of the
+  // bus, through its own port.
+  loadGeneratedConf([standInNode('fpp_group_out'), micNode()],
+    ['fpp_input_bus_a', 'fpp_input_bus_b', 'fpp_tee_fppd_stream_1', 'output.fpp_loopback_ig1_mic']);
+  for (const lb of ['input.fpp_loopback_ig1_mic', 'input.fpp_loopback_ig1_fppd_stream_1', 'input.fpp_loopback_ig2_fppd_stream_1']) {
+    expect(channels(graph(), lb, 'input'), lb).toEqual(['FL', 'FR']);
+  }
+  const want = [
+    `${mic}:FL > input.fpp_loopback_ig1_mic:FL`, `${mic}:FR > input.fpp_loopback_ig1_mic:FR`,
+    'output.fpp_loopback_ig1_mic:FL > fpp_input_bus_a:FL', 'output.fpp_loopback_ig1_mic:FR > fpp_input_bus_a:FR',
+    ...[1, 2].flatMap((id) => [`fpp_tee_fppd_stream_1:FL > input.fpp_loopback_ig${id}_fppd_stream_1:FL`,
+      `fpp_tee_fppd_stream_1:FR > input.fpp_loopback_ig${id}_fppd_stream_1:FR`]),
+  ];
+  await expect.poll(() => want.filter((l) => !portLinks().includes(l)), { timeout: 10_000,
+    message: `not linked:\n${portLinks().filter((l) => /loopback|tee|mic/.test(l)).join('\n')}` }).toEqual([]);
+  // Nothing else into the loopbacks' capture ends: no channel crossed over.
+  expect(portLinks().filter((l) => / > input\.fpp_loopback_/.test(l)).sort()).toEqual(want.filter((l) => / > input\./.test(l)).sort());
 });

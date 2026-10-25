@@ -98,3 +98,37 @@ test('the installed cape\'s vendor is found when its EEPROM names it with a suff
   await expect(page.locator('#eepromVendorList')).toHaveValue('fpp-tests Vendor');
   await expect(page.locator('#eepromVendorCapes')).toHaveValue('fpp-tests cape');
 });
+
+test('the vendor named exactly wins over one whose name is only a prefix, whichever list arrives first', async ({ page, request }) => {
+  // Regression: the vendor lists arrive in any order and the first one whose
+  // name matched took the selection for good; since 70dcffb22 a prefix
+  // matches, so a vendor named "fpp-tests" whose list came first took the
+  // cape of "fpp-tests Vendor".  Its list has a cape of the same name, so the
+  // version (and the download it leads to) was the wrong vendor's, and at the
+  // Basic level the lists were locked to it.
+  const PREFIX = 'https://prefix.fpp-tests.invalid/eeproms.json';
+  const answer = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body),
+                                       headers: { 'Access-Control-Allow-Origin': '*' } });
+  await page.route(INDEX, (r) => r.fulfill(answer({ vendors: [{ name: 'Prefix', url: PREFIX }, { name: 'fpp-tests', url: LIST }] })));
+  await page.route(PREFIX, (r) => r.fulfill(answer({ name: 'fpp-tests', capes: {
+    'fpp-tests cape': { versions: { '1.0': { url: 'https://prefix.fpp-tests.invalid/fpp-tests%20cape.bin' } } },
+  } })));
+  // The exact one arrives after it.
+  await page.route(LIST, async (r) => {
+    await new Promise((done) => setTimeout(done, 1500));
+    await r.fulfill(answer({ name: 'fpp-tests Vendor', capes: capes(['fpp-tests other cape', 'fpp-tests cape']) }));
+  });
+  installCape('fpp-tests Vendor');
+  await setLevel(request, '0');
+  await page.goto('/cape-info.php');
+  await page.locator('#eeprom-upgrade-tab').click();
+  const vendor = page.locator('#eepromVendorList');
+  await expect(vendor.locator('option')).toHaveCount(3, { timeout: 15_000 });
+  await expect(vendor).toHaveValue('fpp-tests Vendor');
+  await expect(page.locator('#eepromVendorCapes')).toHaveValue('fpp-tests cape');
+  await expect(page.locator('#eepromVendorCapeVersions')).toHaveValue('https://vendor.fpp-tests.invalid/fpp-tests%20cape.bin');
+  // Still locked to the installed cape at the Basic level.
+  await expect(vendor).toBeDisabled();
+  await expect(page.locator('#eepromVendorCapes')).toBeDisabled();
+  await expect(page.locator('#eepromHardwareLockedNote')).toBeVisible();
+});

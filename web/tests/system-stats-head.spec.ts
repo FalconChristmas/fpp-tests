@@ -15,3 +15,21 @@ test('System Stats carries the shared viewport and charset tags', async ({ page 
   expect(viewport.every((c) => /width=device-width/.test(c ?? ''))).toBe(true);
   expect(await page.locator('head meta[charset]').count()).toBeGreaterThan(0);
 });
+
+test.describe('in a dark colour scheme', () => {
+  test.use({ colorScheme: 'dark' });
+
+  test('System Stats carries the shared head once, and still follows the theme', async ({ page }) => {
+    // Regression: 9c16f43a7 ("Health and Stats dark mode") included
+    // htmlMeta.inc a second time, after config.php, so the page carried two
+    // of each meta tag and ran the theme script twice.  Once is enough for
+    // the theme: with no Theme setting it follows the browser's dark scheme.
+    await answerUpdateCheck(page);
+    await page.goto('/system-stats.php');
+    await expect(page.locator('#uptime-days')).toBeVisible();
+    for (const meta of ['meta[name="viewport"]', 'meta[charset]', 'meta[name="color-scheme"]']) {
+      expect(await page.locator(`head ${meta}`).count(), meta).toBe(1);
+    }
+    await expect(page.locator('html')).toHaveAttribute('data-bs-theme', 'dark');
+  });
+});

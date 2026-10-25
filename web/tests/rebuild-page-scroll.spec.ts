@@ -75,3 +75,19 @@ test('the Rebuild FPP page follows its output to the bottom', async ({ page }) =
     await expect.poll(() => atBottom(page), { timeout: 5_000, message: 'the page did not end at the bottom' }).toBe(true);
   });
 });
+
+test('a Rebuild FPP asked for by curl gets the output and no page script', async () => {
+  // Regression: like a1ddad2da's changebranch.php, the per-step scrolls go to
+  // a browser only, but the links and the scroll after "Rebuild Complete."
+  // went to curl too.  By POST, as the deprecated GET is not.
+  test.setTimeout(120_000);
+  await withStandIns(async () => {
+    const body = inPlayer('curl', '-s', '--max-time', '90', '-X', 'POST', '-d', '', 'http://127.0.0.1/rebuildfpp.php');
+    // The control: the rebuild ran to its end.
+    expect(body).toContain('fpp-tests build line 299');
+    expect(body).toContain('Rebuild Complete.');
+    expect(inPlayer('cat', `${MARK}.log`)).toContain('start');
+    expect(body).not.toContain('<script>');
+    expect(body).not.toContain('Go to FPP Main Status Page');
+  });
+});

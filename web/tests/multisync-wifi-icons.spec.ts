@@ -96,3 +96,31 @@ test("a remote answering only at its wired address gets the wifi icon after its 
   await expect(row).toContainText('master', { timeout: 15_000 });
   await expect.poll(() => ipCellTokens(page, row), { timeout: 10_000 }).toEqual([WIRED, WIRELESS, 'wifi']);
 });
+
+test("with auto refresh on, a remote answering at one of its two addresses stays up, its wifi icon kept", async ({ page, request }) => {
+  // Regression: each auto refresh polls every address the row was listed
+  // at, and the address that never answers was applied too.  From its 4th
+  // failed answer on it marked the row Unreachable and redrew the IP cell
+  // from its empty interfaces, dropping the wifi icon 6093170ee put there,
+  // though the other address was answering every poll.
+  test.setTimeout(90_000);
+  let polls = 0;
+  await request.put('/api/settings/MultiSyncRefreshStatus', { data: '1' });
+  try {
+    const row = await openMultisync(page, [WIRED, WIRELESS], { [WIRED]: DUAL_NIC, [WIRELESS]: UNREACHABLE });
+    // Routed after openMultisync's own, so it sees each poll first.
+    await page.route('**/api/system/status?**', (route) => {
+      if (new URL(route.request().url()).searchParams.getAll('ip[]').length) polls++;
+      return route.fallback();
+    });
+    await expect(row).toContainText('master', { timeout: 15_000 });
+    // A poll is only scheduled once the previous one has rendered, so when
+    // poll n+1 is requested, render n is done.
+    await expect.poll(() => polls, { timeout: 40_000 }).toBeGreaterThanOrEqual(8);
+    await expect(row).not.toContainText('Unreachable');
+    await expect(row).toContainText('Remote');
+    expect(await ipCellTokens(page, row)).toEqual([WIRED, WIRELESS, 'wifi']);
+  } finally {
+    await request.put('/api/settings/MultiSyncRefreshStatus', { data: '0' });
+  }
+});

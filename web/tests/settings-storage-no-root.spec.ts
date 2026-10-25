@@ -13,8 +13,8 @@ import { MEDIA, exists, putFile } from './settings-file';
 // The select is printed only off Docker, so the page is rendered with the
 // container marker moved aside and a platform marker holding what config.php
 // falls back to without one (uname -s); both are put back straight after.
-// Only warnings from PrintStorageDeviceSelect() count: the tab's later
-// findmnt lookup warns here too, because the image has no colrm.
+// Only warnings from PrintStorageDeviceSelect() count there; the tab's
+// later findmnt lookup has a test of its own below.
 
 test.skip(!container, 'reads the error log inside the run-web.sh container');
 
@@ -64,4 +64,22 @@ test('the Storage tab prints its device select with no root device found and log
   expect(body).toContain("id='storageDevice'");
   await new Promise((r) => setTimeout(r, 500));
   expect(warningsIn(range).slice(before), 'the device select logged a warning').toEqual([]);
+});
+
+test('the Storage tab logs no warning when the root device lookup for its new-partition button finds nothing', async ({ request }) => {
+  // Regression: the same unchecked $output[0] as 24c22f508, in the tab's
+  // top-level lookup (findmnt piped through colrm) that decides whether to
+  // offer a new filesystem in the unpartitioned space.  It answers nothing
+  // here (the image has no colrm), and every load of the tab logged
+  // "Undefined array key 0".  This one runs on Docker too.
+  // The control: the lookup answers nothing here.
+  expect(sh(`findmnt -n -o SOURCE / | colrm 1 5 2>/dev/null || true`).trim(), 'the root device lookup found something here').toBe('');
+  const all = (): string[] => sh(`grep 'settings-storage.php on line' ${LOG} 2>/dev/null || true`).split('\n').filter((l) => l !== '');
+  const before = all().length;
+  const r = await request.get('/settings-storage.php');
+  expect(r.status()).toBe(200);
+  // It got past the lookup, to the end of the page.
+  expect(await r.text()).toContain('id="mounted-device-callout-warning"');
+  await new Promise((r) => setTimeout(r, 500));
+  expect(all().slice(before), 'the Storage tab logged a warning').toEqual([]);
 });

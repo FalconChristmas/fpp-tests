@@ -51,8 +51,32 @@ test('a task\'s preset is picked from the presets there are, and one that has go
   await expect(orphan.locator('option:checked')).toHaveText('fpp-tests gone (unavailable)');
   await expect(orphan.locator('option:checked')).toBeDisabled();
 
-  // Not saved here: a disabled option reads as null through jQuery's .val(),
-  // so Save with an unavailable preset on the page throws and saves nothing.
+});
+
+test('Save with an unavailable preset on the page saves every task, that one still naming it', async ({ page, request }) => {
+  // Regression: a disabled option reads as null through jQuery's .val(), so
+  // Save threw (null.trim()) and saved nothing while any task showed an
+  // "(unavailable)" preset.  Receiving ends: the saved file, fppd's reload of
+  // it, and the page reading it back.
+  await put(request, JSON.stringify([task('fpp-tests kept', PRESET), task('fpp-tests orphan', 'fpp-tests gone')]));
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/recurringtasks.php');
+  const rows = page.locator('#tblTasksBody > tr');
+  await expect(rows).toHaveCount(2, { timeout: 15_000 });
+  await expect(rows.nth(1).locator('select.ptTmplPreset option:checked')).toHaveText('fpp-tests gone (unavailable)');
+  // An edit, so the save is seen to happen.
+  await rows.nth(0).locator('.ptTmplName').fill('fpp-tests renamed');
+  await page.locator('button', { hasText: /^Save$/ }).click();
+  await expect.poll(async () => ((await (await request.get(FILE)).json()) as any[]).map((t) => [t.name, t.type, t.preset]),
+    { timeout: 15_000, message: `page errors: ${errors.join('; ')}` })
+    .toEqual([['fpp-tests renamed', 'preset', PRESET], ['fpp-tests orphan', 'preset', 'fpp-tests gone']]);
+  expect(errors).toEqual([]);
+  await expect.poll(async () => (((await (await request.get('/api/fppd/recurringtasks')).json())?.tasks ?? []) as any[])
+    .map((t) => [t.name, t.preset]), { timeout: 15_000 })
+    .toEqual([['fpp-tests renamed', PRESET], ['fpp-tests orphan', 'fpp-tests gone']]);
+  await page.reload();
+  await expect(rows.nth(1).locator('select.ptTmplPreset option:checked')).toHaveText('fpp-tests gone (unavailable)', { timeout: 15_000 });
 });
 
 test('a task saved with a preset picked from the list reloads with it, and fppd runs the saved task list', async ({ page, request }) => {

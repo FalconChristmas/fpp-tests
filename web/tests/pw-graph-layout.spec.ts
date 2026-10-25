@@ -156,10 +156,14 @@ test("an input group's EQ routing hub is drawn as part of its EQ", async ({ page
   // routing hub (fpp_route_ig_<id>, a combine-stream with an output stream
   // per output group) after the EQ; the hub and its streams were drawn as
   // boxes of their own instead of the EQ leading straight to the output group.
+  //
+  // And one input per channel: folding the hub in moved its inputs (fed only
+  // by the EQ) onto the EQ's box too, so it drew FL FR FL FR on its left.
   const d = await teeAndEqGraph(page, request);
   expect(d.nodes.filter((n) => /Routing/.test(n.label)).map((n) => n.label)).toEqual([]);
   const eq = node(d, 'EQ: Bus A');
   expect(eq.col).toBe('Effects');
+  expect(ports(eq, 'left')).toEqual(['FL', 'FR']);
   expect(ports(eq, 'right')).toEqual(['FL', 'FR']);
   expect(linkList(d)).toEqual(expect.arrayContaining([
     'Bus A.FL > EQ: Bus A.FL', 'Bus A.FR > EQ: Bus A.FR', 'EQ: Bus A.FL > fpp_group_out.FL', 'EQ: Bus A.FR > fpp_group_out.FR']));

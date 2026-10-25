@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import { execFileSync } from 'child_process';
-import { container, inPlayer } from './container';
+import { container, docker, inPlayer } from './container';
 import { MEDIA, exists, putFile, readFile } from './settings-file';
 import { keepingFile } from './privacy-helpers';
 import { SecondPlayer } from './second-player';
@@ -106,8 +106,13 @@ test('Restart FPPD on a remote says which mode it set, and the remote takes it',
   // printed $mode before it was set: "Setting FPPD mode @ <ip> to " and
   // nothing.  The remote is a stand-in on a host of its own that records what
   // it is sent (a real one's fppd quits for the restart, and its container
-  // with it); the mode change it got is then sent to a second real player,
-  // which has to take it.
+  // with it); the mode change and restart it got are then sent to a second
+  // real player, which has to take them.
+  //
+  // And the restart is a quick one.  The page asked for quick=true, which
+  // the remote's RestartFPPD() never took ("true" == 1 is false in PHP), so
+  // every remote got a full stop and start; the fppMode setting only needs a
+  // quick one.  A quick restart re-execs fppd in place, so its pid stays.
   test.setTimeout(300_000);
   const remote = StandIn.sibling('restart', {
     '/api/settings/fppMode': { json: { status: 'OK' } },
@@ -115,6 +120,7 @@ test('Restart FPPD on a remote says which mode it set, and the remote takes it',
     '/api/fppd/status': { json: { status: 0, status_name: 'idle' } },
   });
   let put: { method: string; path: string; body: string } | undefined;
+  let restart: { method: string; path: string; body: string } | undefined;
   try {
     remote.start();
     // By POST with the query string, as the MultiSync page's quick stream asks.
@@ -123,23 +129,63 @@ test('Restart FPPD on a remote says which mode it set, and the remote takes it',
     expect(body).toContain(`Setting FPPD mode @ ${remote.address} to remote\n`);
     expect(body).toContain('FPPD Restarted');
     const sent = remote.requests();
-    // The control: the remote was asked for the restart too.
-    expect(sent.map((q) => q.path.split('?')[0])).toContain('/api/system/fppd/restart');
     put = sent.find((q) => q.path === '/api/settings/fppMode');
     expect(put?.method).toBe('PUT');
+    restart = sent.find((q) => q.path.split('?')[0] === '/api/system/fppd/restart');
+    expect(restart, 'the remote was not asked to restart').toBeDefined();
+    // quick=1, the value the API documents: a remote of any FPP since 5.0
+    // takes it, where only one with this fix takes quick=true.
+    expect(new URLSearchParams(restart!.path.split('?')[1] ?? '').get('quick'), restart!.path).toBe('1');
   } finally {
     remote.stop();
   }
-  // The receiving end: a real player given that request is in remote mode.
+  // The receiving end: a real player given those requests restarts quickly,
+  // in remote mode.
   const peer = new SecondPlayer('mode').start();
+  const pid = () => peer.sh('pidof fppd || true').trim();
+  const logged = (line: string) => Number(peer.sh(`grep -c "${line}" /home/fpp/media/logs/fppd.log || true`).trim());
+  const restartedQuickly = (path: string, method: string, mode: string) => {
+    const before = pid();
+    const down = logged('Shutting down main loop');
+    const up = logged('Starting main processing loop');
+    expect(before, 'no fppd running before the restart').toMatch(/^\d+$/);
+    peer.sh(`curl -s -X ${method} --max-time 30 'http://127.0.0.1${path}'`);
+    // Restarted: its main loop shut down and started again (the old one
+    // answers the API while it shuts down, so an answer alone is not it).
+    let status: any;
+    for (let i = 0; i < 60; i++) {
+      execFileSync('sleep', ['1']);
+      try {
+        status = logged('Starting main processing loop') > up ? peer.get('/api/fppd/status') : undefined;
+      } catch {
+        status = undefined;
+      }
+      if (status?.mode_name) break;
+    }
+    // A full stop takes the player's fppd out from under web_serve.py, and
+    // the player goes down with it.
+    expect(docker('inspect', '-f', '{{.State.Running}}', peer.name).trim(),
+      `${path}: fppd was stopped, not restarted in place (the player went down with it)`).toBe('true');
+    expect(logged('Shutting down main loop'), `${path}: fppd never shut down for the restart`).toBeGreaterThan(down);
+    expect(status?.mode_name, `${path}: ${JSON.stringify(status)}`).toBe(mode);
+    expect(pid(), `${path}: fppd was stopped and started again, not restarted in place`).toBe(before);
+  };
   try {
     expect(peer.get('/api/settings/fppMode').value).not.toBe('remote');
     peer.sh(`curl -s -X ${put!.method} --data-binary '${put!.body}' 'http://127.0.0.1${put!.path}'`);
     expect(peer.get('/api/settings/fppMode').value).toBe('remote');
-  } finally {
-    const verdict = peer.stop();
-    expect(verdict.ok, verdict.detail).toBe(true);
+    restartedQuickly(restart!.path, restart!.method, 'remote');
+    // An older player's MultiSync still sends quick=true; the remote takes
+    // that as quick too.
+    restartedQuickly('/api/system/fppd/restart?quick=true', 'POST', 'remote');
+  } catch (e) {
+    // Its own failure first: a full restart also takes the player's fppd
+    // out from under web_serve.py, which stop()'s verdict then reports.
+    peer.stop();
+    throw e;
   }
+  const verdict = peer.stop();
+  expect(verdict.ok, verdict.detail).toBe(true);
 });
 
 test('a branch change asked for by a script or a remote gets no page script in its output', async ({ request }) => {
