@@ -18,3 +18,20 @@ test('a POST whose JSON body is a string, number or true is answered by its rout
     expect(text).toContain('not a JSON object');
   }
 });
+
+test('a GET that says it carries JSON is answered by its route', async ({ request }) => {
+  // Regression: fpp 8cf550dc0.  limonade replaced the request method's
+  // parameters with the decoded JSON body whenever Content-Type said JSON;
+  // for a GET those are $_GET, which holds the route itself (uri), so every
+  // PHP route answered such a GET 404 -- as a browser's fetch() that sets the
+  // header sends it, body or not.
+  const json = { 'Content-Type': 'application/json' };
+  for (const path of ['/api/settings/HostName', '/api/configfile']) {
+    const plain = await request.get(path);
+    // The control: the route answers without the header.
+    expect(plain.status(), path).toBe(200);
+    const r = await request.get(path, { headers: json });
+    expect(r.status(), `${path}: ${(await r.text()).slice(0, 200)}`).toBe(200);
+    expect(await r.text(), path).toBe(await plain.text());
+  }
+});

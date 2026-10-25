@@ -58,12 +58,16 @@ MEDIA = "/fpp-test-media"  # where the media directory appears to fppinit
 
 def _stub(log, loud=False):
     # Prints /fppinit-state/<command>.<argument>.out for the first argument
-    # that has one (stub_output()), so a scenario can give a verb its output.
+    # that has one (stub_output()), so a scenario can give a verb its output;
+    # called with no arguments (pw-dump), /fppinit-state/<command>..out.
     note = ("echo \"fppinit sandbox: $(basename \"$0\") is a stub, nothing done: $*\" >&2\n"
             if loud else "")
     return ("#!/bin/sh\n"
             f"printf '%s\\n' \"$(basename \"$0\") $*\" >> {log}\n"
             + note +
+            "if [ $# -eq 0 ] && [ -f \"/fppinit-state/$(basename \"$0\")..out\" ]; then\n"
+            "    cat \"/fppinit-state/$(basename \"$0\")..out\"\n"
+            "fi\n"
             "for a in \"$@\"; do\n"
             "    f=\"/fppinit-state/$(basename \"$0\").$a.out\"\n"
             "    if [ -f \"$f\" ]; then cat \"$f\"; break; fi\n"
@@ -157,8 +161,9 @@ class FppinitSandbox:
 
     def stub_output(self, command, argument, text):
         """What a stubbed command prints when called with `argument` (say
-        amixer with scontrols); otherwise the stubs print nothing. The
-        command is stubbed in /usr/bin even where it isn't installed."""
+        amixer with scontrols), or with no arguments at all when `argument`
+        is "" (pw-dump); otherwise the stubs print nothing. The command is
+        stubbed in /usr/bin even where it isn't installed."""
         with open(os.path.join(self.state, f"{command}.{argument}.out"), "w") as f:
             f.write(text)
 

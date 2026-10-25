@@ -82,6 +82,22 @@ function fppTestsDocsLiveHello() { return 'fpp-tests docs plugin'; }
     }
   });
 
+  test("the spec lists none of fppd's internal routes, which Apache refuses", async ({ request }) => {
+    // Regression: fpp a1e516e8e.  fppd's route list (/internal/pluginApiRoutes)
+    // includes its internal routes, and only that one was left out of the
+    // spec, by name: POST /api/plugin-apis/internal/crashReport was listed as
+    // undocumented, though Apache answers every /api/plugin-apis/internal
+    // path 403.
+    const routes = JSON.parse(sh('curl -s http://localhost:32322/internal/pluginApiRoutes'));
+    // The controls: fppd does report another internal route, and Apache does
+    // refuse it.
+    expect(routes.map((r: any) => r.path), 'fppd reports /internal/crashReport').toContain('/internal/crashReport');
+    expect((await request.post('/api/plugin-apis/internal/crashReport', { data: '' })).status()).toBe(403);
+
+    const s = await spec(request);
+    expect(Object.keys(s.paths).filter((p) => /\/internal(\/|$)/i.test(p))).toEqual([]);
+  });
+
   test("a plugin documents its own routes with apiDocs.json, and a broken one is skipped", async ({ request }) => {
     // Feature: 006f389dc.  A plugin's apiDocs.json (an OpenAPI "paths"
     // fragment, keyed by the path the plugin registers with fppd) is merged
@@ -97,6 +113,8 @@ function fppTestsDocsLiveHello() { return 'fpp-tests docs plugin'; }
         paths: {
           '/fppTestsDocs/status': { get: { summary: 'fpp-tests documented route' } },
           '/fppd/fppTestsDocs': { post: { summary: 'fpp-tests direct route' } },
+          // Under fppd's internal namespace, which Apache refuses (fpp a1e516e8e).
+          '/Internal/fppTestsDocs': { get: { summary: 'fpp-tests internal route' } },
         },
       }));
       writeIn(`${PLUGINS}/${BROKEN}/apiDocs.json`, '{ "paths": { "/fppTestsBroken": ');
@@ -111,6 +129,7 @@ function fppTestsDocsLiveHello() { return 'fpp-tests docs plugin'; }
       // A path in a namespace Apache proxies directly is listed there.
       expect(s.paths['/api/fppd/fppTestsDocs']?.post?.summary).toBe('fpp-tests direct route');
       expect(JSON.stringify(s)).not.toContain('fppTestsWrong');
+      expect(JSON.stringify(s), 'a plugin path under /internal/').not.toContain('fpp-tests internal route');
 
       expect(s.paths['/api/fppd/plugin/{PluginName}/{action}']?.post, 'the plugin load/unload route').toBeTruthy();
       expect(Object.keys(s.paths).filter((p) => /\{\d+\}/.test(p)), 'positional path parameters').toEqual([]);

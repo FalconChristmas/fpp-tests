@@ -62,6 +62,37 @@ test('a scan that iw cannot do falls back to iwlist', async ({ request }) => {
   expect(realSyntaxErrors(), calls().join('\n')).toEqual([]);
 });
 
+test('a connected adapter is scanned at low priority, in words iw takes', async ({ request }) => {
+  // Regression: fpp f32c3b1b8.  The scan of a connected adapter asked for
+  // `iw dev <if> scan low-priority`; iw's flag is "lowpri", and it refuses
+  // anything else as a usage error, so the low-priority scan never ran and
+  // every scan fell through to a full one -- in the network API and in
+  // wifi_scan.sh (Troubleshooting) alike.
+  const bss = 'BSS 02:aa:bb:cc:dd:07(on wlan9)\n\tfreq: 2437\n\tsignal: -48.00 dBm\n\tSSID: fpp-tests-lowpri\n';
+  stub('iw', [
+    [`dev ${WLAN} info*`, `Interface ${WLAN}\n\tifindex 9\n\ttype managed\n`],
+    [`dev ${WLAN} link*`, iwLink('fpp-tests-home')],
+    // Only the low-priority scan finds anything.
+    [`dev ${WLAN} scan lowpri`, bss],
+    ['dev', `phy#0\n\tInterface ${WLAN}\n\t\ttype managed\n`],
+  ]);
+  stub('iwlist');
+  clearCalls();
+  const r = await (await request.get(`/api/network/wifi/scan/${WLAN}`, { timeout: 60_000 })).json();
+  // The control: the adapter was taken as connected, so a low-priority scan
+  // was meant.
+  expect(calls().some((c) => c === `iw dev ${WLAN} link`), calls().join('\n')).toBe(true);
+  expect(realSyntaxErrors(), calls().join('\n')).toEqual([]);
+  expect(r.status, JSON.stringify(r)).toBe('OK');
+  expect(r.networks.map((n: any) => n.SSID)).toEqual(['fpp-tests-lowpri']);
+
+  clearCalls();
+  const out = inPlayer('bash', '/opt/fpp/scripts/wifi_scan.sh');
+  expect(calls(), out).toContain(`iw dev ${WLAN} scan lowpri`);
+  expect(realSyntaxErrors(), calls().join('\n')).toEqual([]);
+  expect(out).toContain('fpp-tests-lowpri');
+});
+
 test('an adapter\'s address and link come from ip and iw, never ifconfig or iwconfig', async ({ request }) => {
   // Regression: 88f05d967.  Every interface lookup ran ifconfig, which goes
   // through the kernel's wireless extensions on a wireless adapter (a "will
