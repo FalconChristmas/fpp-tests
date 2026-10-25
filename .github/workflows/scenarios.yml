@@ -30,7 +30,7 @@ on:
         type: boolean
         default: false
       device:
-        description: Also run the device scenarios on the Pi (needs flavor asan, whose skips pick them)
+        description: Also run the device scenarios on the Pi 5 and the AM62x Beagle (needs flavor asan, whose skips pick them)
         type: boolean
         default: false
   # A pull request to this repo runs the suite against fpp master, so a
@@ -161,24 +161,40 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # The scenarios only a device can run, on a real Raspberry Pi 5 through
+  # The scenarios only a device can run, on real hardware through
   # run-local.sh: the ones the last nightly's ASan run skipped
   # (scripts/device-tests.py; taken from the previous night so this runs
-  # beside the shards instead of after them) --
-  # Pi fppinit and cape detection, DPI pixels, framebuffer and KMS outputs,
-  # GPIO, the serial console, the real sound card (--host-audio). On the same
-  # fpp ref as the shards, as a coverage build: its counters join the Docker
-  # shards' in the coverage report, so the code only a Pi reaches is counted.
+  # beside the shards instead of after them). On a Raspberry Pi 5: Pi
+  # fppinit and cape detection, DPI pixels, framebuffer and KMS outputs,
+  # GPIO, the serial console, the real sound card (--host-audio). On an
+  # AM62x BeagleBone (a PocketBeagle2 with a cape): the BB64 cape
+  # detection, its PRU outputs against the FAKE_PRU mode run-local.sh puts
+  # it in, GPIO and the cape's sound card. Each picks its own from the one
+  # list; the rest skip. On the same fpp ref as the shards. The Pi's is a
+  # coverage build: its counters join the Docker shards' in the coverage
+  # report, so the code only a Pi reaches is counted. The Beagle's is a
+  # debug build, since it builds through nocc (scripts/device-make.sh).
   # Self-hosted, where a job is root on the device, so never for a pull
-  # request: only the nightly and a run by hand that asks for it.
+  # request: only the nightly and a run by hand that asks for it. Each
+  # runner carries its device's label.
   device:
     if: github.event_name == 'schedule' || github.event.inputs.device == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: pi5
+            coverage: true
+            timeout: 120
+          - device: am62x
+            coverage: false
+            timeout: 180
     runs-on:
       group: Devices
-      labels: [self-hosted, Linux, ARM64]
-    timeout-minutes: 120
+      labels: [self-hosted, Linux, ARM64, "${{ matrix.device }}"]
+    timeout-minutes: ${{ matrix.timeout }}
     concurrency:
-      group: device
+      group: device-${{ matrix.device }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -215,19 +231,21 @@ jobs:
           submodules: recursive
 
       # The coverage flavor, as build-fpp.sh makes it in Docker: the debug
-      # target at -O0 with --coverage. The checkout cleans the tree each
-      # night; ccache (the runner user's own) makes the rebuild cheap.
+      # target at -O0 with --coverage; or the plain debug target. The
+      # checkout cleans the tree each night; ccache (the runner user's own)
+      # makes the rebuild cheap.
       - name: Build fpp
         working-directory: fpp/src
         env:
           CCACHE: ccache
           CCACHE_BASEDIR: ${{ github.workspace }}/fpp
           CCACHE_NOHASHDIR: "1"
-          LDFLAGS: --coverage
+          LDFLAGS: ${{ matrix.coverage && '--coverage' || '' }}
         run: |
-          if ! make -j"$(nproc)" debug "OPTIMIZE_FLAGS=-g -O0 -Wno-psabi --coverage" > build.log 2>&1; then
-            grep -E "error|Error" build.log | tail -40
-            exit 1
+          if [ "${{ matrix.coverage }}" = true ]; then
+            ../../scripts/device-make.sh debug "OPTIMIZE_FLAGS=-g -O0 -Wno-psabi --coverage"
+          else
+            ../../scripts/device-make.sh debug
           fi
 
       # fppoled holds the cape buttons' GPIO lines, which test_gpio_pins
@@ -255,7 +273,7 @@ jobs:
         run: sudo systemctl start fppoled
 
       - name: Measure the coverage
-        if: always()
+        if: always() && matrix.coverage
         run: |
           if [ -d "gcov$PWD/fpp" ]; then
             sudo cp -a "gcov$PWD/fpp/." fpp/
@@ -271,7 +289,7 @@ jobs:
           mkdir -p artifacts
           sudo chown -R "$(id -u):$(id -g)" artifacts gcov fpp 2>/dev/null; chmod -R u+rwX artifacts
           version=$(git -C fpp describe --tags --match='[0-9]*' 2>/dev/null || git -C fpp rev-parse --short HEAD)
-          printf '{"flavor":"pi5","version":"%s","sha":"%s"}\n' "$version" \
+          printf '{"flavor":"%s","version":"%s","sha":"%s"}\n' "${{ matrix.device }}" "$version" \
             "$(git -C fpp rev-parse HEAD)" > artifacts/meta.json
           cp fpp/src/build.log artifacts/ 2>/dev/null || true
 
@@ -279,7 +297,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: failed-scenarios-pi5
+          name: failed-scenarios-${{ matrix.device }}
           path: |
             artifacts/
             !artifacts/coverage/
@@ -292,7 +310,7 @@ jobs:
 
       # Its counters, for the coverage merge in the results job.
       - name: Upload the coverage counts
-        if: always()
+        if: always() && matrix.coverage
         uses: actions/upload-artifact@v7
         with:
           name: shard-coverage-device
@@ -307,7 +325,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: results-pi5
+          name: results-${{ matrix.device }}
           path: |
             artifacts/meta.json
             artifacts/junit.xml

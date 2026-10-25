@@ -1,20 +1,28 @@
 name: Device
 
-# The scenarios on a real Raspberry Pi 5, through run-local.sh: the ones the
-# Docker runs skip -- Pi-only fppinit and cape detection, DPI pixels, the
-# framebuffer and KMS outputs, GPIO, the serial console, the real sound card
-# (--host-audio). The nightly runs them as part of the Scenarios workflow
-# (its device job, a coverage build); this is for a run by hand: the tests a
-# Docker run's ASan skipped (scripts/device-tests.py), or the whole suite,
-# which takes hours, in any flavor.
+# The scenarios on a real device, through run-local.sh: the ones the Docker
+# runs skip. On a Raspberry Pi 5: Pi-only fppinit and cape detection, DPI
+# pixels, the framebuffer and KMS outputs, GPIO, the serial console, the real
+# sound card (--host-audio). On an AM62x BeagleBone: the BB64 cape detection,
+# its PRU outputs against FAKE_PRU, GPIO, the cape's sound card. The nightly
+# runs them as part of the Scenarios workflow (its device job); this is for a
+# run by hand: the tests a Docker run's ASan skipped
+# (scripts/device-tests.py), or the whole suite, which takes hours, in any
+# flavor.
 #
 # This runs on a self-hosted runner in the org's Devices group, where a job is
-# root on the device (run-local.sh needs it). So there is no pull_request
-# trigger: only the schedule and a run by hand reach it.
+# root on the device (run-local.sh needs it); each runner carries its
+# device's label. So there is no pull_request trigger: only the schedule and
+# a run by hand reach it.
 
 on:
   workflow_dispatch:
     inputs:
+      device:
+        description: Which device
+        type: choice
+        options: [pi5, am62x]
+        default: pi5
       tests:
         description: Which scenarios (device = the ones the last Docker nightly skipped)
         type: choice
@@ -39,22 +47,23 @@ on:
         description: Extra pytest arguments (e.g. -k presets)
         default: ""
 
-concurrency:
-  group: device
-  cancel-in-progress: false
-
 permissions:
   contents: read
   # to fetch the Docker run's results
   actions: read
 
 jobs:
-  pi5:
+  device:
     runs-on:
       group: Devices
-      labels: [self-hosted, Linux, ARM64]
+      labels: [self-hosted, Linux, ARM64, "${{ github.event.inputs.device || 'pi5' }}"]
     timeout-minutes: 240
+    # One run at a time on a device, this workflow's or the nightly's.
+    concurrency:
+      group: device-${{ github.event.inputs.device || 'pi5' }}
+      cancel-in-progress: false
     env:
+      DEVICE: ${{ github.event.inputs.device || 'pi5' }}
       FLAVOR: ${{ github.event.inputs.flavor || 'debug' }}
       ALL_TESTS: ${{ github.event.inputs.tests == 'all' && '1' || '' }}
     steps:
@@ -127,11 +136,7 @@ jobs:
           CCACHE: ccache
           CCACHE_BASEDIR: ${{ github.workspace }}/fpp
           CCACHE_NOHASHDIR: "1"
-        run: |
-          if ! make -j"$(nproc)" "$FLAVOR" > build.log 2>&1; then
-            grep -E "error|Error" build.log | tail -40
-            exit 1
-          fi
+        run: ../../scripts/device-make.sh "$FLAVOR"
 
       # fppoled holds the cape buttons' GPIO lines, which test_gpio_pins
       # drives. Started again at the end, however the job ends.
@@ -167,7 +172,7 @@ jobs:
           mkdir -p artifacts
           sudo chown -R "$(id -u):$(id -g)" artifacts && chmod -R u+rwX artifacts
           version=$(git -C fpp describe --tags --match='[0-9]*' 2>/dev/null || git -C fpp rev-parse --short HEAD)
-          printf '{"flavor":"pi5-%s","version":"%s","sha":"%s"}\n' "$FLAVOR" "$version" \
+          printf '{"flavor":"%s-%s","version":"%s","sha":"%s"}\n' "$DEVICE" "$FLAVOR" "$version" \
             "$(git -C fpp rev-parse HEAD)" > artifacts/meta.json
           cp fpp/src/build.log artifacts/ 2>/dev/null || true
 
@@ -175,7 +180,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: failed-scenarios-pi5
+          name: failed-scenarios-${{ env.DEVICE }}
           path: artifacts/
           if-no-files-found: ignore
           retention-days: 14
@@ -188,7 +193,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: results-pi5
+          name: results-${{ env.DEVICE }}
           path: |
             artifacts/meta.json
             artifacts/junit.xml

@@ -20,9 +20,9 @@ import sys
 import ci_results
 
 results, site, history_file, run_url = sys.argv[1:5]
-FLAVORS = ["asan", "tsan", "coverage", "pi5", "web"]
+FLAVORS = ["asan", "tsan", "coverage", "pi5", "am62x", "web"]
 LABEL = {"asan": "ASan", "tsan": "TSan", "coverage": "coverage build", "pi5": "Pi 5",
-         "web": "web UI"}
+         "am62x": "AM62x Beagle", "web": "web UI"}
 FPP_COMMIT = "https://github.com/FalconChristmas/fpp/commit/"
 README = "https://github.com/FalconChristmas/fpp-tests#writing-a-scenario"
 
@@ -229,10 +229,11 @@ page = f"""<!doctype html>
 <title>FPP Tests</title>
 <style>
 :root {{ --bg:#fbfbfa; --fg:#1d1f21; --muted:#5f6670; --line:#e2e4e8; --card:#fff;
-  --good:#1a7f37; --bad:#c62828; --c1:#2563eb; --c2:#d97706; --c3:#7c3aed; --bar:#dbe4f5; }}
+  --good:#1a7f37; --bad:#c62828; --c1:#2563eb; --c2:#d97706; --c3:#7c3aed;
+  --c4:#0f766e; --c5:#be185d; --bar:#dbe4f5; }}
 @media (prefers-color-scheme: dark) {{ :root {{ --bg:#111315; --fg:#e7e9ec; --muted:#9aa3ad;
   --line:#2b2f34; --card:#1a1d20; --good:#4ac26b; --bad:#ff6b6b; --c1:#6ea2ff; --c2:#f5a524;
-  --c3:#b392ff; --bar:#22324d; }} }}
+  --c3:#b392ff; --c4:#2dd4bf; --c5:#f472b6; --bar:#22324d; }} }}
 * {{ box-sizing:border-box; }}
 body {{ margin:0; background:var(--bg); color:var(--fg);
   font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }}
