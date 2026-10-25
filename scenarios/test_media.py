@@ -835,6 +835,65 @@ def test_stuck_teardowns_restart_fppd_before_they_pile_up(fppd, audio):
     fppd.wait_for(answers, timeout=60, interval=1, what="the restarted fppd to answer")
 
 
+def test_a_hardware_decoder_stuck_opening_counts_as_a_decoder_wedge(fppd, audio):
+    """A video whose hardware decoder never loads (a stand-in plugin,
+    vid_hwdecwedge.c, whose plugin_init never returns, as the v4l2 plugin's
+    device probe does) fails to preroll, and that counts toward the
+    decoder-wedge restart: with the restart limit at 1, fppd restarts.
+
+    Regression: c4902a6f9. A Pi 4's bcm2835-codec oopsed and kept its mutex,
+    so every later open() of the decoder blocked. The wedge ladder restarted
+    fppd once; the restarted fppd's first video loaded the v4l2 plugin,
+    whose probe open()ed the decoder and never returned, and every later
+    pipeline waited on GStreamer's plugin-load lock. No decoder element was
+    ever made, so the wedge check found none in the pipeline and logged
+    every failure "no hardware decoder involved": the ladder never reached
+    the reboot that would have recovered the decoder, and abandoned
+    teardowns piled up until a 32-bit fppd could not start a thread. (The
+    reboot rung is off here, so a device run of the parent can't reboot the
+    box.)"""
+    import subprocess
+    import shims
+    from test_video import make_video, overlay_consumer, setup
+    flags = subprocess.run(["pkg-config", "--cflags", "--libs", "gstreamer-1.0"], capture_output=True, text=True)
+    if flags.returncode:
+        pytest.skip("the GStreamer development files are not installed")
+    so = shims.build("vid_hwdecwedge.c", libs=("-ldl", *flags.stdout.split()))
+    plugins = os.path.join(fppd.media, "tmp", "gst-plugins")
+    os.makedirs(plugins)
+    os.symlink(so, os.path.join(plugins, "libgstvidhwdecwedge.so"))
+    gst_env = {"GST_PLUGIN_PATH_1_0": plugins,
+               "GST_REGISTRY_1_0": os.path.join(fppd.media, "tmp", "gst-registry.bin")}
+    # The registry, made with the plugin loading normally, so fppd knows the
+    # decoder without loading it -- as a Pi knows v4l2h264dec.
+    r = subprocess.run(["gst-inspect-1.0", "hwdecwedge"], env={**os.environ, **gst_env},
+                       capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, f"the stand-in decoder did not register: {r.stderr.strip()[-300:]}"
+    loaded = os.path.join(fppd.media, "tmp", "hwdecwedge.log")
+    make_video(os.path.join(fppd.media, "videos", "Bars.mkv"))
+    setup(fppd, [overlay_consumer()])
+    fppd.settings(GStreamerWedgeRestartLimit="1", GStreamerWedgeRebootLimit="0")
+    fppd.start(extra_env={**gst_env, "HWDECWEDGE_WEDGE": "1", "HWDECWEDGE_LOG": loaded})
+    fppd.command("Play Media", "Bars.mkv", "1", "0", "1", "HDMI-A-1")
+    fppd.wait_for(lambda: "failed to preroll (" in fppd.log(), timeout=40, interval=0.5,
+                  what="the preroll to time out")
+    with open(loaded) as f:
+        assert f.read().split() == ["load", "fppd"], "fppd's decodebin did not choose the stand-in decoder"
+    log = fppd.log()
+    assert "pipeline failed to preroll (no hardware decoder involved" not in log, \
+        "a decoder that never loaded was not counted as a decoder wedge"
+    assert "pipeline failed to preroll (consecutive decoder-wedge events: 1, restart limit: 1)" in log
+    fppd.wait_for(lambda: "Restart: " in fppd.log(), timeout=30, interval=0.5,
+                  what="fppd to restart")
+
+    def answers():
+        try:
+            return bool(fppd.get("/fppd/status", timeout=5))
+        except Exception:
+            return False  # still coming back up
+    fppd.wait_for(answers, timeout=60, interval=1, what="the restarted fppd to answer")
+
+
 def test_volume_answers_while_pactl_is_slow(fppd):
     """With pactl slow to answer (a stand-in that takes 5 s, as a wedged
     PipeWire makes it), a volume change still answers at once and reads
