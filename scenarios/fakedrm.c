@@ -26,6 +26,16 @@
  *   FAKEDRM_DIR           where the fake sysfs files are
  *   FAKEDRM_LOG           commits that change a plane, and refusals, one line each
  *   FAKEDRM_LOAD_TRACKER  "0": no limit (debugfs hvs_load_tracker = N)
+ *   FAKEDRM_CONNECTOR     "DPI-1": the connector is a DPI panel instead, with
+ *                         the one mode FPP's DPI overlay sets up (1920x997,
+ *                         38.4 MHz, 1921 x 1000 total: 20 Hz), the CRTC
+ *                         running it; "DSI-1": a DSI panel, 800x480@60 as
+ *                         the official 7" touchscreen
+ *   FAKEDRM_CRTC_OFF      "1": the CRTC starts off, as with no console on
+ *                         the display (nothing plugged in at boot)
+ *   FAKEDRM_FAIL_MODESET  a path: while it exists, every modeset
+ *                         (drmModeSetCrtc() with a mode) fails with EBUSY,
+ *                         and is logged as refused
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -126,9 +136,30 @@ static drmModeModeInfo mode(int w, int h, uint32_t clock, int hs, int he, int ht
     return m;
 }
 
-static void modes(drmModeModeInfo out[2]) {
+static int dpi(void) {
+    const char* c = getenv("FAKEDRM_CONNECTOR");
+    return c && !strcmp(c, "DPI-1");
+}
+
+static int dsi(void) {
+    const char* c = getenv("FAKEDRM_CONNECTOR");
+    return c && !strcmp(c, "DSI-1");
+}
+
+// The connector's modes, the preferred first; returns how many.
+static int modes(drmModeModeInfo out[2]) {
+    if (dpi()) {
+        out[0] = mode(1920, 997, 38400, 1920, 1921, 1921, 998, 999, 1000, DRM_MODE_TYPE_PREFERRED);
+        out[0].vrefresh = 20;
+        return 1;
+    }
+    if (dsi()) {
+        out[0] = mode(800, 480, 30000, 840, 860, 1000, 488, 490, 500, DRM_MODE_TYPE_PREFERRED);
+        return 1;
+    }
     out[0] = mode(1920, 1080, 148500, 2008, 2052, 2200, 1084, 1089, 1125, DRM_MODE_TYPE_PREFERRED);
     out[1] = mode(1280, 720, 74250, 1390, 1430, 1650, 725, 730, 750, 0);
+    return 2;
 }
 
 // The console left the CRTC running the preferred mode.
@@ -136,6 +167,10 @@ __attribute__((constructor)) static void init(void) {
     drmModeModeInfo m[2];
     modes(m);
     crtc_mode = m[0];
+    const char* off = getenv("FAKEDRM_CRTC_OFF");
+    if (off && !strcmp(off, "1")) {
+        crtc_active = 0;
+    }
 }
 
 /* --- the real libc functions --------------------------------------------- */
@@ -509,6 +544,16 @@ int drmModeSetCrtc(int fd, uint32_t crtc_id, uint32_t fb_id, uint32_t x, uint32_
         pthread_mutex_unlock(&mu);
         return 0;
     }
+    const char* failing = getenv("FAKEDRM_FAIL_MODESET");
+    if (failing) {
+        REAL(access);
+        if (real_access(failing, F_OK) == 0) {
+            logf_("refuse crtc %dx%d@%d: FAKEDRM_FAIL_MODESET", m->hdisplay, m->vdisplay, m->vrefresh);
+            pthread_mutex_unlock(&mu);
+            errno = EBUSY;
+            return -1;
+        }
+    }
     Fb* fb = fb_locked(fb_id);
     // Legacy SetCrtc scans the primary plane out at the mode's size.
     if (!fb || fb->w < x + m->hdisplay || fb->h < y + m->vdisplay) {
@@ -869,14 +914,13 @@ static drmModeConnectorPtr connector(int fd, uint32_t id) {
     drmModeConnectorPtr c = calloc(1, sizeof(*c));
     c->connector_id = CONN_ID;
     c->encoder_id = ENC_ID;
-    c->connector_type = DRM_MODE_CONNECTOR_HDMIA;
+    c->connector_type = dpi() ? DRM_MODE_CONNECTOR_DPI : dsi() ? DRM_MODE_CONNECTOR_DSI : DRM_MODE_CONNECTOR_HDMIA;
     c->connector_type_id = 1;
     c->connection = DRM_MODE_CONNECTED;
     c->mmWidth = 520, c->mmHeight = 290;
     c->subpixel = DRM_MODE_SUBPIXEL_UNKNOWN;
-    c->count_modes = 2;
     c->modes = malloc(2 * sizeof(drmModeModeInfo));
-    modes(c->modes);
+    c->count_modes = modes(c->modes);
     c->count_props = 1;
     c->props = malloc(sizeof(uint32_t));
     c->props[0] = PROP_EDID;
@@ -903,7 +947,7 @@ drmModeEncoderPtr drmModeGetEncoder(int fd, uint32_t id) {
     }
     drmModeEncoderPtr e = calloc(1, sizeof(*e));
     e->encoder_id = ENC_ID;
-    e->encoder_type = DRM_MODE_ENCODER_TMDS;
+    e->encoder_type = dpi() ? DRM_MODE_ENCODER_DPI : dsi() ? DRM_MODE_ENCODER_DSI : DRM_MODE_ENCODER_TMDS;
     pthread_mutex_lock(&mu);
     e->crtc_id = crtc_active ? CRTC_ID : 0;
     pthread_mutex_unlock(&mu);

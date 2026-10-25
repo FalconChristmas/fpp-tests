@@ -17,9 +17,10 @@ import shims
 CONNECTOR = "HDMI-A-1"
 
 
-def start_env(fppd):
+def start_env(fppd, crtc_off=False):
     """(preload, extra_env) for fppd.start(): the fake card, and the stand-in
-    kmssink committing its frames to it."""
+    kmssink committing its frames to it. crtc_off: the CRTC starts off, as
+    with nothing on the display at boot."""
     from test_video import fake_kms_env
     flags = subprocess.run(["pkg-config", "--cflags", "libdrm"], capture_output=True, text=True)
     if flags.returncode:
@@ -34,6 +35,8 @@ def start_env(fppd):
             f.write(text + "\n")
     env = fake_kms_env(fppd, FAKEKMS_SETPLANE=1)
     env.update(FAKEDRM_DIR=root, FAKEDRM_LOG=os.path.join(fppd.media, "tmp", "fakedrm.log"))
+    if crtc_off:
+        env["FAKEDRM_CRTC_OFF"] = "1"
     return [so], env
 
 
@@ -44,3 +47,39 @@ def log(fppd):
             return f.read()
     except FileNotFoundError:
         return ""
+
+
+def panel_env(fppd, connector, mode):
+    """(preload, extra_env) for fppd.start(): the fake card with a panel on
+    `connector` ("DPI-1" or "DSI-1") in place of the HDMI display, running
+    its one mode ("WxH", see fakedrm.c). No display load limit, and no
+    GStreamer stand-in."""
+    flags = subprocess.run(["pkg-config", "--cflags", "libdrm"], capture_output=True, text=True)
+    if flags.returncode:
+        pytest.skip("the libdrm development files are not installed")
+    so = shims.build("fakedrm.c", libs=("-ldl", "-lpthread", *flags.stdout.split()))
+    root = os.path.join(fppd.media, "tmp", "fakedrm")
+    sysfs = os.path.join(root, "sys", "class", "drm", f"card0-{connector}")
+    os.makedirs(sysfs)
+    for name, text in (("status", "connected"), ("enabled", "enabled"), ("connector_id", "35"),
+                       ("modes", mode)):
+        with open(os.path.join(sysfs, name), "w") as f:
+            f.write(text + "\n")
+    env = {"FAKEDRM_DIR": root, "FAKEDRM_LOG": os.path.join(fppd.media, "tmp", "fakedrm.log"),
+           "FAKEDRM_CONNECTOR": connector, "FAKEDRM_LOAD_TRACKER": "0"}
+    return [so], env
+
+
+def dpi_env(fppd, fail_modeset=None):
+    """panel_env() with a DPI panel on DPI-1, running the mode FPP's DPI
+    overlay sets up, as a Pi whose config.txt loads vc4-kms-dpi-fpp has.
+    fail_modeset: a path that, while it exists, makes every modeset fail."""
+    preload, env = panel_env(fppd, "DPI-1", "1920x997")
+    if fail_modeset:
+        env["FAKEDRM_FAIL_MODESET"] = fail_modeset
+    return preload, env
+
+
+def dsi_env(fppd):
+    """panel_env() with an 800x480 DSI touchscreen on DSI-1."""
+    return panel_env(fppd, "DSI-1", "800x480")

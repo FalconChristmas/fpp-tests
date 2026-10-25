@@ -24,6 +24,10 @@
  *                     a chip whose MODE1 read errors. A plain byte read,
  *                     which is how fpp probes for a chip, never fails.
  */
+/* open() and open64() are both defined below: a 32-bit build with 64-bit
+ * file offsets would make them one symbol. */
+#undef _TIME_BITS
+#undef _FILE_OFFSET_BITS
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <errno.h>
@@ -269,6 +273,22 @@ int ioctl(int fd, unsigned long req, ...) {
     }
     pthread_mutex_unlock(&lock);
     return rc;
+}
+
+/* A 32-bit build with 64-bit time_t (armhf since Debian trixie) calls this
+ * instead of ioctl(). */
+int __ioctl_time64(int fd, unsigned long req, ...) {
+    static int (*real)(int, unsigned long, ...);
+    if (!real)
+        real = dlsym(RTLD_NEXT, "__ioctl_time64");
+    va_list ap;
+    va_start(ap, req);
+    void* arg = va_arg(ap, void*);
+    va_end(ap);
+    if (!ours(fd)) {
+        return real(fd, req, arg);
+    }
+    return ioctl(fd, req, arg);
 }
 
 ssize_t write(int fd, const void* buf, size_t len) {

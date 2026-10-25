@@ -4,7 +4,7 @@
 # exported or built: run `make` (or `make debug`, `make tsan`) in the tree
 # first, then this.
 #
-#   ./run-local.sh [--fpp DIR] [--host-audio] [--host-pinctrl] [--host-modules] [pytest args...]
+#   ./run-local.sh [--fpp DIR] [--host-audio] [--host-pinctrl] [--host-modules] [--host-pru] [pytest args...]
 #
 # --fpp           the fpp tree whose src/fppd to test (default /opt/fpp)
 # --host-audio    media scenarios play through the device's own PipeWire --
@@ -16,6 +16,12 @@
 #                 pad registers: a test fppd then re-muxes the device's pins.
 # --host-modules  keep the ability to load and unload kernel modules, and the
 #                 real modprobe/rmmod/insmod, instead of the stubs below.
+# --host-pru      on a BeagleBone, the real PRUs instead of hiding them (below):
+#                 /dev/mem, /lib/firmware and remoteproc, its state and
+#                 firmware files writable. A test fppd then loads and runs PRU
+#                 programs, so stop the device's own fppd first. Without
+#                 --host-pinctrl too, no pad is muxed to a PRU, so nothing a
+#                 PRU drives reaches a pin.
 #
 # The device's own fppd keeps running. Each test fppd runs in private mount,
 # network and PID namespaces, set up below, so that it cannot reach the
@@ -81,6 +87,7 @@ while [ $# -gt 0 ]; do
     --host-audio) export FPP_TESTS_HOST_AUDIO=1; shift ;;
     --host-pinctrl) export FPP_TESTS_HOST_PINCTRL=1; shift ;;
     --host-modules) export FPP_TESTS_HOST_MODULES=1; shift ;;
+    --host-pru) export FPP_TESTS_HOST_PRU=1; shift ;;
     *) break ;;
     esac
 done
@@ -189,7 +196,7 @@ exec unshare --mount --net --pid --fork --kill-child --mount-proc sh -c '
     # host interfaces and none of a scenario dummy ones (fppd counts qdisc
     # drops only on the interfaces it finds there).
     mount -t sysfs sysfs /sys
-    if [ -n "$FPP_TESTS_BEAGLE" ]; then
+    if [ -n "$FPP_TESTS_BEAGLE" ] && [ -z "$FPP_TESTS_HOST_PRU" ]; then
         if [ -d /sys/class/remoteproc ]; then
             mount -t tmpfs -o mode=755 tmpfs /sys/class/remoteproc
         fi
@@ -199,6 +206,14 @@ exec unshare --mount --net --pid --fork --kill-child --mount-proc sh -c '
         if [ -e /dev/mem ]; then mount --bind /dev/null /dev/mem; fi
     fi
     mount -o remount,bind,ro /sys
+    if [ -n "$FPP_TESTS_BEAGLE" ] && [ -n "$FPP_TESTS_HOST_PRU" ]; then
+        # the remoteproc directory of each core writable again, for its state
+        # and firmware files
+        for r in /sys/class/remoteproc/remoteproc*; do
+            d=$(readlink -f "$r")
+            mount --bind "$d" "$d" && mount -o remount,bind,rw "$d"
+        done
+    fi
     # The real pinctrl and kmod, kept where hosttools.py finds them, before
     # stubs go over them.
     H=/run/fpp-tests-host

@@ -126,6 +126,24 @@ int lstat64(const char* path, struct stat64* st) {
     return real_lstat64(map(path, buf, sizeof(buf)), st);
 }
 
+/* A 32-bit build with 64-bit time_t (armhf since Debian trixie) calls
+ * these instead of stat()/lstat()/ioctl(); the struct is passed through. */
+int __stat64_time64(const char* path, void* st) {
+    static int (*real)(const char*, void*);
+    if (!real)
+        real = dlsym(RTLD_NEXT, "__stat64_time64");
+    char buf[512];
+    return real(map(path, buf, sizeof(buf)), st);
+}
+
+int __lstat64_time64(const char* path, void* st) {
+    static int (*real)(const char*, void*);
+    if (!real)
+        real = dlsym(RTLD_NEXT, "__lstat64_time64");
+    char buf[512];
+    return real(map(path, buf, sizeof(buf)), st);
+}
+
 int access(const char* path, int mode) {
     REAL(access);
     char buf[512];
@@ -242,4 +260,18 @@ int ioctl(int fd, unsigned long req, ...) {
     }
     errno = ENOTTY;
     return -1;
+}
+
+int __ioctl_time64(int fd, unsigned long req, ...) {
+    static int (*real)(int, unsigned long, ...);
+    if (!real)
+        real = dlsym(RTLD_NEXT, "__ioctl_time64");
+    va_list ap;
+    va_start(ap, req);
+    void* arg = va_arg(ap, void*);
+    va_end(ap);
+    if (!isBusFd(fd)) {
+        return real(fd, req, arg);
+    }
+    return ioctl(fd, req, arg);
 }

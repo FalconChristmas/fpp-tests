@@ -22,6 +22,14 @@
 //   NATIVE_LEAKCHECK       "Native Test Leak Check" runs LeakSanitizer now
 //                          (fppd _exit()s, so its check at exit never runs):
 //                          "leaks" or "clean", the report going to log_path
+//   NATIVE_GPIO            "Native Test GPIO <pin> <mode> [<0|1>]" configures
+//                          the pin as an output in <mode> (gpio, gpio_od),
+//                          sets it if a value is given and answers
+//                          "acquired <0|1> value <getValue()>"
+//   NATIVE_I2C             "Native Test I2C Raw <bus> <addr> <reg> <count>"
+//                          writes <count> bytes (0x5A) to <reg> with
+//                          I2CUtils::writeRawI2CBlockData() and answers what
+//                          it returned
 
 #include <atomic>
 #include <chrono>
@@ -54,6 +62,13 @@
 struct SetValueAccess : public PixelOverlayModel {
     using PixelOverlayModel::setValue;
 };
+#endif
+
+#if defined(NATIVE_I2C)
+#include "util/I2CUtils.h"
+#endif
+#if defined(NATIVE_GPIO)
+#include "util/GPIOUtils.h"
 #endif
 
 #if defined(NATIVE_LEAKCHECK)
@@ -174,6 +189,35 @@ public:
             (m->*(&SetValueAccess::setValue))((uint8_t)std::atoi(a[1].c_str()),
                                               std::atoi(a[2].c_str()), std::atoi(a[3].c_str()));
             return std::string("set");
+        });
+#endif
+#if defined(NATIVE_GPIO)
+        add("Native Test GPIO", [](const std::vector<std::string>& a) {
+            if (a.size() < 2) {
+                return std::string("usage: <pin> <mode> [<0|1>]");
+            }
+            const PinCapabilities& p = PinCapabilities::getPinByName(a[0]);
+            if (!p.ptr()) {
+                return std::string("no pin ") + a[0];
+            }
+            p.configPin(a[1], true, "Native");
+            if (a.size() > 2 && !a[2].empty()) {
+                p.setValue(a[2] == "1");
+            }
+            return std::string("acquired ") + (p.isAcquired() ? "1" : "0") + " value " +
+                   (p.getValue() ? "1" : "0");
+        });
+#endif
+#if defined(NATIVE_I2C)
+        add("Native Test I2C Raw", [](const std::vector<std::string>& a) {
+            if (a.size() < 4) {
+                return std::string("usage: <bus> <addr> <reg> <count>");
+            }
+            I2CUtils i2c(std::atoi(a[0].c_str()), (int)std::strtol(a[1].c_str(), nullptr, 0), true);
+            int count = std::atoi(a[3].c_str());
+            std::vector<uint8_t> buf(count > 0 ? count : 0, 0x5A);
+            return std::to_string(i2c.writeRawI2CBlockData((int)std::strtol(a[2].c_str(), nullptr, 0),
+                                                           buf.data(), count));
         });
 #endif
 #if defined(NATIVE_LEAKCHECK)

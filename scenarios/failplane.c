@@ -14,6 +14,9 @@
  * framebuffers as it stops -- sleeps that long first, so the old consumer's
  * lease is still held when its restart asks for the connector. Logged as
  * "c <fd> <fb id> <monotonic s> <ms slept>".
+ *
+ * Every drmModePageFlip() is logged too, never failed: "K" for kmssink's,
+ * "F" for fppd's own framebuffer outputs, with the same fields.
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -86,4 +89,17 @@ int drmModeRmFB(int fd, uint32_t fb_id) {
         usleep(ms * 1000);
     }
     return real(fd, fb_id);
+}
+
+int drmModePageFlip(int fd, uint32_t crtc_id, uint32_t fb_id, uint32_t flags, void* data) {
+    static int (*real)(int, uint32_t, uint32_t, uint32_t, void*);
+    if (!real) {
+        real = dlsym(RTLD_NEXT, "drmModePageFlip");
+    }
+    char name[17] = "";
+    prctl(PR_GET_NAME, name);
+    int kms = strstr(name, ":src") || strstr(name, ":sink");
+    int rc = real(fd, crtc_id, fb_id, flags, data);
+    log_call(kms ? 'K' : 'F', fd, crtc_id, rc);
+    return rc;
 }

@@ -142,6 +142,8 @@ class FppinitSandbox:
         self.upper = None
         self.root_files = {}
         self.unstubbed = set()
+        self.fakes = {}
+        self.devices = []
 
     def write(self, rel, content):
         """Write a file into the sandbox's media directory (JSON for a dict
@@ -185,6 +187,21 @@ class FppinitSandbox:
         as each later run starts (a script, from its "#!", is executable),
         or None to remove one the system has."""
         self.root_files[path] = content
+
+    def fake_path(self, path, content):
+        """Bind something of the scenario's over a path the kernel provides
+        under /proc or /sys, for each later run: a file's content (a str), or
+        a directory given as {relative path: content} -- say /proc/asound
+        with a sound card that isn't there, or a connector's status. The
+        path must exist on the machine; nothing else in /proc or /sys moves."""
+        assert path.startswith(("/proc/", "/sys/")), path
+        self.fakes[path] = content
+
+    def device(self, name):
+        """Give later runs the machine's /dev/<name> as well -- a gpiochip,
+        say, for a step that drives a real line."""
+        assert "/" not in name and os.path.exists("/dev/" + name), name
+        self.devices.append(name)
 
     def settings(self, **kv):
         with open(os.path.join(self.media, "settings"), "a") as f:
@@ -240,6 +257,20 @@ class FppinitSandbox:
                 f.write(content)
             mode = "755" if content.startswith("#!") else "644"
             root_lines.append(f'mkdir -p "$(dirname {dest})"; cp {shlex.quote(src)} {dest}; chmod {mode} {dest}')
+        fake_lines = []
+        for i, (path, content) in enumerate(self.fakes.items()):
+            src = os.path.join(run_dir, f"fake-{i}")
+            if isinstance(content, dict):
+                for rel, text in content.items():
+                    f = os.path.join(src, rel)
+                    os.makedirs(os.path.dirname(f), exist_ok=True)
+                    with open(f, "w") as fh:
+                        fh.write(text)
+                os.makedirs(src, exist_ok=True)
+            else:
+                with open(src, "w") as fh:
+                    fh.write(content)
+            fake_lines.append(f'mount --bind {shlex.quote(src)} "$R"{shlex.quote(path)}')
         home = ""
         if media_home:
             home = f'mkdir -p "$R/home/fpp/media"; mount --bind {shlex.quote(self.media)} "$R/home/fpp/media"'
@@ -248,12 +279,13 @@ set -e
 R={shlex.quote(root)}
 mount -t overlay overlay -o lowerdir=/,upperdir={shlex.quote(self.upper)},workdir={shlex.quote(work)} "$R"
 mount -t tmpfs -o mode=755 tmpfs "$R/dev"
-for d in {' '.join(DEVICES)}; do touch "$R/dev/$d"; mount --bind "/dev/$d" "$R/dev/$d"; done
+for d in {' '.join(DEVICES + self.devices)}; do touch "$R/dev/$d"; mount --bind "/dev/$d" "$R/dev/$d"; done
 ln -s /proc/self/fd "$R/dev/fd"
 mount -t proc proc "$R/proc"
 mount --bind "$R/proc/sys" "$R/proc/sys"; mount -o remount,bind,ro "$R/proc/sys"
 mount --bind /dev/null "$R/proc/sysrq-trigger"
 mount --rbind /sys "$R/sys"; mount -o remount,bind,ro "$R/sys"
+{chr(10).join(fake_lines)}
 mount -t tmpfs tmpfs "$R/run"
 mount -t tmpfs -o mode=1777 tmpfs "$R/tmp"
 mkdir -p "$R{MEDIA}" "$R/boot/firmware" "$R/opt/fpp"

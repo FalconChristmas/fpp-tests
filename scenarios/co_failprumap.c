@@ -2,6 +2,7 @@
  * exactly $CO_FAILPRUMAP_LEN bytes fail with ENOMEM, as the PRU
  * memory mappings do once fppd has run out of file descriptors.  On an AM62x
  * in FAKE_PRU mode the PRUSS window is such a mapping (0x80000 bytes).
+ * $CO_FAILPRUMAP_SKIP (default 0) such mappings are let through first.
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -12,8 +13,11 @@
 
 static void* fail_or(void* (*real)(void*, size_t, int, int, int, off_t), void* addr, size_t len,
                      int prot, int flags, int fd, off_t off) {
+    static int seen;
     const char* want = getenv("CO_FAILPRUMAP_LEN");
-    if (want && (flags & MAP_ANONYMOUS) && len == strtoul(want, NULL, 0)) {
+    const char* skip = getenv("CO_FAILPRUMAP_SKIP");
+    if (want && (flags & MAP_ANONYMOUS) && len == strtoul(want, NULL, 0) &&
+        __atomic_fetch_add(&seen, 1, __ATOMIC_RELAXED) >= (skip ? atoi(skip) : 0)) {
         errno = ENOMEM;
         return MAP_FAILED;
     }
