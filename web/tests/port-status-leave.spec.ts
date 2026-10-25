@@ -8,6 +8,11 @@ import type { Page, Request } from '@playwright/test';
 // started.  fppd's half of the fix - /api/fppd/ports/stop ends only a
 // pixel-count test - needs output port pins, which the container has none of,
 // so only the page's half is tested here.
+//
+// Coverage: 5db6365eb sends that stop as a keepalive fetch from pagehide,
+// where it was an XHR from beforeunload that Firefox cancels as the page goes
+// (#2826).  Chromium, which this suite runs, sends either, so the tests here
+// pass with or without it.
 
 async function stopsSentOnLeave(page: Page, countPixels: boolean): Promise<number> {
   let stops = 0;
