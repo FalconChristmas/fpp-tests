@@ -1,5 +1,6 @@
-"""fppd's macOS-only code, on a Mac (macfppd.py): shutting down, the socket
-framebuffer FPPMon draws from, and the CoreAudio output-device lookup.
+"""fppd's macOS-only code, on a Mac (macfppd.py): shutting down (also with the
+WLED API responder on), the socket framebuffer FPPMon draws from, and the
+CoreAudio output-device lookup.
 
 The test fppd runs with a scratch media directory, MultiSync off, no
 channel outputs, and netguard_mac.dylib refusing anything past loopback, so
@@ -37,6 +38,31 @@ def test_fppd_stops_cleanly(macfppd):
         out = macfppd.output()
         assert rc == 0, f"stop {i + 1}: fppd exited {rc}\n{out}"
         assert not [w for w in FATAL if w in out], f"stop {i + 1}:\n{out}"
+
+
+def test_fppd_stops_with_the_wled_api_responder_on(macfppd):
+    """With the WLED API responder on, as it is by default, fppd stops
+    (SIGTERM) within 15 s and exits 0, also with a client connected to the
+    responder that has sent nothing.
+
+    Regression: 657efd007. The responder's Cleanup() woke its accept thread
+    with shutdown() on the listening socket. On Linux that makes accept() return;
+    on macOS it doesn't, so the join on the accept thread never ended and
+    fppd hung on every stop."""
+    macfppd.settings(WLEDAPIResponder="1")
+    macfppd.start()
+    idle = socket.create_connection(("127.0.0.1", 32327), timeout=5)
+    try:
+        # the idle connection has its own thread by now, blocked in recv()
+        time.sleep(0.5)
+        start = time.monotonic()
+        rc = macfppd.stop(timeout=15)
+        took = time.monotonic() - start
+    finally:
+        idle.close()
+    out = macfppd.output()
+    assert rc != "hung", f"fppd was still running 15 s after SIGTERM:\n{out}"
+    assert rc == 0, f"fppd exited {rc} after {took:.1f} s\n{out}"
 
 
 class FakeMon:

@@ -63,9 +63,9 @@ class MacFppd:
                   "upload", "videos", "images", "effects", "plugindata"):
             os.makedirs(os.path.join(self.media, d))
         # Nothing to go out on: MultiSync off, and no channel outputs at all.
-        # The WLED API responder is off too: on macOS its shutdown never ends
-        # (shutdown() does not wake the thread in accept() there), so fppd
-        # cannot stop with it on.
+        # The WLED API responder is off too: before 657efd007 fppd could not
+        # stop on macOS with it on, and the other scenarios' controls run
+        # older trees. The one that checks the responder turns it back on.
         self.settings(MultiSyncEnabled="0", MultiSyncBroadcast="0", DisableFakeNetworkBridges="1",
                       WLEDAPIResponder="0")
         self.root_txt = os.path.join(self.tree, "www", "media_root.txt")
