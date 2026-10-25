@@ -357,7 +357,11 @@ def test_an_empty_boot_config_removal_does_not_hang(fppinit):
     erased nothing, so fppcapedetect spun at boot and the box never came up.
     The empty entry is skipped and the real one beside it still applies.
 
-    Regression: 5e9ee7dcd."""
+    Regression: 5e9ee7dcd. Since 2e4ce2aa8 an unsigned cape's empty entry
+    is refused before the loop that spun (it isn't a dtoverlay= or dtparam=
+    line), and a test can only make unsigned capes, so on master this passes
+    with 5e9ee7dcd undone: it now guards the unsigned refusal, and the
+    empty-entry skip only matters for a signed cape."""
     with open(os.path.join(fppinit.boot, "config.txt"), "w") as f:
         f.write("dtparam=audio=on\ndtoverlay=fpp-test-remove-me\n")
     fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(bootConfig={

@@ -10,6 +10,7 @@ for them fail, and nothing on the device changes. The logo cases run
 fppoled and fppcapedetect in the fppinit sandbox, where /var/tmp is scratch.
 """
 
+import json
 import os
 import signal
 import subprocess
@@ -19,7 +20,9 @@ import time
 import pytest
 
 import cape_eeprom as ee
+import hosttools
 from fppinit import fppinit  # noqa: F401 -- the fixture
+from test_gpio_pins import PLAIN_PINS, free_pins
 
 MEDIA = "/home/fpp/media"
 
@@ -206,3 +209,159 @@ def test_cape_detection_keeps_the_cached_logo_in_step(fppinit):
     r = fppinit.capedetect("-no-set-permissions")
     assert r.returncode == 0, r.stdout + r.stderr
     assert fppinit.written(CACHE) == XBM
+
+
+# ---- what the display shows (oled.py's fake SSD1306) ----------------------------
+
+@pytest.fixture
+def screen(oled_media, tmp_path):
+    """fppoled on a fake 128x64 SSD1306 (LEDDisplayType 1), stopped after the
+    test; the frames it drew are read from screen.frames()."""
+    import oled
+    oled_media.settings(LEDDisplayType=1)
+    s = oled.Fppoled(os.environ["FPP_TREE"], str(tmp_path))
+    yield s
+    if s.proc is not None:
+        s.stop()
+
+
+def lit(frame, x0, y0, w, h):
+    return sum(frame.pixel(x, y) for x in range(x0, x0 + w) for y in range(y0, y0 + h))
+
+
+def test_the_status_page_says_no_network_once_fppd_answers(screen, fppd):
+    """With no network address but fppd running, the status page's top line
+    reads "No Network" within a few seconds, and the lines below it are
+    fppd's status.
+
+    Regression: e323af2e9. The page said "FPP Booting..." for its first 60
+    iterations whatever fppd said, so a box without a network looked stuck
+    in boot for a minute. The test fppd is on the namespace's loopback,
+    which the page doesn't count as a network.
+    """
+    fppd.settings(LEDDisplayType=1)
+    fppd.start()
+    screen.start()
+    f = screen.wait_for(lambda f: f.line(0) == "No Network", timeout=15,
+                        what='"No Network" on the top line')
+    # under the separator (row 16), fppd's mode and status from its
+    # /fppd/status, not the "Booting..." shown while fppd doesn't answer
+    assert f.text_at(17) == "Player: idle", [f.text_at(y) for y in range(0, 57)]
+
+
+def test_the_status_page_runs_once_a_second_with_buttons(oled_media, screen):
+    """On a cape whose buttons are GPIO lines fppoled waits on for edges,
+    the status page still redraws once a second.
+
+    Regression: a52919427. Between iterations the run loop waited up to 5 s
+    in poll() for a button, so on those capes every count the page keeps
+    in iterations -- "FPP Booting..." for 60, the network rescan, the line
+    rotation -- ran five times slow. The buttons here are free header lines
+    (test_gpio_pins.free_pins); the test checks fppoled holds them, which is
+    what puts it on the poll() path.
+    """
+    pins = free_pins()[:2]
+    if len(pins) < 2:
+        pytest.skip("needs two free plain header GPIOs (a Raspberry Pi)")
+    gpios = [PLAIN_PINS[p] for p in pins]
+    oled_media.put("config/gpio.json", json.dumps([
+        {"pin": p, "enabled": True, "mode": "gpio_pu", "desc": "",
+         "rising": [], "falling": [{"command": "OLED Navigation", "args": [b]}]}
+        for p, b in zip(pins, ("Up", "Down"))]))
+    with hosttools.pads_kept(gpios):
+        try:
+            screen.start()
+            first = screen.wait_for(lambda f: True, timeout=30, what="a first frame")
+            out = subprocess.run(["gpioinfo"], capture_output=True, text=True).stdout
+            held = [l for l in out.splitlines()
+                    if any(f'"GPIO{g}"' in l for g in gpios) and "FPPOLED" in l]
+            assert len(held) == 2, f"fppoled does not hold {pins}:\n{out}\n{screen.log()}"
+            time.sleep(8)
+            frames = [f for f in screen.frames() if f.ms > first.ms]
+            assert len(frames) >= 6, (f"{len(frames)} redraws in the 8 s after the first\n"
+                                      f"{screen.log()}")
+        finally:
+            screen.stop()
+
+
+def test_the_status_page_keeps_redrawing_after_the_clock_steps_back(screen, tmp_path):
+    """After the wall clock steps back a day -- a never-set cape RTC taking
+    over from the saved image time, about 10 s into a boot -- the status
+    page goes on redrawing every second.
+
+    Regression: a5e13f833. The run loop timed its 1 s refresh on the wall
+    clock, so after a backward step "now" stayed behind the last update and
+    the display froze on whatever it showed (on a box with no network,
+    "Booting..." for good). fppoled's wall clock is libfaketime's here, its
+    monotonic clock the real one.
+    """
+    import glob
+    libs = glob.glob("/usr/lib/*/faketime/libfaketimeMT.so.1")
+    if not libs:
+        pytest.skip("libfaketime is not installed (apt-get install faketime)")
+    clock = tmp_path / "faketime"
+    clock.write_text("+0\n")
+    screen.start(preload=[libs[0]], extra_env={
+        "FAKETIME_TIMESTAMP_FILE": str(clock), "FAKETIME_NO_CACHE": "1",
+        "FAKETIME_DONT_FAKE_MONOTONIC": "1", "NO_FAKE_STAT": "1"})
+    screen.wait_for(lambda f: f.line(0) in ("FPP Booting...", "No Network"), timeout=30,
+                    what="the status page")
+    time.sleep(2)
+    before = len(screen.frames())
+    new = tmp_path / "faketime.new"
+    new.write_text("-86400\n")
+    os.replace(new, clock)
+    stepped = time.monotonic()
+    time.sleep(6)
+    after = [f for f in screen.frames()[before:]]
+    assert len(after) >= 4, (f"{len(after)} redraws in the 6 s after the clock stepped back "
+                             f"a day\n{screen.log()}")
+    assert screen.proc.poll() is None, screen.log()
+
+
+def capeimage(oled_media, last):
+    """An 8x8 cape image, every pixel lit (XBM bits are inverted on the
+    panel), whose final token is `last`."""
+    oled_media.put("tmp/cape-image.xbm",
+                   "#define cape_width 8\n#define cape_height 8\n"
+                   "static unsigned char cape_bits[] = {\n"
+                   "   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, " + last + "\n")
+
+
+def test_a_cape_image_whose_last_byte_shares_the_brace_is_drawn(oled_media, screen):
+    """A cape image ending "0x00 };" (no comma before the brace, as the
+    built-in PiHat and DPIPixels-24 images and the DIY templates are written)
+    is drawn under the boot notice.
+
+    Regression: 635bf758f. The parser dropped the token holding the brace,
+    so the image came out a byte short of width x height and, since
+    bb1d47557 checks that, was not drawn at all.
+    """
+    capeimage(oled_media, "0x00 };")
+    oled_media.put("tmp/cape_detect_done", None)
+    screen.start()
+    f = screen.wait_for(lambda f: f.line(0).startswith("FPP - Cape"), timeout=10,
+                        what="the cape detection notice")
+    assert lit(f, 0, 20, 8, 8) == 64, f.text()
+    # nothing past the image's 8 columns: it is drawn where it belongs
+    assert lit(f, 8, 20, 8, 8) == 0, f.text()
+
+
+def test_a_cape_image_with_a_byte_that_is_not_hex_leaves_fppoled_running(oled_media, screen):
+    """A cape image (it comes from the cape's EEPROM) with a token that isn't
+    a hex byte is not drawn, and fppoled goes on to the status page.
+
+    Regression: bb1d47557. The byte went to stoi, whose exception ended
+    fppoled: no display at all for that cape.
+    """
+    oled_media.put("tmp/cape-image.xbm",
+                   "#define cape_width 8\n#define cape_height 8\n"
+                   "static unsigned char cape_bits[] = {\n"
+                   "   0x00, 0x00, 0x00, zz, 0x00, 0x00, 0x00, 0x00, };\n")
+    screen.start()
+    f = screen.wait_for(lambda f: f.line(0) in ("FPP Booting...", "No Network"), timeout=30,
+                        what="the status page")
+    assert "terminate called" not in screen.log(), screen.log()
+    # no image where the page puts one, under "Booting."
+    assert lit(f, 0, 24, 8, 8) == 0, f.text()
+    assert screen.stop() == 0, screen.log()

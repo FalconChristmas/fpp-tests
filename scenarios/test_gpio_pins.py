@@ -60,6 +60,52 @@ def have_pin(fppd, pin):
         pytest.skip(f"no GPIO pin {pin} on this board")
 
 
+def pull(gpio):
+    """"pu", "pd" or "pn": the pad's pull as the real pinctrl reads it."""
+    state = hosttools.pad_states([gpio])[gpio] or ""
+    return next((w for w in state.split() if w in ("pu", "pd", "pn")), None)
+
+
+def test_an_inputs_pull_reaches_the_pad(pads, fppd):
+    """A gpio.json input in gpio_pu or gpio_pd mode, with edge actions,
+    comes up with that pull on the pad, read back with the real pinctrl --
+    for a pin of each kind fpp's Pi pin table has: P1-7, which keeps the
+    table's default reset mode ("a0"); P1-11, reset to "ip" ("no" on a
+    Pi 5); P1-37, reset to "ip" everywhere. Each asks for the pull its pad
+    isn't at now, so the check can fail.
+
+    Regression: f5ded7082 (on a pin whose reset mode was still the default
+    "a0", configPin took a pinctrl-only shortcut and returned, so the pull
+    was never asked for) and d0a4e12ba (on a Pi 5 the "no" reset mode took
+    the same shortcut: P1-35 and P1-11's kind came up floating). Since
+    fa30658a0 the shortcut no longer returns, which on its own also keeps
+    the pull; each fix was shown red on a device against master with the
+    shortcut put back as it was at the fix's parent.
+
+    Not bae7ebf18 (the edge-event request carrying configPin's bias): with
+    it undone on master the pads keep their pull all the same.
+    """
+    want = {}
+    for pin in ("P1-7", "P1-11", "P1-37"):
+        if pin in free_pins():
+            gpio = PLAIN_PINS[pin]
+            want[pin] = (gpio, "pd" if pull(gpio) == "pu" else "pu")
+    if not want:
+        pytest.skip("none of P1-7, P1-11 and P1-37 is free here")
+    fppd.write("config/gpio.json", [
+        {"pin": pin, "enabled": True, "mode": "gpio_" + p,
+         "rising": {"command": "Set Variable", "args": ["X", "1"]},
+         "falling": {"command": "Set Variable", "args": ["X", "0"]}}
+        for pin, (gpio, p) in want.items()])
+    fppd.start()
+    expected = {pin: p for pin, (gpio, p) in want.items()}
+    got = lambda: {pin: pull(gpio) for pin, (gpio, p) in want.items()}
+    try:
+        fppd.wait_for(lambda: got() == expected, timeout=5, what="the pulls")
+    except TimeoutError:
+        pytest.fail(f"asked for {expected}, the pads have {got()}\n{fppd.log()[-3000:]}")
+
+
 def test_a_configured_input_is_not_driven(pads, fppd):
     """A pin gpio.json configures as an input refuses to be driven by
     POST /api/gpio/<pin> (409) and by the GPIO command (an error), and stays
