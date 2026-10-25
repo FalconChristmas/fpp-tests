@@ -158,6 +158,9 @@ jobs:
         env:
           HOST_AUDIO: ${{ github.event.inputs.host_audio == 'true' && '--host-audio' || '' }}
           PYTEST_ARGS: ${{ github.event.inputs.pytest_args }}
+          # On the AM62x board the scenarios that drive the real PRUs take a
+          # second pass (scripts/device-scenarios.sh).
+          HOST_PRU: ${{ github.event.inputs.device == 'am62x' && '1' || '' }}
         # HOST_AUDIO and PYTEST_ARGS are left unquoted on purpose, to split
         # into arguments. The node ids go in a file (pytest's @file), one per
         # line, since some carry spaces in their parameters.
@@ -166,7 +169,7 @@ jobs:
           [ -f device-tests.txt ] && TESTS="@$PWD/device-tests.txt"
           # No bytecode: as root it lands in scenarios/__pycache__, which the
           # runner then cannot remove.
-          sudo env PYTHONDONTWRITEBYTECODE=1 ./run-local.sh --fpp fpp $HOST_AUDIO -v -rA --junitxml=artifacts/junit.xml $PYTEST_ARGS ${TESTS:+"$TESTS"}
+          sudo env PYTHONDONTWRITEBYTECODE=1 HOST_PRU="$HOST_PRU" scripts/device-scenarios.sh --fpp fpp $HOST_AUDIO -v -rA $PYTEST_ARGS ${TESTS:+"$TESTS"}
 
       - name: Start them again
         if: always() && env.RESTART_SERVICES != ''

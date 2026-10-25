@@ -61,6 +61,20 @@ def save_artifacts(f, nodeid):
                     dirs_exist_ok=True)
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "host_pru: drives the real PRUs (the real_pru fixture), so it runs only "
+        "under run-local.sh --host-pru, which the PRU scenarios that need them hidden can't share")
+
+
+def pytest_collection_modifyitems(config, items):
+    """Mark what asks for real_pru, so a device run can take those in a pass
+    of their own (-m host_pru) and the rest without them (-m "not host_pru")."""
+    for item in items:
+        if "real_pru" in getattr(item, "fixturenames", ()):
+            item.add_marker(pytest.mark.host_pru)
+
+
 @pytest.hookimpl(wrapper=True, tryfirst=True)
 def pytest_runtest_makereport(item, call):
     rep = yield

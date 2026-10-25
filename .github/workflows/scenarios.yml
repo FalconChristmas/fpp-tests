@@ -186,8 +186,11 @@ jobs:
           - device: pi5
             coverage: true
             timeout: 120
+          # host_pru: the scenarios that drive the real PRUs take a second
+          # pass (scripts/device-scenarios.sh)
           - device: am62x
             coverage: false
+            host_pru: true
             timeout: 180
     runs-on:
       group: Devices
@@ -271,8 +274,8 @@ jobs:
       # carry spaces in their parameters.
       - name: Run the scenarios
         run: |
-          sudo env PYTHONDONTWRITEBYTECODE=1 GCOV_PREFIX="$PWD/gcov" \
-            ./run-local.sh --fpp fpp --host-audio -v -rA --junitxml=artifacts/junit.xml "@$PWD/device-tests.txt"
+          sudo env PYTHONDONTWRITEBYTECODE=1 GCOV_PREFIX="$PWD/gcov" HOST_PRU=${{ matrix.host_pru && '1' || '' }} \
+            scripts/device-scenarios.sh --fpp fpp --host-audio -v -rA "@$PWD/device-tests.txt"
 
       - name: Start them again
         if: always() && env.RESTART_SERVICES != ''
