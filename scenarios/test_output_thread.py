@@ -166,6 +166,38 @@ def test_a_start_during_the_last_pass_before_idling(fppd):
             fppd.command("Effect Stop", "fx")
 
 
+@pytest.mark.parametrize("offset", [0.3, 0.8, 1.3])
+def test_a_range_overlay_set_while_the_output_thread_idles(fppd, offset):
+    """A channel range set over the API while the output thread is in its
+    2.5 s idle wait goes on the wire within a second, not when the wait runs
+    out.
+
+    Test mode is started and stopped, so the thread is running and then
+    idle; the range is set `offset` s into the idle wait.
+
+    Regression: 8cdd81a3e. PUT /overlays/range added the range without
+    counting a start request (an overlay model's state change does), so the
+    idle wait slept on: the range stayed dark for the rest of the 2.5 s, then
+    the thread stopped the outputs and the main loop started it again. Every
+    range PUT just after fppd started waited this out.
+    """
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fppd.command("Test Start", "100", "RGB Cycle", f"1-{CHANNELS}", "R-G-B")
+        assert rx.wait_frames(3, timeout=8, since=time.monotonic()), "test mode sent nothing"
+        fppd.command("Test Stop")
+        time.sleep(offset)
+        since = time.monotonic()
+        fppd.request("PUT", "/overlays/range/1-30", {"Value": 42})
+        lit = bytes([42] * 30)
+        fppd.wait_for(lambda: any(f[:30] == lit for _, f in rx.snapshot(since)), timeout=4,
+                      what="the range on the wire")
+        took = next(t for t, f in rx.snapshot(since) if f[:30] == lit) - since
+        assert took < 1.0, f"the range went out {took:.2f} s after it was set {offset} s into the idle wait"
+
+
 def test_fppd_stops_without_waiting_out_the_idle_window(fppd):
     """fppd stopped while the output thread is in its 2.5 s idle wait exits
     promptly, not when that wait runs out.
