@@ -21,7 +21,7 @@ on:
       device:
         description: Which device
         type: choice
-        options: [pi5, am62x]
+        options: [pi5, am62x, am335x-bbb, am335x-pb1]
         default: pi5
       tests:
         description: Which scenarios (device = the ones the last Docker nightly skipped)
@@ -54,6 +54,7 @@ permissions:
 
 jobs:
   device:
+    if: ${{ !startsWith(github.event.inputs.device, 'am335x') }}
     runs-on:
       group: Devices
       labels: [self-hosted, Linux, ARM64, "${{ github.event.inputs.device || 'pi5' }}"]
@@ -194,6 +195,62 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: results-${{ env.DEVICE }}
+          path: |
+            artifacts/meta.json
+            artifacts/junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The AM335x scenarios (only those: the tests input doesn't apply) on a
+  # BeagleBone Black or an original PocketBeagle, driven over ssh from a
+  # runner elsewhere, as the nightly's am335x job does
+  # (scripts/remote-device.sh).
+  am335x:
+    if: startsWith(github.event.inputs.device, 'am335x')
+    runs-on:
+      group: Devices
+      labels: [self-hosted, am335x]
+    timeout-minutes: 240
+    concurrency:
+      group: device-${{ github.event.inputs.device }}
+      cancel-in-progress: false
+    env:
+      DEVICE_BOARD: ${{ github.event.inputs.device == 'am335x-pb1' && 'pb1' || 'bbb' }}
+      DEVICE_FLAVOR: ${{ github.event.inputs.device }}-${{ github.event.inputs.flavor }}
+    steps:
+      - name: Checkout fpp-tests
+        uses: actions/checkout@v6
+
+      - name: Run the scenarios
+        env:
+          FPP_REF: ${{ github.event.inputs.fpp_ref }}
+          FLAVOR: ${{ github.event.inputs.flavor }}
+          PYTEST_ARGS: ${{ github.event.inputs.pytest_args }}
+        # PYTEST_ARGS and TESTS are left unquoted on purpose, to split into
+        # arguments. With no AM335x scenarios checked out, PYTEST_ARGS names
+        # what to run.
+        run: |
+          TESTS=$(ls scenarios/test_am335x_*.py 2>/dev/null || true)
+          scripts/remote-device.sh "$FPP_REF" "$FLAVOR" -v -rA $PYTEST_ARGS $TESTS
+
+      - name: Upload failed scenarios
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failed-scenarios-${{ github.event.inputs.device }}
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Summarize
+        if: always()
+        run: python3 scripts/ci-summary.py artifacts >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: results-${{ github.event.inputs.device }}
           path: |
             artifacts/meta.json
             artifacts/junit.xml

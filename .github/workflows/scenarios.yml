@@ -332,6 +332,69 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # The AM335x scenarios (scenarios/test_am335x_*.py, and only those) on a
+  # BeagleBone Black and an original PocketBeagle: the PRU outputs and loader
+  # against fakepruss, the pinmux, the boot. The boards are too small for
+  # runners of their own, so one runner elsewhere drives each over ssh in
+  # turn (scripts/remote-device.sh; each board's host is in the runner's
+  # .env). A debug build, through nocc. Self-hosted, as the device job.
+  am335x:
+    if: github.event_name == 'schedule' || github.event.inputs.device == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [bbb, pb1]
+    runs-on:
+      group: Devices
+      labels: [self-hosted, am335x]
+    timeout-minutes: 120
+    concurrency:
+      group: device-am335x-${{ matrix.board }}
+      cancel-in-progress: false
+    env:
+      FPP_REF: ${{ github.event.inputs.fpp_ref || 'master' }}
+    steps:
+      - name: Checkout fpp-tests
+        uses: actions/checkout@v6
+
+      - name: Pick the scenarios
+        id: pick
+        run: |
+          ls scenarios/test_am335x_*.py > am335x-tests.txt 2>/dev/null || true
+          echo "count=$(wc -l < am335x-tests.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
+          [ -s am335x-tests.txt ] || echo "::notice::no AM335x scenarios in this checkout"
+
+      - name: Run the scenarios
+        if: steps.pick.outputs.count != '0'
+        env:
+          DEVICE_BOARD: ${{ matrix.board }}
+          DEVICE_FLAVOR: am335x-${{ matrix.board }}
+        run: scripts/remote-device.sh "$FPP_REF" debug -v -rA $(cat am335x-tests.txt)
+
+      - name: Upload failed scenarios
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failed-scenarios-am335x-${{ matrix.board }}
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Summarize
+        if: always() && steps.pick.outputs.count != '0'
+        run: python3 scripts/ci-summary.py artifacts >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the results
+        if: always() && steps.pick.outputs.count != '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: results-am335x-${{ matrix.board }}
+          path: |
+            artifacts/meta.json
+            artifacts/junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
   # A flavor's shards, put back together as one results-<flavor>: what the
   # dashboard reads. A shard that never finished leaves the flavor failed.
   # Coverage also takes the device's counters, when it ran.
@@ -512,7 +575,7 @@ jobs:
   # latest coverage report, line by line. Each deploy replaces the whole site,
   # so only a run with a coverage build publishes by hand.
   publish:
-    needs: [results, web]
+    needs: [results, web, am335x]
     if: always() && !cancelled() && (github.event_name == 'schedule' || (github.event.inputs.publish == 'true' && github.event.inputs.fpp_ref == 'master' && github.event.inputs.flavor == 'coverage'))
     runs-on: ubuntu-latest
     permissions:
