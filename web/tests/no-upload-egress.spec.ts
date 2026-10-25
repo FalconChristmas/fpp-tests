@@ -57,3 +57,19 @@ while True:
     inPlayer('sh', '-c', `pkill -f "python3 /tmp/fpp-tests-443[.]py" || true; rm -f ${LOG} ${CRASH} /tmp/fpp-tests-443.py`);
   }
 });
+
+// GitHub's names are on loopback too, so the plugin manager, the update
+// checks and the OS image list never ask the real GitHub; fake-https.ts
+// serves the answers a test wants.  With nothing serving there, a request is
+// refused at once instead of going out.
+const GITHUB = ['github.com', 'www.github.com', 'api.github.com', 'codeload.github.com',
+  'raw.githubusercontent.com', 'objects.githubusercontent.com'];
+
+test('GitHub resolves to loopback, so nothing reaches the real GitHub', () => {
+  for (const host of GITHUB) {
+    const addrs = inPlayer('sh', '-c', `getent ahosts ${host} | awk '{print $1}' | sort -u`).split('\n').filter(Boolean);
+    expect(addrs, `${host} resolves off the player`).toEqual(['127.0.0.1']);
+  }
+  const rc = inPlayer('sh', '-c', 'curl -s -o /dev/null --max-time 5 https://api.github.com/; echo $?').trim();
+  expect(rc, 'curl to api.github.com should be refused on loopback').toBe('7');
+});

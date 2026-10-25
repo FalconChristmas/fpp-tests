@@ -30,8 +30,17 @@ fi
 # crash server (fppd's crash handler and the Diagnostic Report's Send).
 # Something that would have contacted one finds nothing listening.
 # web/tests/no-upload-egress.spec.ts checks it.
-NO_UPLOAD_HOSTS="--add-host fppstats.falconchristmas.com:127.0.0.1 --add-host crashes.falconplayer.com:127.0.0.1"
-DOCKER="docker run --rm --ulimit nofile=1048576:1048576 -v fpp-tests-work:/work -v $CCACHE_MOUNT -e FPP_TESTS_IMAGE=$IMAGE_ID -e FPP_TESTS_NOPCH $NO_UPLOAD_HOSTS"
+LOOPBACK_HOSTS="--add-host fppstats.falconchristmas.com:127.0.0.1 --add-host crashes.falconplayer.com:127.0.0.1"
+# GitHub's names go to loopback too: the plugin manager, the update checks
+# and the OS image list would otherwise ask the real GitHub, which a test
+# can't control and which rate-limits. A test that wants an answer from one
+# serves it there (web/tests/fake-https.ts); with nothing serving, the request
+# fails at once.
+for h in github.com www.github.com api.github.com codeload.github.com \
+    raw.githubusercontent.com objects.githubusercontent.com; do
+    LOOPBACK_HOSTS="$LOOPBACK_HOSTS --add-host $h:127.0.0.1"
+done
+DOCKER="docker run --rm --ulimit nofile=1048576:1048576 -v fpp-tests-work:/work -v $CCACHE_MOUNT -e FPP_TESTS_IMAGE=$IMAGE_ID -e FPP_TESTS_NOPCH $LOOPBACK_HOSTS"
 
 # Each built tree is ~190MB (build-fpp.sh drops the objects); keep the most
 # recently used FPP_TESTS_KEEP_TREES. A run holds a shared lock on its tree
