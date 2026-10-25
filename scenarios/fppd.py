@@ -70,6 +70,18 @@ class Fppd:
             return True
         return f"{feature}=1" in words
 
+    @property
+    def strings_config(self):
+        """The pixel strings config this fppd reads, under the media
+        directory: a BeagleBone build reads config/co-bbbStrings.json and
+        never looks at the co-pixelStrings.json every other build reads. A
+        Beagle build is the one with the PRU string drivers."""
+        src = os.path.join(self.tree, "src")
+        if any(os.path.exists(os.path.join(src, f"libfpp-co-{d}.so"))
+               for d in ("BBShiftString", "BBB48String")):
+            return "config/co-bbbStrings.json"
+        return "config/co-pixelStrings.json"
+
     def settings(self, **kv):
         """Append key = "value" lines to the media settings file."""
         with open(os.path.join(self.media, "settings"), "a") as f:

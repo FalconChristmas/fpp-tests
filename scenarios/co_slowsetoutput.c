@@ -5,10 +5,13 @@
  * destroying the callback's owner lands in that window, every time.
  *
  * A release is SetOutput()'s when SetOutput() (its extent from the symbol
- * table) is among the unlock's first few callers -- directly, through an inlined std::unique_lock, or through
- * std::unique_lock's own unlock() in a sanitizer build. Needs frame pointers
- * (fppd's asan, tsan and debug flavors). The first hold is announced on
- * stderr, so a scenario can tell the shim found its mark.
+ * table) is among the unlock's first few callers -- directly, through an
+ * inlined std::unique_lock, or through std::unique_lock's own unlock() in a
+ * sanitizer build. In the -O0 debug build none of the lock's wrappers is
+ * inlined and each keeps a frame, which puts SetOutput() 7 frames up from
+ * here. Needs frame pointers (fppd's asan, tsan and debug flavors). The first
+ * hold is announced on stderr, so a scenario can tell the shim found its
+ * mark.
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -33,7 +36,7 @@ __attribute__((noinline, optimize("no-omit-frame-pointer")))
 static int called_from_setoutput(void) {
     uintptr_t* fp = (uintptr_t*)__builtin_frame_address(0);
     uintptr_t sp = (uintptr_t)fp;  // frame records only go up the stack from here
-    for (int i = 0; i < 6 && fp; i++) {
+    for (int i = 0; i < 10 && fp; i++) {
         if ((uintptr_t)fp < sp || (uintptr_t)fp > sp + (8 << 20) || ((uintptr_t)fp & 7)) {
             return 0;
         }

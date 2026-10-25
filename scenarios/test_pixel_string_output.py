@@ -4,7 +4,8 @@ onto their pins, in normal running and under the string testers.
 
 The port is a pixel string output built for the scenario
 (tools/pixelstringdump.cpp, loaded as a plugin) that writes each port's
-bytes to a file every frame, so this runs anywhere -- no cape, no PRU.
+bytes to a file every frame, so this runs anywhere -- no cape, no PRU. It
+goes in the strings config the build reads (a BeagleBone's is its own).
 """
 
 import os
@@ -42,7 +43,7 @@ def wire(fppd):
 
 def start(fppd, port):
     throw_plugin.install(fppd, source="pixelstringdump.cpp", name="PixelStringDump")
-    fppd.write("config/co-pixelStrings.json", outputs(port))
+    fppd.write(fppd.strings_config, outputs(port))
     fppd.settings(DisableFakeNetworkBridges="1")
     fppd.start()
 

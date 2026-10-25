@@ -111,6 +111,7 @@ def test_a_long_smart_receiver_string_in_the_last_latch_bank_stays_in_its_mask(f
         "cannot open FrameBuffer device" in out, fppd.tail()
 
 
+@pytest.mark.skipif(not on_pi(), reason="DPIPixels is built for a Raspberry Pi")
 def test_two_latched_outputs_on_one_pin_each_take_1600_pixels(fppd):
     """A latch cape with two outputs on one data pin, in latch banks 0 and
     1, each with the full 1600 pixels: DPIPixels comes up on the fake DPI
