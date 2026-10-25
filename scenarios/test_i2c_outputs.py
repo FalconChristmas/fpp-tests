@@ -71,6 +71,10 @@ def test_a_pca9685_with_more_ports_than_the_chip_writes_only_its_16(fppd):
     indexed past the 16-entry port array and the 32-entry data array, and
     each frame went out as 80 bytes from LED0, over the chip's reserved
     registers.
+
+    Also d5806e148: d641c3d6a's FPPD_MAX_CHANNELS reached PCA9685.cpp only
+    through the precompiled header, so without it (--nopch, distributed
+    builds) the output didn't build.
     """
     bus = Bus(fppd, [PCA])
     fppd.write("config/co-other.json", other_output(pca9685(ports=20)))

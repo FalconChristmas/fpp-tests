@@ -52,7 +52,10 @@ def test_rpiws281x_strings_migrate_to_dpi(fppinit):
     """The removed RPIWS281X string output is migrated to DPIPixels as the
     box boots: an rPi-28D becomes the 4-output DPI variant with its ws2801
     output now ws2811, the DPI overlay goes into config.txt, and the box
-    reboots to load it."""
+    reboots to load it.
+
+    Regression: e791964f5 (its boot half; fppd's is test_dpi_migration.py).
+    """
     fppinit.write("config/co-pixelStrings.json", {"channelOutputs": [{
         "type": "RPIWS281X", "subType": "rPi-28D", "enabled": 1, "startChannel": 1,
         "channelCount": 900, "outputs": [{"protocol": "ws2811", "virtualStrings": []},

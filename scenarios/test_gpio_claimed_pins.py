@@ -218,6 +218,10 @@ def test_a_pwm_output_whose_pwm_cannot_be_set_up_starts(pads, pinctrl, debugfs, 
     Regression: 8609826b7. setupPWM() failed and left the duty-cycle file
     unopened, and GPIOOutput::Init() then called setPWMValue(), which
     fprintf()ed to it: SIGSEGV at startup.
+
+    Also e44a2d9e7: setupPWM() itself fprintf()ed to each sysfs file it
+    failed to open, the export first (SIGSEGV in setupPWM()); shown red on a
+    device against master with those checks taken out.
     """
     pin = next((p for p, g in PWM_PINS.items() if not pinmux_owner(g) and
                 "consumer=" not in line_info(g)), None)

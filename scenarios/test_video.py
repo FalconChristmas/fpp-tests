@@ -153,6 +153,10 @@ def test_a_playing_video_reaches_an_overlay_model(fppd, audio):
     channel: the overlay member built intervideosrc with an empty channel
     name, which doesn't parse, and the model never showed a frame.
 
+    Also guards b2e54ddd4, on a device whose HDMI-A-1 is there but empty:
+    with nothing on the connector, video was disabled even though PipeWire
+    routing had a consumer waiting for it.
+
     Feature: 198974f27 (Play Media's video output argument)."""
     make_video(os.path.join(fppd.media, "videos", "Bars.mkv"))
     setup(fppd, [overlay_consumer()])

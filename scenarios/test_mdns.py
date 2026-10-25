@@ -235,6 +235,10 @@ def test_a_lasting_collision_keeps_the_alternative_name(avahi, fppd):
     Not a regression check: before 3e67cdd6a there was no retry to lose.
     It covers the other half of that change, the one that leaves a real
     duplicate's name alone.
+
+    Regression: 5dc7f543a (the collision half). A collision re-registered
+    the same name, collided again, and looped; the service never moved to
+    "<host> #2".
     """
     clash, _ = start_into_collision(fppd)
     try:

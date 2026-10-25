@@ -45,6 +45,11 @@ sudo ./run-local.sh                       # tests /opt/fpp/src/fppd; build it fi
 sudo ./run-local.sh --fpp ~/fpp -k presets
 ```
 
+`--host-pru` (a BeagleBone, the device's own fppd stopped) gives the test fppd the real
+PRUs -- /dev/mem, /lib/firmware and writable remoteproc state -- instead of hiding them,
+so a scenario can check what a PRU program was handed and did (`pru.py`). Without
+`--host-pinctrl` too, no pad is muxed to a PRU, so nothing reaches a pin.
+
 `--host-audio` instead plays media through the device's own PipeWire and sound card,
 and records the card's sink, so a scenario can measure against the card's real clock
 (`test_long_song_stays_locked_to_the_sound_card`, opt-in; `FPP_TESTS_LONG_SONG` sets its
@@ -180,6 +185,8 @@ with "fppd is wedged" on a timeout), `wait_for`, and `log`. Helpers for the show
 | `audio.py` | A private PipeWire with a null sink (the `audio` fixture) that fppd plays into and a test records; `write_tone_wav()` |
 | `fppinit.py` | The `fppinit` fixture: runs one `fppinit <action>` from the tree under test in a sandbox -- an overlay of `/` whose writes land in a scratch dir (`written()`), its own media dir (`FPP_MEDIA_DIR`) and `/boot/firmware`, no disks or buses, read-only `/sys` and `/proc/sys`, its own PID namespace, module/reboot/clock capabilities dropped. `systemctl`, `modprobe`, `reboot` and similar are stubs that log their calls (`calls()`); `systemctl` answers `is-active`/`is-enabled` from `service()`. `capedetect()` runs `fppcapedetect` the same way, with the media dir also at `/home/fpp/media` (`build-fpp.sh` builds it in the container too, which FPP's makefiles otherwise skip). Needs root and namespaces (run-local.sh) |
 | `cape_eeprom.py` | Builds cape EEPROM images in the format CapeUtils parses: unsigned, or with a signature that does not verify (`image()`, `cape_info()`, raw records for corrupt ones) |
+| `am335x.py` | `FakePruss`: the PRU subsystem of an AM335x BeagleBone (BBB, PocketBeagle) for a test fppd under run-local.sh, which hides the real one. `fakepruss.c` (LD_PRELOAD) maps the PRU memories from files the scenario reads back (`data_ram()`, `shared_ram()`, `ddr()`, `ctrl()`), acts on remoteproc starts and stops (`events()`, `starts()`: which program each core booted), and can model a running program that undoes a stop or a PRUSS whose RAM faults once its cores are offline. The tree's PRU sources are bound over /opt/fpp's, so the firmware fppd assembles is the tree's. `fakepinmux.c` gives the tree's own pinctrl a file for /dev/am335xpm |
+| `pru.py` | The real PRUs of an AM62x BeagleBone under run-local.sh --host-pru: `Pruss` maps the PRUSS through /dev/mem (each core's data RAM, the shared RAM the SMEM rings live in, control and debug registers: PC, r0-r31, halt/resume) with single aligned 32-bit accesses. The `real_pru` fixture skips unless the cores are free, makes the tree's own PRU program images the ones fppd loads (it runs them from /opt/fpp/src), and stops any core a killed fppd left running |
 | `oled.py` | `Fppoled` runs fppoled on a fake 128x64 SSD1306 (`fakessd1306.c`, LD_PRELOAD): the I2C writes it sends the panel are rebuilt into frames, and `Frame.text_at()` reads their text back with the 5x7 font from the tree's own `SSD1306_OLED.c`. Runs on a device under run-local.sh (fppoled isn't built in a container) |
 | `i2cbus.py` | `Bus`: a fake I2C bus for fppd (`fakei2c.c`) with chips at the addresses a test names, register reads that can be made to fail, and every write fppd puts on it (`writes()`, `registers()`), for the PCA9685, MCP23017 and PCF8574 outputs. Answers for any `/dev/i2c-N`, so it runs in Docker and on a device |
 | `wsclient.py` | `WebSocket`: a small RFC 6455 client (the image's Python has none) for fppd's sockets such as `/fppdws`: checks the handshake's accept key, sends masked frames, reads and joins the server's, answers its pings; `abort()` drops the connection with a TCP reset |
