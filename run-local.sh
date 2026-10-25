@@ -75,8 +75,8 @@
 # lines) and skip where there are none; stop the device's fppd first if one
 # of its outputs is on a line a scenario drives.
 #
-# Needs root (for the namespaces). Installs python3-pytest, python3-zstandard
-# and faketime if missing.
+# Needs root (for the namespaces). Installs python3-pytest, python3-zstandard,
+# faketime and xxd if missing.
 set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -114,11 +114,13 @@ if [ ! -x "$TREE/src/fppd" ]; then
     exit 2
 fi
 # pytest runs the suite; zstandard writes zstd FSEQ files; libfaketime lets
-# the calendar scenarios fake fppd's clock (they skip without it).
+# the calendar scenarios fake fppd's clock (they skip without it); xxd is
+# what FPP's cape EEPROM scripts call (as in the Docker image).
 MISSING=""
 python3 -c "import pytest" 2>/dev/null || MISSING="$MISSING python3-pytest"
 python3 -c "import zstandard" 2>/dev/null || MISSING="$MISSING python3-zstandard"
 ls /usr/lib/*/faketime/libfaketimeMT.so.1 > /dev/null 2>&1 || MISSING="$MISSING faketime"
+command -v xxd > /dev/null 2>&1 || MISSING="$MISSING xxd"
 if [ -n "$MISSING" ]; then
     echo "installing:$MISSING"
     apt-get -q update > /dev/null
