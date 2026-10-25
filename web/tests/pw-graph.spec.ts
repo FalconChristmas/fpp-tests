@@ -119,7 +119,9 @@ test("an input group's loopback halves are tied to the group and drawn as part o
   // Regression: 19ce04912. A loopback module has no node of its own, only
   // input.<name> and output.<name>; the graph matched the bare name, so the
   // halves were never tied to their input group and the page drew both as
-  // separate boxes between the capture source and the group.
+  // separate boxes between the capture source and the group.  Also
+  // 45c8159c2, which first folded the halves into the group's box (without
+  // it they are drawn on their own whatever they are tied to).
   writeFile(`${CONFIG}/pipewire-input-groups.json`, {
     inputGroups: [{ id: 1, name: 'Bus', enabled: true, channels: 2, outputs: [],
       members: [{ type: 'alsa_capture', name: 'Mic', channels: 2 }] }],
