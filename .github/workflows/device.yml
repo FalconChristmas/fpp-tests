@@ -139,14 +139,20 @@ jobs:
           CCACHE_NOHASHDIR: "1"
         run: ../../scripts/device-make.sh "$FLAVOR"
 
-      # fppoled holds the cape buttons' GPIO lines, which test_gpio_pins
-      # drives. Started again at the end, however the job ends.
-      - name: Stop fppoled
+      # The run has the device to itself: the device's own fppd holds its
+      # outputs' GPIO lines (a cape's string pins, which the BB output
+      # scenarios drive) and fppoled the cape buttons' (test_gpio_pins).
+      # Started again at the end, however the job ends.
+      - name: Stop the device's fppd and fppoled
         run: |
-          if systemctl is-active --quiet fppoled; then
-            sudo systemctl stop fppoled
-            echo "RESTART_FPPOLED=1" >> "$GITHUB_ENV"
-          fi
+          restart=
+          for s in fppd fppoled; do
+            if systemctl is-active --quiet $s; then
+              sudo systemctl stop $s
+              restart="$restart $s"
+            fi
+          done
+          echo "RESTART_SERVICES=$restart" >> "$GITHUB_ENV"
 
       - name: Run the scenarios
         env:
@@ -162,9 +168,10 @@ jobs:
           # runner then cannot remove.
           sudo env PYTHONDONTWRITEBYTECODE=1 ./run-local.sh --fpp fpp $HOST_AUDIO -v -rA --junitxml=artifacts/junit.xml $PYTEST_ARGS ${TESTS:+"$TESTS"}
 
-      - name: Start fppoled again
-        if: always() && env.RESTART_FPPOLED == '1'
-        run: sudo systemctl start fppoled
+      - name: Start them again
+        if: always() && env.RESTART_SERVICES != ''
+        run: |
+          for s in $RESTART_SERVICES; do sudo systemctl start $s; done
 
       # run-local.sh runs as root, so its artifacts are root's.
       - name: Make the artifacts readable
