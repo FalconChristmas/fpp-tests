@@ -150,6 +150,11 @@ def main():
     with open(os.path.join(artifacts, "fppd.json"), "w") as out:
         json.dump(verdict, out, indent=2)
     if failed:
+        # The verdict too: a second player's artifacts are on its own tmpfs,
+        # so its log is all that is left of them.
+        print(json.dumps({k: v for k, v in verdict.items() if k != "sanitizer_reports"}), flush=True)
+        for r in reports:
+            print(r[:4000], flush=True)
         print(f.tail(), flush=True)
         shutil.copytree(f.media, os.path.join(artifacts, "media"), symlinks=True, dirs_exist_ok=True)
     shutil.copytree("/var/log/apache2", os.path.join(artifacts, "apache2"), dirs_exist_ok=True)
