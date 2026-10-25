@@ -12,7 +12,7 @@ import { describe, graph, loadGeneratedConf, peakThrough, reaches, standInNode, 
 // post-restart restore runs against it.  A half-scale tone is played in and
 // read off the output group sink's monitor.
 //
-// Regression: fpp 38827a39d.  The generators write these levels as
+// Regression: fpp 554c34562.  The generators write these levels as
 // channelmix.volume, which PipeWire (1.4) keeps as a node property but does
 // not apply, and nothing set a saved member or path level once the stack was
 // up (RestorePipeWireInputGroupVolumes() and fppinit's
@@ -104,10 +104,9 @@ test('a member saved at 50% is heard at 50% after the stack starts', async ({ re
   expect(saved, 'the saved 50% member level was not applied').toBeCloseTo(0.25, 1);
 });
 
-test('an output group Apply puts a saved routing path level back too', async ({ request }) => {
-  // Regression: fpp 38827a39d.  An output group Apply restarts the stack as
-  // well, which rebuilds the input groups' nodes at full level, and it put
-  // back only the output groups' levels.
+// A saved 60% routing path, set live to full level as a restart leaves it,
+// and then `restart`: the path must be heard at 60% again.
+async function pathLevelIsPutBackBy(request: APIRequestContext, restart: () => Promise<void>) {
   seed([{ id: 1, name: 'Bus', enabled: true, channels: 2, outputs: [1],
     routing: { '1': { volume: 60, mute: false } }, members: [{ type: 'fppd_stream', sourceId: 'fppd_stream_1' }] }]);
   await applyAndStart(request, [standInNode('fpp_group_front')], ['fpp_input_bus']);
@@ -120,8 +119,39 @@ test('an output group Apply puts a saved routing path level back too', async ({ 
   pw(`pw-cli set-param ${id} Props '{ channelVolumes: [ 1.0, 1.0 ] }'`);
   expect(peakThrough('fpp_input_bus', 'fpp_group_front')).toBeCloseTo(0.5, 1);
 
-  const r = await request.post('/api/pipewire/audio/groups/apply', { timeout: 120_000 });
-  expect(r.ok(), await r.text()).toBe(true);
+  await restart();
   await settleAfterApply(request);
   expect(peakThrough('fpp_input_bus', 'fpp_group_front'), 'the saved 60% path level was not put back').toBeCloseTo(0.3, 1);
+}
+
+test('an output group Apply puts a saved routing path level back too', async ({ request }) => {
+  // Regression: fpp 554c34562.  An output group Apply restarts the stack as
+  // well, which rebuilds the input groups' nodes at full level, and it put
+  // back only the output groups' levels.
+  await pathLevelIsPutBackBy(request, async () => {
+    const r = await request.post('/api/pipewire/audio/groups/apply', { timeout: 120_000 });
+    expect(r.ok(), await r.text()).toBe(true);
+  });
+});
+
+test('a VBAN Apply puts a saved routing path level back', async ({ request }) => {
+  // Regression: fpp 606d17627.  A VBAN Apply that changes the graph restarts the
+  // stack, and put back no saved level at all.
+  await pathLevelIsPutBackBy(request, async () => {
+    const saved = await request.post('/api/pipewire/vban/instances',
+      { data: { instances: [{ name: 'Desk In', mode: 'receive', streamName: 'Stream1', enabled: true }] } });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    const r = await request.post('/api/pipewire/vban/apply', { timeout: 120_000 });
+    expect(r.ok(), await r.text()).toBe(true);
+    expect((await r.json()).message).toContain('restarted');
+  });
+});
+
+test("System Health's PipeWire restart puts a saved routing path level back", async ({ request }) => {
+  // Regression: fpp 606d17627.  The recovery restart bounced the stack and put
+  // back no saved level at all.
+  await pathLevelIsPutBackBy(request, async () => {
+    const r = await request.post('/api/pipewire/audio/services/restart', { timeout: 120_000 });
+    expect(r.ok(), await r.text()).toBe(true);
+  });
 });

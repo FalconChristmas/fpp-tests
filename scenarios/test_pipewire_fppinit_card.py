@@ -105,7 +105,7 @@ def test_member_and_routing_path_levels_are_restored_after_the_stack_starts(fppi
     (WirePlumber puts back a stream's last live level), and a muted member
     is left alone.
 
-    Regression: fpp 38827a39d. The generated config gives these levels as
+    Regression: fpp 554c34562. The generated config gives these levels as
     channelmix.volume, which PipeWire keeps as a property and does not
     apply, and the restore here set only the bus and output group levels,
     so both were heard at 100% after every boot.
