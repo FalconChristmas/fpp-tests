@@ -4,8 +4,11 @@ import { container, inPlayer } from './container';
 import { snapshotSettings, putFile, exists } from './settings-file';
 
 // A password typed into the setup wizard and then dropped by choosing "No
-// Password" is not saved. Regression: 71a4efa71 ("fix(setup): a password
-// typed before choosing "No Password" is not saved"). 93e3590f2 moved
+// Password" is not saved. Regression: 52f72663c ("choosing "No Password" and
+// Saving errors if the browser autofills the password boxes", #2605), which
+// first filtered the password values out under No Password, and 71a4efa71
+// ("fix(setup): a password typed before choosing "No Password" is not
+// saved"), which put that filter back. 93e3590f2 moved
 // finishSetup()'s No Password filter from the password values to the enable
 // keys, so a value typed (or autofilled) before the choice went out on its
 // own. The UI password was written to the settings file and to .htpasswd,
