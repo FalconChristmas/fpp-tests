@@ -79,7 +79,8 @@ test('a same-size rewrite in the same second is not answered 304', async () => {
         `tag=$(curl -s -D - -o /dev/null http://127.0.0.1/api/configfile/${name} | sed -n 's/^[Ee][Tt]ag: *//p' | tr -d '\\r')`,
         `printf '{"v":"B"}' > ${file}`,
         `b=$(stat -c %Y:%i ${file})`,
-        `[ "$a" = "$b" ] && echo "$tag"`,
+        // a write that fell in the next second: echo nothing, try again
+        `if [ "$a" = "$b" ]; then echo "$tag"; fi`,
       ].join('; ')).trim();
       if (out) result = out;
     }

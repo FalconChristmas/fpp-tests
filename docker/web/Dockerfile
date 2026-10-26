@@ -8,7 +8,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         apache2 php8.4-fpm php8.4-cli php8.4-common php8.4-curl php8.4-bcmath \
         php8.4-sqlite3 php8.4-zip php8.4-xml \
-        sudo jq file iputils-ping net-tools \
+        sudo jq file iputils-ping net-tools wget \
     && rm -rf /var/lib/apt/lists/*
 
 RUN a2dismod mpm_prefork 2>/dev/null; \

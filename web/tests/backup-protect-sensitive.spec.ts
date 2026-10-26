@@ -23,8 +23,11 @@ test.skip(!container, 'needs the player run-web.sh serves (FPP_TESTS_WEB_CONTAIN
 
 // Every one of these takes a backup into config/backups; drop the new ones.
 const backups = () => inPlayer('sh', '-c', `ls ${BACKUPS}`).split('\n').filter(Boolean);
-test.beforeEach(() => inPlayer('sh', '-c', `mkdir -p ${BACKUPS} && ls ${BACKUPS} > ${LISTED}`));
-test.afterEach(() => inPlayer('sh', '-c', `cd ${BACKUPS} && ls | grep -vxF -f ${LISTED} | xargs -r rm -f; rm -f ${LISTED}`));
+// The backups earlier tests left are set aside: by the end of a full run there
+// are as many as the rotation keeps, and every backup taken here would prune one.
+const ASIDE = `${LISTED}.aside`;
+test.beforeEach(() => inPlayer('sh', '-c', `mkdir -p ${BACKUPS} && rm -rf ${ASIDE} && mkdir ${ASIDE} && find ${BACKUPS} -mindepth 1 -maxdepth 1 -exec mv {} ${ASIDE}/ \\; && ls ${BACKUPS} > ${LISTED}`));
+test.afterEach(() => inPlayer('sh', '-c', `cd ${BACKUPS} && ls | grep -vxF -f ${LISTED} | xargs -r rm -f; rm -f ${LISTED}; find ${ASIDE} -mindepth 1 -maxdepth 1 -exec mv {} ${BACKUPS}/ \\; ; rmdir ${ASIDE}`));
 
 async function makeBackup(request: APIRequestContext, body: object) {
   const r = await request.post('/api/backups/configuration', { data: body });

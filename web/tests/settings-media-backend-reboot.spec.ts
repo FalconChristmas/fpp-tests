@@ -19,7 +19,12 @@ test.skip(!container, 'needs the player run-web.sh serves (FPP_TESTS_WEB_CONTAIN
 
 let restoreSettings: () => void;
 test.beforeEach(() => { restoreSettings = snapshotSettings(); });
-test.afterEach(() => restoreSettings());
+test.afterEach(async ({ request }) => {
+  restoreSettings();
+  // The settings file is put back, but fppd keeps the reboot flag it was
+  // told about, and the next page would show its Reboot Required alert.
+  await request.put('/api/settings/rebootFlag', { data: '0' });
+});
 
 test('changing the Media Backend asks for a reboot', async ({ page, request }) => {
   setSettingInFile('rebootFlag', '0');

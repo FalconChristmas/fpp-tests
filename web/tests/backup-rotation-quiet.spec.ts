@@ -15,8 +15,11 @@ test.skip(!container, 'needs the player run-web.sh serves (FPP_TESTS_WEB_CONTAIN
 const LOG = `${MEDIA}/logs/apache2-error.log`;
 const LISTED = '/tmp/fpp-tests-backup-rotation-quiet.backups';
 
-test.beforeEach(() => inPlayer('sh', '-c', `mkdir -p ${BACKUPS} && ls ${BACKUPS} > ${LISTED}`));
-test.afterEach(() => inPlayer('sh', '-c', `cd ${BACKUPS} && ls | grep -vxF -f ${LISTED} | xargs -r rm -f; rm -f ${LISTED}`));
+// The backups earlier tests left are set aside: by the end of a full run there
+// are as many as the rotation keeps, and every backup taken here would prune one.
+const ASIDE = `${LISTED}.aside`;
+test.beforeEach(() => inPlayer('sh', '-c', `mkdir -p ${BACKUPS} && rm -rf ${ASIDE} && mkdir ${ASIDE} && find ${BACKUPS} -mindepth 1 -maxdepth 1 -exec mv {} ${ASIDE}/ \\; && ls ${BACKUPS} > ${LISTED}`));
+test.afterEach(() => inPlayer('sh', '-c', `cd ${BACKUPS} && ls | grep -vxF -f ${LISTED} | xargs -r rm -f; rm -f ${LISTED}; find ${ASIDE} -mindepth 1 -maxdepth 1 -exec mv {} ${BACKUPS}/ \\; ; rmdir ${ASIDE}`));
 
 const notRemoving = () => Number(inPlayer('sh', '-c', `grep -c 'NOT removing JSON Settings backup' ${LOG} 2>/dev/null || true`).trim() || 0);
 
