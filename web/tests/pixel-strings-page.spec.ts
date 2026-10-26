@@ -165,6 +165,39 @@ test('Clone String copies a string\'s Reverse to the strings it fills', async ({
   expect(reverseOf(got, 1), 'the clone as saved').toBe(1);
 });
 
+test('Clone String finds its string whatever header rows the table holds', async ({ page }) => {
+  // Regression: 584498b3f. Clone String took the selected string's place
+  // from its rowIndex in the whole table less one, while it counted the
+  // strings in the table's body: it assumed exactly one header row above
+  // them. The floating
+  // header (floatThead) leaves its own sizing header in the table, one
+  // normally, but a full web run caught the table holding two, as a second
+  // floatThead set-up without a destroy leaves it. The first string's place
+  // then came out one past itself, there were no strings below it, and the
+  // clone was refused: "Max rows to clone going down is 0".
+  writeFile(CONFIG, JSON.stringify(stringsConfig([vstring('String 1', 0, 50)], [vstring('', 150, 0)])));
+  const alerts: string[] = [];
+  page.on('dialog', (d) => {
+    if (d.type() === 'alert') alerts.push(d.message());
+    d.accept(d.type() === 'prompt' ? '1' : undefined);
+  });
+  await page.goto('/channeloutputs.php');
+  await page.locator('#stringTab-tab').click();
+  await expect(page.locator('#PixelString_enable')).toBeChecked({ timeout: 15_000 });
+  // The table as that run had it: a second copy of floatThead's sizing header.
+  const firstRowIndex = await page.evaluate(() => {
+    const t = document.getElementById('PixelString') as HTMLTableElement;
+    const head = t.querySelector(':scope > thead')!;
+    t.insertBefore(head.cloneNode(true), head);
+    return (t.querySelector('tr[id$="_Output_0_0_0"]') as HTMLTableRowElement).rowIndex;
+  });
+  // The control: two header rows above the first string.
+  expect(firstRowIndex).toBe(2);
+  await row(page, 0).locator('td.vsPortLabel').dispatchEvent('mousedown');
+  await page.locator('#cloneStringButton').click();
+  await expect(row(page, 1).locator('input.vsPixelCount'), `the clone was made (alerts: ${alerts.join(' | ')})`).toHaveValue('50');
+});
+
 test('the estimated max fps is set by the longest port: about 40 fps at 800 pixels', async ({ page }) => {
   // Feature: 15454a9c9.  The Pixel Strings tab estimates the frame rate the
   // strings allow: a port clocks about 800 RGB pixels at 40 fps, so the port
