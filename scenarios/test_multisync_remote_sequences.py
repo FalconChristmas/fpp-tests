@@ -49,7 +49,11 @@ class Master:
         time.sleep(0.5)
         self.send("start")
         self.began = time.monotonic()
-        while time.monotonic() - self.began < seconds:
+        self.keep_playing(seconds)
+
+    def keep_playing(self, seconds):
+        until = time.monotonic() + seconds
+        while time.monotonic() < until:
             time.sleep(0.5)
             self.send("sync", self.frame())
 
@@ -107,6 +111,35 @@ def test_shorter_copy_ends_once(fppd):
     m.close()
     assert (started, stopped) == (1, 1), f"SEQUENCE_STARTED x{started}, SEQUENCE_STOPPED x{stopped}"
     assert not any(any(d) for t, d in late), "the remote lit up again after its sequence ended"
+
+
+def test_stale_sync_from_the_last_play_through_does_not_end_the_next(fppd):
+    """When the master plays the same file twice in a row, a late copy of the
+    first play-through's last sync packet can arrive after the second has
+    started (two network paths to the remote, Wi-Fi holding multicast).  It
+    jumps the remote to the end of the file; the master's next sync packets
+    bring it back in step.
+
+    Regression: 43ddc762. The remote ended the file within a second, then
+    ignored every sync packet for it until the master's next open: dark for
+    the rest of the play-through."""
+    frames = unique_frames(600, CHANNELS)
+    lookup = {f: i for i, f in enumerate(frames)}
+    write_fseq(f"{fppd.media}/sequences/Show.fseq", frames, step_ms=STEP_MS)
+    remote(fppd)
+    m = Master()
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        m.play(2)
+        m.send("sync", len(frames) - 8)  # the late copy from the last play-through
+        m.keep_playing(5)
+        at = m.frame()
+        recent = [lookup.get(d) for t, d in rx.snapshot(since=time.monotonic() - 0.5)]
+        recent = [i for i in recent if i is not None]
+        m.send("stop")
+    m.close()
+    assert recent and abs(recent[-1] - at) <= 6, \
+        f"remote showing frame {recent[-1] if recent else None} with the master at {at}"
 
 
 def test_fallback_follows_the_master_and_stops_with_it(fppd):
