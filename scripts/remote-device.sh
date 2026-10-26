@@ -12,10 +12,13 @@
 #                   make and ccache redo only what the commit changed
 #   ~/ci/fpp-tests  this checkout, synced over
 # The build goes through scripts/device-make.sh (nocc, on $NOCC_SERVERS, also
-# from the .env). The board's own fppd and fppoled stop for the run (the
-# scenarios drive the real GPIO lines) and start again however it ends. The
-# results land in artifacts/ here, with meta.json flavored
-# $DEVICE_FLAVOR, as the other device jobs leave them.
+# from the .env). For FLAVOR coverage the run's counts go to ~/ci/gcov
+# (GCOV_PREFIX: the tree is under run-local.sh's overlay), and gcovr (in
+# ~/ci/gcovr) puts the report in artifacts/coverage as the device job's.
+# The board's own fppd and fppoled stop for the run (the scenarios drive the
+# real GPIO lines) and start again however it ends. The results land in
+# artifacts/ here, with meta.json flavored $DEVICE_FLAVOR, as the other
+# device jobs leave them.
 set -e
 REF="$1"
 FLAVOR="$2"
@@ -68,6 +71,13 @@ build capes/drivers/pinctrl pinctrl
 # the scenarios' fake pinmux.
 on_board "chmod ug-s $CI/fpp/capes/drivers/pinctrl/pinctrl"
 
+# The tree is kept between runs: the last run's counts would add to these.
+gcov=
+if [ "$FLAVOR" = coverage ]; then
+    gcov="GCOV_PREFIX=\$HOME/$CI/gcov"
+    on_board "sudo rm -rf $CI/gcov; find $CI/fpp -name '*.gcda' -delete"
+fi
+
 # Under systemd-run, so a dropped ssh session doesn't take pytest with it
 # halfway through: the run finishes and puts the board's services back.
 status=0
@@ -78,12 +88,21 @@ on_board "set -e; cd $CI/fpp-tests
     done
     sudo rm -rf artifacts
     sudo systemd-run --quiet --collect --wait --pipe --unit=fpp-tests-device \
-        --working-directory=\$PWD env PYTHONDONTWRITEBYTECODE=1 \
+        --working-directory=\$PWD env PYTHONDONTWRITEBYTECODE=1 $gcov \
         ./run-local.sh --fpp \$HOME/$CI/fpp -v -rA --junitxml=artifacts/junit.xml $quoted || status=\$?
     for s in \$restart; do sudo systemctl start \$s; done
     sudo chown -R \$(id -u):\$(id -g) artifacts 2>/dev/null || true
     exit \${status:-0}" || status=$?
 
+if [ "$FLAVOR" = coverage ]; then
+    echo "::group::Measure the coverage"
+    on_board "cd $CI
+        if [ -d gcov\$HOME/$CI/fpp ]; then sudo cp -a gcov\$HOME/$CI/fpp/. fpp/; fi
+        [ -x gcovr/bin/gcovr ] || { rm -rf gcovr; python3 -m venv gcovr && gcovr/bin/pip install -q gcovr==7.2; }
+        sudo env PATH=\$HOME/$CI/gcovr/bin:\$PATH sh fpp-tests/scripts/coverage-report.sh \$HOME/$CI/fpp \$HOME/$CI/fpp-tests/artifacts/coverage
+        sudo chown -R \$(id -u):\$(id -g) fpp fpp-tests/artifacts" || true
+    echo "::endgroup::"
+fi
 rsync -a "$DEVICE_HOST:$CI/fpp-tests/artifacts/" artifacts/ || true
 on_board "cat $CI/fpp/src/build.log" > artifacts/build.log 2>/dev/null || true
 version=$(on_board "git -C $CI/fpp describe --tags --match='[0-9]*' 2>/dev/null || git -C $CI/fpp rev-parse --short HEAD")

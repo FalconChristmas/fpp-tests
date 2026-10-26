@@ -37,7 +37,9 @@ on:
       flavor:
         description: Build flavor (ASan doesn't run on the Pi's 39-bit kernel)
         type: choice
-        options: [debug, optimized, tsan]
+        # coverage: the nightly's build (scripts/device-make.sh), here for
+        # its build and test results; only the AM335x job keeps a report
+        options: [debug, optimized, tsan, coverage]
         default: debug
       host_audio:
         description: Play media through the device's sound card (run-local.sh --host-audio)

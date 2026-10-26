@@ -171,9 +171,9 @@ jobs:
   # detection, its PRU outputs against the FAKE_PRU mode run-local.sh puts
   # it in, GPIO and the cape's sound card. Each picks its own from the one
   # list; the rest skip. On the same fpp ref as the shards. The Pi's is a
-  # coverage build: its counters join the Docker shards' in the coverage
-  # report, so the code only a Pi reaches is counted. The Beagle's is a
-  # debug build, since it builds through nocc (scripts/device-make.sh).
+  # coverage build, the Pi's and the Beagle's: their counters join the
+  # Docker shards' in the coverage report, so the code only a device reaches
+  # is counted. The Beagle's compiles through nocc (scripts/device-make.sh).
   # Self-hosted, where a job is root on the device, so never for a pull
   # request: only the nightly and a run by hand that asks for it. Each
   # runner carries its device's label.
@@ -184,12 +184,10 @@ jobs:
       matrix:
         include:
           - device: pi5
-            coverage: true
             timeout: 120
           # host_pru: the scenarios that drive the real PRUs take a second
           # pass (scripts/device-scenarios.sh)
           - device: am62x
-            coverage: false
             host_pru: true
             timeout: 180
     runs-on:
@@ -233,26 +231,17 @@ jobs:
           # left to fetch them itself races two clones of one submodule.
           submodules: recursive
 
-      # The coverage flavor, as build-fpp.sh makes it in Docker: the debug
-      # target at -O0 with --coverage; or the plain debug target. The
-      # checkout cleans the tree each night; ccache (the runner user's own)
-      # makes the rebuild cheap.
+      # The coverage flavor, as build-fpp.sh makes it in Docker
+      # (scripts/device-make.sh). The checkout cleans the tree each night;
+      # ccache (the runner user's own, and the shared remote cache its
+      # ccache.conf names) makes the rebuild cheap.
       - name: Build fpp
         working-directory: fpp/src
         env:
           CCACHE: ccache
           CCACHE_BASEDIR: ${{ github.workspace }}/fpp
           CCACHE_NOHASHDIR: "1"
-          LDFLAGS: ${{ matrix.coverage && '--coverage' || '' }}
-        run: |
-          if [ "${{ matrix.coverage }}" = true ]; then
-            ../../scripts/device-make.sh debug "OPTIMIZE_FLAGS=-g -O0 -Wno-psabi --coverage"
-            # fppd leaves through _exit(), which writes no counts without it
-            # (scripts/gcov-exit.c; scenarios/fppd.py preloads it)
-            gcc -shared -fPIC -O2 -o ../gcov-exit.so ../../scripts/gcov-exit.c
-          else
-            ../../scripts/device-make.sh debug
-          fi
+        run: ../../scripts/device-make.sh coverage
 
       # The run has the device to itself: the device's own fppd holds its
       # outputs' GPIO lines (a cape's string pins, which the BB output
@@ -286,7 +275,7 @@ jobs:
           for s in $RESTART_SERVICES; do sudo systemctl start $s; done
 
       - name: Measure the coverage
-        if: always() && matrix.coverage
+        if: always()
         run: |
           if [ -d "gcov$PWD/fpp" ]; then
             sudo cp -a "gcov$PWD/fpp/." fpp/
@@ -300,7 +289,7 @@ jobs:
         if: always()
         run: |
           mkdir -p artifacts
-          # gcov/ only for a coverage build: a missing one would fail the
+          # gcov/ only once a run wrote counts: a missing one would fail the
           # chown, and the step with it, before meta.json is written
           dirs="artifacts fpp"
           [ -d gcov ] && dirs="$dirs gcov"
@@ -328,10 +317,10 @@ jobs:
 
       # Its counters, for the coverage merge in the results job.
       - name: Upload the coverage counts
-        if: always() && matrix.coverage
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: shard-coverage-device
+          name: shard-coverage-device-${{ matrix.device }}
           # Two paths, so the artifact keeps coverage/ as the shards' do.
           path: |
             artifacts/meta.json
@@ -355,7 +344,8 @@ jobs:
   # against fakepruss, the pinmux, the boot. The boards are too small for
   # runners of their own, so one runner elsewhere drives each over ssh in
   # turn (scripts/remote-device.sh; each board's host is in the runner's
-  # .env). A debug build, through nocc. Self-hosted, as the device job.
+  # .env). A coverage build, as the device job's, through nocc.
+  # Self-hosted, as the device job.
   am335x:
     if: github.event_name == 'schedule' || github.event.inputs.device == 'true'
     strategy:
@@ -387,7 +377,7 @@ jobs:
         env:
           DEVICE_BOARD: ${{ matrix.board }}
           DEVICE_FLAVOR: am335x-${{ matrix.board }}
-        run: scripts/remote-device.sh "$FPP_REF" debug -v -rA $(cat am335x-tests.txt)
+        run: scripts/remote-device.sh "$FPP_REF" coverage -v -rA $(cat am335x-tests.txt)
 
       - name: Upload failed scenarios
         if: failure()
@@ -402,6 +392,19 @@ jobs:
         if: always() && steps.pick.outputs.count != '0'
         run: python3 scripts/ci-summary.py artifacts >> "$GITHUB_STEP_SUMMARY"
 
+      # Its counters, for the coverage merge in the results job.
+      - name: Upload the coverage counts
+        if: always() && steps.pick.outputs.count != '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: shard-coverage-device-am335x-${{ matrix.board }}
+          # Two paths, so the artifact keeps coverage/ as the shards' do.
+          path: |
+            artifacts/meta.json
+            artifacts/coverage/coverage.json
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload the results
         if: always() && steps.pick.outputs.count != '0'
         uses: actions/upload-artifact@v7
@@ -415,9 +418,9 @@ jobs:
 
   # A flavor's shards, put back together as one results-<flavor>: what the
   # dashboard reads. A shard that never finished leaves the flavor failed.
-  # Coverage also takes the device's counters, when it ran.
+  # Coverage also takes the devices' counters, when they ran.
   results:
-    needs: [scenarios, device]
+    needs: [scenarios, device, am335x]
     if: always() && needs.scenarios.result != 'skipped'
     runs-on: ubuntu-latest
     strategy:
