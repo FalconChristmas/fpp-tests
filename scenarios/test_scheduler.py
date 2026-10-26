@@ -144,7 +144,11 @@ def test_extend_schedule_by_a_negative_amount_ends_it_early(fppd):
 def test_extend_schedule_refuses_an_argument_that_isnt_a_number(fppd, arg):
     """Extend Schedule with a Seconds that isn't a number (an unset %VAR%,
     a typo, only spaces) is refused, and the playlist plays on. (Only spaces
-    used to parse as a successful 0.)"""
+    used to parse as a successful 0.)
+
+    Regression (the "  " case): 6f26fbe55. ParseIntArg() skipped the
+    trailing whitespace before asking whether strtol() had consumed
+    anything, so an argument of only spaces passed as 0."""
     scheduled_show(fppd, -60, 300)
     fppd.start()
     fppd.wait_for(lambda: playing(fppd), timeout=30, interval=0.5, what="the scheduled playlist")
