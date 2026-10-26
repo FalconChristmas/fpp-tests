@@ -64,3 +64,63 @@ test('the package name list has each package once', async ({ request }) => {
     inPlayer('rm', '-f', index);
   }
 });
+
+// A local apt repository in the player with one package in it, and apt
+// pointed at it alone (the image's Debian sources are put aside, so nothing
+// is fetched from the internet), for the length of fn.  apt's lists and the
+// sources are put back afterwards, and the package removed.
+async function withLocalRepo(pkg: string, fn: () => Promise<void>) {
+  const repo = '/tmp/fpp-tests-repo';
+  inPlayer('sh', '-c', `set -e; rm -rf ${repo}; mkdir -p ${repo}/build/DEBIAN; cd ${repo}
+    printf 'Package: ${pkg}\\nVersion: 1.0\\nArchitecture: all\\nMaintainer: fpp-tests <fpp-tests@example.invalid>\\nDescription: fpp-tests stand-in\\n' > build/DEBIAN/control
+    dpkg-deb -b build ${pkg}_1.0_all.deb > /dev/null; rm -rf build
+    dpkg-scanpackages . /dev/null 2>/dev/null > Packages
+    mv /etc/apt/sources.list.d/debian.sources /tmp/fpp-tests-debian.sources
+    echo 'deb [trusted=yes] file:${repo} ./' > /etc/apt/sources.list.d/fpp-tests.list`);
+  try {
+    await fn();
+  } finally {
+    inPlayer('sh', '-c', `dpkg -P ${pkg} > /dev/null 2>&1; rm -rf ${repo} /etc/apt/sources.list.d/fpp-tests.list
+      [ -f /tmp/fpp-tests-debian.sources ] && mv /tmp/fpp-tests-debian.sources /etc/apt/sources.list.d/debian.sources
+      find /var/lib/apt/lists -mindepth 1 -maxdepth 1 ! -name lock ! -name partial -exec rm -rf {} +; true`);
+  }
+}
+
+// Feature: b2b126c10 ("add \"Install All Missing\" button to Package
+// Manager").  A manifest carried over from another image lists packages this
+// one does not have; the page installs them in one go.  The receiving end is
+// apt: the package is installed afterwards.
+test('Install All Missing installs the missing packages and skips what apt does not have', async ({ page }) => {
+  const hadManifest = exists(MANIFEST);
+  const saved = hadManifest ? readFile(MANIFEST) : '';
+  const manifest = JSON.stringify([
+    { package: 'fpp-tests-parent', requestedBy: ['user'] },
+    // Comes back with its parent; not one of the missing.
+    { package: 'fpp-tests-dep', requestedBy: ['user'], via: ['fpp-tests-parent'] },
+    { package: 'bash', requestedBy: ['user'] },
+    { package: 'fpp-tests-gone', requestedBy: ['user'] },
+  ]);
+  putFile(MANIFEST, manifest);
+  const installed = () => inPlayer('sh', '-c', "dpkg-query -W -f='${db:Status-Status}' fpp-tests-parent 2>/dev/null; true").trim();
+  try {
+    await withLocalRepo('fpp-tests-parent', async () => {
+      expect(installed(), 'the control: the package is not installed yet').not.toBe('installed');
+      await page.goto('/packages.php');
+      const button = page.locator('#installMissingBtn');
+      await expect(button).toBeVisible({ timeout: 30_000 });
+      await expect(page.locator('#installMissingCount')).toHaveText('2');
+      // (In the order the page's status requests came back.)
+      expect((await button.getAttribute('title'))!.split(', ').sort()).toEqual(['fpp-tests-gone', 'fpp-tests-parent']);
+      page.once('dialog', (d) => d.accept());
+      await button.click();
+      const log = page.locator('#packageProgressPopupText');
+      await expect(log).toHaveValue(/Completed with skipped packages/, { timeout: 180_000 });
+      expect(await log.inputValue()).toContain("Skipping 'fpp-tests-gone'");
+      expect(installed(), 'apt did not install the missing package').toBe('installed');
+      // The manifest is what it was.
+      expect(JSON.parse(readFile(MANIFEST))).toEqual(JSON.parse(manifest));
+    });
+  } finally {
+    if (hadManifest) putFile(MANIFEST, saved); else inPlayer('rm', '-f', MANIFEST);
+  }
+});

@@ -327,7 +327,11 @@ def test_validate_expression(fppd):
     text.
 
     Covers 4a232b973: conditionExpr=true classifies the If editor's fields
-    the way If reads them, where a bare compile called every name valid."""
+    the way If reads them, where a bare compile called every name valid.
+    And 986fa2943: Set Variable's Expression field (no conditionExpr) is
+    classified too -- formula, template or literal -- so the editor can warn
+    that a bare variable name is stored as text; before it, those answers
+    carried no kind.  (The editor's warning is web/tests/command-editor.spec.ts.)"""
     fppd.start()
     set_vars(fppd, Count="10")
     wrong = {}

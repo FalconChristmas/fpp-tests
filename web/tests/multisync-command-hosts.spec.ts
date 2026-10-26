@@ -17,7 +17,10 @@ test.describe(() => {
   test('a command entry for two MultiSync hosts lists what each of them has', async ({ page, request }) => {
     // Regression: 5b19c77be.  When the hosts field became checkboxes, the
     // reload took only the first picked host, so a list showed only what
-    // that one player had.
+    // that one player had.  Also covers 9fae42ac3, which first filled the
+    // lists from every picked host and counted them ("exists on 1/2 Hosts");
+    // with the reload limited to a single host again, only the first host's
+    // entry is listed.
     const name = 'fpp-tests-ms-hosts';
     await request.post(`/api/playlist/${name}`, { data: { name, version: 4, leadIn: [], mainPlaylist: [], leadOut: [], playlistInfo: {} } });
     const asked: string[] = [];

@@ -72,6 +72,81 @@ test('an OS upgrade of an image that is missing or empty says so and runs nothin
   });
 });
 
+test('an OS image too big for the free space on the root filesystem is not applied', async ({ request }) => {
+  // Regression: 45e34275c ("Add pre-flight disk space checks before applying
+  // an FPP OS upgrade", #2820).  The upgrade copies the new OS over the
+  // running root, and with too little room it died part way, leaving a root
+  // that cannot boot.  The image here is a sparse file: as big as asked, and
+  // taking no space.  (The same check in upgradeOS-part1.sh is not run here:
+  // when it passes, part1 goes on to rewrite the player's root.)
+  const BIG = `${MEDIA}/upload/fpp-tests-big.fppos`;
+  const SMALL = `${MEDIA}/upload/fpp-tests-small.fppos`;
+  await withStandInUpgrade(async () => {
+    const free = parseInt(inPlayer('sh', '-c', "df -B1 --output=avail / | tail -1").trim(), 10);
+    // More than half what is free: the copy needs room for the image and the OS it holds.
+    inPlayer('truncate', '-s', String(Math.floor(free / 2) + 1024 * 1024 * 1024), BIG);
+    putFile(SMALL, 'fpp-tests image');
+    try {
+      let body = await upgradeOS(request, 'fpp-tests-big.fppos');
+      expect(body).toContain('Not enough free space on the root filesystem to apply fpp-tests-big.fppos');
+      expect(exists(RAN), `the upgrade ran with too little room:\n${body}`).toBe(false);
+      // The control: an image that fits goes on to the (stand-in) upgrade.
+      body = await upgradeOS(request, 'fpp-tests-small.fppos');
+      expect(readFile(RAN).trim(), body).toBe(SMALL);
+    } finally {
+      inPlayer('rm', '-f', BIG, SMALL);
+    }
+  });
+});
+
+test('an OS image download streams a handful of progress lines, not one per redraw', async ({ request }) => {
+  // Regression: a8f128d9d ("stop wget's progress bar from flooding the OS
+  // upgrade dialog with a line per redraw").  wget drew a progress bar,
+  // redrawn with a \r several times a second, and every redraw reached the
+  // dialog as more output.  The image comes from a server in the player
+  // that sends 24 MB over a few seconds, long enough for many redraws.
+  // The receiving end is wget's own output, so it takes a real wget.
+  test.skip(inPlayer('sh', '-c', 'command -v wget || true').trim() === '', 'the player image has no wget');
+  const NAME = 'fpp-tests-slow.fppos';
+  const SIZE = 24 * 1024 * 1024;
+  const server = `
+import http.server, time
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/octet-stream')
+        self.send_header('Content-Length', '${SIZE}')
+        self.end_headers()
+        chunk = b'x' * 65536
+        for i in range(${SIZE} // 65536):
+            self.wfile.write(chunk)
+            if i % 16 == 0:
+                time.sleep(0.25)
+    def log_message(self, *a):
+        pass
+http.server.HTTPServer(('127.0.0.1', 8783), H).serve_forever()
+`;
+  putFile('/tmp/fpp-tests-slow-server.py', server);
+  docker('exec', '-d', container, 'python3', '/tmp/fpp-tests-slow-server.py');
+  try {
+    await expect.poll(() => inPlayer('sh', '-c', 'curl -s -o /dev/null -r 0-0 -w "%{http_code}" --max-time 2 http://127.0.0.1:8783/x || true').trim(),
+      { timeout: 10_000 }).toMatch(/^20/);
+    await keepingFile(UPGRADE_LOG, async () => {
+      const r = await request.get(`/upgradeOS.php?wrapped=1&downloadOnly=1&os=${encodeURIComponent(`http://127.0.0.1:8783/${NAME}`)}`, { timeout: 120_000 });
+      const body = await r.text();
+      // The control: the image arrived, whole.
+      expect(parseInt(inPlayer('stat', '-c', '%s', `${MEDIA}/upload/${NAME}`).trim(), 10), body.slice(-500)).toBe(SIZE);
+      expect(body).toContain('Download complete');
+      const redraws = (body.match(/\r/g) || []).length;
+      expect(redraws, `the progress came as ${redraws} redraws`).toBeLessThanOrEqual(2);
+      expect(body.split('\n').length).toBeLessThan(40);
+    });
+  } finally {
+    inPlayer('sh', '-c', "pkill -f 'python3 /tmp/[f]pp-tests-slow-server' || true");
+    inPlayer('rm', '-f', '/tmp/fpp-tests-slow-server.py', `${MEDIA}/upload/${NAME}`);
+  }
+});
+
 test('an OS image name that is not a plain file name is refused', async ({ request }) => {
   // Regression: 9bbf886ea ("prevent argument injection in OS upgrade via
   // escapeshellcmd misuse").  A local image name went through

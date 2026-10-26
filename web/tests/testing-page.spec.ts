@@ -74,7 +74,9 @@ test('a colour picked for the custom cycle pattern is added to the pattern fppd 
   }, { timeout: 10_000 }).toBe('RGBCycle-RGBCustom 12AB3400FF00');
 });
 
-test.describe('the Channel Fader', () => {
+// A DDP output carrying channels 1-150 to the receiver in the player, for
+// the length of each test of the describe it is called in.
+function withDDPReceiver() {
   test.skip(!container, 'runs a DDP receiver inside the run-web.sh container');
   let savedOutputs: string | null = null;
   let savedBridges = '0';
@@ -105,6 +107,10 @@ test.describe('the Channel Fader', () => {
     }
     await request.put('/api/settings/DisableFakeNetworkBridges', { data: savedBridges });
   });
+}
+
+test.describe('the Channel Fader', () => {
+  withDDPReceiver();
 
   async function openFader(page: Page, start: number, count: number) {
     await openTesting(page);
@@ -186,5 +192,103 @@ test.describe('the Channel Fader', () => {
     // And the test runs over the model's channels.
     await page.locator('#dmxTestEnabled').check();
     await expect.poll(async () => (await testmode(request)).channelSet, { timeout: 10_000 }).toBe('1-150');
+  });
+});
+
+test.describe('RGBW test patterns', () => {
+  withDDPReceiver();
+
+  async function setRange(page: Page, el: string, value: number) {
+    await page.locator(el).fill(String(value));
+    await page.locator(el).dispatchEvent('input');
+    await page.locator(el).dispatchEvent('change');
+  }
+
+  test('a colour fill on 4-channel pixels sends R, G, B and W to each pixel', async ({ page, request }) => {
+    // Feature: efad2429a (the new Display Testing).  The fill takes a White
+    // level; fppd's RGB Single Color then fills with a 4-channel stride.
+    await openTesting(page);
+    await page.locator('#testModeStartChannel').fill('1');
+    await page.locator('#testModeEndChannel').fill('150');
+    await page.locator('#channelsPerPixel').selectOption('4');
+    await page.locator('#channelsPerPixel').dispatchEvent('change');
+    await page.locator('#solid-color-tab').click();
+    await page.locator('label[for="RGBFill"]').click();
+    await expect(page.locator('#RGBFill')).toBeChecked();
+    // Enabled first, then each colour change restarts the fill.  Only the
+    // first two pixels are checked: after other test patterns have run,
+    // fppd's RGB Single Color has been seen to fill only the first 9
+    // channels of 1-150, and to put out black when restarted after a Test
+    // Stop with the colour and channels it last ran with -- fppd bugs of
+    // their own, not this commit's.
+    await page.locator('#testModeEnabled').check();
+    await setRange(page, '#testModeColorR', 10);
+    await setRange(page, '#testModeColorG', 20);
+    await setRange(page, '#testModeColorB', 30);
+    await setRange(page, '#testModeColorW', 200);
+    await expect.poll(async () => (await testmode(request)).color4, { timeout: 10_000 }).toBe(200);
+    await expect.poll(() => channels(8), { timeout: 10_000 }).toEqual([10, 20, 30, 200, 10, 20, 30, 200]);
+  });
+
+  test('the R-G-B-W cycle lights each pixel\'s white channel on its own', async ({ page, request }) => {
+    // Feature: efad2429a.  RGB Cycle R-G-B-W steps every 4-channel pixel
+    // through red, green, blue and white; on 3-channel pixels nothing ever
+    // shows two whites four channels apart with the colours between dark.
+    await openTesting(page);
+    await page.locator('#testModeStartChannel').fill('1');
+    await page.locator('#testModeEndChannel').fill('150');
+    await page.locator('#channelsPerPixel').selectOption('4');
+    await page.locator('#channelsPerPixel').dispatchEvent('change');
+    await setRange(page, '#testModeCycleMS', 200);
+    await page.locator('#RGBCycle-RGBW').check();
+    await page.locator('#testModeEnabled').check();
+    await expect.poll(async () => (await testmode(request)).colorPattern, { timeout: 10_000 }).toBe('FF00000000FF00000000FF00000000FF');
+    const seen = new Set<string>();
+    await expect.poll(async () => {
+      seen.add((await channels(8)).join(','));
+      return seen.has('0,0,0,255,0,0,0,255');
+    }, { timeout: 15_000, intervals: [50] }).toBe(true);
+  });
+});
+
+test.describe('test mode ownership', () => {
+  test('a test started on Channel Testing shows as running there, and the Channel Fader tab warns it will take over', async ({ page, request }) => {
+    // Regression: 291b16bf1.  fppd runs one test at a time, but each tab had
+    // its own Enable box: after switching tabs the other tab's box sat
+    // unticked beside output still running, with nothing saying so.  Stop
+    // Test in the warning ends fppd's test.
+    await openTesting(page);
+    await page.locator('#testModeStartChannel').fill('1');
+    await page.locator('#testModeEndChannel').fill('150');
+    await page.locator('#testModeEnabled').check();
+    await expect.poll(async () => (await testmode(request)).enabled).toBeTruthy();
+    await expect(page.locator('#dmxTestTakeover')).toBeHidden();
+
+    await page.locator('#tab-dmx-tab').click();
+    await expect(page.locator('#dmxTestTakeover')).toBeVisible();
+    await expect(page.locator('#dmxTestEnabled')).not.toBeChecked();
+    await page.locator('#tab-channels-tab').click();
+    await expect(page.locator('#testModeEnabled')).toBeChecked();
+    await expect(page.locator('#channelTestTakeover')).toBeHidden();
+
+    await page.locator('#tab-dmx-tab').click();
+    await page.locator('#dmxTestTakeover button', { hasText: 'Stop Test' }).click();
+    await expect.poll(async () => !!(await testmode(request)).enabled, { timeout: 10_000 }).toBe(false);
+    await expect(page.locator('#dmxTestTakeover')).toBeHidden();
+    await page.locator('#tab-channels-tab').click();
+    await expect(page.locator('#testModeEnabled')).not.toBeChecked();
+  });
+
+  test('a test already running when the page opens is shown as running on Channel Testing', async ({ page, request }) => {
+    // Regression: 291b16bf1.  A test fppd is running that this page did not
+    // start (another browser, the API) is attributed to Channel Testing,
+    // whose box is ticked, and the Channel Fader tab warns about it.
+    const t = await request.post('/api/command', { data: { command: 'Test Start', args: ['1000', 'RGB Cycle', '1-150', 'R-G-B'] } });
+    expect(t.ok()).toBe(true);
+    await openTesting(page);
+    await expect(page.locator('#testModeEnabled')).toBeChecked({ timeout: 10_000 });
+    await page.locator('#tab-dmx-tab').click();
+    await expect(page.locator('#dmxTestTakeover')).toBeVisible();
+    await expect(page.locator('#dmxTestEnabled')).not.toBeChecked();
   });
 });

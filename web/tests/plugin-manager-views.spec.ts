@@ -45,6 +45,8 @@ test('an incompatible plugin is listed at Advanced, and not at Basic', async ({ 
   // Regression: e00c3c184 ("Add early return for uiLevel check").  Basic hid
   // plugins it could only "Install anyway", but showed the ones that won't
   // install on this FPP at all, in their own section.
+  // Feature: 119fd772d ("Show incompatible plugins in a collapsed section").
+  // They had been listed with the rest, at the Developer level only.
   const OK = 'fpp-tests-compat';
   const BAD = 'fpp-tests-incompat';
   const m = await major(request);
@@ -60,8 +62,14 @@ test('an incompatible plugin is listed at Advanced, and not at Basic', async ({ 
     // The control: the compatible one is listed at both levels.
     await expect(page.locator(`#pluginGrid [id="row-${OK}"]`)).toBeAttached();
     await expect(page.locator(`#incompatibleGrid [id="row-${BAD}"]`), `uiLevel ${level}`).toHaveCount(shown ? 1 : 0);
-    if (shown) await expect(page.locator('#incompatiblePluginsWrap')).toBeVisible();
-    else await expect(page.locator('#incompatiblePluginsWrap')).toBeHidden();
+    await expect(page.locator(`#pluginGrid [id="row-${BAD}"]`)).toHaveCount(0);
+    if (shown) {
+      await expect(page.locator('#incompatiblePluginsWrap')).toBeVisible();
+      // Collapsed until opened.
+      await expect(page.locator('#incompatiblePluginsWrap details')).not.toHaveAttribute('open', /.*/);
+      await expect(page.locator(`#incompatibleGrid [id="row-${BAD}"]`)).toBeHidden();
+      await expect(page.locator('#incompatiblePluginsCount')).toHaveText('1');
+    } else await expect(page.locator('#incompatiblePluginsWrap')).toBeHidden();
   }
 });
 

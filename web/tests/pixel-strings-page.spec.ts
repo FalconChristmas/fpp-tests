@@ -186,3 +186,103 @@ test('the estimated max fps is set by the longest port: about 40 fps at 800 pixe
   await row(page, 1).locator('input.vsStartNulls').dispatchEvent('change');
   await expect(fps).toHaveText(/≈40 fps max \(longest port 1\b/);
 });
+
+test('F2 on the Strings tab starts the next string after the selected one, and stays on the page', async ({ page }) => {
+  // Regression: 033380eed.  The page bound its own keydown handler for F2
+  // (set the next string's start channel) beside the global one, which sends
+  // F2 to Settings: both ran, and the page navigated away right after
+  // filling in the channel.  Off the Strings tab, F2 still opens Settings.
+  writeFile(CONFIG, JSON.stringify(stringsConfig([vstring('first', 0, 50)], [vstring('second', 0, 50)])));
+  await openStrings(page);
+  await row(page, 0).locator('td.vsPortLabel').dispatchEvent('mousedown');
+  await page.keyboard.press('F2');
+  await expect(row(page, 1).locator('input.vsStartChannel')).toHaveValue('151');
+  await page.waitForTimeout(1500);
+  expect(new URL(page.url()).pathname, 'F2 left the page').toBe('/channeloutputs.php');
+  await expect(row(page, 1)).toHaveClass(/selectedEntry/);
+
+  // The control: on another tab F2 is the global Settings key.  This player
+  // shows only the Strings tab, so an Other outputs one is added.
+  await page.locator('[data-bs-toggle="dropdown"]').filter({ hasText: 'Add Output Group' }).click();
+  await page.locator('#addOutputCategoryMenu a.dropdown-item').first().click();
+  await page.locator('[id^="tab-other-"][id$="-tab"]').first().click();
+  await page.keyboard.press('F2');
+  await expect(page).toHaveURL(/settings\.php/);
+});
+
+test('saving the strings turns test mode off', async ({ page, request }) => {
+  // Feature: 05cc45f5c.  Saving an output config ends a running test pattern.
+  writeFile(CONFIG, JSON.stringify(stringsConfig([vstring('first', 0, 50)], [vstring('second', 150, 50)])));
+  await openStrings(page);
+  const t = await request.post('/api/command', { data: { command: 'Test Start', args: ['1000', 'RGB Cycle', '1-300', 'R-G-B'] } });
+  expect(t.ok()).toBe(true);
+  try {
+    await expect.poll(async () => (await (await request.get('/api/testmode')).json()).enabled).toBe(1);
+    await row(page, 1).locator('input.vsDescription').fill('second-saved');
+    await saveAndWait(page, request, (c) => c.channelOutputs[0].outputs[1].virtualStrings[0].description === 'second-saved');
+    await expect.poll(async () => (await (await request.get('/api/testmode')).json()).enabled, { timeout: 10_000 }).toBe(0);
+  } finally {
+    await request.post('/api/command', { data: { command: 'Test Stop', args: [] } });
+  }
+});
+
+test('Import Strings takes a model\'s pixel count from xLights\' named node-count attributes, or an old parm2', async ({ page, request }) => {
+  // Regression: 6b0b4e34f.  The import read the pixel count from the parm2
+  // attribute, which current xLights no longer writes (it has per-type names
+  // such as NodesPerString), so a current layout imported 0-pixel strings.
+  const XML = `${MEDIA}/upload/xlights_rgbeffects.xml`;
+  const savedXml = readFile(XML);
+  writeFile(XML, `<?xml version="1.0" encoding="UTF-8"?>
+<xrgb><models>
+<model name="fpp-tests tree" DisplayAs="Tree" Tree="Tree" TreeDegrees="360" StringCount="1" NodesPerString="50" StartChannel="1">
+  <ControllerConnection Port="1" Protocol="ws2811"/></model>
+<model name="fpp-tests arch" DisplayAs="Arches" parm1="1" parm2="30" parm3="1" StartChannel="151">
+  <ControllerConnection Port="2" Protocol="ws2811"/></model>
+</models></xrgb>`);
+  try {
+    writeFile(CONFIG, JSON.stringify(stringsConfig([vstring('', 0, 0)], [vstring('', 0, 0)])));
+    await openStrings(page);
+    await page.locator('#stringTab input[value="Import Strings"]').click();
+    await expect(row(page, 0).locator('input.vsPixelCount')).toHaveValue('50');
+    await expect(row(page, 1).locator('input.vsPixelCount')).toHaveValue('30');
+    await expect(row(page, 0).locator('input.vsDescription')).toHaveValue('fpp-tests tree');
+    // And what is saved for the outputs.
+    const got = await saveAndWait(page, request, (c) => c.channelOutputs[0].outputs[1].virtualStrings[0].pixelCount === 30);
+    expect(got.channelOutputs[0].outputs.map((o: any) => [o.virtualStrings[0].description, o.virtualStrings[0].pixelCount]))
+      .toEqual([['fpp-tests tree', 50], ['fpp-tests arch', 30]]);
+  } finally {
+    putBack(XML, savedXml);
+  }
+});
+
+test.describe('on a BBShiftString cape', () => {
+  // The WS2811 800kHz family, as c5cce457b lists it: every one is driven
+  // with the ws2811 bit cell, so each is a name, not a behaviour.
+  const WS281X = ['ws2811', 'ws2812', 'ws2812b', 'ws2813', 'ws2815', 'ws2818', 'sk6812', 'sk6813', 'sm16703', 'gs8206',
+    'gs8208', 'tm1809', 'tm1812', 'ucs1904', 'ucs2903', 'apa104', 'apa106', 'apa109', 'sk6812rgbw', 'sk6818', 'sm16704',
+    'ucs2904', 'ws2814'];
+
+  test('a port\'s protocol list names the WS2811-family parts, and the one picked is saved', async ({ page, request }) => {
+    // Feature: c5cce457b.  The dropdown said only "ws2811", leaving someone
+    // with SK6812s to work out that it is a WS2811 in disguise.  Parts the
+    // ws2811 cell would drive wrongly (the 400kHz ones, sk6822, tm1914) are
+    // not in the list.
+    writeFile(CAPE_FILE, JSON.stringify({ ...CAPE, driver: 'BBShiftString' }));
+    const config = stringsConfig([vstring('first', 0, 50)], [vstring('second', 150, 50)]);
+    config.channelOutputs[0].type = 'BBShiftString';
+    writeFile(CONFIG, JSON.stringify(config));
+    await openStrings(page);
+    const protocol = row(page, 0).locator('select.vsProtocol');
+    const offered = await protocol.locator('option').evaluateAll((os) => os.map((o: any) => o.value));
+    expect(offered).toEqual(expect.arrayContaining(WS281X));
+    for (const wrong of ['tm1803', 'tm1804', 'ucs1903', 'sk6822', 'pl9823', 'tm1914']) {
+      expect(offered, 'a part the ws2811 cell does not drive').not.toContain(wrong);
+    }
+    await protocol.selectOption('sk6812');
+    const got = await saveAndWait(page, request, (c) => c.channelOutputs[0].outputs[0].protocol === 'sk6812');
+    expect(got.channelOutputs[0].type).toBe('BBShiftString');
+    await page.reload();
+    await page.locator('#stringTab-tab').click();
+    await expect(row(page, 0).locator('select.vsProtocol')).toHaveValue('sk6812', { timeout: 15_000 });
+  });
+});
