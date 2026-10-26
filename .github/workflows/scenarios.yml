@@ -297,7 +297,12 @@ jobs:
         if: always()
         run: |
           mkdir -p artifacts
-          sudo chown -R "$(id -u):$(id -g)" artifacts gcov fpp 2>/dev/null; chmod -R u+rwX artifacts
+          # gcov/ only for a coverage build: a missing one would fail the
+          # chown, and the step with it, before meta.json is written
+          dirs="artifacts fpp"
+          [ -d gcov ] && dirs="$dirs gcov"
+          sudo chown -R "$(id -u):$(id -g)" $dirs
+          chmod -R u+rwX artifacts
           version=$(git -C fpp describe --tags --match='[0-9]*' 2>/dev/null || git -C fpp rev-parse --short HEAD)
           printf '{"flavor":"%s","version":"%s","sha":"%s"}\n' "${{ matrix.device }}" "$version" \
             "$(git -C fpp rev-parse HEAD)" > artifacts/meta.json
