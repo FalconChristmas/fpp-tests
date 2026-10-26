@@ -130,10 +130,9 @@ test('a Command Preset picked into an If\'s Then Run list runs as the preset is 
   const PRESET = 'fpp-tests if preset';
   const preset = (value: string) => ({ commands: [{ name: PRESET, presetSlot: 0,
     command: 'Set Variable', args: [VAR, 'Value', value, '1', '0', '100', ''] }] });
-  // A group, as the editor saves a Check: the editor cannot open a bare
-  // condition at the top (BackendJSONToTree gives it no items), though fppd
-  // runs one.
-  const TRUE = { op: 'AND', not: false, conditions: [{ source: 'Expression', name: '1', comparator: 'equal to', value: '1', not: false }] };
+  // A bare condition, as the scenarios send a Check (see the bare-If tests
+  // below).
+  const TRUE = { source: 'Expression', name: '1', comparator: 'equal to', value: '1', not: false };
   await put(request, PRESETS, preset('first'));
   await put(request, INSTANT, { command: 'If', args: [JSON.stringify(TRUE), '[]', 'Sequential', '', 'Sequential'] });
   const dialog = await openDialog(page);
@@ -162,6 +161,51 @@ test('a Command Preset picked into an If\'s Then Run list runs as the preset is 
   await page.waitForTimeout(1500); // fppd reloads the presets when the file changes
   expect((await request.post('/api/command', { data: ran })).ok()).toBe(true);
   await expect.poll(() => variable(request, VAR), { timeout: 10_000 }).toBe('second');
+});
+
+test.describe('an If whose Check is one bare condition', () => {
+  // Regression: 88d509b88.  fppd takes a Check that is a single condition with
+  // no group around it (ConditionNode::FromJSON reads a leaf at the top), and
+  // the scenarios send one.  The editor turned it into a tree whose root had
+  // no items, so rendering it threw ("Cannot read properties of undefined
+  // (reading 'length')"), the Then and Otherwise lists came up empty, and the
+  // presets page's summary fell back to the raw arguments.
+  const VAR = 'fppTestsIfBare';
+  // False, so the Otherwise list is what runs: an editor that dropped the
+  // condition would save an empty Check instead.
+  const CHECK = { source: 'Expression', name: '1', comparator: 'equal to', value: '2', not: false };
+  const setVar = (value: string) => JSON.stringify([{ command: 'Set Variable', args: [VAR, 'Value', value, '1', '0', '100', ''] }]);
+  const IF = { command: 'If', args: [JSON.stringify(CHECK), setVar('then'), 'Sequential', setVar('otherwise'), 'Sequential'] };
+
+  test('opens with the condition and both lists, and saves a Check fppd runs', async ({ page, request }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await put(request, INSTANT, IF);
+    const dialog = await openDialog(page);
+    await expect(dialog.locator('#editorCommand')).toHaveValue('If');
+    await expect(dialog.locator('.condListRow')).toHaveText(['Expression 1 equal to "2"']);
+    await expect(dialog.locator('.cmdListLabel')).toHaveText(['Set Variable: fppTestsIfBare, Value, then, 1, 0, 100, —',
+      'Set Variable: fppTestsIfBare, Value, otherwise, 1, 0, 100, —']);
+    expect(errors, 'the editor threw opening the If').toEqual([]);
+
+    // Saved, it is a one-condition group, the same test.
+    await request.post('/api/command', { data: { command: 'Set Variable', args: [VAR, 'Value', 'unset', '1', '0', '100', ''] } });
+    const sent = page.waitForRequest((r) => r.method() === 'POST' && /api\/command(\?|$)/.test(r.url()));
+    await dialog.locator('#btnSaveEditorCommand').click();
+    const ran = JSON.parse((await sent).postData() || '{}');
+    expect(JSON.parse(ran.args[0])).toEqual({ op: 'AND', conditions: [{ source: 'Expression', name: '1', comparator: 'equal to', value: '2' }] });
+    // The receiving end: fppd ran it and took Otherwise.
+    await expect.poll(() => variable(request, VAR), { timeout: 10_000 }).toBe('otherwise');
+  });
+
+  test('is summarized as its formula on the Command Presets page', async ({ page, request }) => {
+    await put(request, PRESETS, { commands: [{ name: 'fpp-tests bare if', presetSlot: 0, ...IF }] });
+    await page.goto('/commandPresets.php');
+    // Not the raw arguments, {"source":"Expression",...} | [{"command":...
+    await expect(page.locator('.cmdTmplArgs').filter({ hasText: VAR })).toHaveText(
+      'If Expression(1) equal to Expression(2) → Then: Set Variable: fppTestsIfBare, Value, then, 1, 0, 100, — | Otherwise: Set Variable: fppTestsIfBare, Value, otherwise, 1, 0, 100, —',
+      { timeout: 15_000 });
+  });
 });
 
 test.describe('Effect Stop', () => {

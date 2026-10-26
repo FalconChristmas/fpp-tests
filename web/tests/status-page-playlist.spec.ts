@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures';
 import type { APIRequestContext } from '@playwright/test';
 import { container, inPlayer } from './container';
+import { putFile } from './settings-file';
 
 // The status page's player section: what it shows about the playlist fppd
 // is playing.  The playlists are played by the real fppd.
@@ -113,6 +114,45 @@ test("streamed output keeps its line breaks as text in a <pre>, and as <br> else
     expect(result.pre.text).toContain('one\ntwo\nthree');
   } finally {
     inPlayer('rm', '-f', log);
+  }
+});
+
+test('a sequence played outside a playlist shows on the status page as playing, by name', async ({ page, request }) => {
+  // Regression: 3e100296e.  The status for a sequence playing outside a
+  // playlist set playerStatusTest, a typo, so the page showed 'Playing '
+  // without the sequence's name.
+  // Regression: ae524f919.  And that branch could not run at all: fppd
+  // reported such a sequence as status 0 (idle) beside status_name
+  // "playing", and parseStatus() goes by status, so the page said Idle.
+  test.skip(!container, 'writes a sequence inside the run-web.sh container');
+  const seq = 'fpp-tests-solo.fseq';
+  const path = `/home/fpp/media/sequences/${seq}`;
+  // FSEQ v1, 3 channels, 2400 frames of 50 ms: two minutes, longer than the test.
+  const header = Buffer.alloc(28);
+  header.write('PSEQ', 0, 'latin1');
+  header.writeUInt16LE(28, 4);
+  header.writeUInt8(1, 7);
+  header.writeUInt16LE(28, 8);
+  header.writeUInt32LE(3, 10);
+  header.writeUInt32LE(2400, 14);
+  header.writeUInt8(50, 18);
+  putFile(path, Buffer.concat([header, Buffer.alloc(3 * 2400, 0x40)]));
+  try {
+    const started = await request.get(`/api/sequence/${seq}/start/0`);
+    expect(started.ok()).toBe(true);
+    // The control: fppd is playing it.
+    await expect.poll(async () => (await (await request.get('/api/fppd/status')).json()).current_sequence,
+      { timeout: 10_000 }).toBe(seq);
+
+    await page.goto('/index.php');
+    await expect(page.locator('#txtPlayerStatus')).toHaveText(`'${seq}'`, { timeout: 15_000 });
+    await expect(page.locator('#btnStopNow')).toBeEnabled();
+    // fppd's side of it: status agrees with status_name.
+    const s = await (await request.get('/api/fppd/status')).json();
+    expect(`${s.status} ${s.status_name}`).toBe('1 playing');
+  } finally {
+    await request.get('/api/sequence/current/stop');
+    inPlayer('rm', '-f', path);
   }
 });
 

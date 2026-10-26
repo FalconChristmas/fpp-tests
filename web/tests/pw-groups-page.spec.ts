@@ -30,10 +30,9 @@ test('new output groups are numbered 1, 2, ...', async ({ page }) => {
   writeFile(`${CONFIG}/pipewire-audio-groups.json`, { groups: [] });
   await page.goto('/pipewire-audio.php');
   const add = page.getByRole('button', { name: 'Add Group' }).first();
-  await expect(add).toBeVisible({ timeout: 15_000 });
-  // Add Group shows before the saved groups have loaded, and a group added
-  // before they answer is replaced by them: wait for the empty list first.
-  await expect(page.getByText('No Audio Groups Configured')).toBeVisible({ timeout: 15_000 });
+  // Enabled once the saved groups are in (c60cef80c; see
+  // pw-groups-load-window.spec.ts), which the click waits for.
+  await expect(add).toBeEnabled({ timeout: 15_000 });
   await add.click();
   await expect(nameInputs(page)).toHaveCount(1);
   await add.click();

@@ -36,6 +36,9 @@ while True:
 // fppd's test mode; null until a test has run.
 const testmode = async (request: APIRequestContext) => (await (await request.get('/api/testmode')).json()) ?? {};
 
+// n channels of a repeating pattern.
+const fill = (pattern: number[], n: number) => Array.from({ length: n }, (_, i) => pattern[i % pattern.length]);
+
 // Channels 1..n of the last frame fppd sent.
 async function channels(n: number): Promise<number[]> {
   const out = inPlayer('sh', '-c', `cat ${FRAME} 2>/dev/null || echo '[]'`);
@@ -207,6 +210,10 @@ test.describe('RGBW test patterns', () => {
   test('a colour fill on 4-channel pixels sends R, G, B and W to each pixel', async ({ page, request }) => {
     // Feature: efad2429a (the new Display Testing).  The fill takes a White
     // level; fppd's RGB Single Color then fills with a 4-channel stride.
+    // Regression: 90fe1372f.  The page's first Test Start can come before
+    // fppd has loaded the DDP output this describe saves, and the channel set
+    // was clipped to the 1-8 placeholder for no outputs then and kept for
+    // the whole test: only channels 1-9 were filled.
     await openTesting(page);
     await page.locator('#testModeStartChannel').fill('1');
     await page.locator('#testModeEndChannel').fill('150');
@@ -215,19 +222,37 @@ test.describe('RGBW test patterns', () => {
     await page.locator('#solid-color-tab').click();
     await page.locator('label[for="RGBFill"]').click();
     await expect(page.locator('#RGBFill')).toBeChecked();
-    // Enabled first, then each colour change restarts the fill.  Only the
-    // first two pixels are checked: after other test patterns have run,
-    // fppd's RGB Single Color has been seen to fill only the first 9
-    // channels of 1-150, and to put out black when restarted after a Test
-    // Stop with the colour and channels it last ran with -- fppd bugs of
-    // their own, not this commit's.
+    // Enabled first, then each colour change restarts the fill.
     await page.locator('#testModeEnabled').check();
     await setRange(page, '#testModeColorR', 10);
     await setRange(page, '#testModeColorG', 20);
     await setRange(page, '#testModeColorB', 30);
     await setRange(page, '#testModeColorW', 200);
     await expect.poll(async () => (await testmode(request)).color4, { timeout: 10_000 }).toBe(200);
-    await expect.poll(() => channels(8), { timeout: 10_000 }).toEqual([10, 20, 30, 200, 10, 20, 30, 200]);
+    // Every pixel of 1-150, and the two channels of the last, partial one.
+    await expect.poll(() => channels(150), { timeout: 10_000 }).toEqual(fill([10, 20, 30, 200], 150));
+  });
+
+  test('RGB Single Color started again after a Test Stop, with the same colour and channels, lights them again at once', async ({ request }) => {
+    // Regression: 57f6defb1.  A started test didn't ask for the output
+    // thread, and for 2.5 s after a Test Stop the idle thread still counted
+    // as running, so the main loop didn't start one: a test started in that
+    // window left the stop's black frame on the wire for up to 2.5 s.  Each
+    // start here comes 300 ms after the output went dark; it is lit in
+    // about a tenth of a second.
+    const start = () => request.post('/api/testmode', { data: {
+      mode: 'RGBFill', cycleMS: 1000, color1: 10, color2: 20, color3: 30, color4: 200, channelsPerNode: 4,
+      enabled: 1, channelSet: '1-150', channelSetType: 'channelRange' } });
+    const want = fill([10, 20, 30, 200], 150);
+    expect((await start()).ok()).toBe(true);
+    await expect.poll(() => channels(150), { timeout: 10_000, message: 'the first start' }).toEqual(want);
+    for (const round of [1, 2, 3]) {
+      expect((await request.post('/api/testmode', { data: { enabled: 0 } })).ok()).toBe(true);
+      await expect.poll(() => channels(150), { timeout: 10_000, message: `stop ${round}` }).toEqual(new Array(150).fill(0));
+      await new Promise((r) => setTimeout(r, 300));
+      expect((await start()).ok()).toBe(true);
+      await expect.poll(() => channels(150), { timeout: 1_000, intervals: [50], message: `start ${round}, within 1 s` }).toEqual(want);
+    }
   });
 
   test('the R-G-B-W cycle lights each pixel\'s white channel on its own', async ({ page, request }) => {

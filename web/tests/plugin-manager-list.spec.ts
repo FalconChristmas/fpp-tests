@@ -140,18 +140,44 @@ test('a pasted pluginInfo.json URL loads on its own and the X takes it away', as
   await expect(card(page, NAME)).toHaveCount(0);
 });
 
-test('a URL without http:// or https:// gets a warning', async ({ page, request, baseURL }) => {
-  // Feature: fae89c348 ("add missing URL scheme warning").
+test('the URL scheme warning is for a URL the box cannot load, not one it can', async ({ page, request, baseURL }) => {
+  // Regression: 01109ba0b.  The scheme warning (Feature: fae89c348, "add
+  // missing URL scheme warning") was for any URL typed without http:// or
+  // https://, but since bc7698015 the loader puts https:// on a bare
+  // github.com/<owner>/<repo> or pluginInfo.json address and loads it, so
+  // those loaded under a warning that they could not.  The warning now goes
+  // by the URL the loader would fetch.
+  const NAME = 'fpp-tests-noscheme';
+  const m = await major(request);
   await setUiLevel(request, '3');
   await routePluginsPage(page, baseURL!, []);
+  await page.route(`https://raw.githubusercontent.com/fpp-tests/${NAME}/**`, (route) => route.fulfill({
+    headers: CORS, json: listed(NAME, [{ minFPPVersion: `${m}.0`, maxFPPVersion: '0', branch: 'master', sha: '' }]),
+  }));
+  // The player's proxy, which the page retries a failed fetch through.
+  await page.route('**/api/plugin/fetchInfo', (route) => route.fulfill({ json: { Status: 'Error', Message: 'fpp-tests' } }));
   await openPage(page, []);
-  const typed = 'raw.githubusercontent.com/fpp-tests/fpp-tests-noscheme/master/pluginInfo.json';
-  await page.locator('#pluginInput').fill(typed);
-  await expect(page.locator('#noUrlSchemeResults')).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator('#noUrlSchemeResults .fppUrlSchemeErrorTerm')).toHaveText(typed);
-  // The control: with the scheme there is no such warning.
-  await page.locator('#pluginInput').fill(`https://${typed}`);
-  await expect(page.locator('#noUrlSchemeResults')).toBeHidden();
+  const input = page.locator('#pluginInput');
+  const warning = page.locator('#noUrlSchemeResults');
+  for (const typed of [
+    `github.com/fpp-tests/${NAME}`,
+    `www.github.com/fpp-tests/${NAME}.git`,
+    `raw.githubusercontent.com/fpp-tests/${NAME}/master/pluginInfo.json`,
+    // The control: with the scheme typed.
+    `https://raw.githubusercontent.com/fpp-tests/${NAME}/master/pluginInfo.json`,
+  ]) {
+    await input.fill('');
+    await input.fill(typed);
+    await expect(card(page, NAME), typed).toBeVisible({ timeout: 15_000 });
+    await expect(warning, `${typed} loaded under the warning`).toBeHidden();
+  }
+  // A scheme the page cannot fetch from gets it.
+  const ftp = `ftp://raw.githubusercontent.com/fpp-tests/${NAME}/master/pluginInfo.json`;
+  await input.fill('');
+  await input.fill(ftp);
+  await expect(warning).toBeVisible({ timeout: 15_000 });
+  await expect(warning.locator('.fppUrlSchemeErrorTerm')).toHaveText(ftp);
+  await expect(card(page, NAME)).toHaveCount(0);
 });
 
 test('the search narrows the incompatible plugins too', async ({ page, request, baseURL }) => {

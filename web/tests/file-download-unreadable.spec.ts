@@ -7,10 +7,11 @@ import { putFile } from './settings-file';
 // from Uploads directory").  A file copied into the Uploads folder by hand
 // (scp or a USB copy as root) is root's and 0600, which the web user (fpp)
 // can't open: GetFileImpl() readfile()d it and sent nothing, with a 200.  It
-// is now sent through sudo cat (sudo tail for ?tail=).  (Its Content-Length
-// header is set after flush() has sent the headers, so it never goes out;
-// the reply is chunked.)  The web user's refusal is fakedeny.so's
-// (fakedeny.ts), as php-fpm runs as root here.
+// is now sent through sudo cat (sudo tail for ?tail=).  The Content-Length
+// it also set never reached the client (Apache's mod_proxy_fcgi drops it) and
+// is gone since b3c72029b; file-download-whole.spec.ts checks the framing.
+// The web user's refusal is fakedeny.so's (fakedeny.ts), as php-fpm runs as
+// root here.
 
 test.skip(!container, 'needs the player run-web.sh serves (FPP_TESTS_WEB_CONTAINER)');
 

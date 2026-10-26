@@ -15,23 +15,42 @@ from test_playlist_media import both, song
 
 def test_lone_sequence_is_reported_playing(fppd):
     """A sequence started outside a playlist (the UI's sequence Play button
-    goes through the command socket's StartSequence) shows as status_name
-    "playing" with current_sequence naming it, while the player's own
-    status stays idle (0) for the scheduler.
+    goes through the command socket's StartSequence, /api/sequence/<name>/start
+    too) shows as status_name "playing" with current_sequence naming it, and
+    status 1, as the same sequence played from a playlist does; status and
+    status_name go back to 0 and "idle" when it stops.
 
     Regression: f733f1551. The sequence engine runs it without the player,
     so status_name read "idle" with current_sequence empty while channel
-    data was visibly playing."""
+    data was visibly playing.
+
+    Regression: ae524f919. status_name then said "playing" while status stayed
+    0, idle, and the status page, which goes by status, said Idle."""
     write_fseq(os.path.join(fppd.media, "sequences", "Solo.fseq"), unique_frames(400, 30))
+    fppd.write("playlists/Solo.json", playlist("Solo", [sequence_entry("Solo.fseq")]))
     fppd.start()
+
+    def playing():
+        s = status(fppd)
+        return s if s.get("current_sequence") == "Solo.fseq" else None
+
+    def stopped():
+        s = status(fppd)
+        return (s.get("status_name"), int(s.get("status"))) == ("idle", 0)
+
+    # The contract: a playlist playing it.
+    fppd.command("Start Playlist", "Solo", "false", "false")
+    s = fppd.wait_for(playing, timeout=10, what="the playlist's sequence to show in the status")
+    assert (s.get("status_name"), int(s.get("status"))) == ("playing", 1), s
+    fppd.command("Stop Now")
+    fppd.wait_for(stopped, timeout=10, what="the playlist to stop")
+
     send("StartSequence,Solo.fseq,0")
-    s = fppd.wait_for(lambda: (lambda s: s if s.get("current_sequence") == "Solo.fseq" else None)(
-        status(fppd)), timeout=10, what="the sequence to show in the status")
+    s = fppd.wait_for(playing, timeout=10, what="the sequence to show in the status")
     assert s.get("status_name") == "playing", s.get("status_name")
-    assert int(s.get("status")) == 0, s.get("status")
+    assert int(s.get("status")) == 1, f"status {s.get('status')} with status_name {s.get('status_name')!r}"
     send("StopSequence")
-    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=10,
-                  what="the sequence to stop")
+    fppd.wait_for(stopped, timeout=10, what="the sequence to stop")
 
 
 def test_playlist_made_from_a_file_is_marked_generated(fppd):
