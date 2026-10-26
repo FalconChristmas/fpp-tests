@@ -193,6 +193,14 @@ called_from_lib:libgstvorbis.so
 called_from_lib:libvorbis.so.0
 called_from_lib:libgstudp.so
 called_from_lib:libgstvpx.so
+# ...and libvpx under vpxdec: the VP8 decoder's frame and row buffers are
+# allocated on the streaming thread as the first frame is decoded, inside the
+# chain call that holds the sink pad's stream lock, and freed by vpxdec's
+# stop() on FPP's teardown thread (VideoInputManager::StopSource()) after the
+# pad's deactivation has taken that same lock -- a GRecMutex locked inside
+# GLib. Seen when fppd stops while a file input is still prerolling
+# (test_video.py's video file input source).
+called_from_lib:libvpx.so.9
 called_from_lib:libgio-2.0.so
 # Opus RTP's encoder (test_aes67_config.py): the same g_rec_mutex_unlock()
 # tail call as pipewiresink above, attributed to this plugin when an Opus
@@ -238,6 +246,14 @@ called_from_lib:libjpeg.so.62
 called_from_lib:libgstkms.so
 called_from_lib:libgstrtsp.so
 called_from_lib:libgstrtspserver-1.0.so
+# ...and the RTSP connection library under both. A viewer's watch (a GSource)
+# is read-dispatched on the server's client thread and finalized on whichever
+# thread drops its last reference: fppd's main thread when
+# RTSPOutputManager::StopServer() closes the viewers on a reload or disable
+# (test_rtsp_outputs.py's viewers-disconnected scenario). The dispatch holds
+# a reference until it returns; that refcount and the context lock are
+# GLib's, unseen.
+called_from_lib:libgstrtsp-1.0.so.0
 # MP3 parse and decode: mpegaudioparse's and mpg123dec's state is used on the
 # streaming thread and freed by the pipeline teardown (FPP-GstReaper), ordered
 # by GStreamer's stream lock.

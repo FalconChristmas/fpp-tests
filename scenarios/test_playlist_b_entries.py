@@ -224,6 +224,13 @@ def test_image_entries_free_their_buffers(fppd):
     35 MB over the first 40 loads and 0.46 MB a load after, a debug build
     24 MB and then nothing), so a fixed cap from the first loads failed on
     a large host with no leak.
+
+    The entries sit behind the pause, so each load is stopped before one is
+    drawn: the buffer is allocated at load, drawn or not. A draw writes the
+    model's 480 KB while the output thread reads it, a race that is
+    suppressed by design (tsan.supp), and TSan can spend 10-20 s in one draw
+    working out that its reports are suppressed -- holding the playlist lock
+    the Stop Now waits on, so the stop timed out as a wedge.
     """
     from test_overlays import matrix, setup
     w = h = 400
@@ -233,7 +240,7 @@ def test_image_entries_free_their_buffers(fppd):
     with open(path, "wb") as f:
         f.write(b"P6\n%d %d\n255\n" % (w, h) + bytes((0, 0, 50)) * (w * h))
     img = {"type": "image", "enabled": 1, "playOnce": 0, "modelName": "M", "imagePath": "Img.ppm"}
-    fppd.write("playlists/P.json", playlist("P", main=[step(1), img, img, img, img, pause(30)]))
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(30), img, img, img, img]))
     fppd.start(extra_env={"ASAN_OPTIONS": (
         "halt_on_error=1:detect_leaks=0:abort_on_error=0:quarantine_size_mb=0:"
         f"log_path={fppd.media}/logs/asan")})
