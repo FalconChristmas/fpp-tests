@@ -1,7 +1,7 @@
 """DPIPixels cape string configs that don't fit its tables.
 
-Device only: run with run-local.sh on a Raspberry Pi with an ASan build (the
-16K-page kernel; ASan can't start on the 4K one). Cape string configs are read
+Device only: run with run-local.sh on a Raspberry Pi, best with an ASan build
+(the 16K-page kernel; ASan can't start on the 4K one). Cape string configs are read
 from /opt/fpp/capes/pi/strings, which run-local.sh overlays, so the scenario's
 own config lands only in its scratch layer. Init may still fail afterwards for
 want of a DPI display connector; only what happens before that matters here.
@@ -11,8 +11,6 @@ import json
 import os
 
 import pytest
-
-from fppd import sanitizer
 
 CAPES = "/opt/fpp/capes/pi/strings"
 
@@ -44,10 +42,9 @@ def test_a_shared_output_index_past_the_outputs_is_refused(fppd):
     left off, with an error, instead of reading past the pin list.
 
     Regression: 2324d312b. outputPinMap[sharedOutput] was indexed
-    unchecked: an ASan heap-buffer-overflow at startup.
+    unchecked: an ASan heap-buffer-overflow at startup. Without ASan the
+    over-read goes unseen, but the refusal's error still has to be there.
     """
-    if sanitizer(fppd.tree) != "asan":
-        pytest.skip("needs an ASan build to see the over-read")
     write_cape("TestDPI", {"outputs": [{"pin": "P1-7"}, {"sharedOutput": 1000}]})
     fppd.write("config/co-pixelStrings.json", {"channelOutputs": [
         {"type": "DPIPixels", "subType": "TestDPI", "enabled": 1, "startChannel": 1,

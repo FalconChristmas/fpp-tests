@@ -271,6 +271,13 @@ class FppinitSandbox:
                 with open(src, "w") as fh:
                     fh.write(content)
             fake_lines.append(f'mount --bind {shlex.quote(src)} "$R"{shlex.quote(path)}')
+        # A device's coverage run sends the counts outside the tree
+        # (GCOV_PREFIX), which needs binding in the same way.
+        gcov = ""
+        prefix = os.environ.get("GCOV_PREFIX")
+        if prefix:
+            os.makedirs(prefix, exist_ok=True)
+            gcov = f'mkdir -p "$R"{shlex.quote(prefix)}; mount --bind {shlex.quote(prefix)} "$R"{shlex.quote(prefix)}'
         home = ""
         if media_home:
             home = f'mkdir -p "$R/home/fpp/media"; mount --bind {shlex.quote(self.media)} "$R/home/fpp/media"'
@@ -295,6 +302,7 @@ mount --bind {shlex.quote(self.tree)} "$R/opt/fpp"
 # Also at its own path, which a coverage build writes its .gcda counts to:
 # on the overlay they would be thrown away with the sandbox.
 mkdir -p "$R"{shlex.quote(self.tree)}; mount --bind {shlex.quote(self.tree)} "$R"{shlex.quote(self.tree)}
+{gcov}
 {home}
 stub() {{
     rm -f "$R$1"

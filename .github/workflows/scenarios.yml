@@ -247,6 +247,9 @@ jobs:
         run: |
           if [ "${{ matrix.coverage }}" = true ]; then
             ../../scripts/device-make.sh debug "OPTIMIZE_FLAGS=-g -O0 -Wno-psabi --coverage"
+            # fppd leaves through _exit(), which writes no counts without it
+            # (scripts/gcov-exit.c; scenarios/fppd.py preloads it)
+            gcc -shared -fPIC -O2 -o ../gcov-exit.so ../../scripts/gcov-exit.c
           else
             ../../scripts/device-make.sh debug
           fi
