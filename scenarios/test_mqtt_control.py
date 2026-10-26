@@ -268,6 +268,52 @@ def test_an_inserted_playlist_does_not_announce_idle(fppd):
     assert "idle" not in got, f"status published while P played on: {got}"
 
 
+def test_playlist_name_returns_after_an_insert_after_current(fppd):
+    """When a playlist inserted with Insert Playlist After Current finishes,
+    the playing playlist's name and status are published again.
+
+    Regression: 38d5636fd. Hand-back resumed the parent,
+    but Resume() republishes only a parent that was paused (Insert
+    Immediate). After Current never pauses it, so playlist/name/status kept
+    the finished insert's name for the rest of the show.
+    """
+    from test_playlist_entries import pause, playlist, step, trace
+    if not shutil.which("mosquitto_sub"):
+        pytest.skip("mosquitto_sub is not installed")
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(3), step(2), pause(30)]))
+    fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                    "mainPlaylist": [step(7)], "leadOut": []})
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    import threading
+    got = []
+    with broker():
+        fppd.start()
+        probe = f"falcon/player/{HOST}/set/probe"
+        fppd.wait_for(lambda: (_publish_many([probe]) or probe in fppd.get("/fppd/mqtt/cache")),
+                      timeout=30, interval=1, what="fppd to connect")
+        sub = subprocess.Popen(["mosquitto_sub", "-h", "127.0.0.1", "-p", PORT,
+                                "-t", f"falcon/player/{HOST}/playlist/name/status"],
+                               stdout=subprocess.PIPE, text=True)
+        reader = threading.Thread(target=lambda: got.extend(l.strip() for l in sub.stdout),
+                                  daemon=True)
+        reader.start()
+        try:
+            fppd.command("Start Playlist", "P", "false", "false")
+            fppd.wait_for(lambda: trace(fppd) == "1", what="P to start")
+            fppd.command("Insert Playlist After Current", "Q", "-1", "-1", "false")
+            fppd.wait_for(lambda: trace(fppd) == "172", timeout=15,
+                          what="Q to play after P's pause and P to resume")
+            time.sleep(1.5)
+            assert status(fppd).get("status_name") == "playing"
+        finally:
+            sub.terminate()
+            sub.wait(timeout=5)
+            reader.join(5)
+        fppd.command("Stop Now")
+    assert "Q" in got, f"the insert's name was never published: {got}"
+    assert got[-1] == "P", f"playlist/name/status still names the finished insert: {got}"
+
+
 def test_state_topics_go_out_retained_at_qos_1(fppd):
     """fppd's state topics reach a subscriber retained and at the QoS 1
     every caller asks for.
