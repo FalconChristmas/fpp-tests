@@ -69,3 +69,38 @@ def test_a_deleted_file_is_reloaded(fppd):
             pass
         return fppd.get("/fppd/volume", timeout=5).get("volume") == 50
     fppd.wait_for(gone, timeout=10, interval=0.5, what="the deleted presets to be dropped")
+
+
+def test_a_deleted_presets_file_stays_deleted(fppd):
+    """commandPresets.json deleted while fppd runs -- Reset Config's
+    Configuration area does it -- stays deleted, its presets are dropped, and
+    a presets file saved afterwards is loaded.
+
+    Regression: 809c07af4. With the delete heard (9c24621b0), the reload went
+    down the startup path for a missing file: it converted any old
+    events/*.fevt and wrote the result, an empty commandPresets.json, back
+    in place of the one just deleted."""
+    path = os.path.join(fppd.media, "config", "commandPresets.json")
+    fppd.write("config/commandPresets.json", {"commands": [set_volume(11)]})
+    fppd.start()
+    fppd.wait_for(loaded(fppd, 11), timeout=10, interval=0.25, what="the presets to load")
+
+    os.unlink(path)
+
+    def dropped():
+        fppd.command("Volume Set", "50", timeout=5)
+        try:
+            fppd.command("Trigger Command Preset", "P", timeout=5)
+        except urllib.error.HTTPError:
+            pass
+        return fppd.get("/fppd/volume", timeout=5).get("volume") == 50
+    fppd.wait_for(dropped, timeout=10, interval=0.5, what="the deleted presets to be dropped")
+    # The reload has run (the presets are gone); give a write-back time to land.
+    time.sleep(2)
+    assert not os.path.exists(path), open(path).read()
+
+    replace_at = (int(time.time()) + 5) * 1_000_000_000
+    tmp = fppd.write("config/.commandPresets.json.tmp", {"commands": [set_volume(22)]})
+    os.utime(tmp, ns=(replace_at, replace_at))
+    os.rename(tmp, path)
+    fppd.wait_for(loaded(fppd, 22), timeout=15, interval=0.25, what="the new presets file to load")
