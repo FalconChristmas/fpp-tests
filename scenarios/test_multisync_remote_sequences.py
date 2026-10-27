@@ -120,7 +120,7 @@ def test_stale_sync_from_the_last_play_through_does_not_end_the_next(fppd):
     jumps the remote to the end of the file; the master's next sync packets
     bring it back in step.
 
-    Regression: 43ddc762. The remote ended the file within a second, then
+    Regression: 1f851f6a9. The remote ended the file within a second, then
     ignored every sync packet for it until the master's next open: dark for
     the rest of the play-through."""
     frames = unique_frames(600, CHANNELS)
@@ -140,6 +140,48 @@ def test_stale_sync_from_the_last_play_through_does_not_end_the_next(fppd):
     m.close()
     assert recent and abs(recent[-1] - at) <= 6, \
         f"remote showing frame {recent[-1] if recent else None} with the master at {at}"
+
+
+def test_stale_sync_does_not_carry_across_the_reopen_behind_it(fppd):
+    """The same late path that delivers the last play-through's final sync
+    packet then delivers its own copies of the master's stop, open and start,
+    right behind it.  The reopen puts the remote back at the master's frame,
+    so it never shows the end of the file.
+
+    Regression: ed5a82164. The sync packet left a skip of most of the file
+    pending, and the output thread applied it after the reopen, counting from
+    frame 0: the remote jumped to the end of the new play-through and played
+    out the file."""
+    frames = unique_frames(600, CHANNELS)
+    lookup = {f: i for i, f in enumerate(frames)}
+    end = len(frames) - 2000 // STEP_MS  # the last two seconds
+    write_fseq(f"{fppd.media}/sequences/Show.fseq", frames, step_ms=STEP_MS)
+    remote(fppd)
+    m = Master()
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        for _ in range(3):
+            m.send("open")
+            time.sleep(0.5)
+            m.send("start")
+            m.began = time.monotonic()
+            time.sleep(0.25)
+            burst = time.monotonic()
+            m.send("sync", len(frames) - 8)  # the late path: the last sync, then the reopen
+            m.send("stop")
+            m.send("open")
+            m.send("start")
+            m.keep_playing(3)
+            shown = [lookup.get(d) for t, d in rx.snapshot(since=burst)]
+            shown = [i for i in shown if i is not None]
+            at = m.frame()
+            m.send("stop")
+            assert not [i for i in shown if i >= end], \
+                f"remote showed frames {min(i for i in shown if i >= end)}+ of {len(frames)} after the reopen"
+            assert shown and abs(shown[-1] - at) <= 6, \
+                f"remote showing frame {shown[-1] if shown else None} with the master at {at}"
+            time.sleep(0.5)
+    m.close()
 
 
 def test_fallback_follows_the_master_and_stops_with_it(fppd):
