@@ -150,3 +150,34 @@ def test_url_get_decodes_a_gzip_reply(fppd):
         assert got == {"name": "fake-controller", "ver": "1.2"}, f"urlGet handed back {got!r:.200}"
     finally:
         server.shutdown()
+
+
+def test_unloading_a_plugin_with_a_request_inside_its_route(fppd):
+    """A plugin unloaded while a request is inside its route handler: the
+    unload waits for the handler, the request gets its answer, and fppd
+    carries on.
+
+    Regression: 824f1d6a6. Clearing the route made newly arriving requests
+    safe, but one already past the lookup was left running in the plugin
+    while the unload went on to dlclose() it, unmapping the code under the
+    handler. The router has been rewritten since (6f0a8be76); the drain is
+    in its disarm."""
+    import os
+    mark = os.path.join(fppd.media, "tmp", "slowroute.entered")
+    fppd.start(extra_env={"SLOWROUTE_MARK": mark})
+    load(fppd, "slowrouteplugin.cpp", "fpp-slowroute")
+    got = {}
+
+    def request():
+        try:
+            got["answer"] = fppd.get("/slow/wait", timeout=30)
+        except Exception as e:  # recorded, asserted on below
+            got["error"] = repr(e)
+    t = threading.Thread(target=request)
+    t.start()
+    fppd.wait_for(lambda: os.path.exists(mark), timeout=10, interval=0.1, what="the request to reach the handler")
+    fppd.post("/fppd/plugin/fpp-slowroute/unload", {}, timeout=40)
+    t.join(35)
+    assert got == {"answer": "done"}, got
+    assert status_of(fppd, "/slow/wait") == 410
+    fppd.check_alive()

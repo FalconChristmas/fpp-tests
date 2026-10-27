@@ -97,7 +97,10 @@ for a in "$@"; do
         is-enabled)
             st=$(cat "$S/$n.enabled" 2>/dev/null || echo disabled); echo "$st"
             [ "$st" = enabled ] || rc=1 ;;
-        stop|kill) echo inactive > "$S/$n.active" ;;
+        stop|kill)
+            # a stop that never returns (stop_hang()); the unit stays active
+            if [ "$verb" = stop ] && [ -f "$S/$n.stophang" ]; then exec sleep "$(cat "$S/$n.stophang")"; fi
+            echo inactive > "$S/$n.active" ;;
         start|restart|reload-or-restart|try-restart)
             # a start job waiting on its device (start_delay())
             if [ -f "$S/$n.startdelay" ]; then sleep "$(cat "$S/$n.startdelay")"; fi
@@ -125,6 +128,14 @@ while [ $# -gt 0 ]; do
 done
 exec env "$@"
 """
+
+
+class Link:
+    """A symlink in a directory given to fake_path(), to `target` -- say a
+    /sys/class/net/<if>/device link into a USB device's tree."""
+
+    def __init__(self, target):
+        self.target = target
 
 
 class FppinitSandbox:
@@ -182,6 +193,13 @@ class FppinitSandbox:
         with open(os.path.join(self.state, f"{name}.startdelay"), "w") as f:
             f.write(f"{seconds}\n")
 
+    def stop_hang(self, name, seconds):
+        """Make the stubbed systemctl's stop of this unit take `seconds`
+        (it sleeps, as a unit whose stop never finishes does), leaving it
+        active; kill still stops it."""
+        with open(os.path.join(self.state, f"{name}.stophang"), "w") as f:
+            f.write(f"{seconds}\n")
+
     def root_file(self, path, content):
         """A file at an absolute path outside the media and boot directories
         as each later run starts (a script, from its "#!", is executable),
@@ -193,7 +211,9 @@ class FppinitSandbox:
         under /proc or /sys, for each later run: a file's content (a str), or
         a directory given as {relative path: content} -- say /proc/asound
         with a sound card that isn't there, or a connector's status. The
-        path must exist on the machine; nothing else in /proc or /sys moves."""
+        path must exist on the machine; nothing else in /proc or /sys moves.
+        In a directory, a Link() content is a symlink; the files are
+        writable, and faked() reads one back after a run."""
         assert path.startswith(("/proc/", "/sys/")), path
         self.fakes[path] = content
 
@@ -264,6 +284,9 @@ class FppinitSandbox:
                 for rel, text in content.items():
                     f = os.path.join(src, rel)
                     os.makedirs(os.path.dirname(f), exist_ok=True)
+                    if isinstance(text, Link):
+                        os.symlink(text.target, f)
+                        continue
                     with open(f, "w") as fh:
                         fh.write(text)
                 os.makedirs(src, exist_ok=True)
@@ -353,6 +376,14 @@ exit $rc
             with open(p, errors="replace") as f:
                 return f.read()
         return None
+
+    def faked(self, path, rel=""):
+        """What a file given with fake_path() held at the end of the last
+        run: the file itself, or `rel` inside a faked directory (what
+        fppinit wrote to a sysfs attribute, say)."""
+        i = list(self.fakes).index(path)
+        with open(os.path.join(os.path.dirname(self.upper), f"fake-{i}", rel)) as f:
+            return f.read()
 
     def calls(self):
         """The stubbed commands the last run invoked, one string each."""
