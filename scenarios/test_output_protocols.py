@@ -260,7 +260,11 @@ def test_generic_udp_tokens(fppd):
     """A Generic UDP output lays its packet out from the Data tokens: hex
     bytes (0x.. and #..), the channel and pixel counts in one byte and in
     two bytes of each order ({S2}/{P2} low byte first, {s2}/{p2} high byte
-    first, as they always have been), and the frame's channel data."""
+    first, as they always have been), and the frame's channel data.
+
+    Guards 85883b709, which swapped the names of the two byte-order helpers
+    (addLittleEndian() put the high byte first) and which token calls which:
+    the bytes on the wire must not change with it."""
     size = 300
     frames = unique_frames(60, size)
     port = 9123

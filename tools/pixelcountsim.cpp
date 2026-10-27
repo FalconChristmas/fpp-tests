@@ -10,6 +10,12 @@
 //                     (the port config fppd gets carries it as
 //                     currentSensor.path, as a cape's does)
 //   "simWirePixels"   how many pixels are physically on the wire
+//   "simPixelMA"      what a pixel on the wire draws at full white, in mA
+//                     (default 60; a seed pixel draws about 8)
+//   "simNoiseMA"      each reading off by up to this much either way,
+//                     uniformly, as a noisy i2c sensor reads (default 0)
+//   "simPin"          more of the port's pin config, as a cape gives it
+//                     (enablePin, eFusePin, ...): merged into what fppd gets
 //
 // Every frame, in test mode, the output hands the strings to the string
 // tester exactly as DPIPixelsOutput::PrepData() does, then writes each
@@ -20,6 +26,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <random>
 #include <fcntl.h>
 #include <string>
 #include <unistd.h>
@@ -42,6 +49,8 @@ struct SimPort {
     PixelString* ps = nullptr;
     int fd = -1;
     int wirePixels = 0;
+    double pixelMA = PIXEL_MA;
+    int noiseMA = 0;
 };
 
 class PixelCountSimOutput : public ChannelOutput {
@@ -60,9 +69,11 @@ public:
             // the sensor opens its file when the port is configured
             p.fd = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
             p.wirePixels = s["simWirePixels"].asInt();
+            p.pixelMA = s.get("simPixelMA", PIXEL_MA).asDouble();
+            p.noiseMA = s.get("simNoiseMA", 0).asInt();
             ports.push_back(p);
             writeCurrent(ports.back(), DARK_MA);
-            Json::Value pin;
+            Json::Value pin = s.get("simPin", Json::Value(Json::objectValue));
             pin["currentSensor"]["path"] = path;
             pin["currentSensor"]["scale"] = 1.0;
             ports.back().ps = new PixelString(true);
@@ -101,7 +112,10 @@ public:
                 for (uint32_t b = 0; b < bytes; b++) {
                     sum += out[b];
                 }
-                ma += (int)(sum * PIXEL_MA / (3 * 255));
+                ma += (int)(sum * p.pixelMA / (3 * 255));
+            }
+            if (p.noiseMA > 0) {
+                ma += std::uniform_int_distribution<int>(-p.noiseMA, p.noiseMA)(noise);
             }
             writeCurrent(p, ma);
         }
@@ -133,6 +147,7 @@ private:
     }
 
     std::vector<SimPort> ports;
+    std::mt19937 noise{ 12345 };  // the same readings every run
     int testCycle = -1;
     int testType_ = 0;
     float testPercent = 0;

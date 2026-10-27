@@ -658,3 +658,37 @@ def test_an_eeprom_with_a_bad_header_puts_the_default_overlay_back(fppinit):
     assert "EEPROM header miss-match" in out, out
     assert boot_read(fppinit, f"{OVERLAYS}/{BASE}") == b"default overlay", out
     assert asked_to_reboot(fppinit), out
+
+
+def modprobe_knowing(*modules):
+    """modprobe for a kernel that has exactly `modules`: "-n -q NAME" (does
+    the name resolve?) answers for those, and every call is logged."""
+    known = " ".join(modules)
+    return f"""#!/bin/sh
+echo "modprobe $*" >> /fppinit-calls.log
+if [ "$1" = -n ]; then
+    for m in {known}; do [ "$3" = "$m" ] && exit 0; done
+    exit 1
+fi
+exit 0
+"""
+
+
+@pytest.mark.parametrize("kernel_has, loaded", [("snd_soc_pcm5102a", "snd_soc_pcm5102a"),
+                                                ("pcm5102a", "pcm5102a")])
+def test_a_capes_renamed_codec_module_is_loaded_by_its_new_name(fppinit, kernel_has, loaded):
+    """A cape whose EEPROM lists the pcm5102a codec module, on a kernel that
+    calls it snd_soc_pcm5102a: fppcapedetect loads snd_soc_pcm5102a. On a
+    kernel that still has pcm5102a (the second case) it keeps the EEPROM's
+    name.
+
+    Regression: 677c6a08f. The EEPROM's name went to modprobe as it was, and
+    failed silently on the newer kernel; the codec then autoloaded only
+    later, by which time setupAudio had found no card and loaded snd-dummy
+    as card 0, leaving the cape's audio behind it."""
+    fppinit.root_file("/usr/sbin/modprobe", modprobe_knowing(kernel_has))
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(modules=["pcm5102a"])))
+    out = detect(fppinit)
+    loads = [c for c in fppinit.calls() if c.startswith("modprobe ") and " -n " not in c + " "]
+    assert f"modprobe {loaded}" in loads, (loads, out[-3000:])
+    assert all(c == f"modprobe {loaded}" for c in loads), (loads, out[-3000:])

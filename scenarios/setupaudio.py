@@ -257,6 +257,12 @@ class CardGraph:
                         WIREPLUMBER_CONFIG_DIR=wp, XDG_STATE_HOME=os.path.join(self.dir, "state"),
                         XDG_CONFIG_HOME=os.path.join(self.dir, "cfg"))
         self.env.pop("PULSE_RUNTIME_PATH", None)
+        scripts = os.path.join(tree, "etc/wireplumber/scripts")
+        if os.path.exists(hook) and os.path.isdir(scripts):
+            # The hook's script, which only a device has installed: without
+            # it (Docker) WirePlumber refuses the profile and links nothing.
+            shutil.copytree(scripts, os.path.join(self.dir, "data", "wireplumber", "scripts"))
+            self.env["XDG_DATA_HOME"] = os.path.join(self.dir, "data")
         self.logpath = os.path.join(self.dir, "daemons.log")
         self.log = open(self.logpath, "w")
         self.procs = []

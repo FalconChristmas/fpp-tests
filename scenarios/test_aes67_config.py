@@ -422,3 +422,32 @@ def test_status_while_config_is_applied(fppd):
             t.join()
     assert not errors, errors
     assert i >= 3, f"only {i} applies in 20 s"
+
+
+def test_concurrent_applies_with_sap_on(fppd):
+    """A SAP-announcing sender, and "AES67 Apply" sent from four clients at
+    once, ten times over: fppd stays up and every apply completes.
+
+    Regression: 80b6395f5. ApplyConfig() joins the SAP threads at the top
+    and starts new ones near the end, and nothing kept two calls apart: both
+    got past the joins, and the second assignment over a still-joinable
+    std::thread called std::terminate()."""
+    write_config(fppd, instances=[send(sapEnabled=True)])
+    start(fppd)
+    errors = []
+
+    def one():
+        try:
+            fppd.command("AES67 Apply", timeout=60)
+        except Exception as e:
+            errors.append(repr(e))
+    n = fppd.log().count("AES67Manager: Applied config")
+    for _ in range(10):
+        threads = [threading.Thread(target=one) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(90)
+        assert not errors, errors
+    applied(fppd, n + 40)
+    assert fppd.get("/aes67/status") is not None

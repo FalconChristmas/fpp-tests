@@ -283,7 +283,13 @@ def test_audio_sync_mode_and_port_change_while_running(fppd):
     - receive with 12000 held by another program (without SO_REUSEADDR):
       fppd can't bind it, raises "could not open the receive socket" and
       stays off (packets sent there once it's free don't count); switching
-      off and back to receive then listens, with no warning left."""
+      off and back to receive then listens, with no warning left.
+
+    Regression: e758d1b45, under TSan. StopAllThreads() closed the
+    receive socket while the listener was still in recvfrom() on it -- the
+    descriptor's number free for another socket to take -- and Reconfigure()
+    wrote the mode the effect thread reads with no lock: switching off raced
+    both."""
     setup(fppd, [matrix("M", width=W, height=H)], channels=CHANNELS)
     other = 12000
     warning = "WLED Audio Sync: could not open the receive socket"

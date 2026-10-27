@@ -615,3 +615,133 @@ def test_ddp_frames_wait_out_a_stalled_main_loop(fppd, when):
         os.kill(fppd.proc.pid, signal.SIGCONT)
     assert dropped == 0, \
         f"{dropped} of {len(burst)} DDP packets dropped (receive buffer {ddp_rcvbuf()} bytes)"
+
+
+def udp_drops(port):
+    """Datagrams the kernel dropped on fppd's socket on UDP `port`."""
+    with open("/proc/net/udp") as f:
+        next(f)
+        for line in f:
+            fields = line.split()
+            if int(fields[1].split(":")[1], 16) == port:
+                return int(fields[-1])
+    raise AssertionError(f"no socket on UDP port {port}")
+
+
+def udp_rcvbuf(port):
+    """fppd's socket's receive buffer on UDP `port` (ss skmem rb)."""
+    import re
+    import subprocess
+    out = subprocess.run(["ss", "-u", "-a", "-n", "-m", "sport", "=", f":{port}"],
+                         capture_output=True, text=True, check=True).stdout
+    m = re.search(r"\brb(\d+)", out)
+    assert m, out
+    return int(m.group(1))
+
+
+def test_e131_frames_of_a_thousand_universes_wait_out_a_stalled_main_loop(fppd):
+    """Two full frames of 1000 E1.31 universes that arrive while the main
+    loop is stalled (fppd stopped here) are all still there when it gets
+    back: the E1.31 socket's buffer is sized by the input universe count.
+
+    Regression: 511c61fb6. Every bridge input socket asked for a flat
+    512 KB (1 MB once the kernel doubles it), whatever the universe count:
+    a little over a frame of these fit, and the kernel dropped the rest of
+    the burst. Now ~4 KB a universe, set with SO_RCVBUFFORCE so a player's
+    net.core.rmem_max (384 KB then) doesn't clamp it. (This container's
+    rmem_max is 4 MB, so the clamp itself isn't what is shown here.)"""
+    import signal
+    universes = 1000
+    fppd.write("config/ci-universes.json", {"channelInputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 512,
+        "universes": [{"active": 1, "id": 1, "universeCount": universes, "startChannel": 1,
+                       "channelCount": 512, "type": 1, "priority": 0, "address": ""}]}]})
+    fppd.start()
+    burst = [e131(u, bytes([u & 0xFF]) * 512, seq=f) for f in range(2) for u in range(1, universes + 1)]
+    before = udp_drops(E131_PORT)
+    os.kill(fppd.proc.pid, signal.SIGSTOP)
+    try:
+        send(burst, E131_PORT)
+        dropped = udp_drops(E131_PORT) - before
+    finally:
+        os.kill(fppd.proc.pid, signal.SIGCONT)
+    assert dropped == 0, \
+        f"{dropped} of {len(burst)} E1.31 packets dropped (receive buffer {udp_rcvbuf(E131_PORT)} bytes)"
+
+
+def test_stats_read_and_reset_while_packets_arrive(fppd):
+    """E1.31, Art-Net and DDP input streaming in while the stats are read
+    and cleared over and over from the API: each read is whole, a clear
+    takes, and the counts carry on climbing after it.
+
+    Regression: 9c455f653, under TSan. The per-universe counters and the
+    DDP and E1.31 totals were plain integers bumped by the packet path on
+    the main loop while the HTTP threads read them and zeroed them on a
+    reset: a data race on each, which TSan reported on both sides.
+
+    Regression: b215b5bdb, under TSan. 9c455f653 left the DDP channel range
+    (ddpMinChannel, ddpMaxChannel) plain: written by the packet path, read
+    by the stats reader, which TSan reported in 3 of 6 runs after it."""
+    import threading
+    setup(fppd)
+    fppd.start()
+    data = bytes([0x33]) * E131_SIZE
+
+    def packets(n):
+        return [(e131(10, data, seq=n), E131_PORT), (e131(11, data, seq=n), E131_PORT),
+                (artdmx(ARTNET_UNIVERSE, data[:ARTNET_SIZE], seq=n), ARTNET_PORT),
+                (ddp(600, data[:50], push=True, seq=n % 15 + 1), DDP_PORT)]
+
+    errors = []
+    stop = threading.Event()
+
+    def poll(clear):
+        while not stop.is_set():
+            try:
+                if clear:
+                    fppd.request("DELETE", "/fppd/e131stats")
+                else:
+                    assert "10" in stats(fppd)
+            except Exception as e:  # report it from the main thread
+                errors.append(repr(e))
+                return
+
+    with Sender(packets, interval=0.002):
+        fppd.wait_for(lambda: int(stats(fppd)["10"]["packetsReceived"]) > 0, what="E1.31 counted")
+        threads = [threading.Thread(target=poll, args=(c,), daemon=True) for c in (False, False, True)]
+        for t in threads:
+            t.start()
+        time.sleep(5)
+        stop.set()
+        for t in threads:
+            t.join(10)
+        assert not errors, errors
+        fppd.request("DELETE", "/fppd/e131stats")
+        fppd.wait_for(lambda: int(stats(fppd)["10"]["packetsReceived"]) > 0, what="counting after a clear")
+
+
+def test_a_bridged_universe_goes_out_whole(fppd):
+    """E1.31 packets for one universe arriving as fast as fppd takes them,
+    each a whole universe of one value that alternates packet to packet:
+    every frame that goes out carries the universe all of one value, never
+    part from one packet and part from the next.
+
+    Regression: 36dbc3e11, under TSan. The receive path copied each packet
+    into the bridge buffer with no lock while the output thread copied the
+    buffer's live ranges into the frame after letting go of the ranges
+    lock: a data race on the buffer, and a packet landing mid-copy sent a
+    universe half old, half new. (The buffer was also allocated by the
+    first bridged packet while the output thread tested the pointer.)"""
+    setup(fppd)
+    a, b = bytes([0x11]) * E131_SIZE, bytes([0x22]) * E131_SIZE
+    with Listener(OUT_PORT) as out:
+        fppd.start()
+        with Sender(lambda n: [(e131(10, a if k % 2 else b, seq=(2 * n + k) & 0xFF), E131_PORT)
+                               for k in range(2)], interval=0.001):
+            wait_output(fppd, out, lambda f: set(region(f, E131_START, E131_SIZE)) <= {0x11, 0x22},
+                        "the bridged universe")
+            time.sleep(5)
+        with out.lock:
+            frames = [d for _, d in out.packets]
+    torn = [f for f in frames if len(set(region(f, E131_START, E131_SIZE))) > 1]
+    assert not torn, f"{len(torn)} of {len(frames)} frames carried a torn universe"

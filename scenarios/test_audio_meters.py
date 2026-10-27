@@ -233,3 +233,56 @@ def test_expired_meters_leave_no_thread_behind_at_shutdown(fppd, audio):
     finally:
         ws.close()
     stop_and_check_clean(fppd)
+
+
+def test_a_meter_slow_to_connect_does_not_hold_up_the_others(fppd, audio):
+    """With a meter on the playing sink pushing its level, a second meter
+    is subscribed whose PipeWire stream takes 3 s to connect
+    (meter_slowconnect.c, as a daemon slow to answer makes it): levels keep
+    being pushed on /fppdws through those 3 s, about ten a second.
+
+    Three websockets listen, and the best of them counts: the slow
+    subscribe holds the HTTP thread it arrived on, and a websocket that
+    happens to share that thread gets its pushes only afterwards, fix or
+    no fix.
+
+    Regression: d13de8550. Subscribe() built and started each meter's
+    pipeline holding the monitor's lock, which the push timer takes to read
+    the levels, so a slow connect stalled the pushes to every browser until
+    it finished."""
+    import threading
+    import shims
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 30, amplitude=0.5)
+    quiet_sink(audio)
+    tmp = os.path.join(fppd.media, "tmp")
+    arm, mark = os.path.join(tmp, "arm"), os.path.join(tmp, "mark")
+    fppd.start(preload=[shims.build("meter_slowconnect.c")],
+               extra_env={"SLOWCONNECT_ARM": arm, "SLOWCONNECT_MARK": mark, "SLOWCONNECT_MS": "3000"})
+    fppd.command("Play Media", "Tone.wav", "1", "0", "1")
+    sockets = [WebSocket("/fppdws") for _ in range(3)]
+    try:
+        subscribe(fppd, [("fpp_test_sink", True)], ttl=20000)
+        assert levels_pushed(sockets[0], 1.5), "precondition: the first meter's levels were never pushed"
+        for ws in sockets[1:]:
+            levels_pushed(ws, 0.2)
+        open(arm, "w").close()
+        second = threading.Thread(target=subscribe, daemon=True,
+                                  args=(fppd, [("fpp_test_sink", True), (QUIET, True)]),
+                                  kwargs={"ttl": 20000, "timeout": 20})
+        second.start()
+        fppd.wait_for(lambda: os.path.exists(mark), timeout=10, interval=0.05,
+                      what="the second meter's stream to start connecting")
+        counts = [0] * len(sockets)
+
+        def listen(k):
+            counts[k] = len(levels_pushed(sockets[k], 2.5))
+        listeners = [threading.Thread(target=listen, args=(k,)) for k in range(len(sockets))]
+        for t in listeners:
+            t.start()
+        for t in listeners:
+            t.join(10)
+        second.join(20)
+    finally:
+        for ws in sockets:
+            ws.close()
+    assert max(counts) >= 15, f"level pushes per websocket in the 2.5 s the second meter took to connect: {counts}"

@@ -211,3 +211,52 @@ def test_a_controller_moderately_over_its_rate_raises_the_warning(fppd):
         fppd.command("Test Start", "100", "RGB Cycle", "1-102000", "R-G-B")
         fppd.wait_for(lambda: [w for w in budget_warnings(fppd) if f"Controller {CONTROLLER}" in w],
                       timeout=150, interval=2, what="the pacing-budget warning")
+
+
+def pacing_by_destination(path):
+    """{controller address: the SO_MAX_PACING_RATE its socket was given, or
+    None}, from pacinglog.so's log."""
+    rates, dests = {}, {}
+    with open(path) as f:
+        for line in f:
+            kind, fd, *rest = line.split()
+            if kind == "rate":
+                rates[fd] = int(rest[0])
+            elif kind == "dest":
+                dests[rest[0]] = rates.get(fd)
+            elif kind == "close":
+                rates.pop(fd, None)
+    return dests
+
+
+def test_each_controller_gets_its_own_pacing_rate(fppd):
+    """Three controllers on the paced show interface, the outputs paced at
+    90 Mbps: one left at the default, one overridden to 30 Mbps and one to
+    Disabled. Their sockets are paced at 90 Mbps (11250000 bytes/s), at
+    30 Mbps (3750000) and not at all, as pacinglog.so sees fppd set them.
+
+    Regression: 4bb7ef651. The rate was one global setting: every unicast
+    destination's socket got it, whatever its universes asked for."""
+    def universe(n, pacing=None):
+        u = {"active": 1, "description": f"c{n}", "id": n, "startChannel": 1 + 510 * (n - 1),
+             "channelCount": 510, "type": 1, "address": f"10.66.0.{n + 1}", "priority": 0,
+             "monitor": 0, "deDuplicate": 0}
+        if pacing is not None:
+            u["pacingRate"] = pacing
+        return u
+    log = os.path.join(fppd.media, "tmp", "pacing.log")
+    with show_interface(rate="1gbit"):
+        fppd.write("config/co-universes.json", {"channelOutputs": [{
+            "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 3 * 510,
+            "interface": IFACE, "pacingRate": 90,
+            "universes": [universe(1), universe(2, 30), universe(3, 0)]}]})
+        fppd.settings(DisableFakeNetworkBridges="1")
+        fppd.start(preload=[shims.build("co_net_popen.c"), shims.build("pacinglog.c")],
+                   extra_env={"CO_FAKEFQ_IFACES": IFACE, "PACING_LOG": log})
+        fppd.request("PUT", "/overlays/range/1-1530", {"Value": 42})
+        fppd.wait_for(lambda: os.path.exists(log) and len(pacing_by_destination(log)) == 3,
+                      timeout=10, what="a send to each controller")
+    assert "pacing enabled at 90 Mbps" in fppd.log(), "the output never took the paced path"
+    got = pacing_by_destination(log)
+    want = {"10.66.0.2": 11250000, "10.66.0.3": 3750000, "10.66.0.4": None}
+    assert got == want, f"pacing rate by controller: {got}, want {want}"

@@ -263,3 +263,46 @@ def test_install_plugin_takes_the_branch_as_one_value(fppinit):
     assert "Invalid branch" in out and r.returncode == 1, out[-3000:]
     r, out = plugin_script(fppinit, "install_plugin", "fpp test", url, "main", "")
     assert "Invalid plugin name" in out and r.returncode == 1, out[-3000:]
+
+
+def test_git_pull_rebases_a_branch_with_a_stray_second_upstream(fppinit):
+    """scripts/git_pull on a checkout set to pull by rebasing (as FPP's
+    clone is), whose branch has picked up a second branch.<name>.merge
+    line, with a new commit on its upstream: the upgrade moves the
+    checkout onto that commit and rebuilds.
+
+    Regression: f5a1df364. git_pull ran a plain "git pull", and a rebasing
+    pull takes its target from FETCH_HEAD: with more than one "for-merge"
+    line there -- from a stray merge line as here, or from the About
+    page's background git_fetch writing FETCH_HEAD at the same moment, the
+    intermittent case -- git refuses: "Cannot rebase onto multiple
+    branches." It now fetches and rebases onto @{u}, which never reads
+    FETCH_HEAD. (The lock that serializes git_fetch with it is not
+    exercised.)
+
+    The GitHub remote git_pull sets is sent to a local origin with a
+    url.insteadOf in the checkout's config, and curl's reachability probe
+    answers as GitHub does."""
+    fpp = checkout_with_src(fppinit)
+    git("config", "pull.rebase", "true", cwd=fpp)
+    # its own commit (src/) is replayed onto the upstream
+    git("config", "user.name", "fpp", cwd=fpp)
+    git("config", "user.email", "fpp@localhost", cwd=fpp)
+    git("config", "--add", "branch.v1.merge", "refs/heads/v2", cwd=fpp)
+    git("config", f"url.{MEDIA}/tmp/origin.git.insteadOf", "https://github.com/FalconChristmas/fpp.git", cwd=fpp)
+    work = os.path.join(fppinit.media, "tmp", "work")
+    git("checkout", "-q", "v1", cwd=work)
+    git("pull", "-q", "origin", "v1", cwd=work)
+    git("commit", "-q", "--allow-empty", "-m", "new on v1", cwd=work)
+    git("push", "-q", "origin", "HEAD:v1", cwd=work)
+    new = head(work)
+    fppinit.root_file("/usr/bin/curl", "#!/bin/sh\necho 'HTTP/2 200'\necho 'Content-Type: text/html; charset=utf-8'\n")
+    r, out = run_script(fppinit, "git_pull")
+    assert "Cannot rebase onto multiple branches" not in out, out[-3000:]
+    on = subprocess.run(["git", "-c", "safe.directory=*", "-C", fpp, "merge-base", "--is-ancestor", new, "HEAD"])
+    branch = subprocess.run(["git", "-c", "safe.directory=*", "-C", fpp, "symbolic-ref", "-q", "HEAD"],
+                            capture_output=True, text=True).stdout.strip()
+    assert on.returncode == 0 and branch == "refs/heads/v1", \
+        f"the checkout did not move onto origin's v1 (HEAD {branch or 'detached'}):\n{out[-3000:]}"
+    assert "make optimized" in made(fppinit) or "make all" in made(fppinit), \
+        f"nothing was rebuilt: {made(fppinit)}\n{out[-3000:]}"

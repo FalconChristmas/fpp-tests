@@ -465,3 +465,113 @@ def test_an_outputs_disabled_preset_that_enables_an_overlay_model(fppd):
         assert rx.wait_frames(10, timeout=5, since=time.monotonic()), \
             "the enabled model's output never restarted"
         fppd.get("/overlays/models", timeout=5)
+
+
+def test_overlays_switched_on_from_the_api_while_a_song_plays(fppd, audio):
+    """A sequence and its media play while two API clients keep switching
+    overlay models on and off: the show plays on, with its frames going
+    out, and (under TSan) nothing races.
+
+    Regression: 885445d7d, under TSan. Every StartChannelOutputThread() --
+    which switching an overlay model on calls, from the API thread -- wrote
+    the mediaOffset setting into a plain float, which the playlist's thread
+    read on every media position to work out the expected frame."""
+    import threading
+
+    from audio import write_tone_wav
+    from fseq import write_fseq
+    from show import playlist
+    from test_overlays import matrix
+    write_fseq(os.path.join(fppd.media, "sequences", "Song.fseq"), unique_frames(400, CHANNELS), step_ms=50)
+    write_tone_wav(os.path.join(fppd.media, "music", "Song.wav"), 20)
+    fppd.write("playlists/Song.json", playlist("Song", [{
+        "type": "both", "enabled": 1, "playOnce": 0, "sequenceName": "Song.fseq", "mediaName": "Song.wav"}]))
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [matrix("A"), matrix("B")]})
+    fppd.settings(DisableFakeNetworkBridges="1", mediaOffset="20")
+    errors = []
+    stop = threading.Event()
+
+    def toggle(model):
+        state = 0
+        while not stop.is_set():
+            state ^= 1
+            try:
+                fppd.request("PUT", f"/overlays/model/{model}/state", {"State": state}, timeout=10)
+            except Exception as e:  # report it from the main thread
+                errors.append(repr(e))
+                return
+
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fppd.command("Start Playlist", "Song", "false", "false")
+        # Not status: polling it while media plays races at this commit's
+        # parent and the fix alike (GetAllSlotsStatus(), fixed since).
+        fppd.wait_for(lambda: "started playing" in fppd.log() and rx.count() > 20,
+                      what="the song and its sequence to play")
+        threads = [threading.Thread(target=toggle, args=(m,), daemon=True) for m in "AB"]
+        for t in threads:
+            t.start()
+        time.sleep(6)
+        stop.set()
+        for t in threads:
+            t.join(15)
+        assert not errors, errors
+        since = time.monotonic()
+        time.sleep(1)
+        assert rx.snapshot(since), "no frames went out once the toggling stopped"
+        fppd.command("Stop Now")
+
+
+def test_a_sequence_started_just_after_the_output_thread_idles_starts_its_own_cadence(fppd):
+    """A 20 fps sequence started 70-170 ms after the last one's blanking
+    frame (in 10 ms steps, a round each) -- as the output thread goes into
+    its idle wait, or just after: its second frame goes out a frame period
+    after its first, not a few ms after it.
+
+    Regression: f805b504d. Back from its idle wait, the output thread
+    restarted its cadence only if more than a frame had passed since the
+    last idle pass was due. A start within a frame of that pass kept the
+    old phase: the first frame went out at the wake and the second at the
+    old tick, and the sequence's timing sync then slowed the next frames
+    to give the lead back. Here, on the parent, starts 100-130 ms after the
+    blank put the second frame 11-29 ms after the first, and the next five
+    at 55-66 ms each; with the fix, 46 ms or more."""
+    from fseq import write_fseq
+    from show import playlist, sequence_entry
+    a, b = unique_frames(20, CHANNELS), unique_frames(40, CHANNELS, first=1000)
+    write_fseq(os.path.join(fppd.media, "sequences", "A.fseq"), a, step_ms=50)
+    write_fseq(os.path.join(fppd.media, "sequences", "B.fseq"), b, step_ms=50)
+    fppd.write("playlists/A.json", playlist("A", [sequence_entry("A.fseq")]))
+    fppd.write("playlists/B.json", playlist("B", [sequence_entry("B.fseq")]))
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    index = {f: i for i, f in enumerate(b)}
+    blank = bytes(CHANNELS)
+    rounds = []
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        for delay_ms in range(70, 171, 10):
+            since = time.monotonic()
+            fppd.command("Start Playlist", "A", "false", "false")
+
+            def blanked():
+                snap = rx.snapshot(since)
+                ended = next((k for k, (_, f) in enumerate(snap) if f == a[-1]), None)
+                if ended is None:
+                    return None
+                return next((t for t, f in snap[ended:] if f == blank), None)
+            at = fppd.wait_for(blanked, timeout=10, interval=0.002, what="A's blanking frame")
+            time.sleep(max(0.0, at + delay_ms / 1000 - time.monotonic()))
+            fppd.command("Start Playlist", "B", "false", "false")
+            fppd.wait_for(lambda: any(f == b[3] for _, f in rx.snapshot(since)), timeout=10,
+                          what="B to play")
+            first = {}
+            for t, f in rx.snapshot(since):
+                if f in index and index[f] not in first:
+                    first[index[f]] = t
+            rounds.append((delay_ms, round((first[1] - first[0]) * 1000)))
+            fppd.command("Stop Now")
+            time.sleep(3)  # past the output thread's 2.5 s idle wait
+    crowded = [(d, g) for d, g in rounds if g < 40]
+    assert not crowded, f"(ms after the blank B started, ms from its first frame to its second): {rounds}"

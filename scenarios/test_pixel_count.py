@@ -15,16 +15,17 @@ import throw_plugin
 PORT = "Port 1"
 
 
-def outputs(fppd, configured, wire, nulls=0):
+def outputs(fppd, configured, wire, nulls=0, **sim):
     """co-pixelStrings.json: one PixelCountSim port, `configured` pixels from
-    channel 1 after `nulls` null nodes, with `wire` pixels on the wire."""
+    channel 1 after `nulls` null nodes, with `wire` pixels on the wire; `sim`
+    adds the simulator's other options (simPixelMA, simNoiseMA)."""
     return {"channelOutputs": [{
         "type": "PixelCountSim", "enabled": 1, "startChannel": 1,
         "channelCount": configured * 3, "outputCount": 1,
         "outputs": [{
             "portNumber": 0, "protocol": "ws2811",
             "simCurrentFile": os.path.join(fppd.media, "tmp", "port1-ma"),
-            "simWirePixels": wire,
+            "simWirePixels": wire, **sim,
             "virtualStrings": [{
                 "description": "port1", "startChannel": 0, "pixelCount": configured,
                 "groupCount": 0, "reverse": 0, "colorOrder": "RGB", "nullNodes": nulls,
@@ -96,3 +97,30 @@ def test_a_pixel_count_after_a_port_is_reconfigured_uses_the_new_config(fppd):
     line, status = count_pixels(fppd, 2)
     assert line.startswith("port 1 has 152 pixels on the wire (150 configured, 2 nulls)"), line
     assert status.get("pixelCount") == 150, status
+
+
+def test_seed_pixels_on_a_noisy_sensor_are_counted(fppd):
+    """A port with 37 seed pixels on the wire, 37 configured: each draws
+    8 mA at full white, and the port's sensor reads up to 12 mA either way
+    of the truth on every reading, as some capes' i2c sensors do. The count
+    reports 37 pixels, give or take the last one.
+
+    Regression: 7ccba9e7b. The counter lit blocks of pixels and took the
+    first block reading under a fixed share of the first block's current as
+    the end, which assumed a quiet sensor and pixels drawing tens of mA; a
+    seed pixel is about one step of noise. It now reads each window dark,
+    lit and dark again, and decides only once a reading clears its
+    threshold by twice its uncertainty."""
+    throw_plugin.install(fppd, source="pixelcountsim.cpp", name="PixelCountSim")
+    fppd.write("config/co-pixelStrings.json", outputs(fppd, 37, 37, simPixelMA=8, simNoiseMA=12))
+    fppd.settings(LogLevel_ChannelOut="info", E131BridgingInterval="10")
+    fppd.start()
+    fppd.wait_for(lambda: port(fppd), what=f"{PORT} to be monitored")
+    fppd.get("/fppd/ports/pixelCount")
+    # The count starts by clearing the port's pixelCount (to -1, or out of
+    # the status) and sets it when it is done.
+    fppd.wait_for(lambda: (port(fppd) or {}).get("pixelCount", -1) < 0, timeout=20,
+                  what="the count to start")
+    status = fppd.wait_for(lambda: (p := port(fppd)) and p.get("pixelCount", -1) >= 0 and p,
+                           timeout=300, interval=0.5, what="the count to finish")
+    assert abs(status["pixelCount"] - 37) <= 1, status

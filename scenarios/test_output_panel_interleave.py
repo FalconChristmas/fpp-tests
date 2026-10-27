@@ -134,3 +134,41 @@ def test_doublez_interleave_maps_every_pixel_once():
             for y in range(8) for x in range(32)}
     diff = [k for k in want if m.get(k) != want[k]]
     assert not diff, f"{len(diff)} pixels misplaced, first {diff[0]}: {m.get(diff[0])} != {want[diff[0]]}"
+
+
+@pytest.mark.parametrize("w, h, scan", [(64, 64, 16), (64, 32, 8)], ids=["64x64 1/16", "64x32 1/8"])
+def test_no_interleave_is_refused_on_a_panel_that_folds_its_rows(w, h, scan):
+    """Interleave "Off" on a panel that scans fewer rows than half its
+    height -- a 64x64 1/16, a 64x32 1/8 -- is refused; on a 64x32 1/16,
+    where nothing folds, it is the identity.
+
+    Regression: 53585566e. Any type createHandler() didn't know, "Off"
+    included, fell back to the identity map, whose rows run to half the
+    panel height while the PRU drivers' frame holds only `scan` rows:
+    BBBMatrix::PrepData wrote about twice its allocation on the first
+    frame."""
+    assert handler_map("Off", w, h, scan) is None, f"Off accepted for a {w}x{h} 1/{scan} panel"
+    m = handler_map("Off", 64, 32, 16)
+    assert m is not None and all(m[k] == k for k in m), "Off is not the identity on a 64x32 1/16 panel"
+
+
+def test_every_accepted_interleave_maps_inside_the_frame():
+    """Every interleave the LED Panels page offers, at every size and scan
+    it offers, is either refused or maps the half panel inside the frame
+    the drivers size for it: `scan` rows of width * height / (scan * 2)
+    columns.
+
+    Regression: 53585566e (the check where the handler is built)."""
+    types = ["Off", "4", "8", "16", "32", "40", "64", "80", "4z", "8z", "16z", "8c", "8s", *FLIP_TYPES,
+             *[f"RPi{n}" for n in range(1, 22)]]
+    bad = []
+    for t in types:
+        for w, h, scan in UI_SIZES:
+            m = handler_map(t, w, h, scan)
+            if m is None:
+                continue
+            span = w * h // (scan * 2)
+            out = [k for k, (x, y) in m.items() if not (0 <= y < scan and 0 <= x < span)]
+            if out:
+                bad.append(f"{t} {w}x{h} 1/{scan}: {len(out)} pixels outside, e.g. {out[0]} -> {m[out[0]]}")
+    assert not bad, "; ".join(bad[:8]) + (f" ... ({len(bad)} in all)" if len(bad) > 8 else "")

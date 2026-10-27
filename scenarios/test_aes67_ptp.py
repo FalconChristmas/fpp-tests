@@ -425,3 +425,140 @@ def test_ptp4l_is_stopped_when_an_apply_leaves_nothing_for_it(fppd, ptp, how):
         os.unlink(os.path.join(fppd.media, CONFIG))
     fppd.command("AES67 Apply", timeout=60)
     fppd.wait_for(lambda: not ptp.running(), timeout=15, what="ptp4l to be stopped")
+
+
+def test_an_apply_keeps_ptp4l_unless_its_settings_change(fppd, ptp):
+    """With PTP on and ptp4l running, an "AES67 Apply" of the same config
+    leaves the same ptp4l running, as does one that changes only a stream;
+    an Apply with a different PTP domain starts a new ptp4l on that domain.
+
+    Regression: 5ad1a2aa4. Every apply stopped ptp4l and started another,
+    which takes seconds to rejoin the domain: while it was gone every
+    receiver following this box lost its clock -- all of them when it is the
+    grandmaster -- for an Apply that touched only the streams, or a watchdog
+    rebuild of one stream."""
+    ptp.answer(port_state="LISTENING", gm_present="false")
+    write_config(fppd)
+    start(fppd, ptp)
+    fppd.wait_for(ptp.running, timeout=30, what="ptp4l to be started")
+    first = ptp.read("ptp4l.pid").strip()
+    apply(fppd)
+    assert ptp.read("ptp4l.pid").strip() == first and ptp.running(), "an unchanged apply restarted ptp4l"
+    write_config(fppd, instances=[{"id": 1, "name": "tx2", "mode": "send", "enabled": True,
+                                   "sapEnabled": False, "multicastIP": "127.0.0.1", "port": 5006}])
+    apply(fppd)
+    assert ptp.read("ptp4l.pid").strip() == first and ptp.running(), \
+        "an apply that changed only a stream restarted ptp4l"
+    write_config(fppd, ptpDomain=1)
+    apply(fppd)
+    fppd.wait_for(lambda: (ptp.read("ptp4l.pid") or "").strip() not in ("", first) and ptp.running(),
+                  timeout=30, what="a new ptp4l for the new domain")
+    assert ptp.conf().get("domainNumber") == "1", ptp.conf()
+
+
+def test_stopping_a_ptp4l_that_already_died_signals_nothing(fppd, ptp, tmp_path):
+    """ptp4l dies on its own, and an unrelated process is given its PID
+    (fppd reaps children at once, so the PID is free for the next one).
+    Turning PTP off with an "AES67 Apply" then stops ptp4l: the process now
+    on that PID is left running.
+
+    Regression: 1b6dc7564. StopChildProcess() sent SIGTERM, and SIGKILL
+    after 3 s, to the PID it had stored without checking what it now
+    belonged to, so the stop killed whatever had taken it. ptp4l is now
+    signalled through a pidfd, which always means our own child."""
+    import shutil
+    import signal
+    import subprocess
+    if not shutil.which("gcc"):
+        pytest.skip("gcc is needed to build pid_at.c")
+    ptp.keep_name()
+    pid_at = str(tmp_path / "pid_at")
+    subprocess.run(["gcc", "-O2", "-o", pid_at, os.path.join(os.path.dirname(__file__), "pid_at.c")],
+                   check=True)
+    ptp.answer(port_state="LISTENING", gm_present="false")
+    write_config(fppd)
+    start(fppd, ptp)
+    fppd.wait_for(ptp.running, timeout=30, what="ptp4l to be started")
+    pid = int(ptp.read("ptp4l.pid"))
+    os.kill(pid, signal.SIGKILL)
+    deadline = time.monotonic() + 5
+    while os.path.exists(f"/proc/{pid}") and time.monotonic() < deadline:
+        time.sleep(0.01)
+    r = subprocess.run([pid_at, str(pid), "sleep", "301"], capture_output=True, text=True)
+    if r.returncode:
+        pytest.skip(f"can't place a process on a chosen PID here: {r.stderr.strip()}")
+    decoy = int(r.stdout)
+    try:
+        write_config(fppd, ptpEnabled=False)
+        apply(fppd)
+        time.sleep(4)  # past the stop's 3 s SIGKILL
+        with open(f"/proc/{decoy}/cmdline", "rb") as f:
+            alive = f.read().split(b"\0")[:2] == [b"sleep", b"301"]
+        assert alive, f"the process given ptp4l's PID {pid} was killed by the stop"
+    except FileNotFoundError:
+        pytest.fail(f"the process given ptp4l's PID {pid} was killed by the stop")
+    finally:
+        try:
+            os.kill(decoy, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
+def test_a_receive_only_box_restarts_a_dead_ptp4l(fppd, ptp):
+    """A box with one receive instance and SAP off (so no SAP announcer):
+    ptp4l dies, and the watchdog starts a new one within its next pass.
+
+    Regression: a1ee52315. Pipeline recovery, ptp4l supervision and the
+    rest of the watchdog ran inside the SAP announcer's loop, which only
+    exists with a SAP-announcing sender: on a receive-only box a dead ptp4l
+    stayed dead. Not covered: the lead servo's leaked udpsink and clock,
+    the other half of the commit."""
+    import signal
+    ptp.keep_name()
+    ptp.answer(port_state="LISTENING", gm_present="false")
+    write_config(fppd, instances=[{"id": 1, "name": "rx", "mode": "receive", "enabled": True,
+                                   "sapEnabled": False, "multicastIP": "127.0.0.1", "port": 5004}])
+    start(fppd, ptp)
+    fppd.wait_for(ptp.running, timeout=30, what="ptp4l to be started")
+    first = ptp.read("ptp4l.pid").strip()
+    os.kill(int(first), signal.SIGKILL)
+    fppd.wait_for(lambda: (ptp.read("ptp4l.pid") or "").strip() not in ("", first) and ptp.running(),
+                  timeout=75, interval=1, what="the watchdog to start a new ptp4l")
+
+
+def test_status_while_ptp4l_starts_and_stops(fppd, ptp):
+    """/aes67/status asked for from three clients without pause while
+    applies turn PTP on and off six times (each starting or stopping
+    ptp4l): every request is answered, and under TSan nothing races.
+
+    Regression: b7ea428a9. Status (and the self-test) read ptp4l's PID and
+    pidfd on HTTP threads with no lock while the apply started and stopped
+    ptp4l -- closing the pidfd under a reader that could then poll a closed,
+    or reused, descriptor. The race shows under TSan; with ASan this only
+    checks every request is answered."""
+    import threading
+    ptp.answer(port_state="LISTENING", gm_present="false")
+    write_config(fppd)
+    start(fppd, ptp)
+    stop = threading.Event()
+    errors = []
+
+    def poll():
+        while not stop.is_set():
+            try:
+                fppd.get("/aes67/status")
+            except Exception as e:
+                errors.append(repr(e))
+                return
+    threads = [threading.Thread(target=poll) for _ in range(3)]
+    for t in threads:
+        t.start()
+    try:
+        for i in range(6):
+            write_config(fppd, ptpEnabled=i % 2 == 1)
+            apply(fppd)
+    finally:
+        stop.set()
+        for t in threads:
+            t.join(30)
+    assert not errors, errors

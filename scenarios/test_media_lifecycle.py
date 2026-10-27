@@ -12,6 +12,8 @@ import os
 import threading
 import time
 
+import pytest
+
 from audio import write_tone_wav
 from show import playlist, status
 
@@ -304,6 +306,48 @@ def test_a_song_that_never_prerolls_gives_way_to_the_next(fppd, audio):
     fppd.wait_for(lambda: started_at(fppd, "B.wav"), timeout=25, interval=0.5,
                   what="the playlist to give up on A.wav and play B.wav")
     assert "failed to preroll" in fppd.log()
+
+
+@pytest.mark.parametrize("started_by", ["Play Media", "playlist"])
+def test_media_that_never_prerolls_is_reported_in_the_ui(fppd, audio, started_by):
+    """A file whose pipeline never prerolls (med_holdread.c holds its first
+    streaming-thread read, as a dead PipeWire connection holds a sink),
+    started with Play Media and as a playlist entry: once fppd gives up on
+    it, fppd's status carries the "Media playback did not start" warning.
+
+    Regression: 154e118ee. f60c3651b raised that warning from
+    the start thread's wait for PLAYING, but Process()'s preroll watchdog
+    -- run by the playlist, and for Play Media by the slot pump since
+    3428bcfbb -- has the same 15 s timeout and got there first: it stopped
+    the output, which cancelled the wait, so the failure only reached the
+    log ("failed to preroll"). Not covered: a hardware decoder wedge, which
+    the watchdog sends to its restart rungs instead (test_media.py)."""
+    import shims
+    write_tone_wav(os.path.join(fppd.media, "music", "Wedge.wav"), 10)
+    tmp = os.path.join(fppd.media, "tmp")
+    arm, mark = os.path.join(tmp, "arm"), os.path.join(tmp, "mark")
+    open(arm, "w").close()
+    fppd.write("playlists/Wedge.json", playlist("Wedge", [media_entry("Wedge.wav")]))
+    fppd.start(preload=[shims.build("med_holdread.c")],
+               extra_env={"HOLDREAD_NAME": "/Wedge.wav", "HOLDREAD_ARM": arm, "HOLDREAD_MARK": mark,
+                          "HOLDREAD_UNTIL_NULL": "12000"})
+    if started_by == "Play Media":
+        fppd.command("Play Media", "Wedge.wav", "1", "0", "1", timeout=10)
+    else:
+        fppd.command("Start Playlist", "Wedge", "false", "false", timeout=10)
+    fppd.wait_for(lambda: os.path.exists(mark), timeout=15, interval=0.1,
+                  what="Wedge.wav's first read to be held")
+
+    def reported():
+        warnings = fppd.get("/fppd/status").get("warnings", [])
+        return [w for w in warnings if "Media playback did not start" in w] or None
+
+    try:
+        fppd.wait_for(reported, timeout=25, interval=0.5, what='the "Media playback did not start" warning')
+    finally:
+        if started_by == "playlist":
+            fppd.command("Stop Now", timeout=10)
+    assert "failed to preroll" in fppd.log() or "never reached PLAYING" in fppd.log()
 
 
 def test_a_decoder_wedge_that_survives_a_restart_reboots(fppd, audio):

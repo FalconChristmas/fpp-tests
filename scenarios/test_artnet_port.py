@@ -116,3 +116,78 @@ def test_taken_artnet_port_leaks_no_sockets(fppd):
         assert grew < 5, f"fppd opened {grew} more file descriptors in 5 s with the ArtNet port taken"
     finally:
         held.close()
+
+
+def art_trigger(key, subkey):
+    """An ArtTrigger packet (OpTrigger 0x9900): OemCode 0xFFFF, Key, SubKey
+    and an empty 512-byte payload."""
+    import struct
+    return (b"Art-Net\0" + struct.pack("<H", 0x9900) + struct.pack(">H", 14) + bytes(2)
+            + struct.pack(">H", 0xFFFF) + bytes([key, subkey]) + bytes(512))
+
+
+def artnet_input(enabled):
+    """ci-universes.json: one E1.31 input universe, and ArtNet universe 5
+    as well when `enabled`."""
+    rows = [{"active": 1, "id": 10, "startChannel": 1, "channelCount": 100, "type": 1,
+             "priority": 0, "address": ""}]
+    if enabled:
+        rows.append({"active": 1, "id": 5, "startChannel": 101, "channelCount": 100, "type": 3,
+                     "priority": 0, "address": ""})
+    return {"channelInputs": [{"type": "universes", "enabled": 1, "startChannel": 1,
+                               "channelCount": 512, "universes": rows}]}
+
+
+def plugin_heard(fppd, key, timeout=5):
+    """Send ArtTriggers with `key` until the plugin logs one, or time out."""
+    from packets import send
+    line = f"artnet plugin fpp-artnet trigger key {key} subkey 7"
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        send([art_trigger(key, 7)], ARTNET_PORT)
+        if line in fppd.log():
+            return True
+        time.sleep(0.25)
+    return False
+
+
+def test_a_plugin_hears_artnet_on_a_player_with_no_artnet_input(fppd):
+    """A native plugin that adds an ArtTrigger handler on a player whose
+    own inputs have no ArtNet universe is handed the ArtTriggers sent to
+    the player.
+
+    Regression: 6df3c4502. Adding an opcode handler only put it in the
+    table: the socket was opened and put in the epoll set by the bridge,
+    for its own ArtNet input, or by a caller that registered the descriptor
+    itself. With neither, the ArtTrigger was never read."""
+    import native_plugin
+    native_plugin.install(fppd, "fpp-artnet", source="artnetplugin.cpp")
+    fppd.write("config/ci-universes.json", artnet_input(False))
+    fppd.start()
+    fppd.wait_for(lambda: "artnet plugin fpp-artnet loaded" in fppd.log(), timeout=20,
+                  what="the plugin to load")
+    assert plugin_heard(fppd, 1), "the plugin was never handed an ArtTrigger"
+
+
+def test_a_plugin_keeps_hearing_artnet_when_the_bridge_drops_its_own(fppd):
+    """A native plugin with an ArtTrigger handler on a player with an ArtNet
+    input universe still gets ArtTriggers after the inputs are saved
+    without ArtNet.
+
+    Regression: 6df3c4502. The bridge's reload took the shared ArtNet
+    socket out of the epoll set and put it back only for an ArtNet input
+    of its own, so the plugin went deaf until something registered it
+    again."""
+    import native_plugin
+    native_plugin.install(fppd, "fpp-artnet", source="artnetplugin.cpp")
+    fppd.write("config/ci-universes.json", artnet_input(True))
+    fppd.settings(LogLevel_E131Bridge="info")
+    fppd.start()
+    fppd.wait_for(lambda: "artnet plugin fpp-artnet loaded" in fppd.log(), timeout=20,
+                  what="the plugin to load")
+    assert plugin_heard(fppd, 1), "precondition: the plugin never heard an ArtTrigger"
+    assert "Universe Count = 1" not in fppd.log()
+    fppd.write("config/ci-universes.json", artnet_input(False))
+    fppd.wait_for(lambda: "Universe Count = 1" in fppd.log(), timeout=10,
+                  what="the inputs to reload without ArtNet")
+    assert plugin_heard(fppd, 2), "after the reload, the plugin was never handed an ArtTrigger"

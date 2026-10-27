@@ -14,7 +14,8 @@ environment names in FPP_TESTS_PTP_DIR:
            option" message for a key listed in `unknown-options`, else "no
            interface specified". With -i it is the daemon: it saves its argv
            (ptp4l.argv, one per line), the config it was given (ptp4l.conf)
-           and its pid (ptp4l.pid), and stays up.
+           and its pid (ptp4l.pid), and stays up -- as "sleep", or, after
+           keep_name(), as "ptp4l", which fppd before pidfds checked for.
   pmc      prints the file named after the TLV it is asked for
            (TIME_STATUS_NP, PORT_DATA_SET), or nothing; its argv goes to
            pmc.argv.
@@ -41,6 +42,10 @@ case " $* " in
     printf '%s\\n' "$@" > "$d/ptp4l.argv"
     cp "$conf" "$d/ptp4l.conf.new" && mv "$d/ptp4l.conf.new" "$d/ptp4l.conf"
     echo $$ > "$d/ptp4l.pid"
+    if [ -f "$d/keep-name" ]; then
+        trap 'exit 0' TERM
+        while :; do sleep 1 & wait $!; done
+    fi
     exec sleep 1000 ;;
 esac
 key=$(sed -n 2p "$conf" | cut -f1)
@@ -119,6 +124,12 @@ class Ptp:
         if port_state is not None:
             self._put("PORT_DATA_SET", port_data_set(port_state))
         self._put("TIME_STATUS_NP", time_status(**time_status_fields))
+
+    def keep_name(self):
+        """Keep the ptp4l daemon's process name "ptp4l" (/proc/<pid>/comm)
+        rather than exec'ing sleep: fppd before 1b6dc7564 took a ptp4l of
+        any other name for one that had died."""
+        open(os.path.join(self.dir, "keep-name"), "w").close()
 
     def unknown_option(self, key):
         """Make the ptp4l probe reject a config key, as an older linuxptp does."""
