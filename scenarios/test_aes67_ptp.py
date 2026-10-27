@@ -401,3 +401,27 @@ def test_ptp_not_installed_warning_comes_down_when_ptp_is_turned_off(fppd):
     write_config(fppd, ptpEnabled=False)
     apply(fppd)
     assert NOT_INSTALLED not in warnings(fppd)
+
+
+@pytest.mark.parametrize("how", ["ptp-off", "disabled", "deleted"])
+def test_ptp4l_is_stopped_when_an_apply_leaves_nothing_for_it(fppd, ptp, how):
+    """PTP on with a send instance starts ptp4l. An "AES67 Apply" of a config
+    with PTP turned off, with every instance disabled, or after the
+    instances file was deleted stops it, without restarting fppd.
+
+    Regression: 2f8672ecc. ApplyConfig() stopped the pipelines but never
+    ptp4l, so unchecking PTP (or removing every stream) left ptp4l running
+    -- still a clock on the network -- until fppd was restarted."""
+    ptp.answer(port_state="LISTENING", gm_present="false")
+    write_config(fppd)
+    start(fppd, ptp)
+    fppd.wait_for(ptp.running, timeout=30, what="ptp4l to be started")
+    if how == "ptp-off":
+        write_config(fppd, ptpEnabled=False)
+    elif how == "disabled":
+        write_config(fppd, instances=[{"id": 1, "name": "tx", "mode": "send", "enabled": False,
+                                       "sapEnabled": False, "multicastIP": "127.0.0.1", "port": 5004}])
+    else:
+        os.unlink(os.path.join(fppd.media, CONFIG))
+    fppd.command("AES67 Apply", timeout=60)
+    fppd.wait_for(lambda: not ptp.running(), timeout=15, what="ptp4l to be stopped")

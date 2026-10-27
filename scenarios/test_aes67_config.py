@@ -235,6 +235,56 @@ def test_sdp_export_of_stored_instances(fppd):
     assert origins() == before, "the o= line changed across a restart"
 
 
+@pytest.fixture
+def two_addresses():
+    """Two dummy interfaces, each with an address of its own, standing for
+    the network ports of two different boxes. Needs CAP_NET_ADMIN in fppd's
+    network namespace (the test container, or run-local.sh's private one)."""
+    import shutil
+    import subprocess
+    if not shutil.which("ip"):
+        pytest.skip("needs iproute2")
+    made = []
+    try:
+        for i, addr in enumerate(("192.0.2.11", "192.0.2.12")):
+            name = f"fpptst{i}"
+            r = subprocess.run(["ip", "link", "add", name, "type", "dummy"], capture_output=True, text=True)
+            if r.returncode:
+                pytest.skip(f"can't make a dummy interface: {r.stderr.strip()}")
+            made.append(name)
+            subprocess.run(["ip", "addr", "add", addr + "/32", "dev", name], check=True)
+            subprocess.run(["ip", "link", "set", name, "up"], check=True)
+        yield {name: addr for name, addr in zip(made, ("192.0.2.11", "192.0.2.12"))}
+    finally:
+        for name in made:
+            subprocess.run(["ip", "link", "del", name], capture_output=True)
+
+
+def test_session_ids_differ_by_device_and_by_stream(fppd, two_addresses):
+    """Three send instances with one name: two with the same multicast
+    group and port on interfaces with different addresses -- the same
+    stream config as two boxes would send it -- and a third on another
+    port. Each one's SDP carries its own o= session id.
+
+    Regression: b2730fcae. The session id was a hash of the stream's name
+    alone, so every box announcing a stream of the same name -- and every
+    stream of one name on a box -- claimed the same session, and a receiver
+    keeps only one of them."""
+    (if_a, addr_a), (if_b, addr_b) = two_addresses.items()
+    write_config(fppd, instances=[
+        send(1, "tx", interface=if_a),
+        send(2, "tx", interface=if_b),
+        send(3, "tx", interface=if_a, port=5006)])
+    start(fppd)
+    origins = {s["instanceId"]: s["sdp"].split("\r\n")[1].split()
+               for s in fppd.get("/aes67/sdp")["streams"]}
+    assert sorted(origins) == [1, 2, 3], origins
+    # o=- <sess-id> <sess-version> IN IP4 <address>
+    assert (origins[1][5], origins[2][5]) == (addr_a, addr_b), f"precondition: source addresses {origins}"
+    ids = {i: o[1] for i, o in origins.items()}
+    assert len(set(ids.values())) == 3, f"session ids shared: {ids}"
+
+
 def test_stream_failure_warnings_come_down_when_fixed(fppd):
     """A send and a receive stream that cannot start (no PipeWire) each raise
     their warning; disabling them and applying takes both down.

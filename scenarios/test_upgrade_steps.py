@@ -216,6 +216,53 @@ def test_upgrade_150_keeps_the_stock_kernel_off_a_bbb(fppinit):
     assert not [c for c in fppinit.calls() if c.startswith("apt-get")], fppinit.calls()
 
 
+# --- 131: the stock 16K-page Pi 5 kernel ------------------------------------
+
+PI_PIN = "/etc/apt/preferences.d/fpp-no-2712-kernel"
+
+
+def test_upgrade_131_takes_a_stock_2712_kernel_off_an_fpp_pi(fppinit):
+    """Upgrade 131, on a Pi whose FPP image has no stock 2712 module tree
+    and a kernel_2712.img on the boot partition beside kernel8.img: pins
+    linux-image-*-rpi-2712 out of apt, sets KERNEL=none for raspi-firmware,
+    removes kernel_2712.img (keeping kernel8.img) and flags a reboot, the
+    running kernel having no modules. A Pi with a stock 2712 module tree --
+    Raspberry Pi OS with FPP installed on top -- is left as it is.
+
+    Regression: 62affa110. Nothing kept apt from installing a newer stock
+    2712 kernel, and a Pi 5 boots kernel_2712.img in preference to
+    kernel8.img: the box came up on a 16K-page kernel with no modules at
+    all (no ipv6 for apache, a 90 s zram timeout at boot)."""
+    fppinit.root_file("/etc/fpp/platform", "Raspberry Pi\n")
+    boot_write(fppinit, "kernel8.img", "fpp kernel")
+    boot_write(fppinit, "kernel_2712.img", "stock 16K kernel")
+    r, out = step(fppinit, 131)
+    assert r.returncode == 0, out[-3000:]
+    pin = fppinit.written(PI_PIN)
+    assert pin and "Pin-Priority: -1" in pin and "linux-image-*-rpi-2712" in pin, f"{pin}\n{out[-3000:]}"
+    assert "KERNEL=none" in (fppinit.written("/etc/default/raspi-firmware") or ""), out[-3000:]
+    assert not os.path.exists(os.path.join(fppinit.boot, "kernel_2712.img")), out[-3000:]
+    assert os.path.exists(os.path.join(fppinit.boot, "kernel8.img"))
+    assert media_settings(fppinit).get("rebootFlag") == "1", f"{media_settings(fppinit)}\n{out[-3000:]}"
+
+
+def test_upgrade_131_leaves_a_pi_with_stock_2712_modules_alone(fppinit):
+    """Upgrade 131 on a Pi that has a stock 2712 module tree (Raspberry Pi
+    OS, FPP installed on top, its own kernel legitimately): no pin, no
+    raspi-firmware change, and kernel_2712.img stays.
+
+    Regression: 62affa110 (the gate of its upgrade step)."""
+    fppinit.root_file("/etc/fpp/platform", "Raspberry Pi\n")
+    fppinit.root_file("/lib/modules/6.12.47+rpt-rpi-2712/modules.dep", "")
+    boot_write(fppinit, "kernel8.img", "fpp kernel")
+    boot_write(fppinit, "kernel_2712.img", "stock 16K kernel")
+    r, out = step(fppinit, 131)
+    assert r.returncode == 0, out[-3000:]
+    assert "manages its own kernel" in out, out[-3000:]
+    assert not fppinit.written(PI_PIN), out[-3000:]
+    assert os.path.exists(os.path.join(fppinit.boot, "kernel_2712.img")), out[-3000:]
+
+
 # --- 145 and 149: Pi overlays that leave the pins free ----------------------
 
 # Stands in for dtc where the system has none (images built before it was

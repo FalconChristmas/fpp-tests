@@ -226,3 +226,82 @@ def test_a_remote_moves_to_the_masters_next_file_on_a_sync_packet(fppd, audio):
         send("stop", "media", 0, 0.0, "B.wav")
     finally:
         sock.close()
+
+
+def write_six_channel_wav(path, tone_s, seconds, rate=48000):
+    """A 6-channel WAV, a 440 Hz tone on its front pair for the first
+    tone_s seconds and silence after: more channels than the slot's
+    persistent output stream carries, so it plays to a pipewiresink of
+    its own."""
+    import array
+    import math
+    import wave
+    pcm = array.array("h", bytes(2 * 6 * int(seconds * rate)))
+    tone = array.array("h", (int(3000 * math.sin(2 * math.pi * 440 * i / rate)) for i in range(int(tone_s * rate))))
+    pcm[0:6 * len(tone):6] = tone
+    pcm[1:6 * len(tone):6] = tone
+    with wave.open(path, "wb") as w:
+        w.setnchannels(6)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm.tobytes())
+
+
+def test_a_remote_with_its_own_sink_keeps_up_with_a_fast_master(fppd, audio):
+    """A remote plays a 6-channel file -- a pipewiresink of its own, not the
+    slot's persistent output stream -- for a master whose media syncs run 3%
+    fast. It speeds up to follow: from 30 s to 40 s it stays within 250 ms
+    of the master and loses no more ground (its offset moves by at most
+    60 ms), and the 41 s of tone at the head of the file is heard over no
+    more than 40.4 s of the null sink (the master gets through it in
+    39.8 s; played at 1x it takes 41).
+
+    Regression: 11de6c82c. AdjustSpeed() (7471f0a6c) changed only the
+    pipeline's rate, which a pipewiresink drained by PipeWire at the
+    graph's rate never plays: the media went on at 1x, 1.2 s behind at
+    30 s and 1.5 s at 40 s, while the requested rate climbed past 1.2. Now
+    the stream's adapter resamples at the rate, and the pipeline's clock
+    runs at it so the sink keeps the stream fed. (A stereo or mono file
+    plays through the persistent output stream, which AdjustFeedSpeed()
+    steers instead -- see above. 3% is far beyond any card's drift, but the
+    null sink's VM timer leaves nothing finer to measure in Docker; at 3%,
+    AdjustSpeed()'s 2% rate steps settle 100-150 ms behind.)"""
+    from audio import RATE
+    from test_media_commands import slot_status
+    write_six_channel_wav(os.path.join(fppd.media, "music", "Six.wav"), 41, 50)
+    fppd.settings(fppMode="remote")
+    fppd.start()
+    rec = audio.record()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    send = lambda *a: sock.sendto(sync_packet(*a), ("127.0.0.1", PORT))
+    fast = 1.03
+    offsets = []
+    try:
+        send("open", "media", 0, 0.0, "Six.wav")
+        time.sleep(1)
+        send("start", "media", 0, 0.0, "Six.wav")
+        t0 = time.monotonic()
+        nxt = t0 + 0.5
+        while time.monotonic() < t0 + 44:
+            now = time.monotonic()
+            if now >= nxt:
+                send("sync", "media", 0, (now - t0) * fast, "Six.wav")
+                nxt += 0.5
+                if 30 <= now - t0 <= 40:
+                    sl = slot_status(fppd, 1) or {}
+                    if sl.get("status") == "playing":
+                        local = sl["secondsElapsed"] + sl["subSecondsElapsed"] / 100
+                        offsets.append(round((local - (time.monotonic() - t0) * fast) * 1000))
+            time.sleep(0.01)
+        send("stop", "media", 0, 0.0, "Six.wav")
+    finally:
+        sock.close()
+    samples = rec.stop()
+    n = RATE // 100
+    loud = [i for i in range(0, len(samples) - n + 1, n) if max(map(abs, samples[i:i + n])) > 0.02]
+    heard_s = (loud[-1] - loud[0]) / RATE if loud else 0.0
+    assert len(offsets) >= 15, f"the remote wasn't playing: {offsets}"
+    # Unsteered, the remote loses 30 ms a second: 300 ms over these 10 s.
+    assert max(abs(o) for o in offsets) <= 250 and max(offsets) - min(offsets) <= 60, \
+        f"remote minus master, ms, from 30 s: {offsets}"
+    assert 38 <= heard_s <= 40.4, f"41 s of tone took {heard_s:.2f} s to play"

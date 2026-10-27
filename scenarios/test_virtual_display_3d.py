@@ -149,7 +149,11 @@ def test_going_dark_sends_one_black_frame_then_pings(fppd):
 
 def test_update_interval_limits_the_frame_rate(fppd):
     """updateInterval is the time between frames sent, whatever the output
-    frame rate: 100 ms is about ten a second."""
+    frame rate: 100 ms is about ten a second.
+
+    Regression: b59c62f81. updateInterval counted output frames, clamped to
+    1-10, and the 3D display sent every frame regardless: 59 events in 3 s
+    at 100 ms."""
     display(fppd, [(0, 0, 0, 0)], updateInterval=100)
     fppd.start()
     wait_listening(fppd)

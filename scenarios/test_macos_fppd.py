@@ -190,3 +190,41 @@ def test_a_device_whose_driver_overstates_its_buffers_is_survived(macfppd):
     assert any(l.startswith("set-volume 1002") for l in sets), f"volume calls: {sets}\n{macfppd.output()}"
     assert not any(l.startswith("set-volume 1001") for l in sets), sets
     assert not macfppd.off_box(), macfppd.off_box()
+
+
+def test_fppmon_started_after_fppd_gets_the_framebuffer(macfppd):
+    """An FB model on the socket framebuffer, fppd started before FPPMon has
+    set framebufferControlSocketPath: once FPPMon writes the setting and
+    binds its socket there, it gets the config (1) and then page syncs (2)
+    as the model is drawn, with no restart of fppd.
+
+    Regression: 600533699. SocketFrameBuffer kept the socket path it built
+    at init from the default "/dev", so an FPPMon started after fppd was
+    never found: the model drew into a buffer nothing showed until fppd was
+    restarted."""
+    sockdir = os.path.join(macfppd.dir, "fb")
+    os.makedirs(sockdir)
+    macfppd.write("config/model-overlays.json", {"autoCreate": False, "models": [
+        {"Name": "Mon", "Type": "FB", "Width": 8, "Height": 4, "Device": "fb1"}]})
+    macfppd.start()
+    mon = None
+    try:
+        # FPPMon starting: the setting, as it saves it, then its socket.
+        macfppd.settings(framebufferControlSocketPath=sockdir)
+        time.sleep(2)  # the settings file monitor's reload
+        mon = FakeMon(os.path.join(sockdir, "fb1"))
+        deadline = time.monotonic() + 15
+        v = 0
+        while not (1 in mon.commands() and mon.commands().count(2) >= 3):
+            assert time.monotonic() < deadline, \
+                f"FPPMon got {mon.commands()} from fppd started before it\n{macfppd.output()}"
+            v = (v + 37) % 256
+            macfppd.request("PUT", "/overlays/model/Mon/data?autoEnable=true&stopEffect=false",
+                            bytes([v]) * (8 * 4 * 3))
+            time.sleep(0.1)
+        got = mon.commands()
+        assert got.index(1) < got.index(2), f"FPPMon got {got}"
+        assert not macfppd.off_box(), macfppd.off_box()
+    finally:
+        if mon:
+            mon.close()

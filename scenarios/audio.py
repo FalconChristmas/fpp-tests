@@ -39,11 +39,19 @@ def env():
 
 
 class AudioServer:
-    def __init__(self):
+    def __init__(self, rate=RATE, wireplumber_from=None):
+        """rate: the graph's clock rate and the null sink's, for a graph
+        that runs as a 44.1 kHz card's does. wireplumber_from: a directory
+        laid out as fpp's etc/wireplumber (wireplumber.conf.d/, scripts/),
+        whose configuration and scripts WirePlumber loads too."""
         self.dir = tempfile.mkdtemp(prefix="pipewire-")
         os.makedirs(os.path.join(self.dir, "pipewire", "pipewire.conf.d"))
         with open(os.path.join(self.dir, "pipewire", "pipewire.conf.d", "50-fpp-tests-sink.conf"), "w") as f:
-            f.write(SINK_CONF)
+            if rate == RATE:
+                f.write(SINK_CONF)
+            else:
+                f.write(SINK_CONF.replace(f"audio.rate = {RATE}", f"audio.rate = {rate}"))
+                f.write(f"context.properties = {{ default.clock.rate = {rate} default.clock.allowed-rates = [ {rate} ] }}\n")
         os.makedirs(RUNTIME, exist_ok=True)
         self.env = env()
         self.env["XDG_CONFIG_HOME"] = self.dir
@@ -52,6 +60,12 @@ class AudioServer:
         # scenario set -- POST /fppd/volume/50 leaves the sink at 0.125 -- was
         # the next scenario's starting level, and it heard nothing.
         self.env["XDG_STATE_HOME"] = os.path.join(self.dir, "state")
+        if wireplumber_from:
+            shutil.copytree(os.path.join(wireplumber_from, "wireplumber.conf.d"),
+                            os.path.join(self.dir, "wireplumber", "wireplumber.conf.d"))
+            self.env["XDG_DATA_HOME"] = os.path.join(self.dir, "data")
+            shutil.copytree(os.path.join(wireplumber_from, "scripts"),
+                            os.path.join(self.dir, "data", "wireplumber", "scripts"))
         self.procs = []
         log = open(os.path.join(self.dir, "daemons.log"), "w")
         for cmd in (["pipewire"], ["wireplumber"], ["pipewire-pulse"]):

@@ -112,3 +112,29 @@ def test_a_model_overlays_upload_over_1mb_is_taken(fppd):
     fppd.start()
     names = {m["Name"] for m in fppd.get("/models")}
     assert names == {m["Name"] for m in models}, sorted(names)[:5]
+
+
+def test_a_trailing_slash_reaches_the_same_endpoint(fppd):
+    """GET, POST and DELETE under /fppd answer the same with a trailing slash
+    as without one.
+
+    Regression: 00b96872d. PlayerResource matched the path after /fppd/
+    exactly, so /fppd/status/ was "status/", which no endpoint is named: each
+    method answered 404 "endpoint fppd/status/ does not exist"."""
+    fppd.start()
+    code, plain = call(fppd, "GET", "/fppd/status")
+    assert code == 200, plain
+    code, slashed = call(fppd, "GET", "/fppd/status/")
+    assert code == 200, slashed
+    assert slashed.get("status_name") == plain.get("status_name"), slashed
+    assert set(slashed) == set(plain), sorted(set(plain) ^ set(slashed))
+
+    # Not 404, and the level is set. (Before c4b11629b a POST that did its
+    # work still answered 400, so the answer's code isn't the check.)
+    code, body = call(fppd, "POST", "/fppd/log/level/debug/")
+    assert code != 404, body
+    assert set(levels(fppd).values()) == {"debug"}, levels(fppd)
+
+    code, body = call(fppd, "DELETE", "/fppd/e131stats/")
+    assert code == 200, body
+    assert body.get("Message") == "Stats Cleared", body

@@ -100,3 +100,29 @@ def test_a_youtube_source_that_yt_dlp_refuses_logs_its_reason(fppd, audio):
                   what="the failed resolution to be logged")
     line = [l for l in fppd.log().splitlines() if "yt-dlp could not resolve the URL for 'Test'" in l][0]
     assert "Sign in to confirm you are not a bot" in line, line
+
+
+def test_a_youtube_source_with_audio_asks_for_the_better_audio_first(fppd, audio):
+    """A YouTube source with audio on: the yt-dlp call that resolves its
+    audio asks for HLS audio 234 (high quality) before 233, and DASH AAC
+    140 (128k) before 139 (HE-AAC 48k), and the source plays what that
+    resolves to.
+
+    Regression: 3b455f2a8. The order was 233/234/139/140, so yt-dlp picked
+    the low-quality stream whenever both were offered."""
+    from test_video import yt_dlp_calls
+    videos = os.path.join(fppd.media, "videos")
+    make_video(os.path.join(videos, "Bars.mkv"), seconds=30)
+    httpd, port = serve(videos)
+    try:
+        env = ytdlp_stand_in(fppd, f"echo http://127.0.0.1:{port}/Bars.mkv\necho 10.0")
+        setup(fppd, [overlay_consumer(SOURCE)],
+              [source("urisrc", uri="https://www.youtube.com/watch?v=x", audioEnabled=True)])
+        fppd.start(extra_env=env)
+        wait_for_bars(fppd, timeout=25)
+    finally:
+        httpd.shutdown()
+    formats = [c[c.index("-f") + 1] for c in yt_dlp_calls(fppd) if "-f" in c]
+    audio_formats = [f for f in formats if "bestaudio" in f]
+    assert audio_formats, f"no yt-dlp call asked for audio: {formats}"
+    assert all(f.startswith("234/233/140/139/") for f in audio_formats), audio_formats

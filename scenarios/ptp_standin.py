@@ -13,8 +13,8 @@ environment names in FPP_TESTS_PTP_DIR:
   ptp4l    with no -i it is the option probe: it prints ptp4l's "unknown
            option" message for a key listed in `unknown-options`, else "no
            interface specified". With -i it is the daemon: it saves its argv
-           (ptp4l.argv, one per line) and the config it was given (ptp4l.conf)
-           and stays up.
+           (ptp4l.argv, one per line), the config it was given (ptp4l.conf)
+           and its pid (ptp4l.pid), and stays up.
   pmc      prints the file named after the TLV it is asked for
            (TIME_STATUS_NP, PORT_DATA_SET), or nothing; its argv goes to
            pmc.argv.
@@ -40,6 +40,7 @@ case " $* " in
 *" -i "*)
     printf '%s\\n' "$@" > "$d/ptp4l.argv"
     cp "$conf" "$d/ptp4l.conf.new" && mv "$d/ptp4l.conf.new" "$d/ptp4l.conf"
+    echo $$ > "$d/ptp4l.pid"
     exec sleep 1000 ;;
 esac
 key=$(sed -n 2p "$conf" | cut -f1)
@@ -146,6 +147,17 @@ class Ptp:
             if len(parts) >= 2 and not line.startswith(("#", "[")):
                 out[parts[0]] = parts[1]
         return out
+
+    def running(self):
+        """Whether the last ptp4l daemon started is still running."""
+        pid = (self.read("ptp4l.pid") or "").strip()
+        if not pid:
+            return False
+        try:
+            with open(f"/proc/{pid}/stat") as f:
+                return f.read().rsplit(")", 1)[1].split()[0] != "Z"
+        except FileNotFoundError:
+            return False
 
     def argv(self, name="ptp4l"):
         text = self.read(name + ".argv")

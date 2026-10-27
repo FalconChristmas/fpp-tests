@@ -252,6 +252,42 @@ def test_play_media_on_slot_1_reports_its_own_position(fppd, audio):
     play_and_check_status(fppd, 1)
 
 
+def test_play_media_status_is_sane_before_its_first_report(fppd, audio):
+    """Media Slot Status polled without pause from just before Play Media
+    of a 6 s file on slot 1: every listing of the slot as playing shows
+    times within those 6 s, from the very first, before the output has
+    reported a position.
+
+    Regression: 4fac0a605. Play Media on slot 1 keeps its status in its
+    own heap object, whose times were never initialized: the first listing
+    read whatever the allocation held -- 0xBEBEBEBE under ASan, -1094795586
+    seconds remaining."""
+    write_tone_wav(os.path.join(fppd.media, "music", "Early.wav"), 6)
+    fppd.start()
+    seen = []
+    done = threading.Event()
+
+    def poll():
+        while not done.is_set():
+            s = slot_status(fppd, 1) or {}
+            if s.get("status") == "playing":
+                seen.append({k: s.get(k) for k in ("secondsElapsed", "secondsRemaining", "minutesTotal",
+                                                   "secondsTotal")})
+
+    poller = threading.Thread(target=poll, daemon=True)
+    poller.start()
+    try:
+        fppd.command("Play Media", "Early.wav", "1", "0", "1")
+        time.sleep(1.5)
+    finally:
+        done.set()
+        poller.join(10)
+    fppd.command("Stop Media Slot", "1")
+    assert seen, "the slot was never listed as playing"
+    bad = [s for s in seen if not all(0 <= (v if v is not None else -1) <= 6 for v in s.values())]
+    assert not bad, f"{len(bad)} of {len(seen)} listings out of range, first {bad[0]}"
+
+
 def test_media_on_another_slot_does_not_pace_the_show(fppd, audio):
     """A Play Media loop on slot 2, started seconds before a sequence+media
     entry on slot 1, leaves the sequence's frames in order with no more than
