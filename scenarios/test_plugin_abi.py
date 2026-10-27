@@ -150,3 +150,69 @@ def test_a_plugin_that_includes_drogon_still_logs(fppd):
     fppd.start()
     wait_loaded(fppd, "fpp-abi-drogon")
     assert "abi plugin fpp-abi-drogon loaded" in fppd.log()
+
+
+def test_a_plugin_built_against_the_three_argument_periodic_timer_loads(fppd):
+    """A plugin built when Timers::addPeriodicTimer took three arguments
+    (before d7b5ecb51 added initialDelayMS) loads, and the periodic timer it
+    starts through that call fires.
+
+    Regression: 3d8aab31c. d7b5ecb51 gave the fourth argument a default,
+    which changed the function's mangled name, so libfpp no longer exported
+    the 3-argument symbol such a plugin links: fppd's dlopen() refused the
+    plugin with an undefined symbol."""
+    plugin_build.build_and_install(fppd, "abiplugin.cpp", "fpp-abi-timer", defines=["ABI_PREBUILT_TIMERS"])
+    fppd.start()
+    wait_loaded(fppd, "fpp-abi-timer")
+    fppd.wait_for(lambda: fppd.log().count("abi plugin fpp-abi-timer timer fired") >= 3, timeout=10,
+                  what="the plugin's periodic timer to fire")
+    fppd.check_alive()
+
+
+def test_a_plugin_built_before_disallow_multisync_is_listed_and_runs(fppd):
+    """A plugin whose Command subclass was built against Commands.h as it
+    was before d7b5ecb51 -- no disallowMultisync() virtual -- is listed by
+    GET /commands and its command runs, and If still carries the
+    disallowMultisync flag the UI reads.
+
+    Regression: abfe12046. d7b5ecb51 inserted the virtual ahead of run(),
+    and Command::getDescription() called it, so describing the plugin's
+    command dispatched into the slot the plugin has run() in: the first
+    GET /commands crashed fppd (here: the plugin's run() writes its result
+    over the object's vtable pointer). Where the tree's own Commands.h no
+    longer has the virtual, the plugin is built against it unchanged."""
+    with open(os.path.join(plugin_build.tree_src(), "commands", "Commands.h")) as f:
+        has_virtual = "    virtual bool disallowMultisync() const { return false; }\n" in f.read()
+    edits = {"commands/Commands.h": [("    virtual bool disallowMultisync() const { return false; }\n", "")]} \
+        if has_virtual else {}
+    headers = plugin_build.header_copy(edits)
+    plugin_build.build_and_install(fppd, "abiplugin.cpp", "fpp-abi-prems", include_first=[headers])
+    fppd.start()
+    fppd.wait_for(lambda: "abi plugin fpp-abi-prems loaded" in fppd.log(), timeout=15,
+                  what="the plugin to load")
+    listed = {c["name"]: c for c in fppd.get("/commands")}
+    assert "fpp-abi-prems Ping" in listed, sorted(listed)
+    assert not listed["fpp-abi-prems Ping"].get("disallowMultisync"), listed["fpp-abi-prems Ping"]
+    assert listed["If"].get("disallowMultisync") is True, listed["If"]
+    assert str(fppd.command("fpp-abi-prems Ping", "x")) == "pong"
+    fppd.check_alive()
+
+
+def test_a_command_that_cannot_describe_itself_leaves_the_rest_listed(fppd):
+    """A plugin command whose getDescription() throws -- what a stale
+    plugin's does when it reads a std::string at another layout's offset --
+    is left out of GET /commands, which still answers 200 with every other
+    command, the plugin's working one included; fppd stays up.
+
+    Regression: 9e1620a69. getDescriptions() had no guard around each
+    command, so the one exception took out the whole list (a 500) and with
+    it every page that edits a command."""
+    plugin_build.build_and_install(fppd, "abiplugin.cpp", "fpp-abi-broken", defines=["ABI_THROWING_DESCRIPTION"])
+    fppd.start()
+    fppd.wait_for(lambda: "abi plugin fpp-abi-broken loaded" in fppd.log(), timeout=15,
+                  what="the plugin to load")
+    names = commands(fppd)
+    assert "fpp-abi-broken Ping" in names and "Start Playlist" in names, sorted(names)
+    assert "fpp-abi-broken Broken" not in names
+    assert str(fppd.command("fpp-abi-broken Ping", "x")) == "pong"
+    fppd.check_alive()

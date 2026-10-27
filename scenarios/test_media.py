@@ -835,6 +835,47 @@ def test_stuck_teardowns_restart_fppd_before_they_pile_up(fppd, audio):
     fppd.wait_for(answers, timeout=60, interval=1, what="the restarted fppd to answer")
 
 
+def test_a_self_restart_resumes_a_manually_started_playlist(fppd, audio):
+    """A playlist started by hand, with no schedule behind it, is playing
+    when stuck media teardowns make fppd restart itself; the restarted fppd
+    picks the playlist back up instead of coming back idle.
+
+    Regression: 2ed353c1e. A restart resumed only a scheduled playlist (the
+    scheduler restarted it); fppd's own recovery restart, which exists to
+    keep the show going, left a manually started show stopped, and every
+    synced remote on its last frame. (The reboot rung is off here, so a
+    device run can't reboot the box.)"""
+    import shims
+    from show import install
+    install(fppd, unique_frames(3000, CHANNELS))  # 150 s: still playing at the restart
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 1)
+    fppd.settings(GStreamerWedgeRebootLimit="0")
+    fppd.start(preload=[shims.build("slownull.c")], extra_env={"SLOWNULL_MS": "600000"})
+    fppd.command("Start Playlist", "Show", "true", "false")
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", timeout=15,
+                  what="the playlist to start")
+    for n in range(1, 5):
+        fppd.command("Play Media", "Tone.wav", "1", "0", "2")
+        fppd.wait_for(lambda: fppd.log().count("teardown wedged") >= n, timeout=40,
+                      interval=0.5, what=f"teardown {n} to be abandoned")
+    fppd.wait_for(lambda: "teardowns are still stuck, restarting fppd" in fppd.log(), timeout=30,
+                  interval=0.5, what="fppd to restart once four teardowns were stuck")
+
+    def playing():
+        try:
+            s = fppd.get("/fppd/status", timeout=5)
+        except Exception:
+            return None  # still coming back up
+        if fppd.log().count("Starting main processing loop") < 2:  # not the restarted one yet
+            return None
+        return s
+    s = fppd.wait_for(playing, timeout=60, interval=1, what="the restarted fppd to answer")
+    time.sleep(5)  # the main loop's resume runs on its first scheduler pass
+    s = status(fppd)
+    assert s.get("status_name") == "playing", f"the restarted fppd is {s.get('status_name')}, not playing"
+    assert s.get("current_playlist", {}).get("playlist") == "Show", s.get("current_playlist")
+
+
 def test_a_hardware_decoder_stuck_opening_counts_as_a_decoder_wedge(fppd, audio):
     """A video whose hardware decoder never loads (a stand-in plugin,
     vid_hwdecwedge.c, whose plugin_init never returns, as the v4l2 plugin's

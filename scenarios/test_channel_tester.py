@@ -38,7 +38,12 @@ def lit(frame):
 def test_single_color_fills_exactly_the_range(fppd):
     """RGB Single Color repeats its colour over the channel range (1-based,
     inclusive) and touches nothing else; Test Stop leaves the output dark
-    and status idle again."""
+    and status idle again.
+
+    Also guards 8506acb38 under TSan: the running test pattern pointer is
+    atomic. As a plain pointer, Test Start's SetupTest() replacing it (HTTP
+    thread, under m_testLock) raced Testing() reading it without the lock.
+    Shown red on master with the pointer made plain again."""
     setup(fppd)
     with DdpReceiver(CHANNELS) as rx:
         fppd.start()

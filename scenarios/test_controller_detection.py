@@ -6,6 +6,7 @@ The devices are fakes in their own network namespace (fake_devices.py),
 answering with the pages and API replies each vendor's detector looks for.
 """
 
+import json
 import time
 
 import pytest
@@ -133,6 +134,30 @@ def test_odd_devices_do_not_stop_discovery_of_the_rest(fppd):
     with fake_devices(devices):
         got = discover(fppd, devices, subnets="10.88.0.[9-59]", want=["10.88.0.9"], timeout=60)
     assert got["10.88.0.9"]["hostname"] == "fake-wled"
+
+
+def test_two_devices_reporting_one_uuid_raise_no_warning(fppd):
+    """Two FPPs at different addresses and with different names that report
+    the same UUID from their API are both listed with it, and no
+    duplicate-UUID warning is raised.
+
+    Regression: f4cfc26c2. UpdateSystem() raised warning 57 ("Duplicate
+    System UUID detected") whenever two names shared a UUID. The check was
+    removed: a device that changed its hostname or address was reported as
+    a duplicate of itself, and the warning's id is the plugin-reinstall
+    warning's.
+    """
+    def fpp(name):
+        info = dict(json.loads(FPP["/api/system/info"]["body"]), HostName=name)
+        return {"/": FPP["/"], "/api/system/info": page(info)}
+    devices = {"10.88.0.2": fpp("twin-a"), "10.88.0.3": fpp("twin-b")}
+    with fake_devices(devices):
+        got = discover(fppd, devices)
+        time.sleep(2)
+        warnings = fppd.get("/fppd/status").get("warningInfo", [])
+    assert got["10.88.0.2"]["uuid"] == got["10.88.0.3"]["uuid"] == "M1-fake-fpp-uuid", got
+    dup = [w for w in warnings if "UUID" in w.get("message", "")]
+    assert not dup, f"a duplicate-UUID warning was raised: {dup}"
 
 
 def test_a_hostile_front_page_does_not_crash_the_regex_detectors(fppd):

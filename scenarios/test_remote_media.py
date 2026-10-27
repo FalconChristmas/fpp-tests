@@ -185,3 +185,44 @@ def test_remote_video_sound_follows_the_master(fppd, audio):
     late = _remote_follows(fppd, audio, "Song.mp3")
     assert max(abs(o) for o in late) <= 50, f"the video's sound strayed {max(abs(o) for o in late):.0f} ms from the master"
     assert max(late) - min(late) <= 30, f"the video's sound wandered {max(late) - min(late):.0f} ms"
+
+
+def test_a_remote_moves_to_the_masters_next_file_on_a_sync_packet(fppd, audio):
+    """A remote playing A.wav that gets a media sync for B.wav -- the
+    master has moved on and the open packet was lost -- opens B.wav and
+    plays it, with no "Error starting media" warning.
+
+    Regression: 84f4ee28b (OpenMediaOutput). With media already open,
+    OpenMediaOutput() unlocked mediaOutputLock to close it and then
+    unlocked it again; the second unlock threw std::system_error, which
+    was caught and reported as "Error starting media B.wav: Operation not
+    permitted": that sync was lost, and B.wav opened only on the next one,
+    with an error on the banner. Runs in Docker against the null sink (the
+    audio fixture)."""
+    from audio import write_tone_wav
+    for name in ("A.wav", "B.wav"):
+        write_tone_wav(os.path.join(fppd.media, "music", name), 30)
+    fppd.settings(fppMode="remote")
+    fppd.start()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    send = lambda *a: sock.sendto(sync_packet(*a), ("127.0.0.1", PORT))
+
+    def started(name):
+        return re.search(r"GStreamer started playing: \S*/music/" + re.escape(name) + "$",
+                         fppd.log(), re.M)
+    try:
+        time.sleep(2)
+        send("open", "media", 0, 0.0, "A.wav")
+        send("start", "media", 0, 0.0, "A.wav")
+        fppd.wait_for(lambda: started("A.wav"), timeout=15, interval=0.25, what="A.wav to play")
+        for t in (1.0, 1.5, 2.0, 2.5):
+            send("sync", "media", 0, t, "B.wav")
+            time.sleep(0.5)
+        fppd.wait_for(lambda: started("B.wav"), timeout=15, interval=0.25,
+                      what="B.wav to replace A.wav")
+        errors = [w for w in fppd.get("/fppd/status").get("warnings", []) if "starting media" in w]
+        assert not errors, errors
+        assert "System exception starting media" not in fppd.log()
+        send("stop", "media", 0, 0.0, "B.wav")
+    finally:
+        sock.close()

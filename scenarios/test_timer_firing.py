@@ -42,7 +42,12 @@ def test_a_timer_on_an_idle_fppd_fires_on_time(fppd):
     Regression: e86081470. Timers were only checked when the main loop came
     round, so on an idle fppd a timer ran at the loop's next wake -- here
     about 45 ms late every time -- rather than when it was due. Timers now
-    arm a timerfd on the EPollManager loop for the next deadline."""
+    arm a timerfd on the EPollManager loop for the next deadline.
+
+    Also guards 7363b6a49 under TSan: hasTimers and nextTimer are atomic. As
+    plain fields, updateTimers() writing them under the lock from the
+    plugin's command thread raced fireTimers() reading them without it on
+    the main loop. Shown red on master with the two made plain again."""
     install(fppd)
     fppd.start()
     fppd.wait_for(lambda: "Timer Fire Chain" in {c["name"] for c in fppd.get("/commands")},

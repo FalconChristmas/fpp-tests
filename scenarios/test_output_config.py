@@ -738,6 +738,57 @@ def test_fixing_the_output_takes_the_local_drop_warning_down(fppd):
         run("ip", "link", "del", "ethfpp0")
 
 
+def test_the_local_drop_warning_has_its_own_id_and_help(fppd):
+    """An output whose interface drops packets in its qdisc raises the
+    local-drop warning as id 69, and the definition the web UI looks that id
+    up in (www/warnings-definitions.json, by id, as updateWarnings() in
+    js/fpp.js does) gives it the drop banner's title and a help page that
+    exists.
+
+    Regression: ff211d104. The drop banner was raised as warning 57, the
+    plugin-reinstall warning's id, so the UI showed it with "plugins must be
+    reinstalled" as its title and linked to the plugin help.
+    """
+    import subprocess
+
+    def run(*cmd):
+        return subprocess.run(cmd, capture_output=True, text=True)
+
+    run("ip", "link", "del", "ethfpp0")
+    if run("ip", "link", "add", "ethfpp0", "type", "dummy").returncode:
+        pytest.skip("cannot add a dummy interface")
+    try:
+        run("ip", "addr", "add", "10.66.0.1/24", "dev", "ethfpp0")
+        run("ip", "link", "set", "ethfpp0", "up")
+        r = run("tc", "qdisc", "add", "dev", "ethfpp0", "root", "tbf", "rate", "1mbit",
+                "burst", "2kb", "limit", "3kb")
+        if r.returncode:
+            pytest.skip(f"tbf: {r.stderr.strip()}")
+        cfg = e131_universes(20, address="10.66.0.2", type=1)
+        cfg["channelOutputs"][0].update({"interface": "ethfpp0", "pacingRate": 0})
+        fppd.write("config/co-universes.json", cfg)
+        fppd.settings(DisableFakeNetworkBridges="1")
+        fppd.start()
+        fppd.command("Test Start", "100", "RGB Cycle", "1-10200", "R-G-B")
+
+        def drop_warning():
+            return [w for w in fppd.get("/fppd/status").get("warningInfo", [])
+                    if "dropping outgoing packets" in w.get("message", "")]
+        up = fppd.wait_for(drop_warning, timeout=240, interval=2, what="the local-drop warning")
+        ids = sorted({w.get("id") for w in up})
+        assert ids == [69], f"the local-drop warning was raised as id {ids}, not 69"
+
+        tree = os.environ["FPP_TREE"]
+        with open(os.path.join(tree, "www/warnings-definitions.json")) as f:
+            defs = [d for d in json.load(f)["Warnings"] if d["id"] == 69]
+        assert len(defs) == 1, f"warnings-definitions.json has {len(defs)} entries for id 69"
+        assert "Dropping Packets" in defs[0]["Title"], defs[0]
+        assert defs[0]["HelpPageType"] == "md", defs[0]
+        assert os.path.isfile(os.path.join(tree, "www/help/warning-helpers/warning-69.md"))
+    finally:
+        run("ip", "link", "del", "ethfpp0")
+
+
 def test_an_output_type_with_a_percent_is_logged_as_it_is(fppd):
     """An output type fppd has no plugin for is logged by name, '%'
     characters and all.

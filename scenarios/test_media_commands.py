@@ -41,6 +41,12 @@ def test_play_media_loop_count_plays_every_pass(fppd, audio):
     handler, on the streaming thread that had just posted EOS; the sink's
     flush re-took its own preroll lock and the seek never returned. The
     file played once, then silence, and the next stop wedged the main loop.
+
+    Also guards 77b64ac06: Stopped() runs once per output. Without that, the
+    Stopped() reached again while the ended output is being deleted queued a
+    second deferred delete of it (ASan: heap-use-after-free in
+    RemoveRunningMedia's timer). Shown red on master with the once-only check
+    taken out.
     """
     write_tone_wav(os.path.join(fppd.media, "music", "Loop.wav"), 1)
     fppd.start()

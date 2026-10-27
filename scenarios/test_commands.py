@@ -3,6 +3,7 @@ places that run commands without an HTTP handler above them."""
 
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -497,44 +498,83 @@ def test_run_script_refuses_a_path_outside_the_scripts_directory(fppd):
         fppd.get("/fppd/status").get("warnings")
 
 
+class StandInApi:
+    """A stand-in for the web API on port 80, where fppd sends the requests
+    some commands make of http://localhost/api/...: it records each request's
+    method, path and body and answers 200 with "{}"."""
+
+    def __init__(self):
+        import http.server
+        import threading
+        self.requests = []
+        recorded = self.requests
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def handle_any(self):
+                body = self.rfile.read(int(self.headers.get("Content-Length", 0) or 0))
+                recorded.append((self.command, self.path, body))
+                self.send_response(200)
+                self.send_header("Content-Length", "2")
+                self.end_headers()
+                self.wfile.write(b"{}")
+
+            do_GET = do_POST = do_PUT = handle_any
+
+            def log_message(self, *a):
+                pass
+
+        try:
+            self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 80), H)
+        except OSError as e:
+            pytest.skip(f"can't listen on port 80 for the web API stand-in: {e}")
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+
+def api_routes(fppd, path):
+    """The methods the tree's www/api/index.php dispatches `path` (under
+    /api) for: the receiving end of a request fppd makes of the web API."""
+    with open(os.path.join(fppd.tree, "www", "api", "index.php")) as f:
+        text = f.read()
+    return {m.upper() for m in re.findall(r"dispatch_(get|post|put|delete)\('" + re.escape(path) + r"'", text)}
+
+
 def test_routing_preset_name_with_a_quote_is_sent_intact(fppd):
     """"Pipewire Apply Routing Preset" with a preset name containing a quote
     and a backslash sends the live-apply endpoint valid JSON naming exactly
-    that preset.
+    that preset, by a method that endpoint is routed for. In a build with
+    GStreamer the command has to be there under that name.
 
     Regression: 03d41a751. The request body was pasted together around the
-    name, so '"' or '\\' in it made invalid JSON (or a different request)."""
-    import http.server
-    import threading
-    bodies = []
-
-    class H(http.server.BaseHTTPRequestHandler):
-        def do_POST(self):
-            bodies.append(self.rfile.read(int(self.headers.get("Content-Length", 0))))
-            self.send_response(200)
-            self.send_header("Content-Length", "2")
-            self.end_headers()
-            self.wfile.write(b"{}")
-
-        def log_message(self, *a):
-            pass
-
+    name, so '"' or '\\' in it made invalid JSON (or a different request).
+    Also 7b9766638 (the command's name; shown red against master with the
+    rename reverted) and 11a5a13a6 (the command; red with its registration
+    removed): this used to skip when the command wasn't listed, so it
+    couldn't fail for either."""
     fppd.start()
-    if "Pipewire Apply Routing Preset" not in [c["name"] for c in fppd.get("/commands")]:
-        pytest.skip("built without AES67 GStreamer support")
-    try:
-        server = http.server.ThreadingHTTPServer(("127.0.0.1", 80), H)
-    except OSError as e:
-        pytest.skip(f"can't listen on port 80 for the live-apply endpoint: {e}")
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
+    listed = [c["name"] for c in fppd.get("/commands")]
+    if not fppd.built_with("gstreamer"):
+        pytest.skip("built without GStreamer, so without the AES67/PipeWire commands")
+    assert "Pipewire Apply Routing Preset" in listed, \
+        sorted(n for n in listed if "Preset" in n or "Routing" in n)
+    with StandInApi() as api:
         name = 'a"b\\c'
         fppd.command("Pipewire Apply Routing Preset", name, timeout=15)
-        fppd.wait_for(lambda: bodies, timeout=10, what="the live-apply request")
-    finally:
-        server.shutdown()
-        server.server_close()
-    assert json.loads(bodies[0])["name"] == name, bodies[0]
+        fppd.wait_for(lambda: api.requests, timeout=10, what="the live-apply request")
+    method, path, body = api.requests[0]
+    assert path == "/api/pipewire/audio/routing/presets/live-apply", api.requests
+    assert method in api_routes(fppd, "/pipewire/audio/routing/presets/live-apply"), \
+        f"{method} isn't routed for the live-apply endpoint"
+    assert json.loads(body)["name"] == name, body
 
 
 def test_persisted_variable_saves_land_in_order(fppd):
@@ -630,3 +670,145 @@ def test_a_file_save_never_shows_a_locked_reader_an_empty_file(fppd):
     assert during == before, f"while the reader held its lock the file read {during!r}"
     with open(path) as f:
         assert json.load(f)["X"]["value"] == "new"
+
+
+def test_the_insert_playlist_commands_are_basic(fppd):
+    """Insert Playlist After Current and Insert Playlist Immediate are listed
+    at the Basic UI level (0), so the command editor offers them without
+    Advanced turned on.
+
+    Regression: 291a7cf12. Both were registered at level 1 (Advanced)."""
+    fppd.start()
+    levels = {c["name"]: c.get("level") for c in fppd.get("/commands")}
+    for name in ("Insert Playlist After Current", "Insert Playlist Immediate"):
+        assert levels.get(name) == 0, f"{name}: level {levels.get(name)!r}"
+
+
+def test_an_if_skips_command_list_entries_that_are_not_objects(fppd):
+    """An If whose Then list holds entries that aren't JSON objects -- a
+    number, a string -- skips them and runs the commands after them, whether
+    the If is POSTed or runs as a playlist entry; the playlist goes on.
+
+    Regression: 113f5372a. Each entry was read with Json::Value::get(),
+    which throws Json::LogicError on a non-object: the whole If failed
+    (POSTed, a 500), and none of its commands ran."""
+    fppd.start()
+    fppd.command("Set Variable", "Flag", "Value", "1", "1", "0", "100", "")
+    cmd = if_command(expression_is("Flag", "1"), [42, "Set Variable", set_variable("Posted", "yes")])
+    try:
+        fppd.post("/command", cmd)
+    except urllib.error.HTTPError as e:
+        pytest.fail(f"the If was refused: {e.code} {getattr(e, 'body', '')}")
+    fppd.wait_for(lambda: variable(fppd, "Posted") == "yes", timeout=5,
+                  what="the If's command after the non-object entries to run")
+
+    fppd.write("playlists/Ifs.json", playlist("Ifs", [
+        command_entry(if_command(expression_is("Flag", "1"), [7, set_variable("FromEntry", "yes")])),
+        command_entry(set_variable("After", "yes"))]))
+    fppd.command("Start Playlist", "Ifs", "false", "false")
+    fppd.wait_for(lambda: variable(fppd, "After") == "yes", timeout=10,
+                  what="the entry after the If to run")
+    assert variable(fppd, "FromEntry") == "yes", "the playlist entry's If didn't run its command"
+
+
+def test_variables_reach_a_playlist_command_entry(fppd):
+    """%VAR:name% in a playlist "FPP Command" entry's arguments is replaced
+    with the variable's value when the entry runs, as it is for presets.
+
+    Regression: ce9700595. Only the preset path (ReplaceCommandKeywords)
+    substituted variables; a playlist entry runs its command through
+    CommandManager::run() directly, so the command got the literal
+    "%VAR:Src%"."""
+    fppd.write("playlists/Vars.json", playlist("Vars", [
+        command_entry(set_variable("Dst", "%VAR:Src%")),
+        command_entry(set_variable("Done", "yes"))]))
+    fppd.start()
+    fppd.command("Set Variable", "Src", "Value", "seven", "1", "0", "100", "")
+    fppd.command("Start Playlist", "Vars", "false", "false")
+    fppd.wait_for(lambda: variable(fppd, "Done") == "yes", timeout=10, what="the playlist to run")
+    assert variable(fppd, "Dst") == "seven"
+
+
+@pytest.mark.parametrize("name, path", [("Reboot", "/system/reboot"), ("Shutdown", "/system/shutdown")])
+def test_reboot_and_shutdown_commands_need_confirming(fppd, name, path):
+    """The Reboot and Shutdown commands (System, Advanced) refuse to act
+    without their confirm argument, and with it ask the web API's
+    /api/system/reboot or /shutdown -- by a method that route is dispatched
+    for -- to do it. On a player, not in a container: the image's
+    /etc/fpp/container is hidden from fppd (nocontainer.c), and port 80 is
+    a stand-in that only records the request.
+
+    Regression: 675ddc7f4, which added them. Its parent has neither command."""
+    from shims import build
+    fppd.start(preload=[build("nocontainer.c")])
+    listed = {c["name"]: c for c in fppd.get("/commands")}
+    assert name in listed, f"no {name} command"
+    assert listed[name].get("category") == "System" and listed[name].get("level") == 1, listed[name]
+    with StandInApi() as api:
+        for refused in ("false", "0"):
+            try:
+                result = fppd.command(name, refused)
+            except urllib.error.HTTPError as e:
+                result = getattr(e, "body", "")
+            assert "Confirmation not given" in str(result), result
+        time.sleep(1)
+        assert api.requests == [], "an unconfirmed command reached the API"
+        fppd.command(name, "true")
+        fppd.wait_for(lambda: api.requests, timeout=10, what=f"the {name} request")
+    method, req_path, _ = api.requests[0]
+    assert req_path == "/api" + path, api.requests
+    assert method in api_routes(fppd, path), f"{method} isn't routed for /api{path}"
+    fppd.check_alive()
+
+
+def test_the_remote_commands_are_gone(fppd):
+    """The deprecated Remote ... commands, which posted a command to one
+    other player by address, aren't listed; a playlist entry naming one
+    fails on its own and the playlist runs its next entry.
+
+    Regression: 58087f2ed, which removed them in favour of MultiSync
+    commands (shown red against master with the removal reverted). The
+    upgrade that converts saved ones is tested separately."""
+    fppd.start()
+    listed = [c["name"] for c in fppd.get("/commands")]
+    assert not [n for n in listed if n.startswith("Remote ")], [n for n in listed if "Remote" in n]
+    fppd.write("playlists/Old.json", playlist("Old", [
+        command_entry({"command": "Remote Trigger Command Preset", "args": ["127.0.0.2", "Nothing"]}),
+        command_entry(set_variable("After", "yes"))]))
+    fppd.command("Start Playlist", "Old", "false", "false")
+    fppd.wait_for(lambda: variable(fppd, "After") == "yes", timeout=10,
+                  what="the entry after the Remote command to run")
+
+
+def test_the_aes67_self_test(fppd):
+    """The "AES67 Test" command and fppd's /aes67/test route answer with a
+    result per subsystem check and a summary that adds up, and the tree's
+    scripts/aes67_test --self-test, which reads that route, prints them;
+    fppd stays up.
+
+    Regression: 28d36cfc0, which added both (shown red against master with
+    the command and route removed). The zero-hop inline RTP it also added is
+    gone from master."""
+    import subprocess
+    fppd.start()
+    if not fppd.built_with("gstreamer"):
+        pytest.skip("built without GStreamer, so without AES67")
+    assert "AES67 Test" in [c["name"] for c in fppd.get("/commands")]
+    try:
+        report = str(fppd.command("AES67 Test", timeout=30))
+    except urllib.error.HTTPError as e:
+        report = getattr(e, "body", "")  # an ErrorResult when a check fails
+    assert "gstreamer_init" in report and re.search(r"Total: \d+ \| Passed: \d+ \| Failed: \d+", report), report
+    result = fppd.get("/aes67/test", timeout=30)
+    tests, summary = result["tests"], result["summary"]
+    assert tests and all({"test", "passed", "message"} <= set(t) for t in tests), result
+    passed = sum(1 for t in tests if t["passed"])
+    assert (summary["total"], summary["passed"], summary["failed"]) == \
+        (len(tests), passed, len(tests) - passed), result
+    assert summary["allPassed"] == (passed == len(tests))
+    assert {"test": "gstreamer_init", "passed": True} == \
+        {k: v for k, v in next(t for t in tests if t["test"] == "gstreamer_init").items() if k != "message"}
+    script = os.path.join(fppd.tree, "scripts", "aes67_test")
+    out = subprocess.run(["bash", script, "--self-test"], capture_output=True, text=True, timeout=60).stdout
+    assert f"Total: {summary['total']} | Passed: {passed} | Failed: {len(tests) - passed}" in out, out
+    fppd.check_alive()

@@ -194,3 +194,27 @@ def test_a_hardware_refined_rate_is_info_not_a_warning(fppinit):
     note = [l for l in lines if "The audio engine runs at 88.2 kHz, not the 44.1 kHz configured." in l]
     assert note == ["[INFO] The audio engine runs at 88.2 kHz, not the 44.1 kHz configured."], out
     assert not any(l.startswith("[WARN]") for l in lines), out
+
+
+def test_the_report_marks_resampled_audio_and_the_summary_names_no_files(fppinit):
+    """The full report lists every file, marks the 44.1 kHz one on a 48 kHz
+    engine as resampled and counts it as one to convert; --summary, the form
+    a Diagnostic Report gets (the command is "pii"), has the counts but no
+    file names.
+
+    Feature: c42fd987d (the Media Files tab's report)."""
+    sb = fppinit
+    write_wav(sb, "song-at-44k.wav", 44100)
+    write_wav(sb, "song-at-48k.wav", 48000)
+    out = report(sb, engine=48000, configured=48000)
+    assert file_note(out, "song-at-44k.wav") == "resampled", out
+    assert file_note(out, "song-at-48k.wav") == "", out
+    assert "48 kHz: 1 of 2 (50%)" in out, out  # "Audio files to convert to" (was "not at")
+
+    args = " ".join(shlex.quote(f"--{d}={MEDIA}/{d}") for d in ("music", "videos", "images"))
+    r = sb._run(["sh", "-c", f"php -d short_open_tag=1 /opt/fpp/scripts/media_report.php --summary {args}"],
+                timeout=120)
+    summary = r.stdout + r.stderr
+    assert r.returncode == 0, summary[-3000:]
+    assert "48 kHz: 1 of 2 (50%)" in summary, summary
+    assert "song-at-" not in summary, f"the summary names files:\n{summary}"

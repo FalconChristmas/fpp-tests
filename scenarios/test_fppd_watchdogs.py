@@ -115,3 +115,30 @@ def test_a_crash_handler_wedged_on_the_log_still_exits(fppd):
     assert rc == -signal.SIGALRM, \
         f"fppd exited with {describe_rc(rc)} after {took:.0f} s, not by the crash handler's watchdog\n{fppd.tail()}"
     assert 100 <= took <= 150, f"the crash handler's watchdog fired {took:.0f} s in"
+
+
+def test_a_main_loop_stall_names_the_call_it_is_stuck_in(fppd):
+    """The main-loop watchdog's stall line names the call the loop last
+    entered -- here 'epoll/callbacks', where life_mainstall.so holds it --
+    and so does its line once the loop moves again.
+
+    Regression: ca86a06a3. The watchdog said only that there had been no
+    iteration for so many seconds; a stalled main thread that gdb couldn't
+    unwind past one bare libc frame left no clue which call it was in.
+    """
+    stall = os.path.join(fppd.media, "tmp", "stall")
+    fppd.settings(MainLoopStallTimeout="2", MainLoopStallRestartTimeout="120")
+    fppd.start(preload=[shims.build("life_mainstall.c")], extra_env={"LIFE_STALL_FILE": stall})
+    time.sleep(1)
+    open(stall, "w").close()
+    fppd.wait_for(lambda: os.path.exists(stall + ".held"), timeout=10, what="the main loop to stall")
+    fppd.wait_for(lambda: "Main loop watchdog: no main loop iteration" in fppd.log(), timeout=30,
+                  interval=0.5, what="the watchdog's stall line")
+    os.remove(stall)
+    fppd.wait_for(lambda: "Main loop watchdog: loop resumed" in fppd.log(), timeout=30,
+                  interval=0.5, what="the watchdog's resumed line")
+    log = fppd.log()
+    stalled = [l for l in log.splitlines() if "Main loop watchdog: no main loop iteration" in l]
+    resumed = [l for l in log.splitlines() if "Main loop watchdog: loop resumed" in l]
+    assert all("stalled in 'epoll/callbacks'" in l for l in stalled), stalled
+    assert all("(was in 'epoll/callbacks')" in l for l in resumed), resumed

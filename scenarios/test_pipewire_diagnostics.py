@@ -86,3 +86,39 @@ def test_a_configured_default_sink_that_is_gone_is_reported(fppd, audio):
         sh("pw-metadata -n default -d 0 default.configured.audio.sink")
         if made:
             os.remove(conf)
+
+
+def test_xruns_off_the_card_are_described_by_how_long_their_nodes_live(fppinit):
+    """Xruns pw-top counts on nodes other than the card are listed as group,
+    stream and client xruns, with notes saying FPP's group and effects nodes
+    live until PipeWire restarts (so their counts compare between runs) and
+    that a climbing count in the playback path can leave the sound behind the
+    lights. pw-top is a stand-in printing two snapshots with xruns on a group
+    node, fppd's stream and a probe.
+
+    Regression: a0b4c6a00. The notes called every such count "context, not a
+    fault", said fppd_stream_N and the other client nodes were rebuilt per
+    track so the numbers were not a trend -- no longer true, and the reason a
+    climbing count on a group node or the held-open stream was dismissed."""
+    script = r"""
+cat > /usr/bin/pw-top <<'STUB'
+#!/bin/sh
+for pass in 1 2; do
+echo "S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME"
+echo "R   40   1024  48000  12.0us  30.0us  0.00  0.00    0    S16LE 2 48000 fpp_alsa_card0"
+echo "R   52   1024  48000  12.0us  30.0us  0.00  0.00    7    F32LE 2 48000 fpp_group_Main"
+echo "R   61   1024  48000  12.0us  30.0us  0.00  0.00    3    F32LE 2 48000 fppd_stream_1"
+echo "R   70   1024  48000  12.0us  30.0us  0.00  0.00    1    F32LE 2 48000 gst-launch-1.0"
+done
+STUB
+chmod +x /usr/bin/pw-top
+/opt/fpp/scripts/pipewire_diagnostics.sh performance
+"""
+    r = fppinit._run(["sh", "-c", script], timeout=120)
+    out = r.stdout + r.stderr
+    assert "11 xrun(s) on group, stream and client nodes" in out, out[-3000:]
+    assert "context, not a fault" not in out, out[-3000:]
+    assert "rebuilt per track" not in out, out[-3000:]
+    notes = " ".join(l.strip() for l in out.splitlines())  # the notes wrap over lines
+    assert "fpp_group_* and fpp_fx_* nodes live until the PipeWire services restart" in notes, out[-3000:]
+    assert "can leave the sound behind the lights" in notes, out[-3000:]

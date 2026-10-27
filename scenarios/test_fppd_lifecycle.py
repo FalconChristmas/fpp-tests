@@ -146,3 +146,102 @@ def test_shutdown_skips_the_global_destructors(fppd):
     assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
     assert "terminate called" not in open(os.path.join(fppd.media, "logs", "fppd.stdout"),
                                           errors="replace").read()
+
+
+import pytest
+
+
+@pytest.mark.parametrize("sig", ["SIGINT", "SIGTERM"])
+def test_a_stop_signal_is_handled_without_allocating(fppd, sig):
+    """SIGINT and SIGTERM stop fppd through a handler that only clears the
+    main loop's flag: fppd exits 0, and ThreadSanitizer (the tsan flavor)
+    sees no signal-unsafe call in a signal handler.
+
+    Regression: 5b9e29f57. drogon's handlers ran for both signals; they log
+    the signal, which allocates, and then ran fppd's callback, all inside
+    the handler, so a signal landing while a thread was in malloc could
+    deadlock the shutdown.
+    """
+    import signal as signals
+    from fppd import describe_rc
+    fppd.start()
+    time.sleep(1)
+    fppd.proc.send_signal(getattr(signals, sig))
+    rc = fppd.proc.wait(timeout=60)
+    fppd.exit_expected = True
+    assert rc == 0, f"fppd exited with {describe_rc(rc)} on {sig}\n{fppd.tail()}"
+    reports = fppd.sanitizer_reports()
+    assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
+
+
+# Runs argv[2:] with a pseudo-terminal as its stdout and stderr, copies what
+# it writes there to argv[1], passes SIGTERM/SIGINT on, and exits as it did.
+ON_A_TERMINAL = r"""
+import os, pty, signal, sys
+pid, fd = pty.fork()
+if pid == 0:
+    os.execv(sys.argv[2], sys.argv[2:])
+for s in (signal.SIGTERM, signal.SIGINT):
+    signal.signal(s, lambda n, f: os.kill(pid, n))
+with open(sys.argv[1], "wb", buffering=0) as out:
+    while True:
+        try:
+            data = os.read(fd, 65536)
+        except InterruptedError:
+            continue
+        except OSError:
+            break
+        if not data:
+            break
+        out.write(data)
+while True:
+    try:
+        _, status = os.waitpid(pid, 0)
+        break
+    except InterruptedError:
+        continue
+sys.exit(os.waitstatus_to_exitcode(status) & 0xff)
+"""
+
+
+def unknown_command(fppd, name):
+    try:
+        fppd.command(name)
+    except Exception:
+        pass  # it answers with an error; the log line is what counts
+
+
+def test_fppd_f_on_a_terminal_echoes_its_log_lines(fppd):
+    """fppd -f run from a terminal echoes every log line to it as well as
+    writing fppd.log.
+
+    Regression: 2beec3674. The copy to stdout of a line already written to
+    the log file was dropped (so journald, reading a systemd fppd's stdout,
+    wouldn't get every line twice), and that took the echo away from a
+    person running fppd -f in a terminal too.
+    """
+    tty = os.path.join(fppd.media, "logs", "fppd.tty")
+    fppd.start(argv=["python3", "-c", ON_A_TERMINAL, tty, os.path.join(fppd.tree, "src", "fppd"), "-f"])
+    unknown_command(fppd, "No Such Command On A Terminal")
+    log = os.path.join(fppd.media, "logs", "fppd.log")
+    fppd.wait_for(lambda: "No Such Command On A Terminal" in open(log, errors="replace").read(),
+                  timeout=10, what="the line in fppd.log")
+    fppd.wait_for(lambda: "No Such Command On A Terminal" in open(tty, errors="replace").read(),
+                  timeout=5, what="the line echoed to the terminal")
+
+
+def test_fppd_f_into_a_pipe_writes_its_log_lines_once(fppd):
+    """fppd -f with stdout a pipe or a file (as under systemd, where journald
+    reads it) leaves the lines it writes to fppd.log off stdout, so the
+    journal doesn't hold every line twice.
+
+    Kept by 2beec3674, which brought the echo back only for a terminal.
+    """
+    fppd.start()
+    unknown_command(fppd, "No Such Command Into A Pipe")
+    log = os.path.join(fppd.media, "logs", "fppd.log")
+    fppd.wait_for(lambda: "No Such Command Into A Pipe" in open(log, errors="replace").read(),
+                  timeout=10, what="the line in fppd.log")
+    time.sleep(0.5)
+    with open(os.path.join(fppd.media, "logs", "fppd.stdout"), errors="replace") as f:
+        assert "No Such Command Into A Pipe" not in f.read(), "a line in fppd.log was copied to stdout too"

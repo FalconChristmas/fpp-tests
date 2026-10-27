@@ -324,3 +324,321 @@ def test_crash_report_checks_the_crashing_code_against_the_disk(fppd):
     ours = [m for m in integrity["modules"] if m["path"].endswith("/libfpp.so")]
     assert ours and re.fullmatch(r"[0-9a-f]{64}", ours[0].get("sha256", "")), \
         f"libfpp.so has no sha256: {ours}"
+
+
+def test_crash_report_tells_memory_damage_from_a_damaged_file(fppd, tmp_path):
+    """A library whose code pages were damaged in RAM is reported as memory
+    damage ("page cache DIFFERS from storage"), not as a file damaged on
+    disk, and a library that really is damaged on disk still reads as one.
+
+    A flipped bit in RAM is modelled with directstorage.so: the library's
+    ordinary reads (its page cache) give the damaged bytes fppd ran, and its
+    O_DIRECT reads give the intact bytes the storage holds.
+
+    Regression: 8a7c3ea56. crash_module_integrity.py read the file through
+    the page cache only, which shares its pages with the mapping, so the
+    code at pc "matched the file" and the md5 mismatched the package: the
+    verdict for a damaged file.
+    """
+    import hashlib
+    import random
+    import shims
+    rng = random.Random(8)
+    intact = bytes(rng.randrange(256) for _ in range(64 * 1024))
+    flipped = bytearray(intact)
+    flipped[0x1234] ^= 0x10
+    flipped = bytes(flipped)
+    libdir = tmp_path / "lib"
+    libdir.mkdir()
+    ram_hit = libdir / "libramhit.so"      # page cache damaged, storage intact
+    disk_hit = libdir / "libdiskhit.so"    # damaged on disk
+    ram_hit.write_bytes(flipped)
+    disk_hit.write_bytes(flipped)
+    storage = tmp_path / "libramhit.storage"
+    storage.write_bytes(intact)
+    dpkg = tmp_path / "dpkg"
+    dpkg.mkdir()
+    md5 = hashlib.md5(intact).hexdigest()
+    (dpkg / "libfpptests.md5sums").write_text(
+        f"{md5}  {str(ram_hit).lstrip('/')}\n{md5}  {str(disk_hit).lstrip('/')}\n")
+    ram_base, disk_base = 0x7f0000000000, 0x7f1000000000
+    code = flipped[0x1230:0x1240]
+    ctx = tmp_path / "fppd_crash_context.log"
+    ctx.write_text(
+        "=== module map\n"
+        f"{ram_base:x}-{ram_base + 0x10000:x} r-xp 00000000 00:00 1 {ram_hit}\n"
+        f"{disk_base:x}-{disk_base + 0x10000:x} r-xp 00000000 00:00 2 {disk_hit}\n"
+        "=== code at pc\n"
+        f"0x{ram_base + 0x1230:x}: {code.hex(' ')}\n"
+        f"0x{disk_base + 0x1230:x}: {code.hex(' ')}\n")
+    out = tmp_path / "module_integrity.json"
+    log = tmp_path / "redirects.log"
+    env = dict(os.environ, LD_PRELOAD=shims.build("directstorage.c"),
+               DIRECTSTORAGE_PATH=str(ram_hit), DIRECTSTORAGE_FROM=str(storage),
+               DIRECTSTORAGE_LOG=str(log), FPP_DPKG_INFO_DIR=str(dpkg))
+    r = subprocess.run(["python3", os.path.join(fppd.tree, "scripts", "crash_module_integrity.py"),
+                        str(ctx), str(out)], capture_output=True, text=True, timeout=60, env=env)
+    assert r.returncode == 0 and out.exists(), f"rc {r.returncode}\n{r.stdout}\n{r.stderr}"
+    report = json.loads(out.read_text())
+    modules = {m["path"]: m for m in report["modules"]}
+    pcs = {c.get("module"): c for c in report["code_at_pc"]}
+    assert modules[str(disk_hit)]["status"] == "DIFFERS from package", modules[str(disk_hit)]
+    assert pcs[str(disk_hit)]["result"] == "matches file", pcs[str(disk_hit)]
+    assert pcs[str(ram_hit)]["result"] == "page cache DIFFERS from storage", \
+        f"memory damage at pc reads as a damaged file: {pcs[str(ram_hit)]}"
+    assert modules[str(ram_hit)]["status"] == "page cache DIFFERS from storage", \
+        f"memory damage reads as a damaged file: {modules[str(ram_hit)]}"
+    assert report["page_cache_differs"] == [str(ram_hit)], report["page_cache_differs"]
+    assert report["differs_from_package"] == [str(disk_hit)], report["differs_from_package"]
+
+
+def test_crash_report_records_installed_plugin_versions(fppd, tmp_path):
+    """A report has a plugins.json naming the commit
+    each installed plugin sits on: here a git checkout owned by another user
+    (as plugins are owned by fpp and the report runs as root), modified in
+    place and cloned from an https remote with a token in its URL, and a
+    plugin that isn't a git checkout. The commit and the -dirty state are
+    recorded, the remote is, with its credentials gone.
+
+    Added in 6eb1ee902. Nothing in a report said which plugin build the
+    device ran, so a fix in a plugin repo could only be aged out by date.
+    """
+    plugin = os.path.join(fppd.media, "plugins", "fpp-tests-plugin")
+    os.makedirs(plugin)
+    git = ["git", "-C", plugin, "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run(["git", "init", "-q", plugin], check=True)
+    with open(os.path.join(plugin, "pluginInfo.json"), "w") as f:
+        f.write("{}\n")
+    subprocess.run([*git, "add", "."], check=True)
+    subprocess.run([*git, "commit", "-qm", "one"], check=True)
+    subprocess.run([*git, "remote", "add", "origin",
+                    "https://fpp-tests-user:LEAK-plugin-token@example.com/x/fpp-tests-plugin.git"], check=True)
+    commit = subprocess.run([*git, "rev-parse", "--short", "HEAD"], check=True,
+                            capture_output=True, text=True).stdout.strip()
+    with open(os.path.join(plugin, "pluginInfo.json"), "a") as f:
+        f.write("\n")
+    subprocess.run(["chown", "-R", "1000:1000", plugin], check=True)
+    os.makedirs(os.path.join(fppd.media, "plugins", "fpp-tests-copied"))
+    os.makedirs(os.path.join(fppd.media, "crashes"))
+    view = private_fppdir(fppd.tree, fppd.media)
+    out = os.path.join(fppd.media, "crashes", "report.zip")
+    env = dict(os.environ)
+    env.pop("LD_PRELOAD", None)
+    r = subprocess.run(["bash", os.path.join(view, "scripts", "generate_crash_report"), "2", out],
+                       capture_output=True, text=True, timeout=180, env=env)
+    assert r.returncode == 0 and os.path.exists(out), f"no report:\n{r.stdout[-2000:]}\n{r.stderr[-2000:]}"
+    with zipfile.ZipFile(out) as z:
+        texts = {n: z.read(n).decode("latin-1") for n in z.namelist()}
+    name = next((n for n in texts if n.endswith("plugins.json")), None)
+    assert name, f"no plugins.json in the report: {sorted(texts)}"
+    plugins = {p["name"]: p for p in json.loads(texts[name])["plugins"]}
+    ours = plugins.get("fpp-tests-plugin")
+    assert ours and ours.get("commit") == commit, f"the plugin's commit {commit} isn't recorded: {plugins}"
+    assert ours.get("dirty") is True and ours.get("describe", "").endswith("-dirty"), ours
+    assert ours.get("remote") == "https://example.com/x/fpp-tests-plugin.git", ours
+    assert plugins.get("fpp-tests-copied", {}).get("error") == "not a git checkout", plugins
+    leaks = sorted(n for n, t in texts.items() if "LEAK-plugin-token" in t or "fpp-tests-user" in t)
+    assert not leaks, f"the remote's credentials ship in: {leaks}"
+
+
+def test_crash_report_resolves_the_fallback_stack_to_lines(fppd, tmp_path):
+    """When gdb gives no stack (here a gdb that fails at once), fppd records
+    the raw frame addresses and the module map, and the report resolves them
+    on the box: fppd_crash_addr2line.log names fppd's own functions with
+    their file:line.
+
+    Added in 0ab80c166. Before it a crash without gdb left only bare
+    addresses, which can't be resolved anywhere but on the device that ran
+    the binary.
+    """
+    stub = tmp_path / "bin"
+    stub.mkdir()
+    (stub / "gdb").write_text("#!/bin/sh\nexit 1\n")
+    (stub / "gdb").chmod(0o755)
+    crashes = os.path.join(fppd.media, "crashes")
+    os.makedirs(crashes, exist_ok=True)
+    fppd.settings(ShareCrashData="0")
+    fppd.start(extra_env={"PATH": f"{stub}:{os.environ['PATH']}"})
+    fppd.proc.send_signal(signal.SIGABRT)
+    try:
+        rc = fppd.proc.wait(timeout=180)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(f"the crash handler did not finish within 180s\n{fppd.tail()}")
+    fppd.exit_expected = True
+    assert rc == 255, f"fppd exited with {describe_rc(rc)}, not the crash handler's _exit(-1)\n{fppd.tail()}"
+    texts = report_texts(fppd, crashes)
+    crash_log = next((t for n, t in texts.items() if n.endswith("fppd_crash.log")), "")
+    assert "=== raw frames" in crash_log, \
+        f"gdb wasn't bypassed, so this proves nothing:\n{crash_log[:2000]}"
+    name = next((n for n in texts if n.endswith("fppd_crash_addr2line.log")), None)
+    assert name, f"the raw frames weren't resolved: {sorted(texts)}"
+    resolved = texts[name]
+    assert "MainLoop" in resolved and "fppd.cpp:" in resolved, \
+        f"fppd's frames aren't named with their lines:\n{resolved}"
+
+
+def crash_with_curl_stub(fppd, tmp_path, share):
+    """Crash fppd with ShareCrashData `share` and a curl on its PATH that
+    only records how it was called; the curl calls."""
+    stub = tmp_path / "bin"
+    stub.mkdir()
+    calls = tmp_path / "curl-calls"
+    (stub / "curl").write_text(f"#!/bin/sh\necho \"$@\" >> {calls}\n")
+    (stub / "curl").chmod(0o755)
+    os.makedirs(os.path.join(fppd.media, "crashes"), exist_ok=True)
+    fppd.settings(ShareCrashData=share)
+    fppd.start(extra_env={"PATH": f"{stub}:{os.environ['PATH']}"})
+    fppd.proc.send_signal(signal.SIGABRT)
+    try:
+        rc = fppd.proc.wait(timeout=180)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(f"the crash handler did not finish within 180s\n{fppd.tail()}")
+    fppd.exit_expected = True
+    assert rc == 255, f"fppd exited with {describe_rc(rc)}, not the crash handler's _exit(-1)\n{fppd.tail()}"
+    return calls.read_text().splitlines() if calls.exists() else []
+
+
+def test_crash_report_kept_locally_is_full_and_never_sent(fppd, tmp_path):
+    """ShareCrashData 0 ("Keep locally, do not send") writes a full report,
+    settings, configs and logs included, into crashes/, and uploads nothing.
+
+    Regression: b4dd21938. 0 was "Disabled": no report was written at all,
+    so the users most likely to read a crash themselves had none to read,
+    while the UI told them to submit or delete reports.
+    """
+    calls = crash_with_curl_stub(fppd, tmp_path, "0")
+    crashes = os.path.join(fppd.media, "crashes")
+    texts = report_texts(fppd, crashes)
+    missing = [n for n in ("settings", "logs/fppd.log") if not any(k.endswith(n) for k in texts)]
+    assert not missing, f"the local report isn't a full one, it lacks {missing}: {sorted(texts)}"
+    uploads = [c for c in calls if "crashUpload" in c]
+    assert not uploads, f"a report kept locally was sent: {uploads}"
+
+
+def test_crash_reports_disabled_writes_none(fppd, tmp_path):
+    """ShareCrashData -1 ("Disabled") writes no report and sends nothing.
+
+    Added in b4dd21938, where -1 took over "Disabled" from 0.
+    """
+    calls = crash_with_curl_stub(fppd, tmp_path, "-1")
+    crashes = os.path.join(fppd.media, "crashes")
+    assert not os.listdir(crashes), f"a disabled crash report was written: {os.listdir(crashes)}"
+    assert not [c for c in calls if "crashUpload" in c], calls
+
+
+def test_stack_traces_only_report_carries_no_log_lines(fppd, tmp_path):
+    """At ShareCrashData 1 ("Send stack traces only") the report has the
+    crash context -- playlist state, registers -- but none of the retained
+    log ring, which is log content (host names, LAN addresses, discovered
+    devices) and ships only where logs/fppd.log does.
+
+    Regression: 8b5fc01e7. The ring was written into fppd_crash_context.log,
+    which is copied at every level, so a user who narrowed sharing to stack
+    traces sent their recent log lines.
+    """
+    crash_with_curl_stub(fppd, tmp_path, "1")
+    texts = report_texts(fppd, os.path.join(fppd.media, "crashes"))
+    context = next((t for n, t in texts.items() if n.endswith("fppd_crash_context.log")), None)
+    assert context and "Main loop phase:" in context, \
+        f"no crash context in the report, so this proves nothing: {sorted(texts)}"
+    carrying = sorted(n for n, t in texts.items()
+                      if "recent log lines (ring buffer" in t or "Crash handler called" in t)
+    assert not carrying, f"a stack-traces-only report carries log lines in: {carrying}"
+
+
+def test_crash_log_ring_holds_the_history_before_the_crash(fppd, tmp_path):
+    """At level 3 the report carries the retained log ring, and the ring
+    stops at the crash: none of the crash handler's own lines are in it.
+
+    Regression: 8b5fc01e7. The ring kept recording while the handler ran,
+    so its signal line and the stack it logged pushed out the pre-crash
+    history the ring exists to keep.
+    """
+    crash_with_curl_stub(fppd, tmp_path, "3")
+    texts = report_texts(fppd, os.path.join(fppd.media, "crashes"))
+    ring = next((t for n, t in texts.items() if n.endswith("fppd_crash_log_ring.log")), None)
+    assert ring and "(empty)" not in ring and len(ring.splitlines()) > 3, \
+        f"no log ring in a level-3 report: {sorted(texts)}\n{(ring or '')[:2000]}"
+    assert "Crash handler called" not in ring, \
+        f"the crash handler's own lines are in the ring:\n{ring[-3000:]}"
+
+
+def test_crash_context_records_the_playlist_and_the_registers(fppd, tmp_path):
+    """A crash mid-playlist leaves a crash context with the playlist's name,
+    section, position and the size of each section, and the registers at
+    the fault, and a level-3 report's log ring keeps debug lines from before
+    the crash that the info-level fppd.log never wrote.
+
+    Added in 45ac03e43. A report carried a stack and nothing else: no
+    playlist state, no registers for a stack that can't be unwound, and the
+    debug line that explains a crash was filtered out before it was kept.
+    """
+    entry = {"type": "pause", "enabled": 1, "playOnce": 0, "duration": 600}
+    fppd.write("playlists/CrashCtx.json", {
+        "name": "CrashCtx", "repeat": 0, "loopCount": 0,
+        "leadIn": [dict(entry, duration=0.2)], "mainPlaylist": [entry, entry, entry],
+        "leadOut": [entry, entry]})
+    stub = tmp_path / "bin"
+    stub.mkdir()
+    (stub / "curl").write_text("#!/bin/sh\nexit 0\n")
+    (stub / "curl").chmod(0o755)
+    crashes = os.path.join(fppd.media, "crashes")
+    os.makedirs(crashes, exist_ok=True)
+    fppd.settings(ShareCrashData="3", LogLevel="info")
+    fppd.start(extra_env={"PATH": f"{stub}:{os.environ['PATH']}"})
+    fppd.command("Start Playlist", "CrashCtx", "false", "false")
+    fppd.wait_for(lambda: fppd.get("/fppd/status").get("current_playlist", {}).get("index") == "2",
+                  timeout=30, what="the playlist to reach its main section")
+    # The snapshot is refreshed on the main loop's next pass over the
+    # playlist (Process()); the section switch itself records the old one.
+    time.sleep(1)
+    fppd.proc.send_signal(signal.SIGABRT)
+    try:
+        rc = fppd.proc.wait(timeout=180)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(f"the crash handler did not finish within 180s\n{fppd.tail()}")
+    fppd.exit_expected = True
+    assert rc == 255, f"fppd exited with {describe_rc(rc)}, not the crash handler's _exit(-1)\n{fppd.tail()}"
+    import re
+    texts = report_texts(fppd, crashes)
+    context = next((t for n, t in texts.items() if n.endswith("fppd_crash_context.log")), "")
+    state = re.search(r"Playlist state: name='CrashCtx' section=(\S+) pos=(\d+) .*"
+                      r"sizes\(leadIn=(\d+) main=(\d+) leadOut=(\d+)\)", context)
+    assert state, f"no playlist state in the crash context:\n{context[:2000]}"
+    assert state.groups() == ("MainPlaylist", "0", "1", "3", "2"), state.group(0)
+    assert re.search(r"=== registers at fault ===\n(pc|rip)=0x[0-9a-f]+ ", context), \
+        f"no registers in the crash context:\n{context[:2000]}"
+    ring = next((t for n, t in texts.items() if n.endswith("fppd_crash_log_ring.log")), "")
+    log = next((t for n, t in texts.items() if n.endswith("logs/fppd.log")), "")
+    # A ring line, past its timestamp, that fppd.log doesn't have.
+    lines = [l.split(") ", 1)[1] for l in ring.splitlines() if re.match(r"\d{4}-\d\d-\d\d .*\) \[", l)]
+    unlogged = [l for l in lines if l not in log]
+    assert unlogged, f"the ring holds no debug lines fppd.log lacks:\nring:\n{ring[-2000:]}\nlog:\n{log[-2000:]}"
+
+
+def test_crash_handler_skips_the_destructors_that_can_hang(fppd, tmp_path):
+    """The crash handler leaves with _exit(): fppd exits at once with -1,
+    without running global and library destructors -- here one
+    (hangatexit.so) that never returns, as ~RTSPOutputManager didn't when
+    the crashed thread still held its apply lock.
+
+    Regression: 7c77248be. The handler ended with exit(-1), which ran the
+    destructors; one waiting on a lock the crashed thread held kept fppd
+    up until the handler's 120 s watchdog killed it, the show dark all that
+    time.
+    """
+    import shims
+    ran = tmp_path / "destructor"
+    fppd.settings(ShareCrashData="-1")
+    fppd.start(preload=[shims.build("hangatexit.c")], extra_env={"HANGATEXIT_FILE": str(ran)})
+    fppd.proc.send_signal(signal.SIGABRT)
+    try:
+        rc = fppd.proc.wait(timeout=60)
+    except subprocess.TimeoutExpired:
+        fppd.proc.kill()
+        fppd.proc.wait()
+        fppd.exit_expected = True
+        raise AssertionError(f"fppd was still up 60 s after the crash; destructor ran: {ran.exists()}\n{fppd.tail()}")
+    fppd.exit_expected = True
+    assert rc == 255, f"fppd exited with {describe_rc(rc)}, not the crash handler's _exit(-1)\n{fppd.tail()}"
+    assert not ran.exists(), "the crash handler ran the destructors"

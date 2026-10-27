@@ -118,3 +118,56 @@ test('the Media Backend tab reports on a running PipeWire and GStreamer', async 
     stopPipeWire();
   }
 });
+
+test('the Media Files tab runs its report once per page load', async ({ page, request }) => {
+  // Feature: c42fd987d (Media Files tab, "runOnce").  The report probes every
+  // media file, so it runs the first time its tab is opened and not on every
+  // later click on the tab.  The container has no ffprobe: a stand-in
+  // answers for WAV files only, as in scenarios/test_media_report.py, which
+  // checks what the report says about them.
+  test.setTimeout(120_000);
+  const FFPROBE = '/usr/bin/ffprobe';
+  const WAV = '/home/fpp/media/music/fpp-tests-media-report.wav';
+  const had = inPlayer('sh', '-c', `test -e ${FFPROBE} && echo y || echo n`).trim() === 'y';
+  if (!had) {
+    putFile(FFPROBE, [
+      '#!/usr/bin/python3 -I',
+      'import json, os, sys, wave',
+      'path = sys.argv[-1]',
+      'try:',
+      '    w = wave.open(path, "rb")',
+      'except Exception:',
+      '    sys.stderr.write("Invalid data found when processing input\\n"); sys.exit(1)',
+      'rate, ch, width, frames = w.getframerate(), w.getnchannels(), w.getsampwidth(), w.getnframes()',
+      'dur = "%.6f" % (frames / rate)',
+      'print(json.dumps({"streams": [{"index": 0, "codec_type": "audio", "codec_name": "pcm_s16le",',
+      '    "sample_rate": str(rate), "channels": ch, "bits_per_sample": 8 * width, "duration": dur}],',
+      '    "format": {"format_name": "wav", "duration": dur, "size": str(os.path.getsize(path))}}))',
+      '',
+    ].join('\n'));
+    inPlayer('chmod', '755', FFPROBE);
+  }
+  inPlayer('python3', '-c', `import wave; w = wave.open("${WAV}", "wb"); w.setnchannels(2); w.setsampwidth(2); w.setframerate(44100); w.writeframes(bytes(17640))`);
+  try {
+    const all = await groups(request);
+    expect(all.MediaFiles?.grpDisplayTitle).toBe('Media Files');
+    const runs: string[] = [];
+    page.on('request', (r) => { if (r.url().includes('troubleshootingHelper.php?key=MediaFileReport')) runs.push(r.url()); });
+    await page.goto('/troubleshooting.php');
+    expect(runs, 'the report ran before its tab was opened').toEqual([]);
+    await openTab(page, 'MediaFiles');
+    const out = page.locator('#pills-MediaFiles #command_MediaFileReport');
+    await expect(out).toContainText('FPP Media Report', { timeout: 60_000 });
+    await expect(out).toContainText('fpp-tests-media-report.wav');
+    const other = Object.keys(all).find((g) => g !== 'MediaFiles' && (all[g].level ?? 0) === 0 &&
+      (all[g].platforms.includes('all')));
+    await openTab(page, other!);
+    await openTab(page, 'MediaFiles');
+    await page.waitForTimeout(2_000);
+    expect(runs.length, 'the report ran again when its tab was opened a second time').toBe(1);
+    await expect(out).toContainText('fpp-tests-media-report.wav');
+  } finally {
+    inPlayer('rm', '-f', WAV);
+    if (!had) inPlayer('rm', '-f', FFPROBE);
+  }
+});

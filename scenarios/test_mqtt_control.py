@@ -378,3 +378,129 @@ def test_legacy_position_topics_while_a_playlist_advances(fppd):
         fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("playlist") == "P",
                       timeout=10, what="P to keep playing")
         fppd.command("Stop Now")
+
+
+class RefusingBroker:
+    """A minimal MQTT 3.1.1 broker on its own port that answers every
+    CONNECT with CONNACK "not authorised" (5) and closes, until accept() is
+    called; after that it accepts, acknowledges SUBSCRIBEs and PINGREQs,
+    and keeps the connection. connects holds each CONNECT's monotonic
+    time."""
+
+    PORT = 18832
+
+    def __init__(self):
+        import socket
+        import threading
+        self.connects = []
+        self.accepting = False
+        self.listener = socket.create_server(("127.0.0.1", self.PORT), reuse_port=False)
+        self.listener.settimeout(0.5)
+        self.stopping = False
+        self.conns = []
+        threading.Thread(target=self._serve, daemon=True).start()
+
+    def accept(self):
+        self.accepting = True
+
+    def _serve(self):
+        import threading
+        while not self.stopping:
+            try:
+                c, _ = self.listener.accept()
+            except OSError:
+                continue
+            self.conns.append(c)
+            threading.Thread(target=self._client, args=(c,), daemon=True).start()
+
+    @staticmethod
+    def _read(c, n):
+        out = b""
+        while len(out) < n:
+            b = c.recv(n - len(out))
+            if not b:
+                raise ConnectionError
+            out += b
+        return out
+
+    def _packet(self, c):
+        kind = self._read(c, 1)[0]
+        length, shift = 0, 0
+        while True:
+            b = self._read(c, 1)[0]
+            length |= (b & 0x7F) << shift
+            shift += 7
+            if not b & 0x80:
+                break
+        return kind, self._read(c, length) if length else b""
+
+    def _client(self, c):
+        try:
+            kind, _ = self._packet(c)
+            if kind != 0x10:
+                return
+            self.connects.append(time.monotonic())
+            if not self.accepting:
+                c.sendall(b"\x20\x02\x00\x05")
+                return
+            c.sendall(b"\x20\x02\x00\x00")
+            while not self.stopping:
+                kind, body = self._packet(c)
+                if kind & 0xF0 == 0x80:      # SUBSCRIBE: grant QoS 0 to each topic
+                    n, i = 0, 2
+                    while i < len(body):
+                        i += 2 + int.from_bytes(body[i:i + 2], "big") + 1
+                        n += 1
+                    c.sendall(bytes([0x90, 2 + n]) + body[:2] + b"\x00" * n)
+                elif kind & 0xF0 == 0x30 and kind & 0x06:   # PUBLISH, QoS 1+
+                    tl = int.from_bytes(body[:2], "big")
+                    c.sendall(b"\x40\x02" + body[2 + tl:4 + tl])
+                elif kind == 0xC0:
+                    c.sendall(b"\xd0\x00")
+                elif kind == 0xE0:
+                    return
+        except OSError:
+            pass
+        finally:
+            c.close()
+
+    def close(self):
+        self.stopping = True
+        self.listener.close()
+        for c in self.conns:
+            try:
+                c.close()
+            except OSError:
+                pass
+
+
+def test_a_refusing_broker_is_logged_once_and_retried_with_backoff(fppd):
+    """A broker that refuses fppd's credentials gets one log line saying so,
+    not a warning per attempt, and fppd's reconnects back off (1 s doubling)
+    instead of coming every second; once the broker accepts, fppd logs that
+    it got in after the refused attempts.
+
+    Regression: 6e660d3c7. A refusal wasn't logged as one at all: each
+    attempt logged "Mosquitto Disconnected. Will try reconnect" at warning,
+    and libmosquitto's fixed 1 s retry hammered the broker (here 15 or so
+    attempts in 15 s, against 4 or 5 with the backoff)."""
+    broker = RefusingBroker()
+    try:
+        fppd.settings(MQTTHost="127.0.0.1", MQTTPort=str(RefusingBroker.PORT), HostName=HOST,
+                      MQTTUsername="fpp", MQTTPassword="wrong")
+        fppd.start()
+        fppd.wait_for(lambda: broker.connects, timeout=15, what="fppd's first CONNECT")
+        time.sleep(15)
+        attempts = len(broker.connects)
+        log = fppd.log()
+        refused = [l for l in log.splitlines() if "refused connection" in l]
+        retries = [l for l in log.splitlines() if "Will try reconnect" in l]
+        assert len(refused) == 1, f"{len(refused)} refusal lines:\n" + "\n".join(refused[:5])
+        assert "not authori" in refused[0], refused[0]
+        assert not retries, f"{len(retries)} reconnect warnings for refusals:\n" + "\n".join(retries[:5])
+        assert attempts <= 6, f"{attempts} connection attempts in 15 s: no backoff"
+        broker.accept()
+        fppd.wait_for(lambda: "accepted connection after" in fppd.log(), timeout=45, interval=0.5,
+                      what="fppd to reconnect once the broker accepts")
+    finally:
+        broker.close()
