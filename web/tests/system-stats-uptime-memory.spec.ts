@@ -74,7 +74,12 @@ test('the uptime counts one second per second, from what the status says', async
   await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
   await page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'));
   const polled = page.waitForResponse((r) => r.url().endsWith('/api/system/status'));
-  await page.goto('/system-stats.php');
+  // jQuery 4 runs $(document).ready handlers from a zero-delay setTimeout,
+  // which a paused clock holds.  Playwright's clock leaks one real-time tick
+  // ~100 ms into the page that runs them if DOMContentLoaded came first; on a
+  // slow runner it comes later and the page never polls.  So run them here.
+  await page.goto('/system-stats.php', { waitUntil: 'domcontentloaded' });
+  await page.clock.runFor(0);
   await polled;
   await expect.poll(() => uptime(page)).toBe('00:01:00:00');
   await page.clock.runFor(1000);
