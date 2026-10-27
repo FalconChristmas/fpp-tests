@@ -350,3 +350,44 @@ def test_bad_effect_file_is_refused_or_survived(fppd, what):
         wait_output(fppd, rx, lambda f: f[MODEL] == good[0], "a good effect after the bad one")
         fppd.command("Effects Stop")
         wait_output(fppd, rx, lambda f: not any(f), "the output to go dark")
+
+
+def test_fseq_effect_starts_refused_at_the_limit_dont_leak_the_file(fppd):
+    """With the most effects fppd will run (100) already running, every
+    further FSEQ Effect Start is refused -- and leaves nothing open behind
+    it: fppd holds the same number of descriptors on the sequence after
+    fifty refused starts as before them.
+
+    Regression: f39edf939. StartEffect owns the FSEQFile it is handed, but
+    its "maximum number of effects already running" return didn't delete
+    it, so each refused start leaked the file, its descriptor and its
+    buffers -- and a caller retrying at the ceiling leaked one per try."""
+    write_fseq(os.path.join(fppd.media, "sequences", "Glow.fseq"),
+               unique_frames(20, CHANNELS), step_ms=50)
+    outputs_only(fppd)
+    fppd.start()
+
+    def open_on_glow():
+        fd_dir = f"/proc/{fppd.proc.pid}/fd"
+        n = 0
+        for fd in os.listdir(fd_dir):
+            try:
+                n += os.readlink(os.path.join(fd_dir, fd)).endswith("/Glow.fseq")
+            except OSError:
+                pass
+        return n
+
+    for _ in range(100):
+        fppd.command("FSEQ Effect Start", "Glow", "true", "false", "false", "false")
+    fppd.wait_for(lambda: len(running(fppd)) == 100, timeout=20, what="100 effects running")
+    before = open_on_glow()
+    assert before >= 100, f"only {before} descriptors on the sequence with 100 effects running"
+
+    for _ in range(50):
+        fppd.command("FSEQ Effect Start", "Glow", "true", "false", "false", "false")
+    time.sleep(0.5)
+    # The starts reached the limit check (not an earlier refusal).
+    assert fppd.log().count("maximum number of effects already running") >= 50
+    assert len(running(fppd)) == 100
+    assert open_on_glow() == before, \
+        f"{open_on_glow() - before} descriptors on the sequence leaked by 50 refused starts"

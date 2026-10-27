@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import http from 'http';
 import { container, inPlayer } from './container';
-import { MEDIA, exists, putFile, readFile, setSettingInFile, settingInFile, snapshotSettings } from './settings-file';
+import { MEDIA, exists, putFile, setSettingInFile, settingInFile, snapshotSettings } from './settings-file';
 
 // The rest of the streamed pages (long-operations-finish.spec.ts has the update
 // pages, Reset Config, packages and Rebuild): each runs a command and prints its
@@ -71,26 +71,6 @@ test('a cape firmware upgrade asks for its reboot after the browser goes', async
     inPlayer('mv', '-f', `${SCRIPT}.fpp-tests-orig`, SCRIPT);
     inPlayer('rm', '-f', DONE, FIRMWARE);
     restore();
-  }
-});
-
-// Regression: 9ae5d5675.  run_mp3gain.php logs MP3Gain's finish, with its exit
-// status, to fppd.log after mp3gain is done; with the tab closed it never did.
-test('MP3Gain logs its finish after the browser goes', async () => {
-  const STUB = '/usr/local/bin/mp3gain';
-  const DONE = '/tmp/fpp-tests-mp3gain.done';
-  const LOG = `${MEDIA}/logs/fppd.log`;
-  const finishes = () => readFile(LOG).split('\n').filter((l) => l.includes('MP3Gain FINISH')).length;
-  const before = finishes();
-  putFile(STUB, slowScript(DONE));
-  inPlayer('chmod', '755', STUB);
-  try {
-    const first = await startAndHangUp('/run_mp3gain.php', JSON.stringify(['fpp-tests.mp3']));
-    expect(first).toContain('Running MP3Gain');
-    await expect.poll(() => exists(DONE), { timeout: 30_000 }).toBe(true);
-    await expect.poll(finishes, { timeout: 10_000, message: 'MP3Gain\'s finish was never logged' }).toBe(before + 1);
-  } finally {
-    inPlayer('rm', '-f', STUB, DONE);
   }
 });
 

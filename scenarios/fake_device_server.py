@@ -10,6 +10,8 @@ client sees a failed transfer rather than an HTTP error."""
 
 import http.server
 import json
+import socket
+import socketserver
 import sys
 import threading
 
@@ -59,7 +61,15 @@ def main():
     devices = json.load(open(sys.argv[1]))
     servers = []
     for addr, pages in devices.items():
-        s = http.server.ThreadingHTTPServer((addr, 80), handler_for(pages))
+        cls, where = http.server.ThreadingHTTPServer, (addr, 80)
+        if ":" in addr:
+            cls = type("Server6", (cls,), {"address_family": socket.AF_INET6,
+                                           # no getfqdn() of the address: a reverse lookup
+                                           # of a link-local one can hang
+                                           "server_bind": socketserver.TCPServer.server_bind})
+            # "fe80::2%dev": a link-local address binds with its interface's index
+            where = socket.getaddrinfo(addr, 80, socket.AF_INET6, socket.SOCK_STREAM)[0][4]
+        s = cls(where, handler_for(pages))
         s.daemon_threads = True
         servers.append(s)
         threading.Thread(target=s.serve_forever, daemon=True).start()

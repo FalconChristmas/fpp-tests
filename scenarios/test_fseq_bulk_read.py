@@ -260,3 +260,20 @@ def test_blocks_of_several_zstd_streams(frames, tmp_path):
     _, got = read_fseq(out)
     diff = first_difference(got, frames)
     assert diff is None, diff
+
+
+def test_converting_a_multi_block_zstd_file_uses_the_bulk_reader(zsrc, frames, tmp_path):
+    """The conversions above are checked frame for frame, but a streaming
+    read gets the same frames: this one checks that fsequtils actually took
+    the block-parallel path -- its verbose log names the worker pool -- and
+    still wrote every frame.
+
+    Regression: 13681489d, which added the bulk reader and had fsequtils
+    ask for it (setReadPattern(Bulk)) on the files it reads in full."""
+    out = str(tmp_path / "out.fseq")
+    rc, stdout, err = fsequtils("-v", "-c", "none", "-o", out, zsrc)
+    assert rc == 0, stdout + err
+    assert "Bulk read:" in stdout + err, "fsequtils read the file without the bulk reader"
+    _, got = read_fseq(out)
+    diff = first_difference(got, frames)
+    assert diff is None, diff

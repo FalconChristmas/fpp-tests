@@ -22,6 +22,7 @@ import pytest
 NETNS = "fpptest-dev"
 HOST_IF, DEV_IF = "fpptdev0", "fpptdev1"
 HOST_ADDR = "10.88.0.1"
+HOST_ADDR6 = "fd00:88::1"  # the host end, for devices on an IPv6 address
 SERVER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fake_device_server.py")
 
 
@@ -68,8 +69,14 @@ def device_network(addresses):
             r = _ip(*args)
             assert r.returncode == 0, f"ip {' '.join(args)}: {r.stderr}"
         _ip("link", "set", "lo", "up", ns=NETNS)
+        if any(":" in a for a in addresses):
+            r = _ip("addr", "add", HOST_ADDR6 + "/64", "dev", HOST_IF, "nodad")
+            assert r.returncode == 0, f"ip addr add {HOST_ADDR6}: {r.stderr}"
         for addr in addresses:
-            _ip("addr", "add", addr + "/24", "dev", DEV_IF, ns=NETNS)
+            if ":" in addr:  # nodad: usable at once, not tentative for a second
+                _ip("addr", "add", addr + "/64", "dev", DEV_IF, "nodad", ns=NETNS)
+            else:
+                _ip("addr", "add", addr + "/24", "dev", DEV_IF, ns=NETNS)
         _ip("link", "set", DEV_IF, "up", ns=NETNS)
 
         def run(*cmd):
@@ -93,8 +100,9 @@ def wait_ready(proc, address, port=80):
     assert line.strip() == "ready", \
         f"fake device server: {line}{proc.stdout.read() if proc.poll() is not None else ''}"
     deadline = time.monotonic() + 10
+    host = f"[{address}]" if ":" in address else address
     while subprocess.run(["curl", "-s", "-o", "/dev/null", "-m", "1",
-                          f"http://{address}:{port}/"]).returncode:
+                          f"http://{host}:{port}/"]).returncode:
         assert time.monotonic() < deadline, f"{address} never answered"
         time.sleep(0.2)
 

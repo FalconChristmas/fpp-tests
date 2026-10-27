@@ -7,7 +7,9 @@ thread.
 These are races. Under ASan a lost one is a use-after-free or an uncaught
 exception that kills fppd; the unsynchronized reads behind them show only
 under TSan (run.sh --flavor tsan). Only the image test is a red check (under
-TSan); the others are coverage, as each docstring says.
+TSan); the others are coverage, as each docstring says. The red checks
+for 03d956965 and 41cc31f30 read the player from a native plugin's thread
+(test_playlist_plugin_reader.py).
 
 Entries append digits to a trace (see test_playlist_entries.py).
 """
@@ -60,7 +62,7 @@ def test_status_polled_while_inserted_playlists_finish(fppd):
 
     Coverage for 03d956965 and c8099ec3a, not a red check: it passes on
     both parents, under ASan and TSan (40 s of it with twice the threads
-    too). The current playlist was a raw global that the main loop deleted
+    too). test_playlist_plugin_reader.py is the red check for 03d956965. The current playlist was a raw global that the main loop deleted
     while HTTP threads still used it -- a status poll racing an inserted
     playlist's end was a use-after-free (03d956965, which made the player
     own playlists through shared_ptr). A retired inserted playlist still
@@ -99,7 +101,8 @@ def test_starts_and_stops_from_http_threads(fppd):
     playlists and parked entries were filled from command threads (a load
     parks the entries it replaces, a stop condemns instances) while the
     main loop drained them with no lock, and the playlist's status flag
-    was read across threads unsynchronized.
+    was read across threads unsynchronized. test_playlist_plugin_reader.py
+    is the red check for the status flag; the lists are still coverage.
     """
     fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(1), step(2), pause(60)]))
     fppd.start()

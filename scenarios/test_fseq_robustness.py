@@ -17,7 +17,8 @@ import pytest
 
 from ddp import DdpReceiver
 from fseq import unique_frames, write_fseq_reference
-from show import CHANNELS, install, status
+from show import CHANNELS, ddp_output, install, status
+from test_fseq_resources import assert_only_refusals, start_with_allocations_capped
 from test_playback import assert_faithful, start, wait_idle
 
 STEP_MS = 50
@@ -115,6 +116,36 @@ def test_sparse_range_outside_channel_space(fppd):
     data = v2([bytes([i + 1]) * n for i in range(3)], sparse=[(0, n)])
     data[32:35] = (0xF00000).to_bytes(3, "little")  # range 0's start channel
     play_bad_then_good(fppd, data)
+
+
+def test_v1_sequence_narrower_than_an_output(fppd):
+    """A v1 sequence of 150 channels, played with a second output whose
+    channels start at 3001 -- wholly past the file's end -- plays every
+    frame to the first output intact -- with fppd's allocations capped at
+    1 GB, as a 32-bit controller's address space caps them.
+
+    Regression: 078a49c97. V1FSEQFile::prepareRead clamped such a range to
+    (channels in the file - range start), which underflowed, so every
+    frame's buffer was sized at nearly 4 GB: on a 64-bit box an 8 MB copy
+    of uninitialized memory into the channels past the file each frame; on
+    a 32-bit one the allocation fails, and the frame was then read through
+    the null pointer (since 55d96e439, not loaded at all). V2 files already
+    skipped ranges past their end."""
+    frames = unique_frames(40, CHANNELS)
+    out = ddp_output(CHANNELS)
+    past = ddp_output(100, address="127.0.0.3")["channelOutputs"][0]
+    past["startChannel"] = past["universes"][0]["startChannel"] = 3001
+    out["channelOutputs"].append(past)
+    with DdpReceiver(CHANNELS, host="127.0.0.1") as rx:
+        install(fppd, frames, step_ms=STEP_MS, version=1)
+        fppd.write("config/co-universes.json", out)
+        limited = start_with_allocations_capped(fppd, 1024)
+        since = time.monotonic()
+        start(fppd)
+        wait_idle(fppd, timeout=20)
+        time.sleep(0.3)
+        assert_faithful(frames, rx.snapshot(since=since))
+    assert_only_refusals(limited)
 
 
 def test_unterminated_media_name(fppd):

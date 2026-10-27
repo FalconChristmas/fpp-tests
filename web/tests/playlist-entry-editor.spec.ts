@@ -37,6 +37,19 @@ async function savePlaylist(page: Page) {
   expect((await saved).ok()).toBe(true);
 }
 
+// Opens the New Entry modal and waits for Bootstrap's show transition to
+// end: a hide asked for while the modal is still fading in is dropped, so
+// an Add clicked that early adds the entry but leaves the modal open over
+// the page.
+async function openNewEntry(page: Page) {
+  await page.evaluate(() => {
+    (window as any).fppTestsModalShown = false;
+    document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsModalShown = true; }, { once: true });
+  });
+  await page.locator('.playlistEntriesAddNewBtn').first().click();
+  await page.waitForFunction(() => (window as any).fppTestsModalShown);
+}
+
 // The New Entry modal's Add: the entry goes into the list.
 async function addEntry(page: Page) {
   const rows = page.locator('#tblPlaylistMainPlaylist tr.playlistRow');
@@ -107,7 +120,7 @@ test.describe('media entries', () => {
       expect(media).toEqual(expect.arrayContaining([MAIN, EXTRA]));
 
       await openEditor(page);
-      await page.locator('.playlistEntriesAddNewBtn').first().click();
+      await openNewEntry(page);
       const modal = page.locator('.modal.show');
       await page.selectOption('#pe_type', 'media');
       const main = modal.locator('select.arg_mediaName');

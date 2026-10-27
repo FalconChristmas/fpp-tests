@@ -41,3 +41,8 @@ RUN sed -i -e 's/^user = .*/user = root/' -e 's/^group = .*/group = root/' \
         /etc/php/8.4/fpm/pool.d/www.conf
 
 RUN echo "ServerName localhost" > /etc/apache2/conf-enabled/servername.conf
+
+# gst-discoverer-1.0, which FPP_Install.sh installs (999e4c239): with no
+# ffprobe on a player, the media metadata and duration APIs fall back to it.
+RUN apt-get update && apt-get install -y --no-install-recommends gstreamer1.0-plugins-base-apps \
+    && rm -rf /var/lib/apt/lists/*
