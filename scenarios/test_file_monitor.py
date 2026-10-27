@@ -3,6 +3,7 @@ replaced."""
 
 import os
 import time
+import urllib.error
 
 
 def set_volume(value):
@@ -42,3 +43,29 @@ def test_a_file_replaced_by_rename_is_reloaded_every_time(fppd):
         os.rename(tmp, path)
         fppd.wait_for(loaded(fppd, value), timeout=15, interval=0.25,
                       what=f"replacement {i + 1} (volume {value}) to load")
+
+
+def test_a_deleted_file_is_reloaded(fppd):
+    """Deleting commandPresets.json while fppd runs drops its presets: the
+    watcher hears the delete. Then a preset that set the volume no longer
+    does.
+
+    Regression: 9c24621b0. FileMonitor ran a deleted file's callbacks
+    only while the file still had its own inode watch. The kernel frees the
+    inode inside the unlink and queues that watch's IN_IGNORED ahead of the
+    directory's IN_DELETE, which cleared the watch first, so the delete was
+    never passed on and fppd kept the deleted file's contents."""
+    fppd.write("config/commandPresets.json", {"commands": [set_volume(11)]})
+    fppd.start()
+    fppd.wait_for(loaded(fppd, 11), timeout=10, interval=0.25, what="the presets to load")
+
+    os.unlink(os.path.join(fppd.media, "config", "commandPresets.json"))
+
+    def gone():
+        fppd.command("Volume Set", "50", timeout=5)
+        try:
+            fppd.command("Trigger Command Preset", "P", timeout=5)
+        except urllib.error.HTTPError:
+            pass
+        return fppd.get("/fppd/volume", timeout=5).get("volume") == 50
+    fppd.wait_for(gone, timeout=10, interval=0.5, what="the deleted presets to be dropped")
