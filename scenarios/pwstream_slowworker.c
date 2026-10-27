@@ -6,11 +6,6 @@
  * carrying on, so whatever woke it -- a track asking for another sink -- is
  * acted on that much later. Other threads, and every later wake, are left
  * alone.
- *
- * It also takes the ASan runtime back out of LD_PRELOAD once fppd has loaded,
- * as noinherit.c does TSan's: the stream checks its links with pw-link, which
- * dies at once ("Illegal instruction") with libasan preloaded, and every
- * track then waits out the 3 s it gives the stream.
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -22,27 +17,6 @@
 #include <unistd.h>
 
 static int done;
-
-__attribute__((constructor)) static void drop_asan_runtime(void) {
-    const char* pre = getenv("LD_PRELOAD");
-    if (!pre || !strstr(pre, "libasan.so")) {
-        return;
-    }
-    char* out = calloc(1, strlen(pre) + 1);
-    char* copy = strdup(pre);
-    for (char* save = NULL, *tok = strtok_r(copy, " :", &save); tok; tok = strtok_r(NULL, " :", &save)) {
-        if (strstr(tok, "libasan.so")) {
-            continue;
-        }
-        if (*out) {
-            strcat(out, " ");
-        }
-        strcat(out, tok);
-    }
-    setenv("LD_PRELOAD", out, 1);
-    free(copy);
-    free(out);
-}
 
 // Sleeps with the wait's mutex released, as if the wait had not returned yet:
 // held, the other threads would only queue behind it.

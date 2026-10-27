@@ -146,14 +146,18 @@ class Fppd:
             env["LD_PRELOAD"] = " ".join(have + list(preload))
         if extra_env:
             env.update(extra_env)
-        if "libtsan.so" in env.get("LD_PRELOAD", ""):
-            # The TSan runtime has to be preloaded ahead of the rest (see
-            # noinherit.c), but the processes fppd starts must not inherit
-            # it: a shell with libtsan preloaded segfaults, so a plugin's
-            # callbacks or a Run Script never ran. noinherit.so takes it
-            # out of fppd's LD_PRELOAD once fppd has loaded.
+        if any(rt in env.get("LD_PRELOAD", "") for rt in ("libtsan.so", "libasan.so")):
+            # The sanitizer runtime has to be preloaded ahead of the rest
+            # (see noinherit.c), but the processes fppd starts must not
+            # inherit it: a shell with libtsan preloaded segfaults, and the
+            # PipeWire tools die at once with libasan. noinherit.so takes it
+            # out of fppd's LD_PRELOAD once fppd has loaded. A child built
+            # with ASan (fpp, or fppd re-executing itself) then finds the
+            # other preloads ahead of its runtime, which ASan refuses unless
+            # told not to check.
             import shims
             env["LD_PRELOAD"] += " " + shims.build("noinherit.c", libs=())
+            env["ASAN_OPTIONS"] += ":verify_asan_link_order=0"
         shim = os.path.join(self.tree, "gcov-exit.so")
         if os.path.exists(shim):
             # The coverage flavor: write the counts on fppd's _exit().
@@ -265,9 +269,9 @@ class Fppd:
 
     def sanitizer_reports(self):
         """fppd's own sanitizer reports. Each process writes <tool>.<pid>;
-        fppd's children (scripts, system tools) inherit the preloaded runtime
-        but are not built with it, and under libfaketime TSan's allocator
-        aborts inside them, so only fppd's pid counts."""
+        fppd's children inherit ASAN_OPTIONS and TSAN_OPTIONS, and a child
+        built with the sanitizer (fpp, a re-executed fppd) writes its own,
+        so only fppd's pid counts."""
         logs = os.path.join(self.media, "logs")
         found = []
         pid = str(self.proc.pid) if self.proc is not None else None
