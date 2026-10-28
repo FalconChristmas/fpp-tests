@@ -15,6 +15,7 @@
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
+#include <execinfo.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,15 +39,26 @@ static void note(const char* what) {
     fclose(f);
 }
 
-static int from_cma_check(void* caller) {
-    Dl_info info;
-    return dladdr(caller, &info) && info.dli_sname &&
-           (strstr(info.dli_sname, "ReadCmaFreeKB") || strstr(info.dli_sname, "WaitForCmaIfLow"));
+// A few frames up, not just the caller: under a sanitizer its runtime is
+// preloaded ahead of this, and its fopen interceptor is what calls ours.
+static int from_cma_check(void) {
+    void* frames[8];
+    int n = backtrace(frames, 8);
+    for (int i = 0; i < n; i++) {
+        Dl_info info = { 0 };
+        if (dladdr(frames[i], &info) && info.dli_sname &&
+            (strstr(info.dli_sname, "ReadCmaFreeKB") || strstr(info.dli_sname, "WaitForCmaIfLow"))) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
-// The real /proc/meminfo with its CmaFree line replaced (or added).
+// The real /proc/meminfo with its CmaFree line replaced (or added), in a
+// stream of its own: fppd's threads read it at once (a video's teardown and
+// a consumer's start).
 static FILE* short_cma(FILE* (*real)(const char*, const char*), const char* kb) {
-    static char text[16384];
+    char text[16384];
     size_t n = 0;
     FILE* f = real("/proc/meminfo", "r");
     char line[256];
@@ -60,16 +72,21 @@ static FILE* short_cma(FILE* (*real)(const char*, const char*), const char* kb) 
         fclose(f);
     }
     n += snprintf(text + n, sizeof text - n, "CmaFree:        %s kB\n", kb);
-    return fmemopen(text, n, "r");
+    // A NULL buffer: fmemopen allocates one and frees it at fclose.
+    FILE* out = fmemopen(NULL, n, "w+");
+    if (out) {
+        fwrite(text, 1, n, out);
+        rewind(out);
+    }
+    return out;
 }
 
-static FILE* steer(FILE* (*real)(const char*, const char*), const char* path, const char* mode,
-                   void* caller) {
+static FILE* steer(FILE* (*real)(const char*, const char*), const char* path, const char* mode) {
     if (!path || strcmp(path, "/proc/meminfo")) {
         return real(path, mode);
     }
     const char* ms = getenv("CMAHOLD_MS");
-    if (ms && atoi(ms) > 0 && from_cma_check(caller)) {
+    if (ms && atoi(ms) > 0 && from_cma_check()) {
         note("hold");
         usleep(atoi(ms) * 1000);
         note("done");
@@ -82,7 +99,7 @@ FILE* fopen(const char* path, const char* mode) {
     if (!real_fopen) {
         real_fopen = (FILE * (*)(const char*, const char*)) dlsym(RTLD_NEXT, "fopen");
     }
-    return steer(real_fopen, path, mode, __builtin_return_address(0));
+    return steer(real_fopen, path, mode);
 }
 
 FILE* fopen64(const char* path, const char* mode) {
@@ -93,5 +110,5 @@ FILE* fopen64(const char* path, const char* mode) {
     if (!real_fopen) {
         real_fopen = (FILE * (*)(const char*, const char*)) dlsym(RTLD_NEXT, "fopen");
     }
-    return steer(real, path, mode, __builtin_return_address(0));
+    return steer(real, path, mode);
 }

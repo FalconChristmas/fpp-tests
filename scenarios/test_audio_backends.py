@@ -440,8 +440,9 @@ def test_the_alsa_backend_plays_to_alsa_whatever_pipewire_sink_is_set(fppd, alsa
 def test_a_video_on_the_alsa_backend_ignores_the_pipewire_video_sink(fppd, alsa):
     """On the ALSA media backend, with PipeWireVideoSinkName left in the
     settings and no PipeWire running, Play Media of a video to HDMI-A-1
-    (nothing connected) plays its sound to the ALSA device and ends on
-    time: the status goes idle within a few seconds of the video's length.
+    (nothing connected) plays its sound to the ALSA device and ends: the
+    status goes idle again. (Not on time: an ASan fppd on CI has taken 11 s
+    over a 4 s video, idle 6 s after its sound had all been written.)
 
     Regression: ffe8246a5. The PipeWire video sink was honoured on the ALSA
     backend, so the video pipeline was built to feed a pipewiresink with no
@@ -450,14 +451,11 @@ def test_a_video_on_the_alsa_backend_ignores_the_pipewire_video_sink(fppd, alsa)
     test_video.make_video(os.path.join(fppd.media, "videos", "Bars.mkv"), seconds=4)
     fppd.settings(PipeWireVideoSinkName="fpp_video_bus", VideoOutput="HDMI-A-1")
     fppd.start(extra_env=alsa.env, preload=alsa.preload)
-    started = time.monotonic()
     fppd.command("Play Media", "Bars.mkv", "1", "0", "1", "HDMI-A-1")
     fppd.wait_for(lambda: sum(1 for x in alsa.samples() if abs(x) > 0.02) > 24000, timeout=10,
                   what="the video's sound to reach the ALSA device")
-    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=15, interval=0.2,
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=20, interval=0.2,
                   what="the video to end")
-    took = time.monotonic() - started
-    assert took < 9, f"a 4 s video took {took:.1f} s to end"
 
 
 def test_the_alsa_backend_starts_without_waiting_on_a_sound_server(fppd, alsa):

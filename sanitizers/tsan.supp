@@ -254,6 +254,16 @@ called_from_lib:libgstrtspserver-1.0.so
 # a reference until it returns; that refcount and the context lock are
 # GLib's, unseen.
 called_from_lib:libgstrtsp-1.0.so.0
+# alsasink on the ALSA media backend (test_audio_backends.py): the PCM that
+# libasound allocates when alsasink opens it on one streaming thread is
+# locked by snd_pcm_delay() on the ring buffer's thread, started after the
+# open under GLib's locks, unseen.
+called_from_lib:libasound.so.2
+# A dmabuf's fd (fakehwdec.c's device-memory frames, test_video_consumers.py)
+# is mapped by the decoder's thread as it fills the frame and closed by the
+# dmabuf allocator on whichever thread drops the frame's last reference; the
+# frame is handed downstream under GStreamer's locks, unseen.
+called_from_lib:libgstallocators-1.0.so.0
 # MP3 parse and decode: mpegaudioparse's and mpg123dec's state is used on the
 # streaming thread and freed by the pipeline teardown (FPP-GstReaper), ordered
 # by GStreamer's stream lock.
