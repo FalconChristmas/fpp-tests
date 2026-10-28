@@ -150,7 +150,21 @@ class Pruss:
         return False
 
     def resume(self, core):
-        self.write32(CTRL[core], self.control(core) | CTRL_ENABLE)
+        """Restart a halted core: set its enable bit until it stays running.
+        The same read-modify-write can have read the register while halt()
+        was clearing the bit, and writes that clear back once running again
+        (twice, in RESET_PRU_CLOCK), halting the core a few instructions
+        after a single write: PRU1 then stopped rendering for good."""
+        running = 0
+        for _ in range(10000):
+            if self.control(core) & CTRL_RUNSTATE:
+                running += 1
+                if running >= 200:
+                    return True
+            else:
+                running = 0
+                self.write32(CTRL[core], self.control(core) | CTRL_ENABLE)
+        return False
 
     def set_register(self, core, n, value):
         """Set r`n` of a halted core through its debug registers."""

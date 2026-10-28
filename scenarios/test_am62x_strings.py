@@ -404,7 +404,7 @@ def test_a_ring_read_position_knocked_out_of_step_heals_on_the_next_frame(real_p
         moved = base + (r0 - base + 64) % size
         p.set_register(1, 0, moved)
         moved_to = p.register(1, 0)
-        p.resume(1)
+        assert p.resume(1), "PRU1 did not stay running"
         assert base <= r0 < base + size, f"r0 {r0:#x} is not in the ring {base:#x}+{size}"
         assert moved_to == moved, f"r0 read back {moved_to:#x}, not {moved:#x}"
         time.sleep(2)
