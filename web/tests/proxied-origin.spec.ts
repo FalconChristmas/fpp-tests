@@ -31,3 +31,18 @@ test('a POST from another site is still refused', async ({ request }) => {
     expect(r.status(), JSON.stringify(headers)).toBe(403);
   }
 });
+
+test('a settings write from another site is refused, and one from no site is not', async ({ request }) => {
+  // Regression: ef8961d24.  There is no login by default and /api answered
+  // any origin, so any page a user opened could change settings.  The write
+  // here puts back the value the setting already has, so nothing changes
+  // whichever way it goes; the route exists on players from before
+  // 77efc7561 (which moved /api/playlists/stop above to POST).
+  const name = 'MultiSyncRefreshStatus';
+  const value = String((await (await request.get(`/api/settings/${name}`)).json()).value ?? '0');
+  const crossSite = await request.put(`/api/settings/${name}`, { data: value, headers: { Origin: 'http://elsewhere.example' } });
+  expect(crossSite.status(), await crossSite.text()).toBe(403);
+  // The control: the same write with no Origin, as a script sends it, is taken.
+  const plain = await request.put(`/api/settings/${name}`, { data: value });
+  expect(plain.status(), await plain.text()).toBe(200);
+});

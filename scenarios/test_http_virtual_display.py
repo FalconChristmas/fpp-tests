@@ -71,3 +71,38 @@ def test_a_preview_client_that_stops_reading_does_not_stall_the_lights(fppd):
     assert after >= before // 2, \
         f"{after} DDP frames in 2 s with a preview client not reading, {before} before it connected"
     assert b"data: " in got, "a reading client got no frame while another was stalled"
+
+
+def test_preview_clients_come_and_go_while_it_streams(fppd):
+    """Preview clients that connect, take a frame and hang up, one after
+    another and two at a time, while the display streams a test pattern:
+    each is served, and the display keeps serving the next.
+
+    Regression (TSan): c08e4f453. The accept thread set m_connListChanged
+    while the select thread read and cleared it, and both read m_running:
+    volatile bools, which order nothing between threads."""
+    virtual_display(fppd, ["10,10"] + [f"{i % 10},{i // 10},{i * 3},3,RGB" for i in range(100)], 300)
+    fppd.start()
+    wait_for_display(fppd)
+    fppd.command("Test Start", "100", "RGB Cycle", "1-300", "R-G-B")
+    try:
+        for i in range(10):
+            clients = [socket.create_connection(("127.0.0.1", VD_PORT), timeout=5)
+                       for _ in range(1 + i % 2)]
+            try:
+                for n, s in enumerate(clients):
+                    s.settimeout(5)
+                    got = b""
+                    end = time.monotonic() + 5
+                    while b"data: " not in got and time.monotonic() < end:
+                        chunk = s.recv(65536)
+                        if not chunk:
+                            break
+                        got += chunk
+                    assert b"data: " in got, f"round {i}, client {n} got no frame: {got[-200:]!r}"
+            finally:
+                for s in clients:
+                    s.close()
+            time.sleep(0.1)
+    finally:
+        fppd.command("Test Stop")

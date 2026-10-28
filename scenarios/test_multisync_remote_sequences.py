@@ -11,7 +11,7 @@ import socket
 import time
 
 from ddp import DdpReceiver
-from fseq import unique_frames, write_fseq
+from fseq import unique_frames, write_fseq, write_fseq_reference
 from multisync import PORT, sync_packet
 from show import CHANNELS, ddp_output, status
 
@@ -111,6 +111,42 @@ def test_shorter_copy_ends_once(fppd):
     m.close()
     assert (started, stopped) == (1, 1), f"SEQUENCE_STARTED x{started}, SEQUENCE_STOPPED x{stopped}"
     assert not any(any(d) for t, d in late), "the remote lit up again after its sequence ended"
+
+
+def test_a_sync_far_past_the_end_of_a_compressed_copy(fppd):
+    """A remote whose zstd copy of the sequence (four blocks) is far shorter
+    than the master's, joining while the master is well past its end: the
+    sync packets name frames thousands past the remote's last (it missed the
+    open, so it starts the sequence at the frame the first sync names), and
+    fppd keeps running and answering, with nothing read out of bounds.
+
+    Coverage for de6d01998, not a red check. The compressed readers found a
+    frame's block by walking the block table until the next block started
+    after it, with nothing bounding the walk but the table's last entry: a
+    frame past that walked off the end of the table (a crash in
+    prepareRead() from the field). This reaches that walk with the frame
+    the first sync names, but with the bound taken out (a hand revert on
+    master) it still passes: the walk stops one entry past the table, inside
+    the vector's capacity, on the 99999999 entry the ZSTD handler pushes and
+    pops while sizing its blocks, which is above any frame a sync packet can
+    name (capped at 86400000). ASan sees a read inside a vector's capacity
+    only with libstdc++'s container annotations, which the build doesn't
+    turn on."""
+    frames = unique_frames(40, CHANNELS)
+    write_fseq_reference(f"{fppd.media}/sequences/Show.fseq", frames, step_ms=STEP_MS,
+                         compression="zstd", blocks=4)
+    remote(fppd)
+    m = Master()
+    fppd.start()
+    # No open: a remote that missed it starts the sequence at the frame the
+    # first sync names.
+    for frame in (5000, 5010, 5020, 20000):
+        m.send("sync", frame)
+        time.sleep(0.5)
+    m.send("stop")
+    m.close()
+    time.sleep(1)
+    assert status(fppd) is not None
 
 
 def test_stale_sync_from_the_last_play_through_does_not_end_the_next(fppd):

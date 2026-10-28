@@ -13,5 +13,10 @@ test('An exported tree serves its pages', async ({ request }) => {
   for (const page of ['/index.php', '/settings.php', '/playlists.php']) {
     const r = await request.get(page);
     expect(r.status(), `${page} answered ${r.status()}`).toBe(200);
+    // The fatal error came after the headers had gone out, so the status was
+    // still 200: the page stopped at "var FPP_VERSION_FLOAT =" instead.
+    const body = await r.text();
+    expect(body, `${page} has a version number`).toMatch(/var FPP_VERSION_FLOAT = [0-9.]+;/);
+    expect(body, `${page} ends`).toContain('</html>');
   }
 });

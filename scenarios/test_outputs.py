@@ -432,6 +432,35 @@ def test_a_udp_output_that_fails_to_load_leaves_multisync_watching_addresses(fpp
         ip("link", "del", "fpptd3")
 
 
+def test_a_controller_name_that_stops_resolving_is_retried(fppd):
+    """A controller whose name resolves when the output starts and fails at
+    the next lookup (the startup pings re-request it) stays a ping target:
+    the ping thread looks its name up again within a ping period, rather
+    than the controller being dropped for good.
+
+    Regression: 1705b8e89 (NW-7). addPeriodicPing() dropped a target whose
+    name failed to resolve, and nothing looked it up again: a controller
+    whose name didn't resolve for a moment stayed out of the output until
+    fppd restarted. (slowgai.so answers the first lookup and fails every
+    later one, recording those made on the ping threads; 100 ms each here,
+    so the ping thread isn't held up -- test_a_name_lookup_does_not_hold_up
+    _the_ping_thread is about that.)"""
+    marker = os.path.join(fppd.media, "tmp", "slowgai.log")
+    fppd.write("config/co-universes.json", {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 3,
+        "universes": [{"active": 1, "description": "controller by name", "id": 1,
+                       "startChannel": 1, "channelCount": 3, "type": 5,
+                       "address": "slow.invalid", "priority": 0, "monitor": 1, "deDuplicate": 0}],
+    }]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start(preload=[shims.build("slowgai.c")],
+               extra_env={"SLOWGAI_NAME": "slow.invalid", "SLOWGAI_FIRST": "127.0.0.2",
+                          "SLOWGAI_FILE": marker, "SLOWGAI_MS": "100"})
+    # the first retry is a ping period (15 s) after the output started
+    fppd.wait_for(lambda: os.path.exists(marker), timeout=40, interval=0.5,
+                  what="the ping thread to look slow.invalid up again")
+
+
 def test_a_name_lookup_does_not_hold_up_the_ping_thread(fppd):
     """A controller whose name stops resolving after the output starts has
     its name looked up again once a ping period, and a lookup that stalls

@@ -11,6 +11,7 @@ import os
 import statistics
 import time
 
+import shims
 from audio import RATE, rms_windows, write_tone_wav
 from show import status
 
@@ -100,3 +101,21 @@ def test_a_changed_media_gain_json_takes_effect_at_the_next_play(fppd, audio):
 
     os.unlink(path)
     heard(0, "after it was deleted")
+
+
+def test_media_gain_json_is_read_once_for_many_plays(fppd, audio):
+    """Three plays of a normalized song with media_gain.json left alone read
+    the file once; readtrace.c records every read of it. The next test shows
+    each change is still heard at the following play.
+
+    Regression: 5007add16. LookupNormalizeGain() read and parsed the whole
+    gain file every time a song or video started."""
+    trace = os.path.join(fppd.media, "tmp", "readtrace.log")
+    size = tones(fppd, "Song.wav")
+    fppd.write(GAINS, {"Song.wav": {"gainDb": -6.0, "size": size}})
+    fppd.start(preload=[shims.build("readtrace.c")],
+               extra_env={"READTRACE_SUFFIX": "/media_gain.json", "READTRACE_FILE": trace})
+    for _ in range(3):
+        level(fppd, audio, "Song.wav", seconds=1)
+    reads = open(trace).read().splitlines() if os.path.exists(trace) else []
+    assert len(reads) == 1, f"media_gain.json was read {len(reads)} times for 3 plays"

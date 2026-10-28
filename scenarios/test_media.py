@@ -594,6 +594,24 @@ def test_daemonized_fppd_applies_volume_changes(fppd):
         d.stop()
 
 
+def test_daemonized_fppd_starts_its_own_volume_worker(fppd):
+    """"fppd -d -v 30" with no slow mixer listing: the daemon applies a later
+    volume change. The plain case of the test above, without the inherited
+    lock b72e55376 is about, so it isolates ec42d3f1e.
+
+    Regression: ec42d3f1e. The worker started for "-v" before the fork; the
+    daemon kept its queue but had no thread, so the change was recorded and
+    read back but never reached pactl."""
+    d = Daemonized(fppd)
+    try:
+        fppd.post("/fppd/volume/55")
+        assert fppd.get("/fppd/volume")["volume"] == 55
+        fppd.wait_for(lambda: "55%" in d.volumes_set(), timeout=10,
+                      what=f"the daemon to set the sink to 55% (it set {d.volumes_set()})")
+    finally:
+        d.stop()
+
+
 def test_fppd_d_returns_to_its_caller(fppd):
     """"fppd -d -v 30" returns 0 to whatever ran it once the daemon is
     detached, as an init script or a Type=forking unit expects.

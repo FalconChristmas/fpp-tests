@@ -254,6 +254,26 @@ def test_regex_over_a_long_run_does_not_overflow_the_stack(fppd, endpoint):
     assert r["ok"] is True and r["filtered"] == "1" * 12000, {k: str(v)[:80] for k, v in r.items()}
 
 
+def test_a_saved_regex_task_over_a_huge_result_leaves_fppd_running(fppd, endpoint):
+    """A saved task whose regex would repeat over a million characters of a
+    long result (a million digits for "temp:(\\d+)", 20 KB in) runs and
+    fppd carries on: the regex never gets that far into the result.
+
+    Regression: 522c7b196. The filter searched the whole result on the main
+    loop, and libstdc++'s std::regex recursed once per repeated character,
+    so the main loop's stack overflowed (SIGSEGV), again every interval
+    once fppd restarted."""
+    big = endpoint("x" * 20000 + "temp:" + "1" * 1000000)
+    fppd.write("config/recurringtasks.json", [url_task(
+        "t", big.url, filterType="regex", filterRegex=r"temp:(\d+)")])
+    fppd.start()
+    fppd.wait_for(lambda: (task_status(fppd, "t") or {}).get("lastRunMS"), timeout=30,
+                  what="the saved task to run")
+    time.sleep(1)
+    fppd.check_alive()
+    assert len(variable(fppd, "t") or "") <= 16384
+
+
 @pytest.mark.parametrize("pattern,body,expected", [
     # ECMAScript takes the first alternative that matches, not the longest
     (r"(foo|foobar)", "foobar", "foo"),

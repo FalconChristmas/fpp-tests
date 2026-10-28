@@ -83,6 +83,36 @@ def test_a_fill_with_a_colour_of_the_wrong_type_still_runs(fppd):
         assert fppd.get("/fppd/status")["status_name"] == "testing"
 
 
+def test_a_test_mode_config_of_the_wrong_type_on_the_command_socket_is_survived(fppd):
+    """SetTestMode on fppd's command socket (what the testmode API forwards
+    its body to) with color1 as a "#202020" string, not the int the field
+    holds: fppd keeps answering the socket, and a good test runs after it.
+
+    Regression: 73b282af2. The pattern's jsoncpp accessor threw on the
+    string, nothing in the command dispatch caught Json::Exception, and it
+    unwound out of the main loop: std::terminate aborted fppd. (Through
+    POST /fppd/testing drogon caught it and answered 500.)
+    """
+    from test_command_socket import fields, send
+
+    setup(fppd)
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        bad = {"enabled": 1, "mode": "RGBFill", "cycleMS": 1000, "channelSet": "1-30",
+               "channelSetType": "channelRange", "color1": "#202020", "color2": 32, "color3": 48}
+        try:
+            send("SetTestMode," + json.dumps(bad))
+        except OSError:
+            pass  # no answer is fine; a dead fppd is not
+        time.sleep(0.5)
+        fppd.check_alive()
+        assert fields(send("v,50,"))[2] == "Setting Volume", "fppd stopped answering the socket"
+        good = dict(bad, color1=16)
+        send("SetTestMode," + json.dumps(good))
+        frame = wait_output(fppd, rx, lambda f: f[:3] == bytes([16, 32, 48]), "a good test afterwards")
+        assert frame[:30] == bytes([16, 32, 48]) * 10, frame[:30].hex()
+
+
 def test_fill_and_cycle_light_a_trailing_partial_pixel(fppd):
     """RGB Single Color and RGB Cycle over ten channels (three pixels and
     one channel more) light the tenth channel too, with the first colour

@@ -86,6 +86,48 @@ def test_taken_artnet_port_warns_once_and_keeps_the_log_quiet(fppd):
                   what="the ArtNet port warning to clear once the port was free")
 
 
+def global_interface():
+    """This machine's interface with a global IPv4 address (eth0 in a
+    container), or None."""
+    import subprocess
+    out = subprocess.run(["ip", "-o", "-4", "addr", "show", "scope", "global"],
+                         capture_output=True, text=True).stdout.split()
+    return out[1] if len(out) > 1 else None
+
+
+def test_artnet_sent_from_another_port_says_to_restart(fppd):
+    """With 6454 held by another program and ArtNet output on an interface
+    with its own address, output setup opens the ArtNet socket on another
+    port, and the warning says FPPD must be restarted once the port is free:
+    nothing tries 6454 again after that.
+
+    Regression: faacde2f0. The warning said only that ArtNet input was off
+    and output came from another port, so it read as something that would
+    clear by itself, as the plain "ArtNet is off" warning does."""
+    import pytest
+    iface = global_interface()
+    if not iface:
+        pytest.skip("no interface with a global address: the fallback needs one")
+    fppd.write("config/co-universes.json", {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 100,
+        "interface": iface, "universes": [
+            {"active": 1, "description": "from 6454", "id": 1, "startChannel": 1,
+             "channelCount": 100, "type": 3, "address": "127.0.0.1", "priority": 0,
+             "monitor": 0, "deDuplicate": 0}]}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    held = Listener(ARTNET_PORT, host="0.0.0.0")
+    try:
+        fppd.start()
+        fppd.wait_for(lambda: artnet_warnings(fppd), timeout=15, interval=0.5,
+                      what="the ArtNet port warning")
+        warnings = artnet_warnings(fppd)
+        # The control: this is the fallback, not "ArtNet is off".
+        assert "sent from another port" in warnings[0], warnings
+        assert "Restart FPPD" in warnings[0], warnings
+    finally:
+        held.close()
+
+
 def test_taken_artnet_port_leaks_no_sockets(fppd):
     """While another program holds 6454, fppd's open file descriptors stay
     put.

@@ -353,3 +353,28 @@ def test_an_eight_channel_i2s_dac_gets_all_its_channels(fppinit):
     out, _ = setup_audio(fppinit, maps)
     rewritten = fppinit.written(SINKS_CONF)
     assert dac8x_channels(rewritten) == 8, f"a cached 2-channel adapter after a boot:\n{rewritten}\n{out[-3000:]}"
+
+
+def test_a_boot_points_pipewires_default_sink_at_fppds(fppinit):
+    """A boot of a Simple-mode board whose PipeWire default sink is some
+    other sink (what WirePlumber remembered, or the first adapter on a
+    first boot): setupAudio makes the sink fppd plays to (PipeWireSinkName)
+    the default, through pactl. With that sink not in the graph, the
+    default is left as it is.
+
+    Regression: c7a2fca4a. Only the UI's applies set the default sink, so
+    a boot left the remembered or first-come one: a plugin's player, or
+    anything else naming no target, played out of another card."""
+    maps = no_card_box(fppinit)
+    set_setting(fppinit, PipeWireSinkName="fpp_group_default")
+    fppinit.stub_output("pactl", "get-default-sink", "fpp_alsa_other\n")
+    out, _ = setup_audio(fppinit, maps)
+    sets = [c for c in fppinit.calls() if c.startswith("pactl set-default-sink")]
+    assert sets == ["pactl set-default-sink fpp_group_default"], f"{sets}\n{out[-3000:]}"
+
+    # The control: fppd's sink isn't in the graph, so the default stays.
+    fppinit.stub_output("pactl", "list", "1\tfpp_group_other\tPipeWire\ts16le 2ch 48000Hz\tSUSPENDED\n")
+    set_setting(fppinit, PipeWireSinkName="fpp_group_default")
+    out, _ = setup_audio(fppinit, maps)
+    sets = [c for c in fppinit.calls() if c.startswith("pactl set-default-sink")]
+    assert sets == [], f"{sets}\n{out[-3000:]}"

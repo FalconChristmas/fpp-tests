@@ -189,7 +189,12 @@ def test_a_wifi_client_for_a_missing_adapter_does_not_hold_setup(fppinit):
                   'INTERFACE="wlan1"\nPROTO="dhcp"\nSSID="TestNet"\nPSK="testpass123"\n')
     fppinit.start_delay("wpa_supplicant@wlan1", 60)
     began = time.monotonic()
-    r = fppinit.run("setupNetwork", timeout=180)
+    # With the media directory also at /home/fpp/media, where fppinit read it
+    # before FPP_MEDIA_DIR (e930dec80), and the directories setupNetwork
+    # writes into, which it didn't make then: the fix's parent is older.
+    for d in ("/etc/wpa_supplicant", "/etc/systemd/network", "/etc/hostapd"):
+        fppinit.root_file(d + "/.fpp-test", "")
+    r = fppinit._run(["/opt/fpp/src/fppinit", "setupNetwork"], timeout=180, media_home=True)
     took = time.monotonic() - began
     assert_clean(r)
     calls = fppinit.calls()

@@ -137,6 +137,27 @@ def test_upgrade_159_installs_the_current_chrony_hook(fppinit):
     assert fppinit.written(CHRONY_HOOK) is None, r.stdout
 
 
+def test_the_chrony_reconnect_hook_steps_only_inside_a_clock_update(fppinit):
+    """The routable.d chrony hook, on a runtime reconnect (fppd running),
+    re-arms chrony's automatic step ("makestep 1.0 3") before bringing the
+    sources online and bursting, and never runs a bare "chronyc makestep".
+
+    Regression: cfa731d71. The hook bursted and then ran a bare makestep,
+    which stepped the leftover slew outside a clock update; any step clears
+    the kernel's NTP state, so timedatectl and the Health Check reported
+    "not synchronized" for up to ~68 minutes while chrony was in sync.
+    """
+    fppinit.root_file("/usr/bin/chronyc", _stub(CALLS))
+    fppinit.root_file("/usr/bin/pgrep", "#!/bin/sh\nexit 0\n")  # fppd is running: a reconnect
+    r = fppinit._run(["sh", "/opt/fpp/etc/networkd-dispatcher/routable.d/chrony"])
+    assert r.returncode == 0, r.stdout + r.stderr
+    chronyc = [c.split(None, 1)[1] if " " in c else "" for c in fppinit.calls() if c.split()[0] == "chronyc"]
+    assert "burst 4/4" in chronyc, f"no burst on a reconnect: {chronyc}"
+    assert "makestep" not in chronyc, f"a bare makestep ran: {chronyc}"
+    assert "makestep 1.0 3" in chronyc and chronyc.index("makestep 1.0 3") < chronyc.index("burst 4/4"), \
+        f"the automatic step was not re-armed before the burst: {chronyc}"
+
+
 def storage_stubs(sb):
     # Neither is in the test image, and on a device mkfs must not run.
     for tool in ("/usr/sbin/sfdisk", "/usr/sbin/mkfs.ext4", "/sbin/mkfs.ext4"):
@@ -344,3 +365,32 @@ def test_installer_systemctl_wrapper_passes_global_mask(tmp_path):
         f"the wrapper didn't pass even a plain enable through, so this proves nothing: {calls}\n{r.stdout}"
     assert any("--global" in c and "mask pipewire.socket pipewire.service" in c for c in calls), \
         f"`systemctl --global mask` never reached systemctl: {calls}\n{r.stdout}"
+
+
+def test_install_pipewire_masks_the_user_units_system_wide(tmp_path):
+    """install_pipewire.sh's masking step masks every per-user PipeWire
+    unit with systemctl --global (/etc/systemd/user), filter-chain included.
+
+    Regression: 0efdfecae. The step linked the units to /dev/null in
+    ~fpp/.config/systemd/user, which an fppos upgrade never carries over, so
+    a device upgraded that way started a second PipeWire stack at login."""
+    with open(os.path.join(TREE, "scripts", "install_pipewire.sh")) as f:
+        src = f.read()
+    m = re.search(r"^# --- 6\..*?$(.*?)^# --- 7\.", src, re.M | re.S)
+    assert m and "Masking user-session PipeWire services" in m.group(1), "no masking step in install_pipewire.sh"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "calls"
+    for cmd in ("systemctl", "chown"):
+        (bin_dir / cmd).write_text(f"#!/bin/sh\nprintf '%s\\n' \"{cmd} $*\" >> {log}\n")
+        (bin_dir / cmd).chmod(0o755)
+    # Anything the step writes under ~fpp lands in tmp_path instead.
+    step = m.group(1).replace("/home/fpp", str(tmp_path / "home"))
+    r = subprocess.run(["bash", "-c", f"PATH={bin_dir}:$PATH\n{step}"], capture_output=True, text=True, timeout=30)
+    calls = log.read_text().splitlines() if log.exists() else []
+    masks = [c for c in calls if c.startswith("systemctl") and "--global" in c and " mask " in c]
+    assert masks, f"no systemctl --global mask: {calls}\n{r.stdout}{r.stderr}"
+    units = set(masks[0].split())
+    for unit in ("pipewire.socket", "pipewire.service", "pipewire-pulse.socket",
+                 "pipewire-pulse.service", "wireplumber.service", "filter-chain.service"):
+        assert unit in units, f"{unit} is not masked: {masks}"
