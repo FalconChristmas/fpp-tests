@@ -245,3 +245,37 @@ def test_fppd_f_into_a_pipe_writes_its_log_lines_once(fppd):
     time.sleep(0.5)
     with open(os.path.join(fppd.media, "logs", "fppd.stdout"), errors="replace") as f:
         assert "No Such Command Into A Pipe" not in f.read(), "a line in fppd.log was copied to stdout too"
+
+
+def test_media_stopped_just_before_shutdown_keeps_its_files_until_exit(fppd, audio):
+    """A 6-channel file playing to a pipewiresink of its own, stopped, and
+    fppd stopped straight after, while the track's pipeline is still being
+    torn down on its own thread: fppd exits 0 and nothing on the way out
+    finds a file descriptor closed under it.
+
+    Regression: 320a29525. At the end of shutdown fppd closed every
+    descriptor from 3 up in its own process, for the restart's exec not to
+    inherit them, while that teardown and the PipeWire threads it shares
+    were still running: GStreamer couldn't wake its polls ("Bad file
+    descriptor"), GLib found its fds already closed, and PipeWire's
+    blocking invoke lost the eventfd it waits on, so a stream was freed
+    while its converter still ran (TSan: free_tmp against the resampler).
+    The descriptors are now marked close-on-exec instead, which the exec and
+    _exit() close for it."""
+    from test_remote_media import write_six_channel_wav
+    write_six_channel_wav(os.path.join(fppd.media, "music", "Six.wav"), 10, 10)
+    fppd.start()
+    fppd.command("Play Media", "Six.wav", "1", "0", "1")
+    fppd.wait_for(lambda: fppd.get("/fppd/status").get("current_song") == "Six.wav", timeout=10,
+                  what="the file to play")
+    time.sleep(1)
+    fppd.command("Stop Media Slot", "1", timeout=10)
+    rc = fppd.stop()
+    fppd.exit_expected = True
+    from fppd import describe_rc
+    out = open(os.path.join(fppd.media, "logs", "fppd.stdout"), errors="replace").read()
+    bad = [line for line in out.splitlines() if "Bad file descriptor" in line or "EBADF" in line]
+    assert not bad, f"{len(bad)} lines like: {bad[0]}"
+    assert rc == 0, f"fppd exited with {describe_rc(rc)} on SIGTERM\n{fppd.tail()}"
+    reports = fppd.sanitizer_reports()
+    assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
