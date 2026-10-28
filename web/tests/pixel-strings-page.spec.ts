@@ -184,15 +184,19 @@ test('Clone String finds its string whatever header rows the table holds', async
   await page.goto('/channeloutputs.php');
   await page.locator('#stringTab-tab').click();
   await expect(page.locator('#PixelString_enable')).toBeChecked({ timeout: 15_000 });
-  // The table as that run had it: a second copy of floatThead's sizing header.
-  const firstRowIndex = await page.evaluate(() => {
+  // The table as that run had it: another copy of floatThead's sizing header
+  // (on top of however many it holds already -- a full run can leave two).
+  const [before, after] = await page.evaluate(() => {
     const t = document.getElementById('PixelString') as HTMLTableElement;
+    const first = () => (t.querySelector('tr[id$="_Output_0_0_0"]') as HTMLTableRowElement).rowIndex;
+    const was = first();
     const head = t.querySelector(':scope > thead')!;
     t.insertBefore(head.cloneNode(true), head);
-    return (t.querySelector('tr[id$="_Output_0_0_0"]') as HTMLTableRowElement).rowIndex;
+    return [was, first()];
   });
-  // The control: two header rows above the first string.
-  expect(firstRowIndex).toBe(2);
+  // The control: at least two header rows above the first string.
+  expect(after).toBe(before + 1);
+  expect(after).toBeGreaterThanOrEqual(2);
   await row(page, 0).locator('td.vsPortLabel').dispatchEvent('mousedown');
   await page.locator('#cloneStringButton').click();
   await expect(row(page, 1).locator('input.vsPixelCount'), `the clone was made (alerts: ${alerts.join(' | ')})`).toHaveValue('50');
