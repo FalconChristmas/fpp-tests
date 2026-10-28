@@ -84,8 +84,9 @@ def test_a_vbr_files_total_follows_gstreamers_estimate(fppd, audio):
     """Play Media of a 12 s VBR MP3 (3 s of noise, then near silence; no
     Xing header) whose length GStreamer estimates from the bitrate seen so
     far, so its estimate starts near 4 s and grows as the quiet frames are
-    read. The slot's total follows the estimate up, reaching 11 s or more
-    before the file ends.
+    read. The slot's total follows the estimate up, reaching 9 s or more
+    before the file ends (11-12 s here; a loaded CI runner has seen its
+    last sample at 10).
 
     Regression: 36ca9ad01. The total was set from GStreamer's first
     duration answer and never again, so the slot kept a length of 3-4 s for
@@ -106,4 +107,4 @@ def test_a_vbr_files_total_follows_gstreamers_estimate(fppd, audio):
             totals.append(sl.get("minutesTotal", 0) * 60 + sl.get("secondsTotal", 0))
         time.sleep(0.25)
     assert totals, "the file never played"
-    assert max(totals) >= 11, f"the slot's total stayed at {sorted(set(totals))} s"
+    assert max(totals) >= 9, f"the slot's total stayed at {sorted(set(totals))} s"
