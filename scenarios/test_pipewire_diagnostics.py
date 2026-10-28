@@ -122,3 +122,31 @@ chmod +x /usr/bin/pw-top
     notes = " ".join(l.strip() for l in out.splitlines())  # the notes wrap over lines
     assert "fpp_group_* and fpp_fx_* nodes live until the PipeWire services restart" in notes, out[-3000:]
     assert "can leave the sound behind the lights" in notes, out[-3000:]
+
+
+def test_throttling_advice_follows_the_flag_that_is_set(fppinit):
+    """vcgencmd get_throttled is decoded flag by flag: 0x80000 (the soft
+    temperature limit reached since boot, nothing now) gets cooling advice
+    and no power supply advice; 0x50005 (under-voltage now, and throttled)
+    still gets the supply advice, as a warning. vcgencmd is the sandbox's
+    stub.
+
+    Regression: 6318938af. Any non-zero value was reported as a
+    "throttling/under-voltage flag" with "Use a supply that can hold 5V
+    under load", so a Pi that had only got warm (issue #3135, 0x80000) was
+    sent to replace a good supply."""
+    def performance(value):
+        fppinit.stub_output("vcgencmd", "get_throttled", f"throttled={value}\n")
+        r = fppinit._run(["/opt/fpp/scripts/pipewire_diagnostics.sh", "performance"], timeout=120)
+        out = r.stdout + r.stderr
+        assert f"Throttling: throttled={value}" in out, f"the throttling check never ran:\n{out[-3000:]}"
+        return out
+
+    out = performance("0x80000")
+    assert "5V" not in out, f"a soft temperature limit got power supply advice:\n{out[-3000:]}"
+    assert "Soft temperature limit reached since boot (not now)" in out, out[-3000:]
+    assert "improve cooling" in out, out[-3000:]
+
+    out = performance("0x50005")
+    assert "[WARN] Under-voltage now" in out, out[-3000:]
+    assert "Use a supply that can hold 5V under load" in out, out[-3000:]

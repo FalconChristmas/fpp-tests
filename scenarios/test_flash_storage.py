@@ -15,6 +15,7 @@ filesystem): run-local.sh on a device.
 """
 
 import os
+import re
 import shutil
 import subprocess
 
@@ -100,3 +101,43 @@ def test_a_flash_refuses_to_start_without_the_boot_filesystem(tree):
     assert "/boot/firmware is not mounted, so there are no boot files to copy" in out, out[-3000:]
     assert "FLASH-RC=0" not in out and "Dry run -- stopping" not in out, out[-3000:]
     assert "source boot filesystem:" in mounted, mounted[-3000:]
+
+
+def fixup_sed(profile, target):
+    """The sed in profile_<profile>_fixup() that points the copy's boot
+    config (its local ${<target>}) at the copy, as the tree under test has
+    it."""
+    with open(os.path.join(os.environ.get("FPP_TREE", ""), "SD", "flash_storage.sh")) as f:
+        src = f.read()
+    m = re.search(rf"^profile_{profile}_fixup\(\) \{{\n(.*?)^\}}$", src, re.M | re.S)
+    assert m, f"no profile_{profile}_fixup() in flash_storage.sh"
+    s = re.search(rf'^\s*(sed -i "s\|root=.*?" "\$\{{{target}\}}")', m.group(1), re.M | re.S)
+    assert s, f"no root= rewrite of ${{{target}}} in profile_{profile}_fixup()"
+    return s.group(1)
+
+
+def test_a_flash_points_a_final_root_token_at_the_copy(tmp_path):
+    """The copy's cmdline.txt (Pi) and extlinux.conf (BB64) are pointed at
+    the copy's partitions when root= or resume= is the line's last token,
+    as it often is in the single line of cmdline.txt, as well as mid-line.
+
+    Regression: 99af6a581. The rewrites matched only a token followed by a
+    space, so a final root= kept naming the source disk and the copy could
+    not boot."""
+    cases = [
+        ("pi", "cmdline", "console=tty1 rootfstype=ext4 rootwait root=/dev/mmcblk0p2\n",
+         "console=tty1 rootfstype=ext4 rootwait root=/dev/sdz2\n"),
+        ("pi", "cmdline", "console=tty1 root=PARTUUID=4e0b4d45-02\n", "console=tty1 root=/dev/sdz2\n"),
+        ("pi", "cmdline", "root=/dev/mmcblk0p2 rootwait\n", "root=/dev/sdz2 rootwait\n"),  # control
+        ("bb64", "extlinux", "    append console=ttyS2 resume=/dev/mmcblk1p2 root=/dev/mmcblk1p3\n"
+                             "    append root=/dev/mmcblk1p3 ro resume=/dev/mmcblk1p2\n",
+         "    append console=ttyS2 resume=/dev/sdzp2 root=/dev/sdzp3\n"
+         "    append root=/dev/sdzp3 ro resume=/dev/sdzp2\n"),
+    ]
+    for i, (profile, target, before, after) in enumerate(cases):
+        path = tmp_path / f"conf{i}"
+        path.write_text(before)
+        script = f'DSTPART=/dev/sdz DEVICE=sdz {target}={path}\n{fixup_sed(profile, target)}\n'
+        r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert path.read_text() == after, f"{profile} {before!r} became {path.read_text()!r}"

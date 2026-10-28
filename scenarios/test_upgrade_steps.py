@@ -12,6 +12,8 @@ import os
 import shutil
 import stat
 
+import pytest
+
 from fppinit import MEDIA, fppinit  # noqa: F401 -- the fixture
 
 TREE = os.environ.get("FPP_TREE", "")
@@ -405,3 +407,188 @@ def test_upgrade_148_replaces_the_exim_daemon_with_a_retry_timer(fppinit):
     r, out = step(fppinit, 148)
     assert r.returncode == 0, out[-3000:]
     assert not [c for c in fppinit.calls() if "exim" in c], fppinit.calls()
+
+
+def test_upgrade_113_gives_networkd_dispatcher_back_to_root(fppinit):
+    """Upgrade 113 makes a non-root-owned /etc/networkd-dispatcher tree
+    root:root again, and on a second run finds it so and changes nothing.
+
+    Regression: 31dd89043. upgrade/80 and 90 copied the hooks with cp -af,
+    which kept /opt/fpp's owner; networkd-dispatcher then refused to run
+    them ("invalid permissions"), which broke the time-sync hook."""
+    fppinit.root_file("/etc/networkd-dispatcher/routable.d/ntpd", "#!/bin/sh\n")
+    fppinit.write("settings", "")
+    r = fppinit._run(["sh", "-c", "chown -R 1001:1001 /etc/networkd-dispatcher && "
+                                  "/opt/fpp/upgrade/113/upgrade.sh; echo \"exited $?\"; "
+                                  "find /etc/networkd-dispatcher ! -uid 0 -o ! -gid 0; "
+                                  "echo second; /opt/fpp/upgrade/113/upgrade.sh; echo \"exited $?\""],
+                     timeout=120, media_home=True)
+    out = r.stdout + r.stderr
+    first, second = out.split("second", 1)
+    assert "exited 0" in first, out[-3000:]
+    assert "/etc/networkd-dispatcher" not in first.split("exited 0", 1)[1], \
+        f"still not root-owned after upgrade 113:\n{out[-3000:]}"
+    assert "already root-owned" in second and "exited 0" in second, out[-3000:]
+
+
+def no_profile(sb):
+    """The fpp user's home as the sandbox has it, without the dotfiles
+    upgrade 114 restores."""
+    for f in (".profile", ".bash_logout"):
+        sb.root_file(f"/home/fpp/{f}", None)
+
+
+def test_upgrade_114_restores_a_missing_profile_and_asks_for_a_reboot(fppinit):
+    """Upgrade 114 puts back a missing ~/.profile from /etc/skel, owned by
+    fpp, so login shells source ~/.bashrc (and the kiosk's startx runs),
+    and sets the reboot flag for it.
+
+    Regressions: 0e154d606 (with no ~/.profile, login shells never read
+    ~/.bashrc and Kiosk mode never started on trixie) and bc6245d44 (the
+    fix needed a reboot to take effect and nothing asked for one)."""
+    import pwd
+    if not os.path.exists("/etc/skel/.profile"):
+        pytest.skip("no /etc/skel/.profile here")
+    no_profile(fppinit)
+    r, out = step(fppinit, 114)
+    profile = fppinit.written("/home/fpp/.profile")
+    assert profile is not None, f"~/.profile was not restored:\n{out[-3000:]}"
+    with open("/etc/skel/.profile") as f:
+        assert profile == f.read()
+    uid = os.stat(os.path.join(fppinit.upper, "home/fpp/.profile")).st_uid
+    assert uid == pwd.getpwnam("fpp").pw_uid, f"~/.profile is owned by uid {uid}"
+    assert media_settings(fppinit).get("rebootFlag") == "1", f"no reboot asked for:\n{out[-3000:]}"
+
+
+def test_upgrade_114_leaves_a_present_profile_alone(fppinit):
+    """With ~/.profile there, upgrade 114 changes nothing and asks for no
+    reboot (the control for the test above)."""
+    no_profile(fppinit)
+    fppinit.root_file("/home/fpp/.profile", "# the user's own\n")
+    r, out = step(fppinit, 114)
+    assert fppinit.written("/home/fpp/.profile") == "# the user's own\n", out[-3000:]
+    assert media_settings(fppinit).get("rebootFlag") != "1", out[-3000:]
+
+
+def test_upgrade_120_reloads_apache_rather_than_restarting_it(fppinit):
+    """Upgrade 120 recopies the Apache site for the /fppdws WebSocket and
+    reloads Apache gracefully: it runs inside a request Apache is serving
+    (the browser's upgrade window), which a restart would cut off.
+
+    Regression: 50e074f93. It restarted Apache, which dropped the streaming
+    upgrade request and left the upgrade page hanging."""
+    fppinit.service("apache2", active=True)
+    fppinit.root_file("/etc/apache2/sites-enabled/.fpp-test", "")
+    r, out = step(fppinit, 120)
+    calls = [c for c in fppinit.calls() if "apache" in c]
+    assert not [c for c in calls if "restart" in c], f"Apache was restarted: {calls}"
+    assert [c for c in calls if "reload apache2" in c or "graceful" in c], f"Apache was not reloaded: {calls}"
+
+
+def test_upgrade_104_recopies_the_apache_site_and_reloads(fppinit):
+    """Upgrade 104 replaces a stale Apache site with the tree's
+    etc/apache2.site (its proxy rewrite rules in the order the 3D
+    visualizer needs) and reloads Apache.
+
+    Added in c95fda85c: an existing box kept its old site file, whose rule
+    order broke the 3D visualizer's proxied requests."""
+    fppinit.service("apache2", active=True)
+    fppinit.root_file("/etc/apache2/sites-enabled/000-default.conf", "# a stale site\n")
+    r = fppinit._run(["sh", "-c", "/opt/fpp/upgrade/104/upgrade.sh; "
+                                  "cmp /opt/fpp/etc/apache2.site /etc/apache2/sites-enabled/000-default.conf "
+                                  "&& echo site-current"], timeout=120, media_home=True)
+    out = r.stdout + r.stderr
+    assert "site-current" in out, f"the Apache site is not the tree's:\n{out[-3000:]}"
+    calls = [c for c in fppinit.calls() if "apache" in c]
+    assert [c for c in calls if "reload apache2" in c], f"Apache was not reloaded: {calls}"
+
+
+def test_upgrade_108_renames_audio_backend_to_media_backend(fppinit):
+    """Upgrade 108 renames the AudioBackend setting to MediaBackend,
+    keeping its value, which fppd and the UI now read.
+
+    Added in 5ca5270f4: without it a box set to PipeWire would read no
+    MediaBackend after the update and fall back to the default backend."""
+    fppinit.write("settings", 'AudioBackend = "pipewire"\nVolume = "70"\n')
+    r, out = step(fppinit, 108)
+    s = media_settings(fppinit)
+    assert s.get("MediaBackend") == "pipewire", f"{s}\n{out[-3000:]}"
+    assert "AudioBackend" not in s, s
+    assert s.get("Volume") == "70", s
+
+
+@pytest.mark.parametrize("backend", [None, "alsa"])
+def test_upgrade_109_moves_alsa_media_to_simple_pipewire(fppinit, backend):
+    """Upgrade 109 moves a box on the ALSA media backend (set, or unset as
+    old boxes are) to Simple PipeWire, drops the ALSA-only ForceHDMI and
+    EnableBBBHDMI settings and asks for a reboot; one already on PipeWire
+    is left alone.
+
+    Added in 05fa13c01."""
+    settings = 'ForceHDMI = "1"\nEnableBBBHDMI = "1"\nForceHDMIResolution = "1920x1080"\n'
+    if backend:
+        settings += f'MediaBackend = "{backend}"\n'
+    fppinit.write("settings", settings)
+    r, out = step(fppinit, 109)
+    s = media_settings(fppinit)
+    assert s.get("MediaBackend") == "pipewire-simple", f"{s}\n{out[-3000:]}"
+    assert "ForceHDMI" not in s and "EnableBBBHDMI" not in s, s
+    assert s.get("ForceHDMIResolution") == "1920x1080", s
+    assert s.get("rebootFlag") == "1", s
+
+    fppinit.write("settings", 'MediaBackend = "pipewire"\n')
+    step(fppinit, 109)
+    assert media_settings(fppinit) == {"MediaBackend": "pipewire"}, media_settings(fppinit)
+
+
+@pytest.mark.parametrize("model", ["Raspberry Pi Zero 2 W Rev 1.0", "Raspberry Pi 4 Model B Rev 1.5"])
+def test_upgrade_111_fixes_hdmi_audio_on_a_pi_zero_2(fppinit, model):
+    """On a Pi Zero 2 W, upgrade 111 adds dtparam=audio=off (and the HDMI
+    hotplug and drive lines) to config.txt's [pi02] section and takes the
+    snd_bcm2835 parameters out of cmdline.txt, asking for a reboot; another
+    Pi model is left alone.
+
+    Added in f593f00a8: existing Zero 2 W installs kept a config that gave
+    them no HDMI sound."""
+    if not os.path.exists("/sys/firmware/devicetree/base/model"):
+        pytest.skip("no device tree here to stand a Pi Zero 2 W's model in")
+    config = "[all]\ndtoverlay=vc4-kms-v3d\n[pi02]\nhdmi_drive=2\n"
+    cmdline = "console=tty1 root=/dev/mmcblk0p2 snd_bcm2835.enable_headphones=1 snd_bcm2835.enable_hdmi=0 rootwait\n"
+    pi_boot(fppinit, config)
+    boot_write(fppinit, "cmdline.txt", cmdline)
+    fppinit.fake_path("/sys/firmware/devicetree/base/model", model + "\0")
+    fppinit.write("settings", "")
+    r, out = step(fppinit, 111)
+    with open(os.path.join(fppinit.boot, "config.txt")) as f:
+        got_config = f.read()
+    with open(os.path.join(fppinit.boot, "cmdline.txt")) as f:
+        got_cmdline = f.read()
+    if "Zero 2" not in model:
+        assert (got_config, got_cmdline) == (config, cmdline), out[-3000:]
+        assert media_settings(fppinit).get("rebootFlag") != "1"
+        return
+    pi02 = got_config.split("[pi02]", 1)[1].split("[", 1)[0].split()
+    for line in ("dtparam=audio=off", "hdmi_force_hotplug=1", "hdmi_drive=2"):
+        assert pi02.count(line) == 1, f"[pi02] has {pi02}:\n{out[-3000:]}"
+    assert got_cmdline == "console=tty1 root=/dev/mmcblk0p2 rootwait\n", got_cmdline
+    assert media_settings(fppinit).get("rebootFlag") == "1", out[-3000:]
+
+
+def test_upgrade_115_clears_stale_xauth_locks_and_fixes_home_ownership(fppinit):
+    """Upgrade 115 removes the stale ~/.Xauthority-c and -l locks that kept
+    the kiosk's X from starting and gives files in fpp's home that another
+    user owns back to fpp; a second run finds nothing to do.
+
+    Added in 853cbb79d (kiosk fixes)."""
+    import pwd
+    fpp = pwd.getpwnam("fpp").pw_uid
+    for f in (".Xauthority-c", ".Xauthority-l", ".fpp-test-root-owned"):
+        fppinit.root_file(f"/home/fpp/{f}", "")
+    fppinit.write("settings", "")
+    r = fppinit._run(["sh", "-c", "/opt/fpp/upgrade/115/upgrade.sh; ls -a /home/fpp"], timeout=120,
+                     media_home=True)
+    out = r.stdout + r.stderr
+    left = [f for f in (".Xauthority-c", ".Xauthority-l") if f in out.split()]
+    assert not left, f"{left} still there:\n{out[-3000:]}"
+    owned = os.stat(os.path.join(fppinit.upper, "home/fpp/.fpp-test-root-owned")).st_uid
+    assert owned == fpp, f"a root-owned file in fpp's home is still uid {owned}:\n{out[-3000:]}"

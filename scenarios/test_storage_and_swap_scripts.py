@@ -126,3 +126,92 @@ def test_a_fat_backup_keeps_non_ascii_file_names(tmp_path):
     finally:
         if loop:
             subprocess.run(["losetup", "-d", loop], capture_output=True)
+
+
+def meminfo(total, cma=0, swap=0):
+    return (f"MemTotal:       {total} kB\nMemFree:        {total // 2} kB\n"
+            f"SwapTotal:      {swap} kB\nCmaTotal:       {cma} kB\n")
+
+
+def swaps(*entries):
+    """/proc/swaps with (name, kind, size kB) entries."""
+    return "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n" + "".join(
+        f"{name}\t\t\t\t{kind}\t\t{size}\t\t0\t\t-2\n" for name, kind, size in entries)
+
+
+def build_box(sb, cpus, arch, memory, swap_entries):
+    """The /proc a build sizes itself from, and uname -m answering `arch`."""
+    sb.fake_path("/proc/cpuinfo", "".join(f"processor\t: {i}\n\n" for i in range(cpus)))
+    sb.fake_path("/proc/meminfo", memory)
+    sb.fake_path("/proc/swaps", swaps(*swap_entries))
+    sb.root_file("/usr/local/sbin/uname", f"#!/bin/sh\n[ \"$1\" = -m ] && echo {arch} && exit 0\n"
+                                          "exec /usr/bin/uname \"$@\"\n")
+
+
+# Bash, with FPP's common and functions sourced from the tree under test.
+FUNCTIONS = 'PATH=/usr/local/sbin:$PATH; . /opt/fpp/scripts/common; . /opt/fpp/scripts/functions; PATH=/usr/local/sbin:$PATH\n'
+
+ZRAM = ("/dev/zram0", "partition", 245000)
+
+
+@pytest.mark.parametrize("cpus,arch,memory,swap_entries,jobs", [
+    # 4 cores, under 1GB: c86553440 caps it at 3
+    (4, "aarch64", meminfo(900000), [], 3),
+    # a 1GB Pi 4 with its 512MB CMA pool: 6d790b72f leaves ~200MB, so 1 job
+    (4, "aarch64", meminfo(730000, cma=524288), [], 1),
+    # a 493MB 32-bit board with only zram: 5dd19628f counts no swap, so 1 job
+    (2, "armv7l", meminfo(493000, swap=245000), [ZRAM], 1),
+    # the same with 100MB of disk swap: 2 jobs (the control)
+    (2, "armv7l", meminfo(493000, swap=345400), [ZRAM, ("/home/fpp/media/tmp/swapfile", "file", 100400)], 2),
+], ids=["under-1GB", "cma-pool", "zram-only", "disk-swap"])
+def test_build_jobs_fit_the_memory_the_compile_can_use(fppinit, cpus, arch, memory, swap_entries, jobs):
+    """ComputeMakeParallelism, the make -j for a build on the device,
+    sized from /proc: a 4-core box under 1GB gets 3 jobs; CMA (the Pi's
+    GPU pool) is not memory a compile can use; zram is not swap a compile
+    can lean on.
+
+    Regressions: c86553440 (a 4-core box with under 1GB got -j4), 6d790b72f
+    (a 1GB Pi 4 counted its 512MB CMA pool, got -j3, and cc1plus was
+    OOM-killed), 5dd19628f (a 493MB board counted its zram as swap and
+    got -j2, which thrashed it)."""
+    build_box(fppinit, cpus, arch, memory, swap_entries)
+    r = fppinit._run(["bash", "-c", FUNCTIONS + 'echo "jobs: $(ComputeMakeParallelism)"'], timeout=60)
+    out = r.stdout + r.stderr
+    got = [l.split()[1] for l in out.splitlines() if l.startswith("jobs: ")]
+    assert got == [str(jobs)], f"{cpus} cores, {arch}, {memory!r}, swaps {swap_entries}: -j{got}\n{out[-2000:]}"
+
+
+# compileBinaries up to the build: the steps around it are stubbed, make does
+# nothing, an fppd is "running", and fallocate, mkswap and swapon only record.
+COMPILE = FUNCTIONS + r"""
+for t in make fallocate mkswap swapon; do
+    printf '#!/bin/sh\nprintf "%%s\\n" "%s $*" >> /fppinit-calls.log\n' "$t" > /usr/bin/$t
+    chmod +x /usr/bin/$t
+done
+cleanCompiledBinaries() { :; }
+populateCCACHE() { :; }
+SetupBuildEnv() { BUILD_CPUS=1; }
+pgrep() { echo 4242; }
+compileBinaries
+"""
+
+
+@pytest.mark.parametrize("swap_entries,made", [
+    ([("/dev/zram0", "partition", 415000)], True),  # a Pi Zero 2 W's
+    ([ZRAM, ("/var/swap", "file", 409600)], False),
+], ids=["zram-only", "disk-swap"])
+def test_a_build_on_a_small_board_gets_a_swapfile_unless_it_has_disk_swap(fppinit, swap_entries, made):
+    """A build on a board with under 512MB and fppd running makes a
+    swapfile for the compile when the board has under 384MB of disk-backed
+    swap -- zram doesn't count -- and none when it has enough.
+
+    Regressions: a6e1038d9 (a Pi Zero 2 W's 415MB of zram passed for swap,
+    no swapfile was made, and the PCH compile was OOM-killed two runs in
+    three) and c86553440 (a swapfile was made however much swap the board
+    already had)."""
+    build_box(fppinit, 1, "aarch64", meminfo(430000, swap=sum(e[2] for e in swap_entries)), swap_entries)
+    r = fppinit._run(["bash", "-c", COMPILE], timeout=120)
+    calls = fppinit.calls()
+    assert any(c.startswith("make ") for c in calls), f"the build never ran:\n{(r.stdout + r.stderr)[-2000:]}"
+    swapons = [c for c in calls if c.startswith("swapon ")]
+    assert bool(swapons) == made, f"swaps {swap_entries}: {calls}"

@@ -562,3 +562,59 @@ def test_output_specific_colour_fade_ramps_the_whole_panel(fppd, test_type, colo
         levels.add(px[lit[0]])
     assert len(levels) >= 6 and min(levels) < 96 and max(levels) > 160, \
         f"the {colour} fade did not ramp: levels {sorted(levels)}"
+
+
+def test_a_bridged_frame_is_latched_after_its_rows_have_left(fppd):
+    """While fppd bridges network input (DDP here), each frame's display
+    packet goes out at least ColorlightSyncGapUS (500 us) after the frame's
+    last row left, measured by the kernel's receive timestamps on the far
+    end of the veth.
+
+    Regression: 3a8e4f707. Bridging runs PrepData() and SendData() back to
+    back, so the display packet followed the last row by 0-300 us and the
+    receiver latched before it had stored that row: the last row lit only
+    part way, differently every frame (#3136)."""
+    from packets import DDP_PORT, ddp, send
+    from test_bridge_inputs import inputs
+    w, h = 32, 16
+    SO_TIMESTAMPNS = 35
+    fppd.write("config/channeloutputs.json", panels_output([panel(0, 0, 0, 0)], channels=w * h * 3))
+    fppd.write("config/ci-universes.json", inputs())
+    fppd.settings(DisableFakeNetworkBridges="1")
+    gaps = []
+    with veth():
+        sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))
+        sock.bind((RX, 0))
+        sock.setsockopt(socket.SOL_SOCKET, SO_TIMESTAMPNS, 1)
+        sock.settimeout(0.2)
+        try:
+            fppd.start()
+            frame = unique_frame(w, h)
+            last_row = None
+            ends = time.monotonic() + 30
+            n = 0
+            while len(gaps) < 60 and time.monotonic() < ends:
+                n += 1
+                send([ddp(off, frame[off:off + 1440], push=off + 1440 >= len(frame), seq=n % 15 + 1)
+                      for off in range(0, len(frame), 1440)], DDP_PORT)
+                stop = time.monotonic() + 0.04
+                while time.monotonic() < stop:
+                    try:
+                        pkt, anc, _, _ = sock.recvmsg(4096, 64)
+                    except socket.timeout:
+                        break
+                    if pkt[6:12] != SRC_MAC:
+                        continue
+                    sec, nsec = struct.unpack("ll", anc[0][2][:16])
+                    t = sec * 1_000_000 + nsec // 1000
+                    if pkt[12] == 0x55:
+                        last_row = t
+                    elif pkt[12] == 0x01 and last_row is not None:
+                        gaps.append(t - last_row)
+                        last_row = None
+        finally:
+            sock.close()
+    assert len(gaps) >= 30, f"only {len(gaps)} bridged frames were latched on the wire"
+    gaps.sort()
+    assert gaps[len(gaps) // 10] >= 400, \
+        f"display packets followed the last row by {gaps[:10]}... us (median {gaps[len(gaps) // 2]} us)"

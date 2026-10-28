@@ -8,6 +8,8 @@ record them -- not what a kernel or a radio then does with them.
 """
 
 import contextlib
+import os
+import re
 import subprocess
 import time
 
@@ -232,3 +234,177 @@ def test_a_carrier_change_handler_never_resets_a_wedged_adapter(fppinit):
     assert_clean(boot(fppinit))
     assert reboots(fppinit) or usb_resets(fppinit), \
         f"postNetwork didn't reset the adapter either, so this proves nothing: {fppinit.calls()}"
+
+
+def network_ports(sb, **ports):
+    """/sys/class/net with lo and the given ports, each a real device:
+    name="wired" (no carrier yet) or "wifi" (an adapter, no carrier)."""
+    net = {"lo/carrier": "1\n", "lo/flags": "0x9\n"}
+    for name, kind in ports.items():
+        sb.root_file(f"/tmp/fpp-dev/{name}/uevent", "")
+        net.update({f"{name}/carrier": "0\n", f"{name}/flags": "0x1003\n",
+                    f"{name}/device": Link(f"/tmp/fpp-dev/{name}")})
+        if kind == "wifi":
+            net[f"{name}/wireless/.keep"] = ""
+    sb.fake_path("/sys/class/net", net)
+
+
+@contextlib.contextmanager
+def carrier_after(sb, port, seconds):
+    """Give `port` carrier `seconds` after the next run starts, as a cable
+    that takes that long to autonegotiate does."""
+    import glob
+    import threading
+    stop = threading.Event()
+
+    def link():
+        began = time.monotonic()
+        while not stop.is_set():
+            files = glob.glob(f"{sb.dir}/run-*/fake-0/{port}/carrier")
+            if files and time.monotonic() - began >= seconds:
+                with open(max(files, key=os.path.getmtime), "w") as f:
+                    f.write("1\n")
+                return
+            time.sleep(0.05)
+    t = threading.Thread(target=link, daemon=True)
+    t.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        t.join()
+
+
+def test_a_wired_port_still_negotiating_is_waited_for(fppinit):
+    """A wired port without carrier may still be autonegotiating: the wait
+    for the network does not write it off once the interfaces have held
+    still, and when carrier comes 5.5 s in, it goes on to wait for the
+    address.
+
+    Regression: 83a24f448. A wired port with no carrier 4 s after the
+    interfaces settled was taken for no cable, so a Pi 5 against a gigabit
+    switch (carrier at 3-5 s) started tethering, then tore it down when
+    DHCP landed."""
+    with_config_dirs(fppinit)
+    network_ports(fppinit, eth0="wired")
+    fppinit.settings(bootDelay="0")
+    with carrier_after(fppinit, "eth0", 5.5):
+        r = run(fppinit, "setupNetwork", net=True)
+    assert_clean(r)
+    out = r.stdout + r.stderr
+    assert "nothing can get an address" not in out, out[-3000:]
+    assert "seconds for network interfaces to have link" in out, \
+        f"the wait gave up before eth0 got carrier:\n{out[-3000:]}"
+
+
+def test_a_board_with_nothing_to_get_an_address_stops_waiting_early(fppinit):
+    """With no wired port and no Wi-Fi adapter configured as a client (a
+    Wi-Fi adapter that can only be the tether AP), the wait for the network
+    ends once the interfaces have held still for a few seconds, rather than
+    after half its timeout (7 s for setupNetwork).
+
+    Regression: f61c30ec7. Such a board, which can only ever tether, sat
+    out the wait for link before tethering came up."""
+    with_config_dirs(fppinit)
+    network_ports(fppinit, wlan0="wifi")
+    fppinit.settings(bootDelay="0")
+    r = run(fppinit, "setupNetwork", net=True)
+    assert_clean(r)
+    out = r.stdout + r.stderr
+    m = re.search(r"No network interfaces with link detected after waiting for (\d+) ms", out)
+    assert m, f"the wait for link did not give up:\n{out[-3000:]}"
+    assert "nothing can get an address" in out, out[-3000:]
+    assert int(m.group(1)) <= 5000, f"waited {m.group(1)} ms for a link nothing could get"
+
+
+def test_a_skipped_boot_delay_ends_at_once(fppinit):
+    """A fixed boot delay shows a countdown (tmp/boot_delay) and ends
+    within moments of the UI asking to skip it (tmp/boot_delay_skip), which
+    it removes along with the countdown.
+
+    Regression: 12f1affaa. The delay slept in 30 s chunks and looked for
+    the skip only between them, so Skip in the UI took up to 30 s."""
+    import threading
+    fppinit.settings(bootDelay="30")
+    delay = os.path.join(fppinit.media, "tmp", "boot_delay")
+    skip = os.path.join(fppinit.media, "tmp", "boot_delay_skip")
+    took = []
+
+    def press_skip():
+        began = time.monotonic()
+        while not os.path.exists(delay):
+            if time.monotonic() - began > 60:
+                return
+            time.sleep(0.05)
+        time.sleep(1)
+        open(skip, "w").close()
+        pressed = time.monotonic()
+        while os.path.exists(skip) and time.monotonic() - pressed < 60:
+            time.sleep(0.05)
+        took.append(time.monotonic() - pressed)
+    t = threading.Thread(target=press_skip, daemon=True)
+    t.start()
+    r = run(fppinit, "postNetwork", net=True)
+    t.join()
+    assert_clean(r)
+    assert took, f"no boot delay countdown was shown, so this proves nothing:\n{r.stdout[-3000:]}"
+    assert took[0] < 3, f"the boot delay took {took[0]:.1f} s to act on the skip"
+    assert not os.path.exists(delay), "the countdown was left for the UI to show"
+
+
+def test_no_boot_delay_clears_a_stale_countdown(fppinit):
+    """With the boot delay off (0), the boot clears a countdown and a skip
+    request left from before, so the UI shows no delay.
+
+    Regression: 12f1affaa. bootDelay 0 left both files, and the UI went on
+    showing a boot delay warning."""
+    fppinit.settings(bootDelay="0")
+    fppinit.write("tmp/boot_delay", "1767225600,30")
+    fppinit.write("tmp/boot_delay_skip", "")
+    assert_clean(run(fppinit, "postNetwork", net=True))
+    left = [f for f in ("tmp/boot_delay", "tmp/boot_delay_skip") if fppinit.media_exists(f)]
+    assert not left, f"left behind: {left}"
+
+
+@pytest.mark.parametrize("port", ["none", "eth0-without-carrier"])
+def test_auto_boot_delay_does_not_wait_for_the_time_with_no_network(fppinit, port):
+    """In the automatic boot delay mode, a box whose clock is behind its
+    image's build date (faketime, as an RTC-less board boots) but that has
+    no network that could reach a time server -- no interface at all, or an
+    eth0 without carrier -- does not wait for the time, and clears the
+    countdown the UI shows.
+
+    Regressions: 8d2298610 (a box with no network sat out the whole
+    5-minute wait for the time), 27f686a8d (an interface without carrier
+    counted as a network to wait for) and a53f32dd6 (skipping the wait left
+    the UI's countdown up)."""
+    fppinit.settings(LogLevel="info")  # bootDelay unset: automatic
+    fppinit.root_file("/etc/fpp/rfs_version", "v2026-06\n")
+    fppinit.write("tmp/boot_delay", "1577836800,auto")
+    setup = ""
+    if port != "none":
+        fppinit.fake_path("/sys/class/net", {"lo/carrier": "1\n", "lo/flags": "0x9\n",
+                                             "eth0/carrier": "0\n", "eth0/flags": "0x1003\n"})
+        setup = "ip link add eth0 type veth peer name eth0p && ip link set eth0 up && "
+    import glob
+    lib = glob.glob("/usr/lib/*/faketime/libfaketime.so.1")
+    if not lib:
+        pytest.skip("no libfaketime")
+    # The library itself: the faketime wrapper needs a /dev/shm the sandbox
+    # lacks. NO_FAKE_STAT keeps rfs_version's real (2026) timestamp.
+    clock = f"LD_PRELOAD={lib[0]} FAKETIME='@2020-01-01 00:00:00' DONT_FAKE_MONOTONIC=1 NO_FAKE_STAT=1"
+    began = time.monotonic()
+    r = None
+    try:
+        r = fppinit._run(["unshare", "--net", "sh", "-c",
+                          setup + f"exec env {clock} /opt/fpp/src/fppinit postNetwork"],
+                         timeout=150, media_home=True)
+    except subprocess.TimeoutExpired:
+        pass
+    assert r is not None, f"postNetwork was still waiting after 150 s ({port})"
+    took = time.monotonic() - began
+    assert_clean(r)
+    out = r.stdout + r.stderr
+    assert took < 90, f"postNetwork took {took:.0f} s with no network ({port}):\n{out[-3000:]}"
+    assert "Waiting until system date" not in out, out[-3000:]
+    assert not fppinit.media_exists("tmp/boot_delay"), "the countdown was left for the UI to show"

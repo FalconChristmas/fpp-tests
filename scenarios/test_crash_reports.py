@@ -6,6 +6,7 @@ uploaded."""
 
 import json
 import os
+import re
 import signal
 import subprocess
 import time
@@ -496,6 +497,35 @@ def crash_with_curl_stub(fppd, tmp_path, share):
     fppd.exit_expected = True
     assert rc == 255, f"fppd exited with {describe_rc(rc)}, not the crash handler's _exit(-1)\n{fppd.tail()}"
     return calls.read_text().splitlines() if calls.exists() else []
+
+
+def test_crash_context_records_the_temperature_at_the_fault(fppd, tmp_path):
+    """The crash context has a "thermal at fault" section, ahead of the
+    module map, with each thermal zone's type and temperature in degrees
+    (or "(no thermal zones)") and each cpufreq policy's clock, even at the
+    lowest share level.
+
+    Added in 603511b4e. A SIGILL at a valid instruction can be a part
+    running too hot for its clock, and nothing in a report said how hot it
+    was: the CPU cools within seconds, so only a reading taken in the
+    handler means anything."""
+    crash_with_curl_stub(fppd, tmp_path, "1")
+    texts = report_texts(fppd, os.path.join(fppd.media, "crashes"))
+    context = next((t for n, t in texts.items() if n.endswith("fppd_crash_context.log")), "")
+    assert "=== module map" in context, f"no crash context, so this proves nothing:\n{context[:2000]}"
+    assert "=== thermal at fault ===" in context, f"no thermal section in the crash context:\n{context[:3000]}"
+    thermal = context.split("=== thermal at fault ===", 1)[1]
+    assert "=== module map" in thermal, "the thermal section came after the module map, which parsers read to the end"
+    thermal = thermal.split("\n===", 1)[0]
+    if os.path.exists("/sys/class/thermal/thermal_zone0/temp"):
+        with open("/sys/class/thermal/thermal_zone0/type") as f:
+            kind = f.read().strip()
+        assert re.search(rf"^thermal_zone0 {re.escape(kind)}: -?\d+\.\d{{3}} C$", thermal, re.M), thermal
+    else:
+        assert "(no thermal zones)" in thermal, thermal
+    if os.path.exists("/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq"):
+        assert re.search(r"^cpufreq policy0: \d+ kHz", thermal, re.M), thermal
+    assert "=0x" not in thermal, f"the report side would read these as registers:\n{thermal}"
 
 
 def test_crash_report_kept_locally_is_full_and_never_sent(fppd, tmp_path):

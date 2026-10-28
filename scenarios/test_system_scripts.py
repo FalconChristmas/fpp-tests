@@ -10,6 +10,8 @@ import signal
 import subprocess
 import time
 
+import pytest
+
 from fppinit import MEDIA, _stub, fppinit  # noqa: F401 -- the fixture
 
 CALLS = "/fppinit-calls.log"
@@ -394,3 +396,304 @@ def test_install_pipewire_masks_the_user_units_system_wide(tmp_path):
     for unit in ("pipewire.socket", "pipewire.service", "pipewire-pulse.socket",
                  "pipewire-pulse.service", "wireplumber.service", "filter-chain.service"):
         assert unit in units, f"{unit} is not masked: {masks}"
+
+
+# scripts/git_fetch against stand-ins: git logs its calls and fails a fetch
+# between the "fail" and "ok" steps; curl answers as GitHub does except between
+# "down" and "up". Each "page" step runs it once, as a page load does; "age S"
+# moves each of its stamps S seconds further into the past (negative: into the
+# future, as a clock stepped back leaves them).
+GIT_FETCH = r"""
+cat > /usr/bin/git <<'STUB'
+#!/bin/sh
+printf '%s\n' "git $*" >> /fppinit-calls.log
+case "$*" in
+    *"fetch -p -P"*) [ -f /fppinit-state/fetch-fails ] && exit 1 ;;
+    branch) echo "* master" ;;
+esac
+exit 0
+STUB
+cat > /usr/bin/curl <<'STUB'
+#!/bin/sh
+[ -f /fppinit-state/github-down ] && exit 7
+printf 'HTTP/2 200\r\nContent-Type: text/html; charset=utf-8\r\n\r\n'
+STUB
+chmod +x /usr/bin/git /usr/bin/curl
+for step in "$@"; do
+    case "$step" in
+        page) env FPPDIR=$FPPDIR $FPPDIR/scripts/git_fetch > /dev/null 2>&1
+              echo "fetches: $(grep -c '^git fetch -p -P$' /fppinit-calls.log)" ;;
+        down) touch /fppinit-state/github-down ;;
+        up) rm -f /fppinit-state/github-down ;;
+        fail) touch /fppinit-state/fetch-fails ;;
+        ok) rm -f /fppinit-state/fetch-fails ;;
+        age*) for f in "$MEDIA"/tmp/git_fetch_*; do
+                  [ -f "$f" ] && touch -d "@$(( $(stat -c %Y "$f") - ${step#age } ))" "$f"
+              done ;;
+    esac
+done
+"""
+
+
+def git_fetch_pages(sb, *steps):
+    """Runs GIT_FETCH's steps; the number of fetches after each page load."""
+    view = fppdir_view(sb)
+    r = sb._run(["env", f"FPPDIR={view}", f"MEDIA={MEDIA}", "bash", "-c", GIT_FETCH, "git_fetch",
+                 *steps], timeout=120)
+    out = r.stdout + r.stderr
+    counts = [int(l.split()[1]) for l in out.splitlines() if l.startswith("fetches: ")]
+    assert len(counts) == steps.count("page"), out[-3000:]
+    return counts, out
+
+
+def test_git_fetch_on_every_page_load_is_throttled(fppinit):
+    """Page loads run scripts/git_fetch; one straight after a fetch does not
+    fetch again (FPP_GIT_FETCH_MIN_AGE, 15 minutes), and once that is past
+    the next does.
+
+    Regression: 46b2d7b5b. Every page view of About, MultiSync or a branch
+    list ran a full fetch of the repo, its tags and every submodule, queued
+    behind the last on the repo lock, which kept a Pi Zero W busy for
+    minutes."""
+    counts, out = git_fetch_pages(fppinit, "page", "page", "page", "age 1000", "page")
+    assert counts[0] == 1, f"the first page load did not fetch, so this proves nothing:\n{out[-3000:]}"
+    assert counts[1:3] == [1, 1], f"page loads straight after a fetch fetched again: {counts}"
+    assert counts[3] == 2, f"a fetch 1000 s old was not repeated: {counts}"
+
+
+def test_git_fetch_counts_only_a_successful_fetch_as_fresh(fppinit):
+    """Only a fetch that worked holds page loads off for 15 minutes. One
+    made while GitHub was unreachable, or whose fetch failed, is retried by
+    a page load two minutes later (not one straight after); a stamp from
+    the future (the clock stepped back) counts as stale.
+
+    Regression: c222a9f90. Any attempt wrote the 15-minute stamp, so the
+    first page load after a boot, before DNS was up, turned update checks
+    off for 15 minutes; and a stamp newer than the clock gave a negative
+    age, which always looked recent."""
+    counts, out = git_fetch_pages(
+        fppinit,
+        "down", "page", "page", "up", "age 120", "page",    # unreachable, retried after 2 minutes
+        "age -3600", "page",                                # clock stepped back an hour
+        "fail", "age 1000", "page", "page", "ok", "age 120", "page",  # the fetch itself fails
+    )
+    assert counts[:2] == [0, 0], f"an unreachable GitHub was fetched from:\n{out[-3000:]}"
+    assert counts[2] == 1, f"2 minutes after GitHub was unreachable, a page load still did not fetch: {counts}"
+    assert counts[3] == 2, f"a fetch stamped an hour in the future stopped page-load fetches: {counts}"
+    assert counts[4] == 3, f"a stale fetch was not repeated: {counts}"
+    assert counts[5] == 3, f"a page load straight after a failed fetch fetched again: {counts}"
+    assert counts[6] == 4, f"2 minutes after a failed fetch, a page load still did not fetch: {counts}"
+
+
+def setup_nocc_host(sb):
+    """scripts/setup_nocc_host.sh with stand-ins for the nocc package (its
+    server and env file, mDNS advertising on) and both cross compilers."""
+    tools = ["nocc-server"] + [f"{t}-{c}" for t in ("arm-linux-gnueabihf", "aarch64-linux-gnu")
+                               for c in ("gcc", "g++")]
+    script = "".join(
+        f"printf '#!/bin/sh\\necho \"usage: -advertise-mdns -port N\"\\n' > /usr/bin/{t}\n"
+        f"chmod +x /usr/bin/{t}\n" for t in tools)
+    script += ("mkdir -p /etc/default\n"
+               "echo 'NOCC_SERVER_OPTS=\"-advertise-mdns -port 43210\"' > /etc/default/nocc-server\n"
+               "bash /opt/fpp/scripts/setup_nocc_host.sh\n"
+               "echo \"setup exited $?\"\n")
+    r = sb._run(["sh", "-c", script], timeout=120)
+    return r.stdout + r.stderr
+
+
+def test_setup_nocc_host_gets_to_the_next_step(fppinit):
+    """With mDNS advertising on (the default), setup_nocc_host.sh starts
+    the helper and goes on to print the client instructions, exiting 0.
+
+    Regression: 20301ec26. Under set -u it assigned the never-set
+    MDNS_NOTE to itself and died with "unbound variable" after starting the
+    helper, before the instructions, exiting non-zero."""
+    out = setup_nocc_host(fppinit)
+    assert any("restart nocc-server" in c for c in fppinit.calls()), \
+        f"the helper was never started, so this proves nothing:\n{out[-3000:]}"
+    assert "unbound variable" not in out, out[-3000:]
+    assert "NEXT STEP" in out, out[-3000:]
+    assert "setup exited 0" in out, out[-3000:]
+
+
+def test_setup_nocc_host_orders_the_helper_after_postnetwork(fppinit):
+    """setup_nocc_host.sh installs a nocc-server drop-in ordering it after
+    fpp_postnetwork, before reloading systemd and restarting it.
+
+    Regression: 051d4a374. nocc-server -advertise-mdns reads the interface
+    addresses once, at startup, and network-online.target does not wait for
+    a DHCP lease: a helper that started early advertised a link-local or
+    tether address its clients could not reach."""
+    out = setup_nocc_host(fppinit)
+    dropin = fppinit.written("/etc/systemd/system/nocc-server.service.d/fpp-after-postnetwork.conf")
+    assert dropin is not None, f"no drop-in was installed:\n{out[-3000:]}"
+    assert "After=fpp_postnetwork.service" in dropin.splitlines(), dropin
+    calls = [c for c in fppinit.calls() if c.startswith("systemctl ")]
+    assert "systemctl daemon-reload" in calls, calls
+    assert calls.index("systemctl daemon-reload") < calls.index("systemctl restart nocc-server"), calls
+
+
+# php_security_update against stand-ins: dpkg-query lists php8.4 packages at
+# the version in /fppinit-state/php-version, and apt-get's install moves them
+# to the one in /fppinit-state/php-candidate, asking the policy-rc.d in place
+# (as invoke-rc.d does) whether php8.4-fpm and apache2 may restart.
+PHP_STANDINS = r"""
+cat > /usr/bin/dpkg-query <<'STUB'
+#!/bin/sh
+v=$(cat /fppinit-state/php-version)
+for p in php8.4-fpm php8.4-cli php8.4-common; do echo "ii  $p php8.4 $v"; done
+echo "ii  apache2 apache2 2.4.62-1"
+STUB
+cat > /usr/bin/apt-get <<'STUB'
+#!/bin/sh
+printf '%s\n' "apt-get $*" >> /fppinit-calls.log
+case " $* " in
+    *" install "*)
+        for s in php8.4-fpm apache2; do
+            if [ -x /usr/sbin/policy-rc.d ]; then
+                /usr/sbin/policy-rc.d "$s" restart; echo "policy $s $?" >> /fppinit-calls.log
+            else
+                echo "policy $s none" >> /fppinit-calls.log
+            fi
+        done
+        cp /fppinit-state/php-candidate /fppinit-state/php-version ;;
+esac
+exit 0
+STUB
+chmod +x /usr/bin/dpkg-query /usr/bin/apt-get
+"""
+
+
+def php_update(sb, installed, candidate, command):
+    sb.unstub("dpkg")  # its --compare-versions; nothing here installs
+    with open(os.path.join(sb.state, "php-version"), "w") as f:
+        f.write(installed + "\n")
+    with open(os.path.join(sb.state, "php-candidate"), "w") as f:
+        f.write(candidate + "\n")
+    if not os.path.exists(os.path.join(sb.media, "settings")):
+        sb.write("settings", "")
+    made = os.path.isdir(os.path.join(sb.media, "tmp", "fppdir"))
+    view = f"{MEDIA}/tmp/fppdir" if made else fppdir_view(sb)
+    r = sb._run(["sh", "-c", PHP_STANDINS + f'{command.replace("/opt/fpp", view)}; echo "exited $?"; '
+                 "ls /usr/sbin/policy-rc.d 2>&1"], timeout=120)
+    return r.stdout + r.stderr
+
+
+def test_php_security_update_leaves_php_fpm_running(fppinit):
+    """php_security_update upgrades the installed php8.x packages from a
+    release without the PHP2Shell fix to one with it. While apt runs, a
+    policy-rc.d refuses only php-fpm's restart (an update started from the
+    web UI runs inside php-fpm's cgroup, and that restart would kill it);
+    the policy is gone afterwards, and the reboot flag is set instead.
+
+    Added in a0aa04d3e: a git update never touched the OS packages, so only
+    a new image or fppos brought the fixed PHP."""
+    out = php_update(fppinit, "8.4.16-1~deb13u1", "8.4.27-1~deb13u1", "/opt/fpp/scripts/php_security_update")
+    calls = fppinit.calls()
+    installs = [c for c in calls if c.startswith("apt-get ") and " install " in c]
+    assert installs and "--only-upgrade" in installs[0].split(), f"PHP was not upgraded:\n{out[-3000:]}\n{calls}"
+    assert "php8.4-fpm" in installs[0].split() and "apache2" not in installs[0].split(), installs
+    assert "policy php8.4-fpm 101" in calls, f"php-fpm's restart was not refused: {calls}"
+    assert "policy apache2 0" in calls, f"the policy refused more than php-fpm: {calls}"
+    assert "exited 0" in out, out[-3000:]
+    assert "No such file" in out.split("exited 0", 1)[1], f"the policy-rc.d was left in place:\n{out[-3000:]}"
+    assert 'rebootFlag = "1"' in fppinit.media_file("settings"), fppinit.media_file("settings")
+
+
+def test_upgrade_160_retries_until_the_fixed_php_arrives(fppinit):
+    """Where the apt sources don't carry the fixed PHP yet (Raspbian
+    publishes it days after Debian), upgrade 160 installs and enables
+    fpp-php-security-update.timer to retry; php_security_update --timer,
+    once PHP is fixed, turns it off.
+
+    Added in a0aa04d3e."""
+    out = php_update(fppinit, "8.4.16-1~deb13u1", "8.4.16-1~deb13u1", "/opt/fpp/upgrade/160/upgrade.sh")
+    if "Container - skipping" in out or "No apt-get" in out:
+        pytest.skip("upgrade 160 doesn't run here")
+    calls = fppinit.calls()
+    assert "The apt sources do not carry the fixed PHP yet" in out, out[-3000:]
+    assert "systemctl enable --now fpp-php-security-update.timer" in calls, f"no retry was scheduled:\n{out[-3000:]}"
+    timer = "/lib/systemd/system/fpp-php-security-update.timer"
+    assert fppinit.written(timer) is not None or fppinit.written("/usr" + timer) is not None, calls
+
+    out = php_update(fppinit, "8.4.27-1~deb13u1", "8.4.27-1~deb13u1", "/opt/fpp/scripts/php_security_update --timer")
+    assert "exited 0" in out, out[-3000:]
+    assert "systemctl disable --now fpp-php-security-update.timer" in fppinit.calls(), out[-3000:]
+
+
+def test_a_side_install_keeps_the_owners_uid_1000_account(fppinit):
+    """FPP_Install.sh's add_fpp_user, run as a side install (no --img) on a
+    machine whose UID 1000 is its owner's login: the owner's account and
+    home are kept and fpp gets the next free id. The sandbox has a passwd,
+    group and shadow of its own for it.
+
+    Regression: 83e270117. The eviction of whatever held UID 1000, meant
+    for the stock pi/debian user of an image build, ran in every mode: a
+    side install on a NUC or VM ran userdel -r on its owner."""
+    with open(os.path.join(TREE, "SD", "FPP_Install.sh")) as f:
+        src = f.read()
+    m = re.search(r"^add_fpp_user\(\) \{\n.*?^\}$", src, re.M | re.S)
+    assert m, "no add_fpp_user() in FPP_Install.sh"
+    groups = ["root:x:0:", "adm:x:4:", "dialout:x:20:", "sudo:x:27:", "audio:x:29:", "video:x:44:",
+              "users:x:100:", "owner:x:1000:"]
+    fppinit.root_file("/etc/passwd", "root:x:0:0:root:/root:/bin/bash\n"
+                                     "owner:x:1000:1000:Owner:/home/owner:/bin/bash\n")
+    fppinit.root_file("/etc/group", "\n".join(groups) + "\n")
+    fppinit.root_file("/etc/shadow", "root:*:20000:0:99999:7:::\nowner:*:20000:0:99999:7:::\n")
+    fppinit.root_file("/etc/gshadow", "".join(f"{g.split(':')[0]}:*::\n" for g in groups))
+    fppinit.root_file("/home/owner/keep", "the owner's file\n")
+    script = f"isimage=false\nFPPUSER=fpp\nFPPHOME=/home/fpp-side-install\n{m.group(0)}\nadd_fpp_user\n" \
+             "echo \"owner: $(getent passwd owner)\"\necho \"fpp: $(getent passwd fpp)\"\n" \
+             "[ -f /home/owner/keep ] && echo 'owner home kept'\n"
+    r = fppinit._run(["bash", "-c", script], timeout=120)
+    out = r.stdout + r.stderr
+    assert "fpp: fpp:x:" in out, f"no fpp user was made, so this proves nothing:\n{out[-3000:]}"
+    assert "owner: owner:x:1000:1000:" in out, f"the owner's UID 1000 account is gone:\n{out[-3000:]}"
+    assert "owner home kept" in out, f"the owner's home went with it:\n{out[-3000:]}"
+    fpp_uid = re.search(r"^fpp: fpp:x:(\d+):", out, re.M).group(1)
+    assert fpp_uid != "1000", out[-3000:]
+
+
+def test_get_uuid_takes_a_pb2_industrial_serial(tmp_path):
+    """get_uuid makes the system UUID from a PocketBeagle 2's EEPROM
+    serial when it is an Industrial board's, whose serial carries an "I".
+    The script reads files of the scenario's in place of
+    /sys/bus/i2c/devices/0-0050/eeprom and of the CPU and device-tree
+    serials (none, as on that board).
+
+    Regression: 288d803a3. The serial had to be PB2 and hex digits only,
+    so an Industrial board fell through to another, less stable source."""
+    with open(os.path.join(TREE, "scripts", "get_uuid")) as f:
+        src = f.read()
+    assert "/sys/bus/i2c/devices/0-0050/eeprom" in src, "get_uuid no longer reads the board EEPROM"
+    serial = "5025PB2I0004A7C1"
+    eeprom = tmp_path / "eeprom"
+    eeprom.write_bytes(b"\xaa" * 40 + serial.encode() + b"\xff" * 16)
+    script = tmp_path / "get_uuid"
+    # No CPU or device-tree serial, which come first, as a PocketBeagle 2 has none.
+    (tmp_path / "cpuinfo").write_text("processor\t: 0\n")
+    script.write_text(src.replace("/sys/bus/i2c/devices/0-0050/eeprom", str(eeprom))
+                         .replace("/proc/cpuinfo", str(tmp_path / "cpuinfo"))
+                         .replace("/proc/device-tree/serial-number", str(tmp_path / "no-serial")))
+    r = subprocess.run(["bash", str(script)], capture_output=True, text=True, timeout=30,
+                       cwd=tmp_path, env=dict(os.environ, FPPDIR=TREE))
+    assert r.stdout.strip() == f"M5-{serial}", f"get_uuid gave {r.stdout.strip()!r}\n{r.stderr[-2000:]}"
+
+
+def test_kiosk_starts_chromium_browser_where_there_is_no_chromium(fppinit):
+    """start_kiosk.sh launches chromium-browser in kiosk mode on an older
+    OS that has it rather than chromium, and logs an error when neither is
+    there. X's tools and the browser are stubs that record their calls.
+
+    Regression: 01d2b4618. It ran chromium, which only trixie has."""
+    stubs = "".join(f"printf '#!/bin/sh\\nprintf \"%%s\\\\n\" \"{t} $*\" >> /fppinit-calls.log\\n' > /usr/bin/{t}; "
+                    f"chmod +x /usr/bin/{t}; " for t in ("xset", "setxkbmap", "xrandr", "chromium-browser"))
+    fppinit.root_file("/usr/bin/chromium", None)
+    fppinit.write("settings", "")
+    r = fppinit._run(["sh", "-c", stubs + "mkdir -p /root/.config/chromium/Default; "
+                      "HOME=/root bash /opt/fpp/scripts/start_kiosk.sh; echo \"exited $?\""],
+                     timeout=60, media_home=True)
+    out = r.stdout + r.stderr
+    launches = [c for c in fppinit.calls() if c.startswith(("chromium", "chromium-browser"))]
+    assert launches and launches[0].startswith("chromium-browser ") and "--kiosk" in launches[0], \
+        f"no chromium-browser kiosk was started: {fppinit.calls()}\n{out[-2000:]}"

@@ -13,6 +13,8 @@ import os
 import re
 import subprocess
 
+import pytest
+
 TREE = os.environ.get("FPP_TREE", "")
 
 
@@ -141,3 +143,54 @@ def test_the_generated_system_uuid_survives_the_root_copy(tmp_path):
     assert (mnt / "etc/fpp/fpp_uuid").exists(), f"fpp_uuid did not survive the upgrade:\n{out}"
     assert (mnt / "etc/fpp/fpp_uuid").read_text() == "8a1d6c2e-0000-4000-8000-fpptests0001\n"
     assert (mnt / "etc/hostname").read_text() == "fpp-tests\n", "the control: the hostname is restored"
+
+
+def test_a_final_root_token_is_pointed_at_the_new_root(tmp_path):
+    """part2's rewrite of the boot config (the Pi's cmdline.txt, the BB64's
+    extlinux.conf) points root= and resume= at the new root when they are a
+    line's last token, as root= often is in cmdline.txt's single line.
+
+    Regression: 99af6a581. Only a token followed by a space was matched, so
+    a final root= kept naming the old root."""
+    lines = re.findall(r'^\s*(sed -i "s\|(?:root|resume)=.*" /mnt/boot/firmware/(?:cmdline\.txt|extlinux/extlinux\.conf))$',
+                       part2(), re.M)
+    assert lines, "no root= rewrites in upgradeOS-part2.sh"
+    cmdline = tmp_path / "cmdline.txt"
+    extlinux = tmp_path / "extlinux.conf"
+    cmdline.write_text("console=tty1 rootfstype=ext4 rootwait root=/dev/mmcblk0p2\n")
+    extlinux.write_text("    append console=ttyS2 root=/dev/mmcblk1p3 resume=/dev/mmcblk1p2\n"
+                        "    append resume=/dev/mmcblk1p2 ro root=/dev/mmcblk1p3\n")
+    script = "ROOTDEV=/dev/sda2 DEVICE=/dev/sda\n" + "\n".join(
+        l.replace("/mnt/boot/firmware/cmdline.txt", str(cmdline))
+         .replace("/mnt/boot/firmware/extlinux/extlinux.conf", str(extlinux)) for l in lines)
+    bash(script, tmp_path)
+    assert cmdline.read_text() == "console=tty1 rootfstype=ext4 rootwait root=/dev/sda2\n", cmdline.read_text()
+    assert extlinux.read_text() == ("    append console=ttyS2 root=/dev/sdap3 resume=/dev/sdap2\n"
+                                    "    append resume=/dev/sdap2 ro root=/dev/sdap3\n"), extlinux.read_text()
+
+
+def test_the_running_systems_home_is_given_back_to_fpp(tmp_path):
+    """part2 resets the ownership of /home/fpp in the system being upgraded
+    (the one at mnt/, part2's working directory), not in the new image it
+    runs from. /home of the machine running this is an empty tmpfs here, so
+    a chown of /home/fpp itself touches nothing.
+
+    Regression: 020e7cb7d. It ran chown -R fpp:fpp /home/fpp, the image's
+    own home, so files in the upgraded system's home kept whatever owner the
+    copy gave them (FPP 9 to 10)."""
+    import pwd
+    try:
+        fpp = pwd.getpwnam("fpp")
+    except KeyError:
+        pytest.skip("no fpp user here")
+    m = re.search(r"^\s*(chown -R fpp:fpp \S*home/fpp)$", part2(), re.M)
+    assert m, "upgradeOS-part2.sh resets no ownership of fpp's home"
+    f = tmp_path / "mnt" / "home" / "fpp" / "media" / "config" / "settings"
+    f.parent.mkdir(parents=True)
+    f.write_text("")
+    os.chown(f, 0, 0)
+    r = subprocess.run(["unshare", "--mount", "--propagation", "private", "sh", "-c",
+                        f"mount -t tmpfs tmpfs /home && {m.group(1)}"],
+                       cwd=tmp_path, capture_output=True, text=True, timeout=60)
+    assert os.stat(f).st_uid == fpp.pw_uid, \
+        f"the upgraded system's {f.relative_to(tmp_path)} is still uid {os.stat(f).st_uid}: {m.group(1)}\n{r.stderr}"

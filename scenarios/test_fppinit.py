@@ -342,6 +342,24 @@ def test_os_reflash_replays_only_the_packages_the_user_asked_for(fppinit):
     assert fppinit.written("/fppos_upgraded") is None, "the reflash marker was kept for a retry"
 
 
+def test_os_reflash_replay_answers_dpkgs_config_file_prompt(fppinit):
+    """The replay's apt-get install passes --force-confdef and
+    --force-confold to dpkg, so a config file the old OS (or a plugin's
+    uninstall) left on disk is kept instead of prompting.
+
+    Regression: e17c73999. DEBIAN_FRONTEND=noninteractive does not answer
+    dpkg's own conffile prompt: with no stdin it read EOF, failed the
+    configure and left the package unconfigured, which made every later apt
+    run fail too."""
+    fppinit.write("config/userpackages.json", [{"package": "vim", "requestedBy": ["fpp-tests"]}])
+    fppinit.root_file("/usr/bin/apt-cache", APT_CACHE)
+    assert_clean(reflash_boot(fppinit))
+    installs = [c for c in fppinit.calls() if c.startswith("apt-get ") and " install " in c]
+    assert [c.split()[-1] for c in installs] == ["vim"], f"vim was not replayed, so this proves nothing: {fppinit.calls()}"
+    for option in ("Dpkg::Options::=--force-confdef", "Dpkg::Options::=--force-confold"):
+        assert option in installs[0].split(), installs[0]
+
+
 @pytest.mark.parametrize("content", ["[" * 3000, '[{"package": ', "\x00\x01binary"],
                          ids=["deeply-nested", "truncated", "binary"])
 def test_os_reflash_survives_a_broken_package_list(fppinit, content):
