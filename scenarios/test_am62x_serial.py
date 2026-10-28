@@ -62,19 +62,55 @@ class Line:
             os.close(fd)
         self.bit = bit
 
-    def edges(self, seconds):
-        """[(time, level)] at each change of level, from a first sample."""
+    def edges(self, seconds, away_from=None):
+        """[(time, level)] at each change of level, from a first sample.
+
+        Each change is timed halfway between the sample that saw it and the
+        one before: one held up by an interrupt then costs half its delay,
+        and a clock read before the register, as this once did, put a change
+        seen after a preemption that much early. Sampling runs on the last
+        CPU at real-time priority, with process `away_from` (fppd) moved off
+        it: at 9600 baud fppd's waking for each frame, on the same core,
+        held samples up by 100-280 us -- up to most of a bit -- just as the
+        frame's first edge went out."""
         reg = (ctypes.c_uint32 * 1024).from_buffer(self.mm)
-        out = []
-        prev = None
-        clock = time.perf_counter
-        end = clock() + seconds
-        while (t := clock()) < end:
-            v = (reg[5] >> self.bit) & 1  # OUT_DATA at 0x14
-            if v != prev:
-                out.append((t, v))
-                prev = v
-        return out
+        cpus = os.sched_getaffinity(0)
+        mine = {max(cpus)}
+        moved = {}
+        if away_from and len(cpus) > 1:
+            for tid in os.listdir(f"/proc/{away_from}/task"):
+                try:
+                    moved[int(tid)] = os.sched_getaffinity(int(tid))
+                    os.sched_setaffinity(int(tid), cpus - mine)
+                except OSError:
+                    pass
+        policy, param = os.sched_getscheduler(0), os.sched_getparam(0)
+        os.sched_setaffinity(0, mine)
+        os.sched_setscheduler(0, os.SCHED_FIFO, os.sched_param(50))
+        try:
+            out = []
+            prev = None
+            clock = time.perf_counter
+            end = clock() + seconds
+            last = clock()
+            while True:
+                v = (reg[5] >> self.bit) & 1  # OUT_DATA at 0x14
+                t = clock()
+                if t >= end:
+                    break
+                if v != prev:
+                    out.append(((last + t) / 2, v))
+                    prev = v
+                last = t
+            return out
+        finally:
+            os.sched_setscheduler(0, policy, param)
+            os.sched_setaffinity(0, cpus)
+            for tid, was in moved.items():
+                try:
+                    os.sched_setaffinity(tid, was)
+                except OSError:
+                    pass
 
 
 def uart_bytes(edges, baud):
@@ -120,5 +156,5 @@ def test_a_serial_output_on_a_pin_with_no_uart_transmit_is_sent_from_a_pru(real_
         line = Line(*P1_10)
     except OSError as e:
         pytest.skip(f"cannot map the GPIO controller: {e}")
-    data = uart_bytes(line.edges(1.5), 9600)
+    data = uart_bytes(line.edges(1.5, away_from=fppd.proc.pid), 9600)
     assert b"FPPAAAA" in data, data
