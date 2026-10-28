@@ -87,7 +87,7 @@ test('each category of Other output has its own tab, and an output added in one 
   await added.locator('input.count').fill('3');
   await added.locator('input.address').fill('127.0.0.2');
   const mark = logMark();
-  await page.locator('#tab-other-DMXSerial input[value="Save"]').click();
+  await page.locator('#tab-other-DMXSerial input[value="Save"]:not(.Zebra_Pin_Clone *)').click();
   await expect.poll(async () => (await saved(request)).length, { timeout: 15_000 }).toBe(4);
   const got = await saved(request);
   expect(got.filter((o) => o.type === 'GenericUDP').map((o) => [o.address, o.startChannel]).sort())

@@ -49,7 +49,7 @@ async function holdConfig(page: Page) {
   return { holding, release, posts };
 }
 
-const saveButton = (page: Page) => page.locator('#stringTab input[type=button][value="Save"]');
+const saveButton = (page: Page) => page.locator('#stringTab input[type=button][value="Save"]:not(.Zebra_Pin_Clone *)');
 
 function stringCount(post: any): number {
   let n = 0;

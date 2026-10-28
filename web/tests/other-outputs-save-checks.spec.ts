@@ -53,7 +53,7 @@ for (const [field, value, message] of [
     await row.locator(`input.${field}`).fill(value);
     const file = await stored(request);
     const mark = logMark();
-    await page.locator('#tab-other-DMXSerial input[value="Save"]').click();
+    await page.locator('#tab-other-DMXSerial input[value="Save"]:not(.Zebra_Pin_Clone *)').click();
     await expect(page.locator('#dialogOKPopup')).toContainText(message);
     // Long enough for a save and fppd's reload, had there been one.
     await page.waitForTimeout(2000);
@@ -64,7 +64,7 @@ for (const [field, value, message] of [
     await page.locator('#dialogOKPopup button', { hasText: 'Close' }).click();
     await row.locator(`input.${field}`).fill(field === 'count' ? '6' : '4');
     const valid = logMark();
-    await page.locator('#tab-other-DMXSerial input[value="Save"]').click();
+    await page.locator('#tab-other-DMXSerial input[value="Save"]:not(.Zebra_Pin_Clone *)').click();
     await expect.poll(() => logSince(valid), { timeout: 15_000 })
       .toMatch(field === 'count' ? /GenericUDPOutput: Determined range needed 0 - 5/ : /GenericUDPOutput: Determined range needed 3 - 5/);
   });
@@ -78,7 +78,7 @@ test('saving the Other outputs turns test mode off', async ({ page, request }) =
   try {
     await expect.poll(async () => (await (await request.get('/api/testmode')).json()).enabled).toBe(1);
     await row.locator('input.count').fill('6');
-    await page.locator('#tab-other-DMXSerial input[value="Save"]').click();
+    await page.locator('#tab-other-DMXSerial input[value="Save"]:not(.Zebra_Pin_Clone *)').click();
     await expect.poll(async () => JSON.parse(await stored(request)).channelOutputs[0].channelCount, { timeout: 15_000 }).toBe(6);
     await expect.poll(async () => (await (await request.get('/api/testmode')).json()).enabled, { timeout: 10_000 }).toBe(0);
   } finally {

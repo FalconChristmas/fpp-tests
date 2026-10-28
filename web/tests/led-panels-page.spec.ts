@@ -81,7 +81,9 @@ async function panelModel(request: APIRequestContext) {
 
 // fppd's test mode; null until a test has run.
 const testmode = async (request: APIRequestContext) => (await (await request.get('/api/testmode')).json()) ?? {};
-const panelSave = (page: Page) => page.locator('#tab-LEDPanels input[type=button][value="Save"]');
+// Not in the hidden copy of the header that Zebra_Pin leaves in its place
+// once the page scrolls and pins it (each Save in a header is matched so).
+const panelSave = (page: Page) => page.locator('#tab-LEDPanels input[type=button][value="Save"]:not(.Zebra_Pin_Clone *)');
 
 test('a pre-v3 panel config with its grid only in panels[] opens and saves as its full grid', async ({ page, request }) => {
   // Regression: ca34dd612 (#2686).  A config from FPP 8.5 had no

@@ -104,7 +104,7 @@ const row = (page: Page, port: number, str = 0) => page.locator(`#PixelString tr
 // is what 182255979 fixed.
 const direction = (page: Page, port: number) =>
   row(page, port).locator('select').filter({ has: page.locator('option', { hasText: /^Reverse$/ }) });
-const save = (page: Page) => page.locator('#stringTab input[type=button][value="Save"]');
+const save = (page: Page) => page.locator('#stringTab input[type=button][value="Save"]:not(.Zebra_Pin_Clone *)');
 
 async function saveAndWait(page: Page, request: APIRequestContext, done: (c: any) => boolean) {
   await save(page).click();

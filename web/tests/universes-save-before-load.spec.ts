@@ -73,7 +73,7 @@ async function routeConfig(page: Page, url: RegExp, status?: number) {
   return { holding, release, posts };
 }
 
-const saveButton = (page: Page) => page.locator('#frmUniverses input[value="Save"]');
+const saveButton = (page: Page) => page.locator('#frmUniverses input[value="Save"]:not(.Zebra_Pin_Clone *)');
 
 async function trySave(page: Page) {
   // A click on the button, forced in case it is disabled; Enter in a field of

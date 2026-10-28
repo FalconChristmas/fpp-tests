@@ -62,7 +62,7 @@ test('a second matrix on the cape takes its panel settings from the first, and i
   await expect(page.locator('#panelMatrix2 .divSharedCapeNote')).toContainText('Panel settings come from Panel Matrix 1');
   await expect(page.locator('#panelMatrix2 .LEDPanelsSize')).toHaveValue('64x32x8');
 
-  await page.locator('input[value="Save"][onclick="SaveLEDPanelsConfig();"]').click();
+  await page.locator('input[value="Save"][onclick="SaveLEDPanelsConfig();"]:not(.Zebra_Pin_Clone *)').click();
   await expect.poll(async () => (await saved(request)).channelOutputs.map((m: any) => m.ledPanelsSize), { timeout: 15_000 })
     .toEqual(['64x32x8', '64x32x8']);
   const got = (await saved(request)).channelOutputs;
@@ -76,7 +76,7 @@ test('two matrices on one cape output are flagged and the save is refused', asyn
   writeOutputs([matrix(1, 1, [64, 32, 8], 0), matrix(2, 6145, [64, 32, 8], 0)]);
   const before = JSON.stringify(await saved(request));
   await openPanels(page);
-  await page.locator('input[value="Save"][onclick="SaveLEDPanelsConfig();"]').click();
+  await page.locator('input[value="Save"][onclick="SaveLEDPanelsConfig();"]:not(.Zebra_Pin_Clone *)').click();
   await expect(page.locator('#dialogOKPopup')).toContainText('Two panel matrices are configured to use the same cape output');
   await expect(page.locator('#panelMatrix2 .divLEDPanelOutputConflict')).toContainText('Cape output 1 is used by both Panel Matrix 1 and Panel Matrix 2');
   await page.waitForTimeout(1500);

@@ -100,7 +100,7 @@ test('the channel count follows the units, and fppd drives every unit of the sav
 
   await row.locator('input.act').check();
   await row.locator('select.device').selectOption('ttyUSB9');
-  await page.locator('#tab-other-DMXSerial input[value="Save"]').click();
+  await page.locator('#tab-other-DMXSerial input[value="Save"]:not(.Zebra_Pin_Clone *)').click();
   await expect.poll(async () => (await stored(request)).length, { timeout: 15_000 }).toBe(1);
   const out = (await stored(request))[0];
   expect(out).toMatchObject({ type: 'LOREnhanced', enabled: 1, startChannel: 1, channelCount: 750, device: 'ttyUSB9' });

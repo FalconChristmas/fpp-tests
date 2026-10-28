@@ -38,7 +38,7 @@ test('an output the Other page has no editor for is shown on Misc and kept on sa
     const row = page.locator('#tblOther-Misc tbody tr').first();
     await expect(row).toContainText('FppTestsPluginOutput');
     await row.locator('input.start').fill('12');
-    await page.locator('#tab-other-Misc input[value="Save"]').click();
+    await page.locator('#tab-other-Misc input[value="Save"]:not(.Zebra_Pin_Clone *)').click();
     await expect.poll(async () => (await saved(request, 'co-other'))?.channelOutputs?.[0]?.startChannel,
       { timeout: 15_000 }).toBe(12);
     const got = (await saved(request, 'co-other')).channelOutputs[0];

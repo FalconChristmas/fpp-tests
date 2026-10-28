@@ -101,7 +101,7 @@ test('Universe Priority and Sync Universe are hidden at the Basic UI level, and 
   await expect(header(page, 'Monitor controller')).toBeVisible();
 
   await row(page, 0).locator('input.txtDesc').fill('fpp-tests saved in basic');
-  await page.locator('#frmUniverses input[value="Save"]').click();
+  await page.locator('#frmUniverses input[value="Save"]:not(.Zebra_Pin_Clone *)').click();
   await expect.poll(async () => (await stored(request)).universes[0].description, { timeout: 15_000 }).toBe('fpp-tests saved in basic');
   expect((await stored(request)).universes[0]).toMatchObject({ priority: 150, syncUniverse: 7 });
 });
@@ -128,7 +128,7 @@ test('saving the universes turns test mode off', async ({ page, request }) => {
   await expect.poll(async () => (await (await request.get('/api/testmode')).json()).enabled).toBe(1);
 
   await row(page, 0).locator('input.txtDesc').fill('fpp-tests test mode');
-  await page.locator('#frmUniverses input[value="Save"]').click();
+  await page.locator('#frmUniverses input[value="Save"]:not(.Zebra_Pin_Clone *)').click();
   await expect.poll(async () => (await stored(request)).universes[0].description, { timeout: 15_000 }).toBe('fpp-tests test mode');
   await expect.poll(async () => (await (await request.get('/api/testmode')).json()).enabled, { timeout: 10_000 }).toBe(0);
 });
