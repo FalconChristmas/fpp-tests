@@ -64,7 +64,7 @@ async function routeConfig(page: Page, status?: number) {
   return { holding, release, posts };
 }
 
-const saveButton = (page: Page, cat: string) => page.locator(`#tab-other-${cat} input[type=button][value="Save"]`);
+const saveButton = (page: Page, cat: string) => page.locator(`#tab-other-${cat} input[type=button][value="Save"]:not(.Zebra_Pin_Clone *)`);
 const addButton = (page: Page) => page.locator('#addOutputDropdown');
 
 // Adds the Virtuals group from the Add Output Group menu: a tab with its own Save.

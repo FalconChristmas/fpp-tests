@@ -96,7 +96,7 @@ async function routeConfig(page: Page, status?: number) {
   return { holding, release, posts };
 }
 
-const saveButton = (page: Page) => page.locator('#tab-pwm input[type=button][value="Save"]');
+const saveButton = (page: Page) => page.locator('#tab-pwm input[type=button][value="Save"]:not(.Zebra_Pin_Clone *)');
 
 async function open(page: Page) {
   page.on('dialog', (d) => d.dismiss());

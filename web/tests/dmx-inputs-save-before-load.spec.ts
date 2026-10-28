@@ -57,7 +57,7 @@ async function routeConfig(page: Page, saved: () => object, status?: number) {
   return { holding, release, posts };
 }
 
-const saveButton = (page: Page) => page.locator('#tab-dmx input[type=button][value="Save"]');
+const saveButton = (page: Page) => page.locator('#tab-dmx input[type=button][value="Save"]:not(.Zebra_Pin_Clone *)');
 
 // Opens the DMX tab and returns the first serial port's name, skipping the
 // test when the player has none.
