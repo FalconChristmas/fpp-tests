@@ -17,7 +17,8 @@ What it fills in by itself:
   todo        everything else
 
 and on every row, the release the commit first shipped in (a cherry-pick onto
-a release branch counts), an area, and where a test would most likely run.
+a release branch counts), an area, the feature it belongs to, and where a test
+would most likely run.
 """
 
 import argparse
@@ -28,7 +29,7 @@ import re
 import subprocess
 import sys
 
-COLUMNS = ["commit", "outcome", "test", "proof", "note", "subject", "release", "area", "where"]
+COLUMNS = ["commit", "outcome", "test", "proof", "note", "subject", "release", "area", "feature", "where"]
 ABBREV = 9
 
 # A commit touching only these changes nothing a test could see.
@@ -221,6 +222,61 @@ def area(subject, files):
     return files[0].split("/")[0] if files else ""
 
 
+# The feature a commit belongs to, for picking work: by its scope when it
+# names one, else by the files it changes. First match wins in both lists.
+FEATURES = [
+    ("Playlists, schedule & sequences", r"playlist|schedul|sequence|fseq|timers|player|recurring",
+     r"^src/playlist/|Scheduler|scheduler|playlist|Playlist|Sequence|fseq"),
+    ("MultiSync & remotes", r"multisync|^sync$|discovery|remote", r"MultiSync|multisync|Remote|remote"),
+    ("Media: audio & video", r"media|audio|video|pipewire|aes67|gstreamer|opus|rtsp|mp3|alsa|kiosk|hdmi|ytdlp|wireplumber",
+     r"^src/mediaoutput/|media|audio|Audio|video|Video|sound|Sound|pipewire|PipeWire|wireplumber"),
+    ("LED panels", r"panel|colorlight|matrix", r"(?i)co-ledPanels|LEDPanel|Matrix|ColorLight|Linsn|BBShiftPanel|panel"),
+    ("BB pixel strings & PRU", r"bbshiftstring|bbb48string|pixelstring|pru|falconv5|bbbserial|bb64|^bbb$|^pb2?$",
+     r"BBShiftString|BBB48String|^src/pru/|co-pixelStrings|PixelString|FalconV5|co-bbbStrings|BBBSerial|BBBUtils"),
+    ("Pi outputs (DPI/spixels)", r"dpipixels|^pi$", r"DPIPixels|spixels|RPi|rpi_ws281x"),
+    ("Capes & EEPROM", r"cape|rtc|eeprom", r"(?i)^capes/|CapeUtils|cape|eeprom"),
+    ("Pixel overlays", r"overlay|effects|^fx$|virtualdisplay|framebuffer|^kms|^drm$", r"(?i)^src/overlays/|overlaymodel|PixelOverlay"),
+    ("Other channel outputs",
+     r"output|^udp|wled|twinkly|artnet|^ddp$|bridge|^lor|serial|^spi$|processors|kinet|udmx|pca9685|mcp23017|pcf8574|tester|pixelcount|usbpixelnet|nrf24",
+     r"^src/channeloutput/|co-other|channeloutputs\.php|co-universes|outputprocessors|OutputMonitor|^src/e131bridge|ChannelOutput"),
+    ("OLED, GPIO & sensors", r"gpio|oled|sensor|i2c|pinctrl", r"^src/oled/|^src/sensors/|gpio|GPIO|^src/i2c"),
+    ("Commands & presets", r"command|variables|^if|set-variable|expr", r"^src/commands/|command|Command"),
+    ("Boot, OS image & install", r"boot|install|imager|image|nocc|upgradeos|os-upgrade|fppos|fppinit|^sd$|packages|flash",
+     r"^src/boot/|^SD/|^etc/systemd|rpi-imager|upgradeOS|handle_boot_actions|^etc/(modprobe|udev|sysctl)|^bin\.|^Docker|"
+     r"init_pre_network|fpp_boot|^etc/networkd|networkd-dispatcher"),
+    ("Network, Apache & security", r"security|network|apache|wifi|prox|csp|mdns|^net$|^http$|ports|privacy|geoip|curl|ping",
+     r"network|Network|apache|Apache|proxies|proxy|wifi|tether|mdns|Mdns|security|login|password|ContentPolicy|csp"),
+    ("Upgrade, backup & files", r"upgrade|update|backup|file|restore|git|changebranch|upload|storage",
+     r"^upgrade/|backup|Backup|filemanager|upgrade|git_|fppupgrade|restore"),
+    ("Plugins", r"plugin|scriptrepository", r"plugin|Plugin"),
+    ("Settings & config", r"setting|config|setup|developer|ui-level|uuid", r"settings|Settings|config\.php|^www/config|setting"),
+    ("Web API", r"api", r"^www/api/"),
+    ("Build & makefiles", r"^build$|^deps", r"Makefile|makefiles|\.mk$|nocc|pch"),
+    ("Web UI (shared JS/CSS/pages)", r"^ui|^www|css|^js$|about|help|troubleshoot|keybind|\.php", r"^www/"),
+    ("fppd core & utilities",
+     r"fppd|crash|status|error|warning|mqtt|stats|log|mainloop|epoll|stability|overflow|daemon|shutdown|time|ptp|events|email|cache|json",
+     r"^src/|^scripts/|^etc/|^external/"),
+]
+FEATURES = [(n, re.compile(sc), re.compile(fp)) for n, sc, fp in FEATURES]
+
+
+def feature(subject, files):
+    m = re.match(r"\w+\(([^),]+)", subject)
+    if m:
+        scope = m.group(1).strip().lower()
+        hit = next((n for n, sc, _ in FEATURES if sc.search(scope)), None)
+        if hit:
+            return hit
+    files = [f for f in files if not NONRUNTIME.search(f)] or files
+    if not files:
+        return "Other"
+    order = [n for n, _, _ in FEATURES] + ["Other"]
+    counts = collections.Counter(next((n for n, _, fp in FEATURES if fp.search(f)), "Other") for f in files)
+    # The feature with the most files, counting at most three each, so a
+    # vendored library's dozens of files don't outvote the change itself.
+    return min(counts, key=lambda n: (-min(counts[n], 3), order.index(n)))
+
+
 def where(files):
     """Where a test could run, for each kind of file changed, most demanding
     first: "device:bb,docker" for a change to fppd and to a BBB output."""
@@ -299,7 +355,8 @@ def main():
             else:
                 row = auto_row(short, subject, files, named.get(full))
             row += [rel[full], (kept[7] if kept and kept[7] else area(subject, files)),
-                    (kept[8] if kept and kept[8] else where(files))]
+                    (kept[8] if kept and kept[8] else feature(subject, files)),
+                    (kept[9] if kept and kept[9] else where(files))]
             counts[row[1]] += 1
             out.write("\t".join(v.replace("\t", " ").replace("\n", " ") for v in row) + "\n")
     os.replace(a.ledger + ".new", a.ledger)

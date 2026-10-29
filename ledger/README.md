@@ -18,6 +18,7 @@ carries unchanged.
 | subject | the fpp commit's subject |
 | release | the first release the commit shipped in, counting a cherry-pick onto a release branch; `unreleased` if none yet |
 | area    | the commit's scope, or the directory it changes |
+| feature | the feature it belongs to, for picking work by subject (`LED panels`, `Network, Apache & security`, …): from the commit's scope, or the files it changes when it has none. A heuristic, so correct a row by hand; the script fills only blank cells |
 | where   | where a test for it would run, for each kind of file it changes: `docker` (scenarios), `web` (Playwright), `device:bb`, `device:pi`, `device:mac` or `device` (any device with the hardware), `os-image` (image build, OS packaging, systemd), `build`, or `none` |
 
 ## Keeping it current
@@ -31,10 +32,11 @@ rows in place and change the note; never regenerate the file over them.
 
 ## Taking a share
 
-Pick rows by `release`, `area` or `where`, e.g. every web row of 10.0 still
-to do:
+Pick rows by `release`, `feature` or `where`, e.g. every Docker row of 10.0 still
+to do, or the open rows of each feature, most first:
 
-    awk -F'\t' '$2=="todo" && $7=="10.0" && $9 ~ /web/' ledger/fpp-since-8.5.1.tsv
+    awk -F'\t' '$2=="todo" && $7=="10.0" && $10 ~ /docker/' ledger/fpp-since-8.5.1.tsv
+    awk -F'\t' '$2=="todo" || $2=="named" {print $9}' ledger/fpp-since-8.5.1.tsv | sort | uniq -c | sort -rn
 
 For each: write a test that fails without the commit and passes with it
 (`scripts/verify-fix.sh`), name the commit in the test, and set the row's
