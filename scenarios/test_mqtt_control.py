@@ -117,6 +117,7 @@ def test_mqtt_cache_has_a_bound(fppd):
     Regression: da791090a. Every message on a subscribed topic was
     cached per topic for good, so anyone able to publish under set/# could
     grow fppd, one topic name after another, until it ran out of memory.
+    It reads the cache through /fppd/mqtt/cache (e721577bb).
     """
     fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
     base = f"falcon/player/{HOST}/set/cachetest"

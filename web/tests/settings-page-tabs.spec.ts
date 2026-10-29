@@ -87,6 +87,9 @@ test('a search finds settings on other tabs, and is gone on the next visit', asy
 // Regression: f302213e8 ("restore the live "Current System Time" clock, dead
 // since Bootstrap 5"). The tab check looked for .active on the <li>, which
 // Bootstrap 5 never sets, so the clock never ran.
+// Also: 6eeae4764 named the tab "Localization" (it was "Localisation", so
+// ?tab=Localization opened Playback), and 86be51147 put back
+// settings-localization.php, which that rename had deleted (the tab was empty).
 test('the Localization tab shows a running clock', async ({ page }) => {
   await page.goto('/settings.php?tab=Localization');
   await settingsLoaded(page);

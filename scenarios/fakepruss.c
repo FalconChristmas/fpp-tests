@@ -27,10 +27,12 @@
  *     can be once a core is stopped (on the hardware the access takes an
  *     external abort, SIGBUS; here it is a SIGSEGV).  The CONTROL registers
  *     stay reachable.
+ *   - $FAKEPRUSS_NOBOOT: cores ("1", "0,1") whose "start" fails: the core stays
+ *     offline, as remoteproc leaves one whose firmware will not boot.
  *
  * Every event is a line in $FAKEPRUSS_DIR/events: "start N <firmware> <copy>",
  * "stop N", "undone N", "halted N", "loaded-running N" (a start while the core
- * had never halted), "map pruss|ddr|bad 0x<off>".
+ * had never halted), "noboot N", "map pruss|ddr|bad 0x<off>".
  */
 #undef _TIME_BITS
 #undef _FILE_OFFSET_BITS
@@ -330,7 +332,10 @@ static void rproc_command(int n, const char* cmd) {
         pthread_mutex_unlock(&lock);
         return;
     }
-    if (strncmp(cmd, "start", 5) == 0 && !online[n]) {
+    const char* nb = getenv("FAKEPRUSS_NOBOOT");
+    if (strncmp(cmd, "start", 5) == 0 && !online[n] && nb && strchr(nb, '0' + n)) {
+        event("noboot %d", n);
+    } else if (strncmp(cmd, "start", 5) == 0 && !online[n]) {
         if (*ctrl(n) & CTRL_RUNSTATE) event("loaded-running %d", n);
         copy_firmware(n);
         *ctrl(n) |= CTRL_EN | CTRL_RUNSTATE;

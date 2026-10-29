@@ -37,3 +37,47 @@ def test_a_raw_block_write_too_big_for_one_message_is_refused(fppd):
         assert raw(fppd, count, reg=0x10) == "-1", count
         fppd.check_alive()
     assert len(bus.writes(CHIP)) == 1, bus.writes(CHIP)[1:]
+
+
+PCF = 0x21
+
+
+def test_a_chip_that_answers_no_read_can_still_be_written_when_asked_to_skip_the_probe(fppd):
+    """A plugin that opens a chip with I2CUtils(bus, addr, true) -- a chip
+    that NAKs a plain byte read until it has been set up -- gets a usable
+    handle: its block write reaches the chip.
+
+    Regression: e5470bb52. Since e3b2c09e5 every I2CUtils read a byte to see
+    the chip was there and closed the handle when the read failed, so such
+    a chip could never be opened, let alone set up; the third argument
+    skips that read.
+    """
+    install(fppd, features=["NATIVE_I2C"])
+    bus = Bus(fppd, [CHIP], noprobe=[CHIP])
+    bus.start(fppd)
+    assert raw(fppd, 4) == "5", "the register and 4 bytes"
+    assert [(reg, data) for _, _, reg, data in bus.writes(CHIP)] == [(0x06, b"\x5a" * 4)], bus.writes(CHIP)
+
+
+def test_an_output_whose_chip_is_not_on_the_bus_says_so_and_writes_nothing(fppd):
+    """A PCF8574 output configured at an address where no chip answers
+    fails to open its device and says so in fppd's log, rather than
+    starting and writing every frame into nothing; the same output at
+    the address the chip is at opens it.
+
+    Regression: e3b2c09e5. I2CUtils only opened /dev/i2c-N and set the
+    slave address, which succeed whatever is on the bus, so a missing or
+    misaddressed chip looked like a working output.
+    """
+    bus = Bus(fppd, [PCF])
+    fppd.write("config/co-other.json", {"channelOutputs": [
+        {"type": "PCF8574", "enabled": 1, "startChannel": 1, "channelCount": 8,
+         "device": "i2c-1", "deviceID": 0x22, "pinOrderingInvert": 0, "relayNumbering": 0},
+        {"type": "PCF8574", "enabled": 1, "startChannel": 9, "channelCount": 8,
+         "device": "i2c-1", "deviceID": PCF, "pinOrderingInvert": 0, "relayNumbering": 0}]})
+    fppd.settings(DisableFakeNetworkBridges="1", LogLevel_ChannelOut="debug")
+    bus.start(fppd)
+    fppd.wait_for(lambda: "PCF8574Output opened I2C device ok" in fppd.log(), what="the output at 0x21 opened")
+    log = fppd.log()
+    assert log.count("Error opening I2C device for PCF8574 output") == 1, fppd.tail(60)
+    assert log.count("PCF8574Output opened I2C device ok") == 1, fppd.tail(60)

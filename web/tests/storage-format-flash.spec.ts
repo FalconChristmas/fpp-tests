@@ -1,6 +1,7 @@
 import { execFileSync } from 'child_process';
 import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
+import { keepingSettings, setSettingInFile } from './privacy-helpers';
 
 // The Storage tab's destructive actions: formatting a partition
 // (formatstorage.php, which runs scripts/format_storage.sh as root) and
@@ -50,9 +51,14 @@ function install(tool: string, body: string) {
   writeIn(path, `#!/bin/sh\n# ${MARK}\n${body}\n`);
 }
 
-// The disks above; `mounted` puts sdz5 on the media directory.
-function standInDisks(mounted = false) {
-  for (const [tool, answers] of Object.entries(DISKS)) {
+// The disks above; `mounted` puts sdz5 on the media directory.  `media`
+// instead says which partition holds the media directory as findmnt -T sees
+// it (the Storage tab's "current storage device"), e.g. 'sdz2'.
+function standInDisks(mounted = false, media = '') {
+  for (const [tool, base] of Object.entries(DISKS)) {
+    const answers: Answers = media === '' ? base : tool === 'findmnt'
+      ? [['-no SOURCE -T *', `/dev/${media}`], ...base]
+      : [[`-no PKNAME /dev/${media}`, media.replace(/p?[0-9]+$/, '')], ...base];
     const all: Answers = mounted
       ? [[tool === 'lsblk' ? '-nro MOUNTPOINTS /dev/sdz5' : '-n -o TARGET -- /dev/sdz5', '/home/fpp/media'],
         // As a plain `lsblk /dev/sdz5` lists it, which is what fpp asked until 10.x.
@@ -152,4 +158,52 @@ test('a flash request is run only for a disk the Storage tab offers', async ({ r
   // stand-in, since 10.x.)
   const out = await (await request.get('/flash-storage.php?dev=nvme9n1&mode=copy', { timeout: 60_000 })).text();
   expect(out).toMatch(/Command: sudo TERM=vt100 (stdbuf --output=L --error=L )?\/opt\/fpp\/SD\/flash_storage\.sh -y --clone 'nvme9n1'/);
+});
+
+test('the drive holding the media directory is not offered to flash, and a flash of it is refused', async ({ request }) => {
+  // Regression: a0da0768b.  On a Pi booted from its SD card with the media
+  // directory moved to a USB or NVMe drive, the Storage tab still offered to
+  // flash FPP onto that drive -- wiping the media the running player was
+  // using.  (Its check is GetFlashTargetDevices()'s storage-disk exclusion
+  // since 7c3b51da7; flash-storage.php refuses what that leaves out.)
+  standInDisks(false, 'sdz2');
+  const html = await (await request.get('/settings-storage.php')).text();
+  const offered = (mode: string) => [...html.matchAll(new RegExp(`flashStorage\\(&quot;([^&]+)&quot;, '${mode}'`, 'g'))].map((m) => m[1]);
+  // The control: the NVMe drive beside it is still offered.
+  expect(offered('create')).toEqual(['nvme9n1']);
+  expect(offered('copy')).toEqual(['nvme9n1']);
+  const out = await (await request.get('/flash-storage.php?dev=sdz&mode=copy')).text();
+  expect(out).toContain("ERROR: 'sdz' is not a valid target device.");
+  expect(calls(), 'the media drive was flashed').toEqual([]);
+});
+
+test('the format prompt offers exFAT, and choosing it types the partition 07 and makes an exFAT filesystem', async ({ page }) => {
+  // Feature: 23add459e ("Ability to format devices to exFAT").  The Storage
+  // tab's format prompt offered ext4 and FAT only, and format_storage.sh had
+  // no exFAT case.  The device scenario test_storage_exfat.py runs the real
+  // sfdisk and mkfs.exfat on a loop device; here they are the stand-ins.
+  standInDisks();
+  await keepingSettings(async () => {
+    setSettingInFile('uiLevel', '1');
+    await page.goto('/settings.php#settings-storage');
+    await page.waitForFunction(() => typeof (window as any).checkFormatStorage === 'function', null, { timeout: 30_000 });
+    // The player is a container, so the tab prints no Storage Device select:
+    // put the one it prints on a device, with a partition not yet mounted.
+    await page.evaluate(() => {
+      const $ = (window as any).$;
+      $('#storageDevice').remove();
+      $('body').append('<select id="storageDevice"><option value="sdz5" selected>sdz5 - 29.8GB (Not Mounted) (USB)</option></select>');
+      (window as any).checkFormatStorage();
+    });
+    const exfat = page.locator('input[name=formatType][value=exFAT]');
+    await expect(exfat).toBeVisible({ timeout: 10_000 });
+    await exfat.check();
+    const formatted = page.waitForResponse((r) => r.url().includes('formatstorage.php'), { timeout: 60_000 });
+    await page.locator('input.msgButton[value="OK"]').click();
+    const r = await formatted;
+    expect(new URL(r.url()).searchParams.get('fs')).toBe('exFAT');
+  });
+  const ran = calls();
+  expect(ran.find((c) => c.startsWith('sfdisk --part-type')), ran.join('\n')).toBe('sfdisk --part-type /dev/sdz 5 07');
+  expect(ran.some((c) => /^mkfs\.exfat (-- )?\/dev\/sdz5$/.test(c)), ran.join('\n')).toBe(true);
 });

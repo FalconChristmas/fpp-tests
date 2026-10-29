@@ -664,6 +664,8 @@ def test_get_uuid_takes_a_pb2_industrial_serial(tmp_path):
     /sys/bus/i2c/devices/0-0050/eeprom and of the CPU and device-tree
     serials (none, as on that board).
 
+    Also guards 87b6e674b, which added the board EEPROM read at all.
+
     Regression: 288d803a3. The serial had to be PB2 and hex digits only,
     so an Industrial board fell through to another, less stable source."""
     with open(os.path.join(TREE, "scripts", "get_uuid")) as f:
@@ -690,7 +692,9 @@ def test_kiosk_starts_chromium_browser_where_there_is_no_chromium(fppinit):
     OS that has it rather than chromium, and logs an error when neither is
     there. X's tools and the browser are stubs that record their calls.
 
-    Regression: 01d2b4618. It ran chromium, which only trixie has."""
+    Regression: 01d2b4618. It ran chromium, which only trixie has. Also
+    guards 4a09bd2cb, which put start_kiosk.sh back after the scripts
+    cleanup deleted it."""
     stubs = "".join(f"printf '#!/bin/sh\\nprintf \"%%s\\\\n\" \"{t} $*\" >> /fppinit-calls.log\\n' > /usr/bin/{t}; "
                     f"chmod +x /usr/bin/{t}; " for t in ("xset", "setxkbmap", "xrandr", "chromium-browser"))
     fppinit.root_file("/usr/bin/chromium", None)

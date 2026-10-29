@@ -48,6 +48,10 @@ def test_user_holiday_added_while_running_is_scheduled(fppd):
     command the socket doesn't have, so fppd kept the old tables, didn't know
     the new name, and ran the entry across its whole date range until it was
     restarted.
+
+    Also guards aa115948a, which merged user-holidays.json into the locale's
+    holidays: without the merge FamilyDay is unknown and the entry runs
+    every day.
     """
     day = datetime.date(YEAR, 6, 20)
     show(fppd)
@@ -67,6 +71,8 @@ def test_locale_changed_while_running_is_used(fppd):
 
     Regression: f97987d31. The cached table was never dropped when Locale changed, so
     fppd kept scheduling with the old locale's holidays until restarted.
+
+    Also guards a9b35b23e, which added Mothering Sunday to the UK table.
     """
     want = easter(YEAR) - datetime.timedelta(days=21)
     show(fppd)
@@ -106,7 +112,10 @@ def test_islamic_holidays_fall_on_their_dates(fppd, name, hijri, month):
 
     Regression: 5f90e21ce. The lookup tables from 2031 (Ramadan) and 2034
     (Eid) on held the previous Gregorian year's date, 11 or 12 days late:
-    Ramadan 2032 on December 15 instead of the 4th."""
+    Ramadan 2032 on December 15 instead of the 4th.
+
+    Also guards a9b35b23e, which added the "lunar" holiday type these
+    entries use; without it they resolve to no date and run every day."""
     want = islamic_date(hijri, month)
     show(fppd)
     fppd.write("config/schedule.json", [entry(7, "19:00:00", "20:00:00",

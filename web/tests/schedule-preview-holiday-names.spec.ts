@@ -37,7 +37,9 @@ test.describe('schedule preview holiday names', () => {
     // date with the occurrence's in full, which held only while fppd gave
     // holidays a year (the year fppd's roll-forward picked, the bug fixed in
     // the same commit); with yearless holidays no occurrence matched, and
-    // no holiday was ever named.
+    // no holiday was ever named.  Also guards aa115948a: the preview names
+    // a user holiday only because it merges user-holidays.json into the
+    // locale's holidays, and fppd schedules it only because GetLocale() does.
     // Two days from the player's today, with no year: a holiday every year.
     const [month, day] = inPlayer('date', '-d', '+2 days', '+%m %d').trim().split(' ').map(Number);
     const r = await request.post('/api/configfile/user-holidays.json', { data: [{ ...HOLIDAY, month, day }] });

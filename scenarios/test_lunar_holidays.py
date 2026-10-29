@@ -19,6 +19,9 @@ Years before 2030 are not checked: fppd holds its scheduler back while its
 clock reads earlier than its build, so faked dates must stay in the future
 of whatever fpp commit the nightly builds (as test_holidays.py's Islamic
 dates do).
+
+These also guard a9b35b23e, which added the "lunar" holiday type and these
+holidays to the Global locale.
 """
 
 import datetime

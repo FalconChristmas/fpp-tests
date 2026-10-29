@@ -7,14 +7,16 @@ import shims
 
 
 class Bus:
-    def __init__(self, fppd, devices, fail=()):
+    def __init__(self, fppd, devices, fail=(), noprobe=()):
         """devices: the addresses with a chip; fail: (addr, reg) register
-        reads that fail with EIO."""
+        reads that fail with EIO; noprobe: chips that NAK a plain byte read
+        (fpp's probe for a chip) but take writes."""
         self.out = os.path.join(fppd.media, "logs", "i2c-writes.txt")
         self.env = {
             "FAKEI2C_DEVICES": ",".join(hex(a) for a in devices),
             "FAKEI2C_OUT": self.out,
             "FAKEI2C_FAIL": ",".join(f"{hex(a)}:{hex(r)}" for a, r in fail),
+            "FAKEI2C_NOPROBE": ",".join(hex(a) for a in noprobe),
         }
 
     def start(self, fppd, **kw):

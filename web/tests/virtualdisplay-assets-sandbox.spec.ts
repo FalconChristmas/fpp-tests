@@ -7,6 +7,10 @@ import { test, expect } from './fixtures';
 // its script ran with full use of the player's API.  Fixed in fpp 65432a4ff
 // ("fix(apache): pages uploaded to virtualdisplay_assets open sandboxed"): the
 // directory is served with CSP "sandbox".
+//
+// They also cover 4c1d7a7f1 ("Add virtual display assets directory to config
+// setup"): the file API finds the directory through GetDirSetting(), and
+// without it an upload never lands there and every GET below is a 404.
 
 const PAGES: { name: string; body: string }[] = [
   {

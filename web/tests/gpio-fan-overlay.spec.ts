@@ -32,6 +32,8 @@ test.afterEach(() => {
   if (!hadCapeInfo) inPlayer('rm', '-f', CAPE_INFO);
 });
 
+// handle_boot_actions itself: deleted by the scripts cleanup (ccc866144) and
+// put back by 42b672c7c, which these tests also guard.
 function runBootActions() {
   setSettingInFile('BootActions', 'settings');
   return inPlayer('/opt/fpp/scripts/handle_boot_actions');

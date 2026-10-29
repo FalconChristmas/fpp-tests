@@ -339,7 +339,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # The AM335x scenarios (scenarios/test_am335x_*.py, and only those) on a
+  # The AM335x scenarios (scenarios/test_am335x_*.py, and the BeagleBone LED
+  # step, test_fppinit_bb_leds.py) on a
   # BeagleBone Black and an original PocketBeagle: the PRU outputs and loader
   # against fakepruss, the pinmux, the boot. The boards are too small for
   # runners of their own, so one runner elsewhere drives each over ssh in
@@ -368,7 +369,7 @@ jobs:
       - name: Pick the scenarios
         id: pick
         run: |
-          ls scenarios/test_am335x_*.py > am335x-tests.txt 2>/dev/null || true
+          ls scenarios/test_am335x_*.py scenarios/test_fppinit_bb_leds.py > am335x-tests.txt 2>/dev/null || true
           echo "count=$(wc -l < am335x-tests.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
           [ -s am335x-tests.txt ] || echo "::notice::no AM335x scenarios in this checkout"
 

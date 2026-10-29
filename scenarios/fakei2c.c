@@ -22,7 +22,10 @@
  *   FAKEI2C_FAIL      register reads (byte-data, word, block) that fail
  *                     with EIO, "addr:reg[,addr:reg]", e.g. "0x40:0x00" --
  *                     a chip whose MODE1 read errors. A plain byte read,
- *                     which is how fpp probes for a chip, never fails.
+ *                     which is how fpp probes for a chip, never fails...
+ *   FAKEI2C_NOPROBE   ...except at these addresses ("0x41,0x42"): chips that
+ *                     take writes but NAK a plain byte read (ENXIO), as a
+ *                     chip that answers no read until it has been set up.
  */
 /* open() and open64() are both defined below: a 32-bit build with 64-bit
  * file offsets would make them one symbol. */
@@ -51,6 +54,7 @@ static unsigned char regs[128][256];
 static int pointer[128];
 static int present[128];
 static int failRead[128][256];
+static int noProbe[128];
 static int configured;
 
 static void configure(void) {
@@ -69,6 +73,18 @@ static void configure(void) {
             present[a] = 1;
         }
         d = *end ? end + 1 : end;
+    }
+    const char* np = getenv("FAKEI2C_NOPROBE");
+    while (np && *np) {
+        char* end;
+        long a = strtol(np, &end, 0);
+        if (end == np) {
+            break;
+        }
+        if (a >= 0 && a < 128) {
+            noProbe[a] = 1;
+        }
+        np = *end ? end + 1 : end;
     }
     const char* f = getenv("FAKEI2C_FAIL");
     while (f && *f) {
@@ -169,7 +185,11 @@ static int smbus(int a, struct i2c_smbus_ioctl_data* t) {
         return 0;
     case I2C_SMBUS_BYTE:
         if (rd) {
-            /* never failed: this is also fpp's probe for the chip */
+            /* fpp's probe for the chip: fails only for FAKEI2C_NOPROBE */
+            if (noProbe[a]) {
+                errno = ENXIO;
+                return -1;
+            }
             d->byte = regs[a][pointer[a]];
         } else {
             /* register-less chips latch the byte; others take it as the

@@ -95,9 +95,10 @@ class FakePruss:
                     program undoes after each start (fakepruss.c)
     offline_fault:  "all": PRUSS RAM inaccessible while every core is
                     offline; "any": while any core is (fakepruss.c)
+    noboot:         cores whose remoteproc start fails, leaving them offline
     """
 
-    def __init__(self, fppd, states=("running", "running"), undo=0, offline_fault=""):
+    def __init__(self, fppd, states=("running", "running"), undo=0, offline_fault="", noboot=()):
         needs_am335x(fppd)
         self.fppd = fppd
         self.dir = os.path.join(fppd.media, "tmp", "fakepruss")
@@ -124,6 +125,8 @@ class FakePruss:
             self.env["FAKEPRUSS_UNDO"] = str(undo)
         if offline_fault:
             self.env["FAKEPRUSS_OFFLINE_FAULT"] = offline_fault
+        if noboot:
+            self.env["FAKEPRUSS_NOBOOT"] = ",".join(str(n) for n in noboot)
 
     @staticmethod
     def sleep_firmware(n):

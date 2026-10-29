@@ -101,6 +101,8 @@ def test_a_sanitizer_build_refuses_to_start_without_its_library_path(fppd):
     Both sanitizers intercept dlopen(), which makes their runtime the caller,
     so fppd's RUNPATH no longer finds the libfpp-co-*.so it opens by name.
 
+    Regression: 79283d13c added the check (ASan only): before it an ASan
+    fppd started without its library path and came up with no outputs.
     Regression: 265cd5c50. The check was ASan's only: a TSan fppd started
     and failed every output ("Failed to load shlib: libfpp-co-GenericUDP.so:
     cannot open shared object file", "Could not create output type ...").

@@ -242,7 +242,7 @@ jobs:
         # arguments. With no AM335x scenarios checked out, PYTEST_ARGS names
         # what to run.
         run: |
-          TESTS=$(ls scenarios/test_am335x_*.py 2>/dev/null || true)
+          TESTS=$(ls scenarios/test_am335x_*.py scenarios/test_fppinit_bb_leds.py 2>/dev/null || true)
           scripts/remote-device.sh "$FPP_REF" "$FLAVOR" -v -rA $PYTEST_ARGS $TESTS
 
       - name: Upload failed scenarios

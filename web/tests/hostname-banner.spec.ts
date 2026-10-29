@@ -36,6 +36,8 @@ test('the status page warns about the default host name until the warning is dis
 });
 
 test('a player with its own host name gets no warning', async ({ page }) => {
+  // Regression: 320b23d90.  The test was !(hostnameConfirmed && HostName ==
+  // "FPP"), so every player that had not dismissed it got the banner.
   setSettingInFile('HostName', 'fpptestsplayer');
   setSettingInFile('hostnameConfirmed', undefined);
   await page.goto('/index.php');

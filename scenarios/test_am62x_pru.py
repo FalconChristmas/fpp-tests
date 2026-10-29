@@ -44,6 +44,11 @@ def test_a_remoteproc_state_file_that_cannot_be_opened_fails_the_output(fppd, fa
     Regression: 6ccab1063. Pru::disable() and enable() wrote "stop" and
     "start" through an unchecked fopen(): fprintf() on the null FILE*,
     SIGSEGV at startup.
+
+    Also covers b433f977a: the state file named is the core's own, found
+    under its PRU device; /sys/class/remoteproc/remoteproc<core> was named
+    before, which is another core (or none) once the M4 cores are enabled
+    and renumber the remoteprocs -- here PRU1 never started (10 s wait).
     """
     write_string_cape("TestShift16", {"driver": "BBShiftString", "outputs": [
         {"pru": 1, "pin": p, "index": i} for p in range(2) for i in range(8)]})

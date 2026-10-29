@@ -520,6 +520,9 @@ def test_invalid_interface_warning_comes_down_when_the_address_arrives(fppd):
     UDP broadcast/multicast"; once its address arrives and multicast flows
     from it, the warning comes down.
 
+    Also guards f56a4f5a3, which added the warning: before it an interface
+    with no address was reported as 127.0.0.1 and nothing was raised.
+
     Regression: 1de28213c. The NEW_ADDR recovery 6b40e5c79 added brought the
     output up but never removed warning 22; it came down only at the next
     co-universes.json load, and where the interface fell back to a default
