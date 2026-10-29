@@ -314,6 +314,28 @@ test('an override with a % in it cannot stop Apache from starting', async ({ req
   });
 });
 
+test('quoted keywords in an override reach the served policy with their quotes', async ({ request }) => {
+  // Regression: 6e12c0131.  The generator trimmed each directive's override
+  // list with xargs, which treats quotes as shell quoting: 'wasm-unsafe-eval'
+  // came out bare (a host name to the browser, so the keyword never applied),
+  // and a value with an unbalanced quote made xargs fail, which dropped every
+  // override for that directive.
+  await keepingPolicy(request, async () => {
+    const overrides = JSON.parse(readFile(OVERRIDES));
+    overrides['script-src'] = ["'wasm-unsafe-eval'", 'https://script-kept.fpp-tests.invalid'];
+    overrides['style-src'] = ["'unsafe-hashes", 'https://style-kept.fpp-tests.invalid'];
+    writeFile(OVERRIDES, overrides);
+    const out = runScript('regenerate-norestart');
+
+    expect(inPlayer('sh', '-c', 'apache2ctl -t 2>&1; echo rc=$?'), out).toContain('rc=0');
+    await reloadApache(request, (d) => (d['script-src'] ?? []).includes('https://script-kept.fpp-tests.invalid'), `the regenerated policy is served\n${out}`);
+    const d = await served(request);
+    expect(d['script-src']).toContain("'wasm-unsafe-eval'");
+    expect(d['script-src']).not.toContain('wasm-unsafe-eval');
+    expect(d['style-src'], 'the other override in a directive with a stray quote is kept').toContain('https://style-kept.fpp-tests.invalid');
+  });
+});
+
 test('Cape Info signs through the browser under the player\'s own policy when the player is offline', async ({ request, page }) => {
   // Feature: 0b862ed56.  When the player can't reach the signing API but the
   // browser can, Cape Info checks the API from the browser (a no-cors fetch,

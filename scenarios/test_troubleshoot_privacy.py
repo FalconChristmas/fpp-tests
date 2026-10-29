@@ -13,6 +13,11 @@ on a made-up EDID, with /sys/class/drm pointed at a scratch directory.
 
 Regression: fpp 54bfd0838, which added the command. Its first redaction,
 grep -v serial, let the Alphanumeric Data String through (verified red).
+
+Regression: fpp 1fad87daf. The report used edid-decode's
+--replace-unique-ids, which Debian trixie's edid-decode doesn't have: the
+report got its usage text, and with the option dropped the older decoder's
+manufacture year still came through.
 """
 
 import json
