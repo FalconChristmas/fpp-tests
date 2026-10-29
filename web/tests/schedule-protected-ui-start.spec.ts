@@ -62,10 +62,23 @@ test('a playlist started from the status page holds a schedule entry back and sa
     await expect(page.locator('#warningsRow')).toContainText(
       `Scheduled playlist '${SHOW}' was blocked from starting due to schedule protection`, { timeout: 15_000 });
   } finally {
-    await request.post('/api/command', { data: { command: 'Stop Now', args: [] } });
-    await request.put('/api/settings/UIStartedPlaylistsProtected', { data: protectedBefore });
+    // The schedule first: stopped while the entry's window is still open,
+    // fppd starts the entry it was holding back, and that keeps playing
+    // (for the rest of its 10 minutes) into the next test.  A reload only
+    // marks the schedule for loading on fppd's next once-a-second pass, and
+    // the check fppd makes when a playlist stops uses the items it already
+    // has, so wait until the reload has happened -- the entry is gone from
+    // fppd's schedule -- before stopping.
     await request.post('/api/schedule', { data: before });
     await request.post('/api/schedule/reload');
+    await expect.poll(async () => ((await (await request.get('/api/fppd/schedule')).json()).schedule.entries as { playlist: string }[])
+      .map((e) => e.playlist), { message: "fppd still has the test's entry", timeout: 10_000 }).not.toContain(SHOW);
+    await request.post('/api/command', { data: { command: 'Stop Now', args: [] } });
+    await expect.poll(async () => (await status(request)).status_name, { timeout: 10_000 }).toBe('idle');
+    // And stays idle: nothing that was held back starts in its place.
+    await new Promise((r) => setTimeout(r, 2500));
+    expect((await status(request)).current_playlist?.playlist ?? '', 'a playlist started after Stop Now').toBe('');
+    await request.put('/api/settings/UIStartedPlaylistsProtected', { data: protectedBefore });
     await request.delete(`/api/playlist/${MINE}`);
     await request.delete(`/api/playlist/${SHOW}`);
   }

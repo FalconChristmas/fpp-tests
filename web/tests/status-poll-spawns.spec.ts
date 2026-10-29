@@ -80,6 +80,11 @@ test('the polled status and info requests start no shells and no git', async ({ 
     // and 90 s (remote git) lifetimes.
     for (const url of ['/api/system/info', '/api/system/status?systemonly', '/api/system/status']) await request.get(url);
     inPlayer('sh', '-c', 'for f in /tmp/cache_*.cache; do touch -d "-2 min" "$f"; done');
+    // A remote check that failed (the player has no internet) is not cached;
+    // its marker holds off the next try for 60 s.  One an earlier test left
+    // could run out inside the window below, and that poll pings and runs
+    // git -- a retry, not the per-poll cost this measures.  Restart the wait.
+    inPlayer('sh', '-c', 'for f in /tmp/cache_*.failed; do [ -e "$f" ] && touch "$f"; done; true');
     // PHP sees the new mtimes once its stat cache moves on.
     await new Promise((r) => setTimeout(r, 2_500));
 

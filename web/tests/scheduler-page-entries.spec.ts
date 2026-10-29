@@ -182,7 +182,11 @@ test.describe('user-defined holidays', () => {
     // Feature: 31b095147.  The Scheduler's Edit Holidays dialog keeps the
     // user's own holidays in config/user-holidays.json, and the date lists
     // offer them beside the locale's.
-    const tomorrow = new Date(Date.now() + 24 * 3600 * 1000);
+    // Tomorrow on the player's clock, not this machine's: they differ in
+    // the evening west of UTC.
+    const [month, day] = inPlayer('date', '-d', 'tomorrow', '+%m %d').trim().split(' ').map(Number);
+    const dayStart = Number(inPlayer('date', '-d', 'tomorrow 00:00', '+%s'));
+    const dayEnd = Number(inPlayer('date', '-d', 'tomorrow 00:00 +1 day', '+%s'));
     await storeSchedule(request, [entry()]);
     await openScheduler(page);
     const modal = await openEditor(page);
@@ -191,13 +195,13 @@ test.describe('user-defined holidays', () => {
     await row.locator('.holName').fill('Fpp Tests Day');
     await row.locator('.holName').blur();
     await row.locator('.holShortName').fill('FppTestsDay');
-    await row.locator('.holMonth').selectOption(String(tomorrow.getMonth() + 1));
-    await row.locator('.holDay').selectOption(String(tomorrow.getDate()));
+    await row.locator('.holMonth').selectOption(String(month));
+    await row.locator('.holDay').selectOption(String(day));
     const reloaded = page.waitForEvent('load');
     await modal.getByRole('button', { name: 'Save' }).click();
     await reloaded;
     expect(storedHolidays()).toEqual([
-      { name: 'Fpp Tests Day', shortName: 'FppTestsDay', month: tomorrow.getMonth() + 1, day: tomorrow.getDate() },
+      { name: 'Fpp Tests Day', shortName: 'FppTestsDay', month, day },
     ]);
 
     // The date lists offer it, and an entry can be pinned to it.
@@ -214,8 +218,8 @@ test.describe('user-defined holidays', () => {
     await request.post('/api/schedule/reload');
     await expect.poll(async () => {
       const items = (await (await request.get('/api/fppd/schedule')).json()).schedule.items as { startTime: number }[];
-      return [...new Set(items.map((i) => new Date(i.startTime * 1000).toDateString()))];
-    }, { timeout: 10_000 }).toEqual([tomorrow.toDateString()]);
+      return [...new Set(items.map((i) => (i.startTime >= dayStart && i.startTime < dayEnd ? 'the holiday' : `other: ${i.startTime}`)))];
+    }, { timeout: 10_000 }).toEqual(['the holiday']);
   });
 
   test('the config name fills in from the display name, and a half-filled holiday is refused', async ({ page }) => {
