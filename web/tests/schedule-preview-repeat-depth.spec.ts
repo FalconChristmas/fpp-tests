@@ -13,13 +13,18 @@ import type { APIRequestContext, Page } from '@playwright/test';
 
 const PLAYLIST = 'fpp-tests-preview-depth';
 
-async function previewSpacers(page: Page, request: APIRequestContext, schedule: object[]) {
+async function previewSpacers(page: Page, request: APIRequestContext, schedule: object[],
+  starts: string[]) {
   const sch = await request.post('/api/schedule', { data: schedule });
   expect(sch.ok()).toBe(true);
   await request.post('/api/schedule/reload');
-  await expect.poll(async () =>
-    (await (await request.get('/api/fppd/schedule')).json()).schedule.items.length,
-  { timeout: 10_000 }).toBeGreaterThan(2);
+  // Wait for fppd to have this schedule, not the previous test's: the times
+  // of day its occurrences start at ("@ 08:00 PM") must be the ones expected.
+  await expect.poll(async () => {
+    const items = (await (await request.get('/api/fppd/schedule')).json()).schedule.items;
+    return [...new Set(items.map((i: { startTimeStr: string }) =>
+      i.startTimeStr.replace(/^.*@ /, '')))].sort();
+  }, { timeout: 10_000 }).toEqual([...starts].sort());
 
   await page.goto('/schedulePreview.php');
   const head = page.locator('table.schedulePreviewTable thead tr').first();
@@ -53,7 +58,8 @@ test.describe('schedule preview indent columns', () => {
   });
 
   test('an hourly entry gets no indent column', async ({ page, request }) => {
-    const cells = await previewSpacers(page, request, [daily('20:00:00', '23:00:00', 6000)]);
+    const cells = await previewSpacers(page, request, [daily('20:00:00', '23:00:00', 6000)],
+      ['08:00 PM', '09:00 PM', '10:00 PM']);
     await expect(cells).toHaveCount(1);
   });
 
@@ -61,7 +67,8 @@ test.describe('schedule preview indent columns', () => {
     // A show over a filler, both ending at 22:00: one level of overlap,
     // however many days the preview covers.
     const cells = await previewSpacers(page, request,
-      [daily('18:00:00', '22:00:00', 0), daily('17:00:00', '22:00:00', 0)]);
+      [daily('18:00:00', '22:00:00', 0), daily('17:00:00', '22:00:00', 0)],
+      ['05:00 PM', '06:00 PM']);
     await expect(cells).toHaveCount(2);
   });
 });
