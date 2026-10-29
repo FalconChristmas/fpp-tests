@@ -13,6 +13,9 @@ test('a jurisdiction already given is preselected', async ({ page }) => {
 });
 
 test('a change on a step is not saved until Finish', async ({ page, request }) => {
+  // Regression: cbebbdadb ("prevent saving of settings on InitialSetup screen
+  // until user clicks Finish Setup"), which first replaced the controls'
+  // saving onChange handlers with ones that only track the change.
   test.setTimeout(120_000);
   const before = await (await request.get('/api/settings/HostDescription')).json();
   await page.goto('/initialSetup.php');

@@ -8,6 +8,9 @@ import { MEDIA, PLUGINS, sh } from './plugin-repo';
 // collects the answers into api/system/status, and RefreshHeaderBar draws one
 // icon per visible indicator.  Every field of one is the plugin's, so none
 // may reach the page as markup or script.
+//
+// Feature: 02ece870d (the plugin header indicator callback itself): each
+// test's control, the plugin's indicator reaching the header, needs it.
 
 test.skip(!container, 'puts plugin directories inside the run-web.sh container');
 

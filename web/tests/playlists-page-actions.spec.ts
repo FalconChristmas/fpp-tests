@@ -52,7 +52,8 @@ test.afterEach(async ({ request }) => {
 test.describe('adding a playlist', () => {
   test('the name box has the focus when the Add dialog opens', async ({ page }) => {
     // Regression: 1fcb2b3ff.  The dialog opened with nothing focused; the
-    // user had to click into the name before typing it.
+    // user had to click into the name before typing it.  Also covers
+    // ed2821810, the focus: option of DoModalDialog() that it uses.
     await page.goto('/playlists.php');
     await whenModalShown(page, () => page.locator('.playlistAddNewBtn').first().click());
     await expect(page.locator('#txtAddPlaylistName')).toBeFocused();
