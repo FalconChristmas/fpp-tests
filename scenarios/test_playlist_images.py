@@ -264,3 +264,30 @@ def test_a_stopped_image_entry_ends_its_thread(fppd):
     fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "idle", what="the stop")
     fppd.wait_for(lambda: image_threads() == 0, timeout=5,
                   what="the stopped image entry's thread to end")
+
+
+def test_the_image_cache_is_trimmed_to_its_entry_limit(fppd):
+    """A cache folder holding 210 scaled copies ("pei-*.png") is trimmed to
+    the cache's 200-entry limit when an image entry loads, oldest first; a
+    file in the cache that isn't a scaled copy is left alone.
+
+    Regression: 86901f4da. CleanupCache() was an empty FIXME, so the cache
+    folder only ever grew."""
+    setup(fppd, [matrix()])
+    cache = os.path.join(fppd.media, "cache")
+    os.makedirs(cache, exist_ok=True)
+    now = time.time()
+    for i in range(210):
+        p = os.path.join(cache, f"pei-old{i:03d}.png")
+        with open(p, "wb") as f:
+            f.write(b"\x89PNG not really")
+        os.utime(p, (now - 10000 + i, now - 10000 + i))   # pei-old000 the oldest
+    with open(os.path.join(cache, "other.txt"), "w") as f:
+        f.write("not ours")
+    ppm(os.path.join(fppd.media, "images", "Exact.ppm"), WIDTH, HEIGHT, (0, 0, 77))
+    frame = show_image(fppd, "Exact.ppm")
+    assert lit_with(frame, (0, 0, 77)), frame and frame[:12].hex()
+    left = sorted(f for f in os.listdir(cache) if f.startswith("pei-old"))
+    assert len(left) == 200, f"{len(left)} cached copies left of 210"
+    assert left[0] == "pei-old010.png", f"not the oldest removed: first left is {left[0]}"
+    assert os.path.exists(os.path.join(cache, "other.txt"))

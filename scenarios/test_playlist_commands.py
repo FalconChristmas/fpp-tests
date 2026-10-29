@@ -73,6 +73,21 @@ def test_start_at_item_keeps_every_entry(fppd):
     wait_idle(fppd)
 
 
+def test_start_at_item_with_only_a_name_starts_at_the_top(fppd):
+    """Start Playlist At Item given only the playlist name (as an older
+    caller or a hand-made preset sends it) starts the playlist from item 1.
+
+    Regression: 73edb54c5. The command read its item argument without
+    checking it was there, past the end of the argument list: ASan reports a
+    heap-buffer-overflow, and a plain build crashed or started at whatever
+    the stray read gave."""
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), step(2)]))
+    fppd.start()
+    fppd.command("Start Playlist At Item", "P")
+    wait_trace(fppd, "12")
+    wait_idle(fppd)
+
+
 def test_start_at_item_of_a_random_playlist(fppd):
     """Start Playlist At Item on a random playlist plays that item first,
     then every other main entry in a shuffle: in a shuffled playlist an

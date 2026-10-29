@@ -372,3 +372,28 @@ def test_coordinates_warning_comes_down_when_they_are_fixed(fppd):
     fppd.settings(Latitude="38.9", Longitude="-104.6")
     fppd.wait_for(lambda: not coordinates_flagged(fppd), timeout=10,
                   what="the coordinates warning to come down once they are fixed")
+
+
+def test_schedule_says_when_entries_run_past_its_horizon(fppd):
+    """An entry whose end date lies past the scheduler's horizon
+    (ScheduleDistance, 28 days by default) is expanded only that far, and
+    the schedule says so (schedulesExtendBeyondDistance, which the schedule
+    preview turns into a note); after a reload with only a short entry it
+    says nothing.
+
+    Regression: 48b8cc08d (its scheduler half). The horizon was stretched to
+    cover the whole entry, a week past its end, so a season-long entry
+    expanded months of occurrences, and nothing reported it."""
+    long = entry(7, "20:00:00", "21:00:00", startDate=f"{YEAR}-01-01", endDate=f"{YEAR}-12-31")
+    got = items(fppd, [long], f"{YEAR}-06-10 12:00:00")
+    sched = fppd.get("/fppd/schedule")["schedule"]
+    assert sched.get("schedulesExtendBeyondDistance") is True, \
+        {k: v for k, v in sched.items() if k != "items"}
+    horizon = datetime.datetime(YEAR, 6, 10).timestamp() + 40 * 86400
+    assert got and max(i["startTime"] for i in got) < horizon, \
+        f"expanded to {max(i['startTimeStr'] for i in got)}"
+    fppd.write("config/schedule.json", [entry(7, "20:00:00", "21:00:00",
+                                              startDate=f"{YEAR}-06-10", endDate=f"{YEAR}-06-12")])
+    reload_schedule(fppd)
+    fppd.wait_for(lambda: fppd.get("/fppd/schedule")["schedule"].get("schedulesExtendBeyondDistance")
+                  is False, what="the note to clear after the reload")

@@ -745,3 +745,54 @@ def test_a_bridged_universe_goes_out_whole(fppd):
             frames = [d for _, d in out.packets]
     torn = [f for f in frames if len(set(region(f, E131_START, E131_SIZE))) > 1]
     assert not torn, f"{len(torn)} of {len(frames)} frames carried a torn universe"
+
+
+def test_bridging_while_playing_warning_has_its_help_entry(fppd):
+    """The bridging-while-playing warning carries its id, 11, in status'
+    warningInfo, and the web UI has a definition and a help page for that
+    id (www/warnings-definitions.json, www/help/warning-helpers), which is
+    how the status page links a warning to its explanation.
+
+    Regression: e2389c5a8. The warning was raised without an id, so the UI
+    had nothing to explain it with."""
+    import json
+    setup(fppd)
+    seq = play_solid_sequence(fppd, 0x03)
+    data = bytes([0xE0]) * E131_SIZE
+    with Listener(OUT_PORT) as out:
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "false", "false")
+        wait_output(fppd, out, lambda f: f == seq[0], "the sequence")
+        with Sender(lambda n: [(e131(10, data, seq=n), E131_PORT)]):
+            w = fppd.wait_for(lambda: [w for w in fppd.get("/fppd/status").get("warningInfo", [])
+                                       if "bridging data while sequence is running" in w.get("message", "")],
+                              what="the bridging-while-playing warning")
+    assert w[0].get("id") == 11, w
+    www = os.path.join(fppd.tree, "www")
+    with open(os.path.join(www, "warnings-definitions.json")) as f:
+        defs = json.load(f)
+    ids = {d.get("id") for group in defs.values() if isinstance(group, list) for d in group}
+    assert 11 in ids, "no warning definition for id 11"
+    assert os.path.exists(os.path.join(www, "help", "warning-helpers", "warning-11.md"))
+
+
+def test_bridge_priority_changed_while_a_sequence_plays(fppd):
+    """bridgeDataPriority changed from the default to "Prioritize Bridge"
+    while a sequence plays and bridged input arrives takes effect at once:
+    the bridged data shows over the sequence, without a restart.
+
+    Regression: 6e4012f7c. The setting was read once, when fppd started; the
+    UI asked for a restart and until then the sequence kept winning."""
+    setup(fppd)
+    seq = play_solid_sequence(fppd, 0x03)
+    data = bytes([0xE0]) * E131_SIZE
+    with Listener(OUT_PORT) as out:
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "false", "false")
+        wait_output(fppd, out, lambda f: f == seq[0], "the sequence")
+        with Sender(lambda n: [(e131(10, data, seq=n), E131_PORT)]):
+            time.sleep(1)
+            assert last(out) == seq[0], "bridged data got over the sequence before the change"
+            fppd.settings(bridgeDataPriority="Prioritize Bridge")
+            wait_output(fppd, out, lambda f: region(f, E131_START, E131_SIZE) == data,
+                        "the bridged data over the sequence after the change", timeout=10)

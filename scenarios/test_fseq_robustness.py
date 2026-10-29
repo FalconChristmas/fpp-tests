@@ -424,3 +424,25 @@ def test_fsequtils_says_when_it_drops_channels(fppd, tmp_path):
     out = r.stdout + r.stderr
     assert r.returncode == 0, out
     assert "only the first 8388608 channels are used" in out, out
+
+
+def test_output_wider_than_a_sparse_sequence_is_logged(fppd):
+    """A sparse sequence storing only channels 1-75, played to a 150-channel
+    output: fppd logs that the output asks for channels the file doesn't
+    have, and the 75 it has play intact.
+
+    Regression: 30b5a7439. Nothing said why the rest of the output stayed
+    dark."""
+    frames = unique_frames(40, CHANNELS)
+    with DdpReceiver(CHANNELS) as rx:
+        install(fppd, frames, step_ms=STEP_MS, sparse=[(0, 75)])
+        fppd.start()
+        since = time.monotonic()
+        start(fppd)
+        wait_idle(fppd, timeout=20)
+        time.sleep(0.3)
+        got = [d[:75] for _, d in rx.snapshot(since=since)]
+    assert "Requested output range outside read ranges" in fppd.log(), \
+        "no log line for the channels the file doesn't have"
+    want = {f[:75] for f in frames}
+    assert len(want & set(got)) >= 36, f"{len(want & set(got))} of 40 frames' stored channels seen"

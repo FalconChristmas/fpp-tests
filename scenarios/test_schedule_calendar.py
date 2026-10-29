@@ -195,3 +195,32 @@ def test_a_command_whose_second_the_clock_steps_over_still_runs(fppd):
                   timeout=10, interval=0.5, what="the 20:30:00 command the clock stepped over")
     assert fppd.log().count("Current Schedule:") == reloads, \
         "the step reloaded the schedule, so the command may have run from the reload, not the stepped-over second"
+
+
+def test_clock_stepping_forward_into_a_window_starts_its_playlist_once(fppd):
+    """A player whose clock steps forward into an open schedule window (NTP
+    correcting a clock that booted behind) starts the window's playlist
+    within seconds, and starts it once.
+
+    Coverage for 8174c3944, not a red check: it dropped ScheduleProc()'s own
+    "time jumped forward" check, which called CheckIfShouldBePlayingNow() on
+    top of CheckScheduledItems(); with the extra call restored the second
+    one finds the playlist already playing and leaves it alone."""
+    day = datetime.date(YEAR, 6, 1)
+    count = {"type": "command", "enabled": 1, "playOnce": 0, "command": "Set Variable",
+             "args": ["Starts", "Expression", "", "1", "0", "100", "=Starts+1", "false"]}
+    fppd.write("playlists/Show.json", {"name": "Show", "repeat": 0, "loopCount": 0, "leadIn": [count],
+                                       "mainPlaylist": [{"type": "pause", "enabled": 1, "playOnce": 0,
+                                                         "duration": 120}], "leadOut": []})
+    fppd.write("config/schedule.json", [entry(EVERY_DAY, "20:00:00", "21:00:00",
+                                              startDate=day.isoformat(), endDate=day.isoformat())])
+    fppd.start(fake_time=at(day, "18:00:00"), tz=ZONE)
+    time.sleep(3)
+    assert fppd.get("/fppd/status").get("status_name") == "idle"
+    fppd.command("Set Variable", "Starts", "Value", "0")
+    fppd.set_clock(at(day, "20:30:00"))
+    fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "playing", timeout=10,
+                  interval=0.5, what="the window's playlist after the step")
+    time.sleep(5)
+    starts = (fppd.get("/variables") or {}).get("Starts", {}).get("value")
+    assert starts is not None and float(starts) == 1, f"the playlist started {starts} times"

@@ -158,18 +158,24 @@ def test_time_branch(fppd, now, expect):
     assert run(fppd, "P") == expect
 
 
-@pytest.mark.parametrize("mode", [1, 2])
+@pytest.mark.parametrize("mode", [1, 2, "1", "2", True], ids=["1", "2", "str1", "str2", "true"])
 def test_random_order(fppd, mode):
     """random 1 shuffles the main section once, at load; random 2 shuffles it
     again for every pass. Either way every entry runs exactly once a pass.
-    (Five entries, three passes: the trace is a double, exact to 15 digits.)"""
+    (Five entries, three passes: the trace is a double, exact to 15 digits.)
+    Some xLights versions upload "random" as a string or a bool, which mean
+    the same.
+
+    Regression (the string cases): 8492d90c9. "random" was read with
+    asInt(), which throws on a string: the playlist was refused as invalid."""
     fppd.write("playlists/P.json", playlist(
         "P", main=[step(d) for d in range(1, 6)], loop_count=3, random=mode))
     fppd.start()
     out = run(fppd, "P", timeout=30, repeat=True)
+    assert out, f"the playlist did not play: trace {out!r}"
     passes = [out[i:i + 5] for i in range(0, len(out), 5)]
     assert len(passes) == 3 and all(sorted(p) == list("12345") for p in passes), out
-    if mode == 1:
+    if int(mode) == 1:
         assert len(set(passes)) == 1, f"random 1 reshuffled between passes: {passes}"
     else:
         # all three alike by chance: 1 in 14400
@@ -619,6 +625,55 @@ def test_dynamic_entry_with_a_disabled_entry(fppd):
     assert run(fppd, "P") == "162"
 
 
+def test_status_names_the_first_entry_of_a_dynamic_entry(fppd):
+    """While a dynamic entry plays the first entry of its data, status gives
+    that entry's type (here a pause), as it does for the entries after it.
+
+    Regression: e62e077ab. GetCurrentEntry() took index 0 for "no entry",
+    so status called the first entry of every dynamic entry "unknown" (and
+    before 71f26d184 gave that case a name, looped forever looking for
+    one)."""
+    path = fppd.write("tmp/dyn.json", {"mainPlaylist": [pause(3), step(6), pause(3)]})
+    fppd.write("playlists/P.json", playlist("P", main=[dynamic("file", dataFile=path), step(2)]))
+    fppd.start()
+    fppd.command("Start Playlist", "P", "false", "false")
+    # Past the lead-in's command entry, into the dynamic entry.
+    first = fppd.wait_for(lambda: (status(fppd).get("current_playlist", {}).get("type")
+                                   not in (None, "", "command")) and
+                          status(fppd)["current_playlist"]["type"], what="P to play")
+    fppd.wait_for(lambda: trace(fppd) == "6", what="the dynamic entry's second pause")
+    second = status(fppd)["current_playlist"]["type"]
+    assert (first, second) == ("pause", "pause"), (first, second)
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=15,
+                  what="P to finish")
+    assert trace(fppd) == "62"
+
+
+def test_empty_dynamic_entry_is_skipped_while_status_is_read(fppd):
+    """A dynamic entry whose data has no entries is skipped with a warning
+    while status is read over and over, and the playlist carries on.
+
+    Coverage for d7c909efb, not a red check: GetCurrentEntry() indexed the
+    entry list before checking the index against its size, which an empty
+    list made a read through a null pointer. Every path that empties the
+    list now also sets the index to -1, under the playlist lock status
+    takes, so the unchecked read is not reached with the checks reversed."""
+    path = fppd.write("tmp/dyn.json", {"mainPlaylist": []})
+    fppd.write("playlists/P.json", playlist("P", main=[
+        step(1), dynamic("file", dataFile=path), dynamic("file", dataFile=path), step(2)],
+        repeat=0))
+    fppd.start()
+    for _ in range(5):
+        fppd.command("Start Playlist", "P", "false", "false")
+        for _ in range(20):
+            status(fppd)
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=15,
+                      interval=0.01, what="P to finish")
+        assert trace(fppd) == "12"
+    warnings = status(fppd).get("warnings", [])
+    assert any("no valid entries" in w for w in warnings), warnings
+
+
 def test_entry_that_neither_starts_nor_finishes_is_skipped(fppd):
     """A random audio entry whose music folder has emptied by the time it
     starts is skipped with a log line, and the playlist carries on.
@@ -739,6 +794,10 @@ def test_dynamic_entry_from_a_slow_url_leaves_fppd_answering(fppd):
     Regression: 16f7f37dd. The entry fetched the URL with a blocking request
     inside its start, holding the playlist lock: status stalled for as long
     as the URL took to answer (up to 15 s).
+
+    Also covers 71f26d184 (its status half): while the entry loads it has no
+    current entry, and status looked for that entry's type in a loop that
+    then dereferenced the null entry -- fppd crashed on the first status.
     """
     body = json.dumps({"mainPlaylist": [step(7), step(8)]})
 

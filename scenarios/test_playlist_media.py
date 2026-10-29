@@ -59,6 +59,33 @@ def test_media_offset_under_a_frame_starts_the_lights(fppd, audio):
     fppd.command("Stop Now")
 
 
+def test_media_offset_holds_the_lights_back_by_the_offset(fppd, audio):
+    """With a 1500 ms media offset a sequence+media entry starts its media
+    and holds its lights back for the offset: the sequence still shows its
+    first frame half a second in, and is playing a second after the offset.
+
+    Regression: b60e0dea4, which added globalMediaOffset (a master whose
+    audio comes out late holds the sequence and its MultiSync packets back
+    by that much). Without it the sequence started with the media."""
+    index = {f: i for i, f in enumerate(song(fppd, 6))}
+    fppd.settings(globalMediaOffset="1500")
+    fppd.write("playlists/Song.json", playlist("Song", [both("Song.fseq", "Song.wav")]))
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fppd.command("Start Playlist", "Song", "false", "false")
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", interval=0.02,
+                      what="the song")
+        began = time.monotonic()
+        time.sleep(0.6)
+        early = [index.get(f, -1) for _, f in rx.snapshot()]
+        fppd.wait_for(lambda: index.get(rx.last(), 0) >= 5, timeout=4,
+                      what="the sequence's lights to play once the offset passed")
+        late = time.monotonic() - began
+    fppd.command("Stop Now")
+    assert max(early, default=-1) <= 0, f"the lights ran during the offset: frames {sorted(set(early))}"
+    assert late >= 1.0, f"lights were at frame 5 {late:.2f} s after the start"
+
+
 def test_media_offset_sends_the_multisync_start_once(fppd, audio):
     """With a media offset, a MultiSync master sends its remotes one media
     start for the song, once the offset has passed.
@@ -81,6 +108,35 @@ def test_media_offset_sends_the_multisync_start_once(fppd, audio):
     starts = [s for s in (parse_sync(t, p) for t, _, _, p in packets)
               if s and s.file_type == "media" and s.action == "start"]
     assert len(starts) == 1, f"{len(starts)} media start packets for one song"
+
+
+def test_a_sequence_shorter_than_its_media_is_stopped_once(fppd, audio):
+    """A sequence+media entry whose 2 s sequence ends before its 4 s media,
+    on a MultiSync master: remotes get one sequence stop for it, when the
+    sequence ends, and one media stop.
+
+    Regression: 4d60fa6b5. When the media ended the entry stopped the
+    already-finished sequence again, and the close sent the remotes a second
+    sequence stop."""
+    remote = "127.0.0.2"
+    frames = unique_frames(40, CHANNELS)  # 2 s
+    write_fseq(os.path.join(fppd.media, "sequences", "Song.fseq"), frames)
+    write_tone_wav(os.path.join(fppd.media, "music", "Song.wav"), 4)
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(DisableFakeNetworkBridges="1", MultiSyncEnabled="1", MultiSyncRemotes=remote)
+    fppd.write("playlists/Song.json", playlist("Song", [both("Song.fseq", "Song.wav")]))
+    with UdpCapture(PORT, remote) as cap:
+        fppd.start()
+        fppd.command("Start Playlist", "Song", "false", "false")
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", what="the song")
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=15,
+                      what="the song to end")
+        time.sleep(1)
+        packets = cap.snapshot()
+    syncs = [s for s in (parse_sync(t, p) for t, _, _, p in packets) if s]
+    stops = [(s.file_type, s.action) for s in syncs if s.action == "stop"]
+    assert stops.count(("fseq", "stop")) == 1, f"stops sent: {stops}"
+    assert stops.count(("media", "stop")) == 1, f"stops sent: {stops}"
 
 
 def test_media_back_for_the_next_pass_after_a_failed_start(fppd, audio):
@@ -109,6 +165,32 @@ def test_media_back_for_the_next_pass_after_a_failed_start(fppd, audio):
     heard = sounding_seconds(rec.stop())
     fppd.command("Stop Now")
     assert heard >= 1.0, f"heard {heard:.2f} s of the second pass's 2 s of media"
+
+
+def test_sequence_and_random_media_with_no_media_plays_the_sequence(fppd):
+    """A sequence+media entry whose media is a random pick from an empty
+    music folder plays its sequence alone, every frame, and ends.
+
+    Regression: 71f26d184 (the PlaylistEntryBoth half). The media entry
+    fails to set up, so the entry has none; Process() took "no media" as
+    "check the media offset" and read the missing media's start time
+    through a null pointer on the playlist thread."""
+    frames = unique_frames(40, CHANNELS)  # 2 s
+    write_fseq(os.path.join(fppd.media, "sequences", "Song.fseq"), frames)
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.write("playlists/Song.json", playlist("Song", [
+        {"type": "both", "enabled": 1, "playOnce": 0, "sequenceName": "Song.fseq",
+         "fileMode": "randomAudio"}]))
+    index = {f: i for i, f in enumerate(frames)}
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fppd.command("Start Playlist", "Song", "false", "false")
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", what="Song to play")
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=10,
+                      what="Song to end")
+        got = {index[f] for _, f in rx.snapshot() if f in index}
+    assert len(got) >= 36 and max(got) >= 38, f"{len(got)} of 40 frames, last {max(got, default=None)}"
 
 
 def test_resume_keeps_the_random_pick(fppd, audio):
