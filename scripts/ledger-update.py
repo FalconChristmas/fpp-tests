@@ -1,6 +1,6 @@
 """Bring a coverage ledger (ledger/*.tsv) up to date with fpp's history.
 
-    python3 scripts/ledger-update.py [--fpp ../fpp] [--since 9.5] [--to origin/master]
+    python3 scripts/ledger-update.py [--fpp ../fpp] [--since 8.5.1] [--to origin/master]
         [--merge OLD.tsv ...] LEDGER.tsv
 
 Every non-merge fpp commit in since..to gets a row. A row someone has filled
@@ -88,16 +88,19 @@ def patch_ids(fpp, revs):
     return {c: p for p, c in (line.split() for line in ids.splitlines())}
 
 
-def releases(fpp, since, rows):
+def releases(fpp, since, to, rows):
     """The first release tag each commit shipped in, counting cherry-picks."""
     tags = [t for t in git(fpp, "tag", "-l").split() if re.fullmatch(r"\d+\.\d+(\.\d+)?", t)]
     key = lambda t: tuple(int(x) for x in t.split("."))
-    tags = sorted((t for t in tags if key(t) > key(since)), key=key)
+    # since's own release line (8.5 and 8.5.1 for since 8.5.1) can have
+    # shipped cherry-picks of the range's commits before since itself.
+    tags = sorted((t for t in tags if key(t) > key(since) or key(t)[:2] == key(since)[:2]), key=key)
     full = {r[1] for r in rows}
     first = {}
     pids = None
     for t in tags:
-        members = set(git(fpp, "rev-list", "--no-merges", f"{since}..{t}").split())
+        base = since if key(t) > key(since) else git(fpp, "merge-base", t, to).strip()
+        members = set(git(fpp, "rev-list", "--no-merges", f"{base}..{t}").split())
         for c in members & full:
             first.setdefault(c, t)
         # A release branch's own commits: cherry-picks of the range's commits.
@@ -265,7 +268,7 @@ def main():
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--fpp", default=os.path.join(here, "..", "fpp"))
-    ap.add_argument("--since", default="9.5")
+    ap.add_argument("--since", default="8.5.1")
     ap.add_argument("--to", default="origin/master")
     ap.add_argument("--merge", action="append", default=[])
     ap.add_argument("ledger")
@@ -274,7 +277,7 @@ def main():
     rows = commits(a.fpp, a.since, a.to)
     if not rows:
         sys.exit(f"no commits in {a.since}..{a.to}")
-    rel = releases(a.fpp, a.since, rows)
+    rel = releases(a.fpp, a.since, a.to, rows)
     named = test_refs(here, rows)
 
     old = {}

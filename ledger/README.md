@@ -4,7 +4,7 @@ One row per fpp commit, saying whether the suite covers it and how that was
 established. A commit is listed whether or not it got a test, so a row is the
 record that it was examined.
 
-`fpp-since-9.5.tsv` covers every non-merge fpp commit after 9.5, up to master
+`fpp-since-8.5.1.tsv` covers every non-merge fpp commit after 8.5.1, up to master
 (tab-separated, newest first). It replaces `fpp-10.0-10.2.tsv`, whose rows it
 carries unchanged.
 
@@ -22,7 +22,7 @@ carries unchanged.
 
 ## Keeping it current
 
-    python3 scripts/ledger-update.py ledger/fpp-since-9.5.tsv
+    python3 scripts/ledger-update.py ledger/fpp-since-8.5.1.tsv
 
 adds a row for each new fpp commit (from `../fpp`'s `origin/master`; fetch it
 first) and refreshes the rows it filled in itself, whose note starts with
@@ -34,7 +34,7 @@ rows in place and change the note; never regenerate the file over them.
 Pick rows by `release`, `area` or `where`, e.g. every web row of 10.0 still
 to do:
 
-    awk -F'\t' '$2=="todo" && $7=="10.0" && $9 ~ /web/' ledger/fpp-since-9.5.tsv
+    awk -F'\t' '$2=="todo" && $7=="10.0" && $9 ~ /web/' ledger/fpp-since-8.5.1.tsv
 
 For each: write a test that fails without the commit and passes with it
 (`scripts/verify-fix.sh`), name the commit in the test, and set the row's

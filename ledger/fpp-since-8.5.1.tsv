@@ -1,4 +1,5 @@
 commit	outcome	test	proof	note	subject	release	area	where
+54bfd0838	todo		none	auto: not examined yet	feat(troubleshooting): display EDID, DRM state and display engine load (#3135)	unreleased	troubleshooting	web
 320a29525	new-test	scenarios/test_fppd_lifecycle.py::test_media_stopped_just_before_shutdown_keeps_its_files_until_exit	red-green-revert	red: master with 320a29525 reverted (debug-less device build, no sanitizer), on a Pi 5 (run-local): 3 lines of "GStreamer-CRITICAL ... failed to wake event: Bad file descriptor" on the way out; green on master	fix(fppd): shutdown marks its descriptors close-on-exec rather than closing them	unreleased	fppd	docker
 274d84f42	new-test	scenarios/test_schedule_repeat_boundary.py::test_range_leaves_out_what_ends_at_its_start; scenarios/test_schedule_repeat_boundary.py::test_range_flags_an_override_by_a_playlist_from_before_its_start	red-green-revert	red: master with 274d84f42 reverted, on a Pi 5 (run-local): the range API listed the 23:00 occurrence that ends at the range's start, and the 23:30 one running under it was not flagged as overridden; both green on master	fix(scheduler): range API should leave out playlists ending at the range start	unreleased	scheduler	docker
 6652a74fd	new-test	scenarios/test_schedule_repeat_boundary.py::test_window_shorter_than_its_repeat_interval_ends_at_its_end_time	red-green-revert	red: master with 6652a74fd reverted, on a Pi 5 (run-local): a 20:00-20:10 entry repeating every 30 minutes ran its first occurrence to 20:30; green on master	fix(scheduler): cap a repeating entry's first occurrence at its End Time	unreleased	scheduler	docker
@@ -2994,3 +2995,937 @@ a53f32dd6	new-test	scenarios/test_fppinit_network_boot.py::test_auto_boot_delay_
 5a38493b3	todo		none	test: postNetwork in the fppinit sandbox, its own network namespace, clock behind rfs_version (libfaketime, NO_FAKE_STAT=1 as test_auto_boot_delay_does_not_wait_for_the_time_with_no_network does), eth0 given its address 3 s in and an SNTP responder named in chrony.conf: the clock is checked after the address arrives (the responder sees a query); on 5a38493b3^ the check ran before the network was up and was skipped. Build the 9.5-era parent's fppinit without the PCH (DISTCC_HOSTS=none CCACHE=ccache: the device has no libhttpserver)	move time sync after waitForInterfacesUp	9.5.1	boot	docker
 8d2298610	new-test	scenarios/test_fppinit_network_boot.py::test_auto_boot_delay_does_not_wait_for_the_time_with_no_network[none]	red-green-device	red: 8d2298610^'s fppinit (no PCH), on a Pi 5 (run-local), automatic boot delay with the clock behind rfs_version and no network interface at all: still waiting for the time ("or 5 minutes") after 150 s; with the fix it skips the wait at once	potential fix for boot delay on non networked devices	9.5.1	boot	docker,web
 1a255f7c1	untestable		none	auto: changes no runtime file (rpi-imager)	Update rpi_imager	10.0	rpi-imager	none
+4738ff43f	todo		none	auto: not examined yet	Level 102 would be installed	9.5	SD	os-image
+fd081d31a	todo		none	auto: not examined yet	fix - dev setting changebranch - allow user to select first branch in list and properly follow git output	9.5	www	web
+ef0d1d1d4	todo		none	auto: not examined yet	change minValidDate for time comparison to use last fpp release date as compare point	9.5	src	docker
+957cad603	todo		none	auto: not examined yet	upgrade script to copy new networkd-dispatcher script to system	9.5	upgrade	docker
+827337660	todo		none	auto: not examined yet	add year date check around  Scheduler-ScheduleProc()	9.5	src	docker
+8174c3944	todo		none	auto: not examined yet	Remove significant time jump check from ScheduleProc as already cover by CheckScheduledItems()	9.5	src	docker
+0c2626a55	todo		none	auto: not examined yet	fix - fpp start to continue if no net connection rather than delay	9.5	networkd-dispatcher	os-image,docker
+4b98257e5	todo		none	auto: not examined yet	Add time-sync.target dependency to fppd.service for improved synchronization handling	9.5	networkd-dispatcher	os-image
+6723b1bdc	todo		none	auto: not examined yet	Fix GPIO setup macros to use assignment instead of compound assignment for clarity and remove depreciated warning on compile	9.5	channeloutput	device
+6efb0c807	todo		none	auto: not examined yet	Enhance NTP configuration handling to ensure proper DHCP and large time correction settings, triggering service restart when necessary	9.5	networkd-dispatcher	os-image,docker
+58e8ce327	todo		none	auto: not examined yet	Fix macos compile failures	9.5	src	docker
+2cd762756	todo		none	auto: not examined yet	macOS doesn't have std::atomic<std::shared_ptr<T>> so use the c++11 functions	9.5	mediaoutput	docker
+935d06075	todo		none	auto: not examined yet	Sched refactor to fix leaks, refactor to use less heap	9.5	src	docker
+b999ca98e	todo		none	auto: not examined yet	Fix shutdown leaks (+ thread refactor) in Events	9.5	src	docker
+418298ee8	todo		none	auto: not examined yet	Colorlight memleaks	9.5	channeloutput	device
+ddaf9cfe0	todo		none	auto: not examined yet	Fix SDLOut leaks	9.5	mediaoutput	docker
+52cfbf28b	todo		none	auto: not examined yet	Fix leaking GPIO command	9.5	commands	docker
+79283d13c	todo		none	auto: not examined yet	docs and asan startup changes	9.5	docs	docker
+9db9424a7	todo		none	auto: not examined yet	Enhance playlist functionality to support v4 format with section-level stats and update UI accordingly, api calls adding items now fix duration and item totals	9.5	api	web
+46a30a69b	todo		none	auto: not examined yet	Configure ntpsec to ignore DHCP NTP servers unless explicitly enabled	9.5	boot	docker
+a0da0768b	todo		none	auto: not examined yet	Don't allow flash/copy to SSD/NVME if it is in use as a Storage device	9.5	www	web
+48b8cc08d	todo		none	auto: not examined yet	Add schedule protection feature for UI-started playlists	9.5	commands	docker,web
+89537656e	todo		none	auto: not examined yet	Update settings.json	9.5	www	web
+31dc5297d	todo		none	auto: not examined yet	Update start_kiosk.sh	9.5	scripts	docker
+412db374a	todo		none	auto: not examined yet	Pi Touchscreen 2 (issue #2185)	9.5	scripts	docker
+4aa630eec	todo		none	auto: not examined yet	formatting	9.5	js	web
+09ef4ef6a	todo		none	auto: not examined yet	fix schedule preview column headings and scroll behavior	9.5	js	web
+aa115948a	todo		none	auto: not examined yet	add backend logic to schedule and preview the new user-defined holiday logic	9.5	api	docker,web
+cc391f1a3	todo		none	auto: not examined yet	don't hostname lookup on UDPhosts which are set inactive	9.5	channeloutput	docker
+9ef699bb4	todo		none	auto: not examined yet	potential fix for system time calculation to avoid time zone issue on comparison	9.5	boot	docker
+ce39e1e55	todo		none	auto: not examined yet	Fix potential crash where a null vector may unintenitally be inserted into m_scheduledItems	9.5	src	docker
+d672e96fd	todo		none	auto: not examined yet	If the fseq file has extended data headers, properly determine the last possible block Also fix some debug strings to use PRIu64 to format 64bit intswq	9.5	fseq	docker
+7a5aef272	todo		none	auto: not examined yet	Only warn once for any missing preset	9.5	commands	docker
+9c1b4c637	todo		none	auto: not examined yet	enhancements to the new playlist export feature	9.5	www	web
+8edc51361	todo		none	auto: not examined yet	fix - table heading scrolling on gpio and outputprocessor tables	9.5	www	web
+910cba4f0	todo		none	auto: not examined yet	fix horizontal scrolling of column headings on pixeloverlay tables	9.5	www	web
+2dbb0ad1f	todo		none	auto: not examined yet	add tooltips to E1.31 / ArtNet / DDP channelout page for monitor, dedup and ping	9.5	www	web
+cbebbdadb	todo		none	auto: not examined yet	prevent saving of settings on InitialSetup screen until user clicks Finish Setup	9.5	www	web
+86901f4da	todo		none	auto: not examined yet	implementation of PlaylistEntryImage::CleanupCache	9.5	playlist	docker
+a9b35b23e	todo		none	auto: not examined yet	addition of more calculated holiday dates global & locale specific	9.5	locale	docker,web
+0be281d24	todo		none	auto: not examined yet	fix - jgrowl styling on validation error of config name (user holidays)	9.5	css	web
+30d87b7f8	todo		none	auto: not examined yet	user defined holidays - add validation and autopop of config name	9.5	www	web
+10d3eb266	todo		none	auto: not examined yet	Fix No Presets found #2514	9.5	commands	docker
+a8ab37a83	todo		none	auto: not examined yet	Delete playlist confirmation dialog	9.5	www	web
+1fcb2b3ff	todo		none	auto: not examined yet	Focus playlist name for new playlist	9.5	www	web
+859f0b282	todo		none	auto: not examined yet	'back' in playlist details goes to playlist list	9.5	js	web
+c6b641053	todo		none	auto: not examined yet	Formatting	9.5	www	web
+ed2821810	todo		none	auto: not examined yet	DoModalDialog focus option	9.5	js	web
+31b095147	todo		none	auto: not examined yet	feature addition - user defined holidays	9.5	www	web
+f5f61fa9d	todo		none	auto: not examined yet	update dependencies in package.json	9.5	www	web
+bd9456c4a	todo		none	auto: not examined yet	improve UI responsiveness on loading large playlists	9.5	js	web
+8162630d5	todo		none	auto: not examined yet	enhancement - add scrolling container class to schedule table for improved usability	9.5	www	web
+8edab0edd	todo		none	auto: not examined yet	change tail follow dialog event to trigger only once on modal shown	9.5	js	web
+17bf060e3	todo		none	auto: not examined yet	enhancement - start tail follow stream on modal shown event	9.5	js	web
+3b42a6a48	todo		none	auto: not examined yet	enhancement - improve tail follow dialog for better scrolling performance on OSX	9.5	js	web
+3a2800937	todo		none	auto: not examined yet	enhancement - adjust tail follow dialog styling for improved responsiveness	9.5	js	web
+54bb98292	todo		none	auto: not examined yet	enhancement - add timeout and heartbeat mechanism to TailFollowFile function	9.5	api	web
+9606d6ea2	todo		none	auto: not examined yet	enhancement - add tail following to log files in filemanager	9.5	api	web
+29a565869	todo		none	auto: not examined yet	spelling typo fix	9.5	fseq	docker
+3b28e6ed3	todo		none	auto: not examined yet	Add validation for schedule entries and improve dropdown handling	9.5	www	web
+cd78f0d03	todo		none	auto: not examined yet	Enhance filesystem troubleshooting commands with descriptions and separate media directory usage command	9.5	www	web
+73ef552aa	todo		none	auto: not examined yet	Add cache-busting query parameter to fpp-filemanager.js script	9.5	www	web
+eb4ec7582	todo		none	auto: not examined yet	update filesystems troubleshooting command to show human readable and media subdirectory sizes sorted smallest to largest per request from zoom room	9.5	www	web
+36a7aae27	todo		none	auto: not examined yet	Fix asan flagging on json parsing	9.5	commands	docker
+20054b05d	todo		none	auto: not examined yet	fix command scheduler showing null and javascript error from undefined "command", fix global scoped variable (missing var)	9.5	www	web
+d35d36e2c	todo		none	auto: not examined yet	fix mobile timepicker from wiping out holidays in scheduler	9.5	www	web
+0b753d348	todo		none	auto: not examined yet	Add SYS_NICE to docker since we start fppd with nice	9.5	Docker	os-image
+5e1883ec9	todo		none	auto: not examined yet	Don't spam the logs while waiting for i2c bus to appear	9.5	boot	docker
+b6b64f735	todo		none	auto: not examined yet	Make docker build	9.5	Docker	os-image
+e797c0564	todo		none	auto: not examined yet	AutoFlash script is calling the script in the wrong location	9.5	SD	os-image
+5ac878d97	todo		none	auto: not examined yet	Longer timeout for crashes	9.5	src	docker
+79018589b	todo		none	auto: not examined yet	Adjust static to be a member of the manager (which is itself static)	9.5	mediaoutput	docker
+7889ba6fe	todo		none	auto: not examined yet	Clamped reading of sample buffer	9.5	mediaoutput	docker
+0238e2b4e	todo		none	auto: not examined yet	Fix data race on SDL::data	9.5	mediaoutput	docker
+46392738d	todo		none	auto: not examined yet	asan/tsan builds	9.5	makefiles	docker
+2405cb5c5	todo		none	auto: not examined yet	Add message to indicate the backup process is complete.	9.5	scripts	docker
+bd6c12796	todo		none	auto: not examined yet	Playlist filtering (#2501)	9.5	js	web
+6588d6a73	todo		none	auto: not examined yet	Fix compiling on gcc v13.2.1	9.5	channeloutput	device
+d25db1201	untestable		none	auto: changes no runtime file (docs)	Fix typo in MQTT.md	9.5	docs	none
+6a41cc92a	untestable		none	auto: changes no runtime file (docs)	Fix formatting and topic names for MQTT	9.5	docs	none
+e5470bb52	todo		none	auto: not examined yet	In some cases, we need to initialize an i2c bus/device without reading from it	9.5	util	device
+fca5b22d6	todo		none	auto: not examined yet	add display mode for playlist entrry rows for #2480	9.5	css	web
+5e6ac4898	todo		none	auto: not examined yet	add export playlist option	9.5	www	web
+5c0b83a10	todo		none	auto: not examined yet	Handle git pull failures better in updates (#2499)	9.5	scripts	docker,web
+e795eb82d	todo		none	auto: not examined yet	"Update MultiSync page to make 'Modified' link ...	9.5	www	web
+ea7acf0c7	todo		none	auto: not examined yet	Cleanup use of ArtNet defines, make sure artnet outputs are set as pingable	9.5	channeloutput	docker
+17a7dde0b	todo		none	auto: not examined yet	Log a warning if triggered CommandPreset is not found	9.5	commands	docker
+56515e4de	todo		none	auto: not examined yet	Improve logging for MQTT publish errors when disconnected	9.5	src	docker
+63607331b	todo		none	auto: not examined yet	Ignore boot delay in Docker since it isn't processed.	9.5	boot	docker,web
+cad5d25f0	todo		none	auto: not examined yet	Set default start channel to 1 for BBB serial output configuration	9.5	www	web
+e0a25d514	todo		none	auto: not examined yet	Refactor SetSetting and SetPluginSetting to ensure restart/reboot flags are set before callbacks	9.5	js	web
+8d9cb347f	todo		none	auto: not examined yet	Potential fix ARP issue on Raspberry Pi Zero 2 W in network setup	9.5	boot	docker
+064b5d7ec	todo		none	auto: not examined yet	Add "Check All for Updates" button and functionality for installed plugins	9.5	css	web
+fa1475b44	todo		none	auto: not examined yet	More work on UDP output to make sure the send buffers are being drained before adding a bunch more data to them	9.5	channeloutput	docker
+dd4228704	todo		none	auto: not examined yet	Refactor troubleshooting command execution to use direct shell execution and improve platform-specific RTC configuration	9.5	www	web
+366703e1e	todo		none	auto: not examined yet	Handle parse_ini_file failure by initializing data as an empty array	9.5	www	web
+38f0e5a55	todo		none	auto: not examined yet	Fix boot delay 'auto' handling by using current time instead of file creation time	9.5	boot	docker
+6c0ebb5bc	todo		none	auto: not examined yet	Re-publish retained status messages on MQTT reconnection to ensure broker has current values	9.5	src	docker
+7daafdc6d	todo		none	auto: not examined yet	Allow ArtNet to not send on the ArtNet port so network buffers may not fill up and packets get dropped. (xLights will need to be updated to support uploading this config)	9.5	channeloutput	docker,web
+71985ef15	todo		none	auto: not examined yet	Enhance boot delay improving message parsing	9.5	boot	docker
+d54a90bcc	untestable		none	auto: changes no runtime file (rpi-imager)	Update rpi_imager for 9.4	9.5	rpi-imager	none
+5c38a9ca9	todo		none	auto: not examined yet	Fix compile from upgrade scripts	9.4	drivers	device
+9211bbf75	todo		none	auto: not examined yet	Install was updated to include 101	9.4	SD	os-image
+bc92a947d	todo		none	auto: not examined yet	Create boot delay logic that allows long delays with UI feedback  whilst keeping timeouts low	9.4	systemd	os-image,docker,web
+38d8b0139	todo		none	auto: not examined yet	Fix compile failure on non pi/bb64	9.4	non-gpl	device
+b959a8eba	todo		none	auto: not examined yet	Allow capes to set pin states/config	9.4	non-gpl	device
+7be3d0243	untestable		none	auto: changes no runtime file (www)	fix absolute URLs in warning help text	9.4	help	none
+e2389c5a8	todo		none	auto: not examined yet	Add explanation text for Received bridging data error	9.4	help	docker,web
+f70eac9e8	todo		none	auto: not examined yet	Add explanation text for Dummy Audio error	9.4	mediaoutput	docker,web
+06238e4f8	todo		none	auto: not examined yet	fix - update ArtNet socket handling to use reserved key for messages - should fix 2425	9.4	channeloutput	docker
+07f922df6	todo		none	auto: not examined yet	fix - increase systemd service timeout values to support boot delays up to 5 minutes	9.4	systemd	os-image,docker,web
+afe406e5a	todo		none	auto: not examined yet	fix - ensure network interface configs persist across upgardes	9.4	SD	os-image
+45defae1c	todo		none	auto: not examined yet	fix -  support for renaming USB ethernet adapter interfaces with persistent names	9.4	api	web
+cbf13f53e	todo		none	auto: not examined yet	Allow the vendor to provde notes for various eeprom versions	9.4	www	web
+4e88d77f2	todo		none	auto: not examined yet	Update URL wrapping in multisync.php to use proxy for external links	9.4	www	web
+9dd99ba4b	todo		none	auto: not examined yet	Add an error check for model overlays if model json is invalid	9.4	overlays	docker
+696a2cc07	todo		none	auto: not examined yet	Delay shutting down PRU until tasks are processed so pru memory is not accessed	9.4	non-gpl	device:bb
+89b96100e	todo		none	auto: not examined yet	Add some error handling to pixel overlay model	9.4	overlays	docker
+9366c3227	todo		none	auto: not examined yet	Move the result pointer	9.4	playlist	docker
+39bd42410	todo		none	auto: not examined yet	Don't close the ArtNet socket on input or output reload as the other may be using it.	9.4	channeloutput	docker
+564a6b9bb	todo		none	auto: not examined yet	Put a mutex around the artnet socket creation.  Use a Warning instead of crash if it cannot be bound.	9.4	channeloutput	docker
+f3f7d8fc1	todo		none	auto: not examined yet	Expose FPP_UUID as advanced mode setting	9.4	www	web
+4d60fa6b5	todo		none	auto: not examined yet	Prevent stopping sequence entry if it is already finished in Process method	9.4	playlist	docker
+344445e20	todo		none	auto: not examined yet	Update MQTT last will message to retain on disconnect	9.4	src	docker
+c3b0f4b80	todo		none	auto: not examined yet	Add disabled option for unavailable commands in command template	9.4	js	web
+08b51e700	todo		none	auto: not examined yet	Add option for 128x64 1/16 Scan in LED panel selection	9.4	www	web
+a36d3ef07	todo		none	auto: not examined yet	Enhance channel output initialization to check for function existence before calling lookup corrections	9.4	www	web
+917449427	todo		none	auto: not examined yet	Add configuration upgrade check for old LED panel matrix versions	9.4	www	web
+2d43c7d2b	todo		none	auto: not examined yet	Enhance ledPanelsSize handling to support legacy configurations and upgrade path	9.4	www	web
+82e7441b6	todo		none	auto: not examined yet	Enhance setting selection logic to auto-select default value when current setting is unavailable	9.4	www	web
+d09eed5ed	todo		none	auto: not examined yet	potential fix for 2389 - Enhance channel output initialization to reload configurations for BBBMatrix outputs when co-bbbStrings.json changes	9.4	channeloutput	docker
+e62e077ab	todo		none	auto: not examined yet	Fix boundary condition in GetCurrentEntry to handle zero index correctly	9.4	playlist	docker
+0834dd241	todo		none	auto: not examined yet	Refactor NTP setting retrieval to use reference parameter for improved clarity	9.4	boot	docker
+7c2433585	todo		none	auto: not examined yet	Add support for UseNTPFromDHCP setting in network configuration	9.4	boot	docker,web
+449f0b48d	todo		none	auto: not examined yet	Add validation and warning for invalid command presets in command presets UI	9.4	css	web
+e8d4025ff	todo		none	auto: not examined yet	Fix issue with BB48String outputs not outputting when configuration changes	9.4	non-gpl	device:bb
+da56526bf	todo		none	auto: not examined yet	If the fseq file is locked during upload, keep the file with a "replace" extension and next time the sequence is used or closed, it will be be swapped in	9.4	api	docker,web
+82f924c56	todo		none	auto: not examined yet	Minor optimzation to not free/malloc a buffer for each frame	9.4	fseq	docker
+092525739	todo		none	auto: not examined yet	On bb64, rebuild the base overlay and pinctrl	9.4	SD	os-image,docker
+b5d6529b0	todo		none	auto: not examined yet	Update the base overlay to not configure the PB2's internal RTC (which is not battery backed up) and not configure/consumme a bunch of pins	9.4	drivers	device
+5d1966667	todo		none	auto: not examined yet	Add internal NRST/BSL_Invoke pins to pinctrl so we can use them to reflash the mspm0 if needed	9.4	drivers	device
+b7d5c77ea	todo		none	auto: not examined yet	Increase tail in file manager to 250 files	9.4	js	web
+02ece870d	todo		none	auto: not examined yet	add generic plugin header display callback so plugins can optionally publish info to header	9.4	api	web
+257ffa064	todo		none	auto: not examined yet	add trigger param to mqtt payload on fpp command execution	9.4	commands	docker
+6463318a4	todo		none	auto: not examined yet	add MQTT event publishing for command execution in various overrides	9.4	commands	docker
+8f211b928	todo		none	auto: not examined yet	add dedicated help page for MQTT	9.4	help	web
+b4835d150	todo		none	auto: not examined yet	add MQTT event publishing for command execution and preset triggers	9.4	commands	docker
+af574eaab	todo		none	auto: not examined yet	add GPIO event publishing to MQTT for rising and falling edge detection	9.4	docs	device
+ed32b3ad2	todo		none	auto: not examined yet	add logging and race condition handling for playlist toggling and starting	9.4	commands	docker
+caf3b03e4	todo		none	auto: not examined yet	fix - playlist empty flags not setting correctly	9.4	js	web
+94aecb231	todo		none	auto: not examined yet	add helper function to format IP addresses with CIDR notation in header bar	9.4	js	web
+7963f6ca1	todo		none	auto: not examined yet	add MEDIA_STOPPED and MEDIA_STARTED event triggers in VLC play commands	9.4	commands	docker
+7dc796222	todo		none	auto: not examined yet	refactor playlist handling to improve priority checks and logging during start commands	9.4	commands	docker
+900c01b7f	todo		none	auto: not examined yet	remove race condition causing issue on playlist start from api call	9.4	commands	docker
+95818ecd8	todo		none	auto: not examined yet	ensure all zero-md dependencies are held locally	9.4	js	web
+bbeca2b11	untestable		none	auto: changes no runtime file (www)	Warning text updates	9.4	help	none
+139a8fbca	todo		none	auto: not examined yet	Explanations for some warnings that are frequently seen	9.4	channeloutput	device,docker,web
+fd3911355	todo		none	auto: not examined yet	missed a spot for EEPROM version warning	9.4	www	web
+bc4f8c3d6	todo		none	auto: not examined yet	Clarify EEPROM versoin	9.4	www	web
+73a4a66ae	todo		none	auto: not examined yet	Maybe fix issues with starting the second PRU for BB48String capes that need it	9.4	non-gpl	device:bb
+878d2aa03	todo		none	auto: not examined yet	Fix compile with PCH turned off	9.4	channeloutput	docker
+e19e2c275	todo		none	auto: not examined yet	make cape GPIO pin hiding a UI setting to persist across sessions	9.4	www	web
+3421c3968	todo		none	auto: not examined yet	Add cape domains to connect-src in policy script	9.4	scripts	docker
+4c1d7a7f1	todo		none	auto: not examined yet	Add virtual display assets directory to config setup	9.4	www	web
+a62d7aeb0	todo		none	auto: not examined yet	Add 'virtualdisplay_assets' to directory list in fppint	9.4	boot	docker
+4647bae06	todo		none	auto: not examined yet	Add directory for virtual display assets on MAC install	9.4	SD	device:mac
+508fd6db8	todo		none	auto: not examined yet	If the cape-info has an eepromVersion set (which can be separate from hardware version), display it	9.4	www	web
+287f65498	todo		none	auto: not examined yet	BBShiftString doesn't need the "other" PRU's data memory or the shared ram, don't map it	9.4	non-gpl	device:bb
+6e9ef8b7d	todo		none	auto: not examined yet	Update settings-storage.php	9.4	www	web
+829bbe5df	todo		none	auto: not examined yet	Update README.Debian	9.4	SD	os-image
+4e524de8d	untestable		none	auto: changes no runtime file (rpi-imager)	clarify rpi-imager text	9.4	rpi-imager	none
+e858f0a2e	untestable		none	auto: changes no runtime file (rpi-imager)	rpi-imager fpp 9.3	9.4	rpi-imager	none
+fcb9bd706	todo		none	auto: not examined yet	Fix partition resize on Pi	9.3	boot	docker
+c78c8e80d	todo		none	auto: not examined yet	If auto-resizing, make sure it doesn't prompt to resize again	9.3	boot	docker
+41e5ca3aa	todo		none	auto: not examined yet	Updates for 9.3	9.3	SD	os-image
+3845587e7	todo		none	auto: not examined yet	More updates for PB2 and latest kernel/device tree	9.3	drivers	device,os-image
+dedb8c274	todo		none	auto: not examined yet	We only support debian 12 so no need for the debian11 value Start updating bb64 readme	9.3	drivers	device,os-image
+315fc317f	todo		none	auto: not examined yet	If faster linkers are installed, use them	9.3	makefiles	device:bb,device:pi,docker
+d1a86d823	todo		none	auto: not examined yet	For "extended" variable headers in fseq file, don't load the data into memory until/unless requested.	9.3	fseq	docker
+0b862ed56	todo		none	auto: not examined yet	Add https://api.falconplayer.com to connect-src, maybe fix cape signing	9.3	scripts	docker
+9c5cb0f8d	todo		none	auto: not examined yet	Add some file locking to the playlist api's	9.3	api	web
+6df874021	todo		none	auto: not examined yet	Use flock to lock the current fseq file that is playing and then prevent uploading a new version of the sequence during playback. Will now result in an error (after a few retries) in xLights instead of causing fppd to crash	9.3	fseq	docker,web
+d3b4a1cbf	todo		none	auto: not examined yet	Log actual setting that was changed instead of just the fact that a setting changed, only log if something is listening for the change.	9.3	src	docker
+e5060929b	todo		none	auto: not examined yet	Breakup a large method into smaller methods to hopefully help narrow down some infrequent crashes	9.3	src	docker
+a47610e41	todo		none	auto: not examined yet	If Falconv5 response is not valid, log and continue, don't crash	9.3	non-gpl	device:bb
+9bab18d90	todo		none	auto: not examined yet	Update BBB/BB64 instructions for auto partition resize flags	9.3	SD	os-image
+bfeb5c05d	todo		none	auto: not examined yet	Start working on own auto partition resize support, fix issue on Pi5+NVMe where cape detection fails due to i2c bus not being available yet	9.3	systemd	os-image,docker
+5c25de96f	untestable		none	auto: changes no runtime file (rpi-imager)	Add beagle id's to devices	9.3	rpi-imager	none
+c7ed1d869	todo		none	auto: not examined yet	Implement render_HEAD so new size check will work	9.3	overlays	docker
+3173a9f23	todo		none	auto: not examined yet	Limit model size when downloading stats	9.3	api	web
+35020c60e	todo		none	auto: not examined yet	If udp outputs are reloaded while some slow or offline controllers have flipped to pinging via curl, a crash might happen	9.3	channeloutput	docker
+f38d8981c	todo		none	auto: not examined yet	Prevent crash if using /opt/fpp/src/fpp -g without first using -G	9.3	src	docker
+e5f0f8835	todo		none	auto: not examined yet	Prevent rpi_rgb_matrix from aborting if number of configured chains exceeds the hat	9.3	channeloutput	device
+e5068483a	todo		none	auto: not examined yet	Fix crash where command json may have a "null" instead of an empty string.	9.3	commands	docker
+8492d90c9	todo		none	auto: not examined yet	Allow for string/bool for "random" entry in playlist as uploaded from certain versions of xLights	9.3	playlist	docker
+d6cdccc76	todo		none	auto: not examined yet	If gpio input pin cannot be configured as input, don't crash	9.3	util	device
+60bc70ea8	todo		none	auto: not examined yet	Fix variable name	9.3	channeloutput	device
+0a91328f1	todo		none	auto: not examined yet	Attempt to detect if pru cannot be started and display a warning instead of crash	9.3	channeloutput	device:bb,docker
+604f2a395	todo		none	auto: not examined yet	Fix crash if custom model data has spaces instead of numbers or 0 or blanks	9.3	overlays	docker
+254444b72	todo		none	auto: not examined yet	Flag an obviously invalid panel configuration and abort creating the output	9.3	channeloutput	device
+666189e98	todo		none	auto: not examined yet	Add a script to "fix" the PB2 eeprom if it's empty	9.3	drivers	device
+1d098a337	todo		none	auto: not examined yet	Remote FileCopy CSP Logic Fix	9.3	www	web
+b010b392e	todo		none	auto: not examined yet	We have limitted memory.   Limit the size of custom models to avoid running out of memory and crashing.	9.3	overlays	docker
+73edb54c5	todo		none	auto: not examined yet	Fix crash if Start Playlist command is used without an index parameter or without specificing the playlist	9.3	commands	docker
+2f5818f9c	todo		none	auto: not examined yet	Remote Backup CSP Fix	9.3	www	web
+c008e2068	todo		none	auto: not examined yet	Remote Backup CSP Fix	9.3	www	web
+dbddc7c33	todo		none	auto: not examined yet	Remote Backup CSP Fix	9.3	www	web
+00aca118d	todo		none	auto: not examined yet	Allow plugins to optionally monitor their settings for changes so they can update themselves dynamically without a restart	9.3	src	docker
+4002d04e8	todo		none	auto: not examined yet	fix gpio read affecting pin status	9.3	src	device
+4ede3f0c8	todo		none	auto: not examined yet	extension of GPIO API end point to allow returning of current value	9.3	src	device
+227a513aa	todo		none	auto: not examined yet	flag gpio pins reserved by cape to prevent user config as input	9.3	www	web
+70a030a66	todo		none	auto: not examined yet	Fix for autoflashing with 3 partitions	9.3	SD	os-image
+9ce4f4366	todo		none	auto: not examined yet	Fix some issues flashing to RevD	9.3	SD	os-image
+49c4b2e1b	todo		none	auto: not examined yet	add Baldrick controller type detection	9.3	api	docker,web
+3e41649cf	todo		none	auto: not examined yet	Fix issue with BBShiftString starting the wrong PRU.  Likely fixes K128 issues	9.3	non-gpl	device:bb
+2f2c69a4b	todo		none	auto: not examined yet	ensure change git branch passes repo data	9.3	js	web
+64d38a765	todo		none	auto: not examined yet	code formatting	9.3	api	web
+86bdee6fa	todo		none	auto: not examined yet	introduce git repo for new features (seperate to main repo)	9.3	api	os-image,docker,web
+07011ace3	todo		none	auto: not examined yet	prevent git dev branches being shown as new releases	9.3	js	web
+2e0d9c878	todo		none	auto: not examined yet	potential fix for Overlay Model Effect | Text Causing FPPD to hang	9.3	overlays	docker
+f74da4e0f	todo		none	auto: not examined yet	fix - UDP sending announcements for inactive network interfaces	9.3	src	docker
+26a5736be	todo		none	auto: not examined yet	remove white space potentially stopping eeprom signing	9.3	www	web
+7f005883d	todo		none	auto: not examined yet	stop user being able to change gpio inputs which are controlled by cape and show what they are config for	9.3	www	web
+ba38a1aa6	todo		none	auto: not examined yet	hopefully fix panelSize setting to match legacy post upgrade	9.3	www	web
+944355af8	todo		none	auto: not examined yet	fix temperature in header to respect localisation setting for F v C degrees	9.3	js	web
+b7732f1ea	todo		none	auto: not examined yet	Improve error message	9.3	scripts	docker
+ba2ffd92a	todo		none	auto: not examined yet	Make it more obvious that you are about to install an untested plugin	9.3	www	web
+8cf070a5c	todo		none	auto: not examined yet	Fix User Packages so they are available in Advanced UI mode	9.3	www	web
+d610ed7e7	todo		none	auto: not examined yet	Support pinned interfaces on ethtool output	9.3	www	web
+3914f4b77	todo		none	auto: not examined yet	Fix a crash if output is recreated while a sub overlay model is using it. Fix locking issue with submodel when setting state	9.3	overlays	docker
+ad363b5e4	todo		none	auto: not examined yet	Updates for readmes, update rpi_imager for 9.2	9.3	SD	os-image
+c168715e9	todo		none	auto: not examined yet	display new playlist name on edit screen when creating new playlist	9.3	www	web
+fa7b75c1e	todo		none	auto: not examined yet	add check for playlist already existing on add	9.3	www	web
+db127753f	todo		none	auto: not examined yet	Update OS level version	9.2	SD	os-image
+cdbe1ba29	todo		none	auto: not examined yet	Size is in 512b blocks, not KB or MB	9.2	SD	os-image
+68aa36c97	todo		none	auto: not examined yet	multisync - show temp in F for Falcon if UI set to that	9.2	www	web
+291d39bcc	todo		none	auto: not examined yet	redesign of proxies page to split manually added from dhcp	9.2	www	web
+151f01b58	todo		none	auto: not examined yet	add check on branch change if apache config needs to change	9.2	scripts	docker
+e1dc74a95	todo		none	auto: not examined yet	Don't warn if we have to fall back to polling.  It still works so nothing to warn about.	9.2	util	device
+e4b2660f9	todo		none	auto: not examined yet	If we fail to get a file for the GPIO edges, reconfigure back to normal so polling will work correctly	9.2	util	device
+b0414fd94	todo		none	auto: not examined yet	Prevent cancelled uploads from deleting the uploads directory entirely	9.2	api	web
+a7257a1e2	todo		none	auto: not examined yet	If command argument is labelled to allowBlanks, record that and when reconstructing the list from a remote, add the blank in. Fixes #2367	9.2	js	web
+34083916f	todo		none	auto: not examined yet	Add an extra clock tick for the clock signal to allow it to propogate better	9.2	non-gpl	device:bb
+6f30af075	todo		none	auto: not examined yet	unlink the corrupt file so concurrent calls won't all have the same parsing issues	9.2	www	web
+cc17ddfe0	todo		none	auto: not examined yet	If the media_duration.cache files becomes unparsable or corrupt, remove it and recreate.	9.2	www	web
+c526360e0	todo		none	auto: not examined yet	clean up formatting and add buttons to control channel outputs	9.2	css	web
+b9abdc255	todo		none	auto: not examined yet	Get the /git URL working	9.2	etc	docker
+71f26d184	todo		none	auto: not examined yet	Prevent a couple of crashes	9.2	playlist	docker
+a5316829f	todo		none	auto: not examined yet	More updates for eMMC on PB2	9.2	SD	os-image,web
+82ca8b729	todo		none	auto: not examined yet	Fix typo in extlinux.conf	9.2	drivers	device
+9f40f8a63	todo		none	auto: not examined yet	addition of logic to remove error states when  fpp.js included on pages with skip JS settings	9.2	js	web
+6dc4a5455	todo		none	auto: not examined yet	add ability to delete individual presetRows on Control Channel output type	9.2	www	web
+822657700	todo		none	auto: not examined yet	Add support for Subscribing to mulitple MQTT Topics	9.2	help	docker,web
+b60e0dea4	todo		none	auto: not examined yet	Add a new advanced option for handling audio/sequence timing offsets that will work better with multisync/remotes. In particular, this allows a masters audio system to have a large delay (like 500ms) and will delay starting the sequence/multisync packets until the delay is done so everything should start in sync.	9.2	channeloutput	docker,web
+e352e553c	todo		none	auto: not examined yet	Start updating things for Beaglebone Black RevD	9.2	boot	device:bb,os-image,docker,web
+47e45d39a	todo		none	auto: not examined yet	update to allow PRU Serial with PB2	9.2	www	web
+c869cbd1b	todo		none	auto: not examined yet	add font-src CSP defaults to ensure WLED loads correctly under proxy	9.2	scripts	docker
+0f6e2bca4	todo		none	auto: not examined yet	fix websocket handling in proxies	9.2	etc	docker
+128880670	todo		none	auto: not examined yet	Fix crash closing media if media wasn't found to start off with	9.2	mediaoutput	docker
+4d3a89e97	todo		none	auto: not examined yet	fix jgrowl suppression console log	9.2	common	web
+fcd5cef99	todo		none	auto: not examined yet	if jgrowl disabled console log messages instead	9.2	common	web
+31c275571	todo		none	auto: not examined yet	add advanced option to disable jgrowl alerts in the UI	9.2	common	web
+2027469a0	todo		none	auto: not examined yet	increase number of header UI colors available	9.2	www	web
+48310d77d	todo		none	auto: not examined yet	fix - columnSelector widget on multisync populating twice	9.2	www	web
+e3b2c09e5	todo		none	auto: not examined yet	Make sure the requested device actually exists on the I2C bus.	9.2	util	device
+4b1a6f263	todo		none	auto: not examined yet	If there is an issue configuring a pin, log in logfile in addition to displaying warning	9.2	util	device
+c04bf3640	todo		none	auto: not examined yet	Use a retry loop  with resume to attempt to download fppos images.  (20 retrys, 5m each should be more than enough)	9.2	www	web
+10a12990d	todo		none	auto: not examined yet	Fix display/load issue where ArtNet universe 0 gets mapped to 1	9.2	js	web
+4fce312e1	todo		none	auto: not examined yet	Update docker ports to remove stuff that is bound to localhost only	9.2	Docker	os-image
+d0fe51863	todo		none	auto: not examined yet	HTTPVirtualDisplay port is not allowed via CSP.  Create an api endpoint for it.	9.2	etc	docker,web
+b0cea2da9	todo		none	auto: not examined yet	Fix error on console related to version function not available	9.2	js	web
+1d74ab059	todo		none	auto: not examined yet	Fix issue when you save new string config, the current monitors stop displaying until fppd is restarted	9.2	src	docker
+809bd6a19	todo		none	auto: not examined yet	More work to get pin usage descriptions into gpioinfo	9.2	channeloutput	device:bb,device,docker
+547358475	todo		none	auto: not examined yet	If EPollManager is shutdown, removing file descriptors has already occurred.  Avoid the warning in the logs.	9.2	src	docker
+3a778e0e3	todo		none	auto: not examined yet	On PB2, GPIO's marked as output always return 0 when queried.   Save the last value and return what is being sent out.	9.2	util	device
+0e8bfefd7	todo		none	auto: not examined yet	iMaybe fix hang with overlay model effects	9.2	overlays	docker
+de882850e	todo		none	auto: not examined yet	Use wget to download file instead of curl_exec due to problems with OpenSSL and PHP on FPP8.x	9.2	www	web
+0fd1be6da	todo		none	auto: not examined yet	Use HTTP 1.1 only for fppos download, retry once if there is an error	9.2	www	web
+a47a60021	todo		none	auto: not examined yet	Fix display of upgrade available when updates are on older  branches	9.1	js	web
+03ad653ca	todo		none	auto: not examined yet	Update rpi-imager for 9.1	9.2	SD	os-image
+238ca0f4f	todo		none	auto: not examined yet	Add BB64 to filtered fppos files	9.1	www	web
+994b836ad	todo		none	auto: not examined yet	Make sure screen saver settings are restored on fppos upgrade	9.1	scripts	docker
+9078ac1f5	todo		none	auto: not examined yet	Adjust timing on BBShiftPanel to brighten the panels a bit at max bright	9.1	non-gpl	device:bb
+2c1d7dbd5	todo		none	auto: not examined yet	Add H-flip for fppoled	9.1	oled	device,web
+0267dad17	todo		none	auto: not examined yet	If outputting video to an overlay model and the overlay model is destroyed/changed, don't crash	9.1	mediaoutput	docker
+58add849b	todo		none	auto: not examined yet	iFix compile	9.1	src	docker
+8a54d2a27	todo		none	auto: not examined yet	Cleanup some code	9.1	boot	docker
+e7a76634f	todo		none	auto: not examined yet	Fix a bunch of issues with proxies and dhcp server	9.1	boot	docker,web
+bde95aa80	todo		none	auto: not examined yet	Configured proxies can also proxy stuff on other ports (like 4200 for shellinabox)	9.1	api	web
+221676a83	todo		none	auto: not examined yet	Add F48V5 & F32v5 IDs	9.1	src	docker
+fd30ffed6	todo		none	auto: not examined yet	Fix ID for Falcon F16v5	9.1	src	docker
+bae9ea1ba	todo		none	auto: not examined yet	Move the last "/" check before the configured proxies as well	9.1	etc	docker
+451411658	todo		none	auto: not examined yet	Update proxy rewrite rules to fix issues with Falcon v5 controllers	9.1	SD	os-image,docker
+0e4ea0918	todo		none	auto: not examined yet	Fix potential crash if the same media file is played by command multiple times in really quick succession	9.1	commands	docker
+ceffffbec	todo		none	auto: not examined yet	revert change as unneeded following testing	9.1	scripts	docker
+2e593d623	todo		none	auto: not examined yet	add https://ipapi.co to CSP for location lookup	9.1	scripts	docker
+837f015a4	todo		none	auto: not examined yet	Newer pi5 device tree/kernel renamed the internal Pi5 clock	9.1	boot	device,web
+5b9201737	todo		none	auto: not examined yet	Move the colorlight firmware and link check settings to colorlight panel settings	9.1	channeloutput	device,web
+4375c60d3	todo		none	auto: not examined yet	Fix VirtualDisplay restart	9.1	channeloutput	docker
+97263c979	todo		none	auto: not examined yet	Make sure reconfiguring virtualmatrix doesn't require fppd restart	9.1	channeloutput	device,docker
+fc8c3dd08	todo		none	auto: not examined yet	ensure freespace is set to int not string in filemanager	9.1	www	web
+0a4d00b60	todo		none	auto: not examined yet	attempt to fix some errors detected in apache error log	9.1	www	web
+769a481df	todo		none	auto: not examined yet	Fix compile on beagles	9.1	non-gpl	device:bb
+d41cdc48f	todo		none	auto: not examined yet	If a PixelOverlayModel is auto created, make sure it's removed when output is closed	9.1	channeloutput	device:bb,device:pi,device,docker
+c06938ddc	todo		none	auto: not examined yet	Also update the fpp-info.json file so the status will reflect the new channel ranges	9.1	channeloutput	docker
+ce735a5ab	todo		none	auto: not examined yet	Fix potential race condition  in OutputMonitor, when channel ranges change, resend a Ping so systems are updated	9.1	channeloutput	docker
+197b55bec	todo		none	auto: not examined yet	Change Manual link for current version	9.1	js	web
+e562b5370	todo		none	auto: not examined yet	fix - check if interleave option should be visible on panel initialisation	9.1	www	web
+1f6a4970a	todo		none	auto: not examined yet	ensure channeloutputs loads showing correct fields for universes	9.1	js	web
+25035983d	todo		none	auto: not examined yet	fix hiding of channel outputs fields based on type	9.1	js	web
+45d4b2eaa	todo		none	auto: not examined yet	Add flags for input/outputs enabled in status json, cleanup old warnings when reloading outputs	9.1	channeloutput	docker
+820eab6a2	todo		none	auto: not examined yet	fix link to enable rsync from backups pages	9.1	www	web
+4c14f7283	todo		none	auto: not examined yet	fix tablesorter on multisync not retaining sort order between sessions	9.1	www	web
+8c3bf5be3	todo		none	auto: not examined yet	Fix "Test" options for Pixel Strings on BeagleBone 64	9.1	www	web
+dd72a0ac5	todo		none	auto: not examined yet	Fix download of vendor eeproms	9.1	www	web
+4cc8195cd	todo		none	auto: not examined yet	Add GPIO troubleshooting commands to Beagles	9.1	www	web
+1a6127e22	todo		none	auto: not examined yet	Add kmsprint commands to video troubleshooting	9.1	www	web
+67feb9844	todo		none	auto: not examined yet	Try to fix issues of hostapd not stopping and wpa not starting on network restart Flag network changes as reboot required	9.1	boot	docker,web
+e78811e68	untestable		none	auto: changes no runtime file (rpi-imager)	Remove 8.5.1 image for PocketBeagle2 from rpi_imager... Too many issues with that version.  It was really a beta/preliminary verion	9.1	rpi-imager	none
+55cff103e	todo		none	auto: not examined yet	Allow eeprom lists to filter specific versions by platform	9.1	www	web
+1757ae15b	todo		none	auto: not examined yet	remove legacy 'proxies' file creation	9.1	boot	docker
+c0c144628	todo		none	auto: not examined yet	Fix proxies to ensure migration, deletion and save needed alert	9.1	api	web
+dcec8a4f2	todo		none	auto: not examined yet	pb2 noob, try to compile PRU serial	9.1	pru	device:bb
+d934bfb7d	todo		none	auto: not examined yet	For smaller boards that don't need to output 64 strings, only configure the pins it actually needs leaving the others to be reused for other purposes	9.1	non-gpl	device:bb
+52c9f9f56	todo		none	auto: not examined yet	Update rpi imager for 9.0	9.1	SD	os-image
+b40dac176	todo		none	auto: not examined yet	display warning of saves required after autolayout	9.1	www	web
+6dda747b9	todo		none	auto: not examined yet	Need to remove other old kernel packages	9.0	SD	os-image
+d9c26c8c8	todo		none	auto: not examined yet	Fix upgrade available on branch other than master	9.0	js	web
+eb1733311	todo		none	auto: not examined yet	Move bootloader update to after rsync	9.0	SD	os-image
+5e93259c8	todo		none	auto: not examined yet	Hide the Connection Type drop down since it's now asked for as part of adding the matrix	9.0	www	web
+2b242ba8b	todo		none	auto: not examined yet	ensure only 1 BBShiftPanel is allowed in panel config	9.0	www	web
+9a67f81c6	todo		none	auto: not examined yet	cosmetic style changes to panels page	9.0	www	web
+88ccf3702	todo		none	auto: not examined yet	fix save change warning appearing twice due to ajax timings	9.0	www	web
+d4a023f18	todo		none	auto: not examined yet	attempt to get wiringPinout to stop being seen as different between current and saved config	9.0	www	web
+0f55d7646	todo		none	auto: not examined yet	don't set wiringPinout for colourlights	9.0	www	web
+877382683	todo		none	auto: not examined yet	alter panels to save orientation to json as front view always	9.0	www	web
+5c003484e	todo		none	auto: not examined yet	set of Matrix Panel UI fixes - panel orientation and save warnings	9.0	www	web
+d7c909efb	todo		none	auto: not examined yet	Fix crash in PlaylistEntryDynamic if the dynamic playlist is empty	9.0	playlist	docker
+ee1e8e190	todo		none	auto: not examined yet	When reloading cape config, string config, etc..., the GPIO vectors would resize causing the references to become invalid.  Flip to using pointers	9.0	src	device
+e88524581	todo		none	auto: not examined yet	Remove leftover debug statements	9.0	channeloutput	docker
+8a2828825	todo		none	auto: not examined yet	Make sure the oiutput config file is locked during writing, re-try loading if it fails to parse as a precaution	9.0	channeloutput	docker,web
+b5f4ac359	todo		none	auto: not examined yet	add newer Genius Controllers	9.0	src	docker
+e070dcaaa	todo		none	auto: not examined yet	Gif the LATCH pin a few extra uS to propogate.   Some slower panels need this	9.0	non-gpl	device:bb
+0b98515b1	todo		none	auto: not examined yet	Stop pinging controller when UDP output is disabled/stopped	9.0	channeloutput	docker
+635ea4ce6	todo		none	auto: not examined yet	Couple more nullptr checks	9.0	src	docker
+b9476f24c	todo		none	auto: not examined yet	only update DOM if content has changed	9.0	js	web
+f99c8bf34	todo		none	auto: not examined yet	improve apache headers and mime handling	9.0	etc	docker
+b0516eb33	todo		none	auto: not examined yet	add missing aria-labels and title attributes	9.0	www	web
+faf2eb1a6	todo		none	auto: not examined yet	Missed a null ptr check	9.0	src	docker
+326e91f31	todo		none	auto: not examined yet	Fix a bunchof compiler warnings	9.0	channeloutput	device:mac,device,docker
+b3a8244a6	todo		none	auto: not examined yet	Start adding infrastructure to cleanup eFuse/gpio pins so pixel string outputs can refresh	9.0	channeloutput	device,docker
+57836c012	todo		none	auto: not examined yet	only repaint volume UI if volume has changed from that displayed	9.0	js	web
+3ec78c839	todo		none	auto: not examined yet	update playlist UI to sync load faster, display more detail on playlist cards and properly refresh cards after changes	9.0	js	web
+4ccca7e32	todo		none	auto: not examined yet	add duration and item count to api/playlists/validate GET	9.0	api	web
+a8360fefe	todo		none	auto: not examined yet	Outputs don't need the restart flag set now	9.0	js	docker,web
+a0143f2f5	todo		none	auto: not examined yet	Update filepond to latest, provide a workaround for safari, at least for files up to 512MB	9.0	js	web
+812bdaab3	todo		none	auto: not examined yet	Start working on getting outputs (other than FPD) to not require a restart on save	9.0	channeloutput	device,docker
+de7f7c9f3	todo		none	auto: not examined yet	Change a few more settings over to not requiring a restart	9.0	channeloutput	docker,web
+5a4440168	todo		none	auto: not examined yet	Changing channel inputs doesn't need to restart FPPD Remove some code that hasn't been used in years	9.0	api	docker,web
+5f478a415	todo		none	auto: not examined yet	Add deprecation warning to FPD page	9.0	www	web
+732ac0b61	todo		none	auto: not examined yet	Allow channel inputs (DMX and UDP) to be re-configured on the fly without restart	9.0	channeloutput	docker
+931f017e1	todo		none	auto: not examined yet	Fix issues where panel test pattern would display the wrong panel number	9.0	channeloutput	device:bb,device,docker
+a17a826f2	todo		none	auto: not examined yet	Attempt fix panel rotation for front/back view	9.0	www	web
+4ca294b73	todo		none	auto: not examined yet	performance tweak for api/media	9.0	api	web
+5d8889c4d	todo		none	auto: not examined yet	asynchronous approach to loading playlists to Improve speed of index.php load	9.0	js	web
+844823abe	todo		none	auto: not examined yet	Updates for beta2	9.0	SD	os-image
+76e5c0d14	todo		none	auto: not examined yet	Fix typo in ifdef	9.0	boot	docker
+c5c2bdbd5	todo		none	auto: not examined yet	Fix apache config for no-password case	9.0	boot	docker,web
+13b8ab86b	todo		none	auto: not examined yet	Remove the marker file even if expansion isn't needed	9.0	boot	docker
+08ab51eb7	todo		none	auto: not examined yet	Add support to Auto-expand partition on RPi to match beagles	9.0	boot	docker
+ec85e265d	todo		none	auto: not examined yet	Fix upgrade of remotes from multisync page	9.0	www	web
+662a74f89	todo		none	auto: not examined yet	prevent apache reload echoing out status on api call to ensure proper valid HTML response	9.0	api	web
+d75f17566	todo		none	auto: not examined yet	If wpa_supplicant is enabled, but it couldn't be activated, restart it during post_net to see if it can pick up an IP	9.0	boot	docker
+818b0f32b	todo		none	auto: not examined yet	Maybe fix upgrade to create the needed file	9.0	upgrade	docker
+827c1b891	todo		none	auto: not examined yet	Remove some of the older upgrade scripts	9.0	upgrade	docker
+d95ce7d54	todo		none	auto: not examined yet	Maybe enable the close button on the fppos upgrade by enabling it on errors/fails which I THINK is happening when the stream is closing unexpectedly Update RPI bootloader/eeprom as part of os update	9.0	SD	os-image,web
+3e66a0f54	todo		none	auto: not examined yet	Regenerate CSP on fppos update to include anything added via plugins, etc...	9.0	scripts	docker
+d8cb94998	todo		none	auto: not examined yet	Cleanup some htaacess files	9.0	.gitignore	device:mac,os-image,docker
+2ece8c9cc	todo		none	auto: not examined yet	After fppos update, make sure the ui and os level passwords are properly configured	9.0	scripts	docker
+2ef988041	todo		none	auto: not examined yet	clean up unneeded code from setupApache	9.0	boot	docker
+d44f4dd1a	todo		none	auto: not examined yet	move handling of UI password away from .htaccess to apache conf files	9.0	boot	docker,web
+9db5d8b40	todo		none	auto: not examined yet	try to find hostname for fpp dhcp clients in proxy UI	9.0	www	web
+cb15a4e1a	todo		none	auto: not examined yet	add warning if new dhcp client is detected but not currently in allowed proxy list	9.0	api	web
+eec01af18	todo		none	auto: not examined yet	remove commented out redundant code from ManageApacheContentPolicy	9.0	scripts	docker
+e5d30889e	todo		none	auto: not examined yet	remove .htaccess symlink from www/proxy as not needed	9.0	upgrade	docker
+9e9c9b5aa	todo		none	auto: not examined yet	fix migration script (post some regression testing)	9.0	upgrade	docker
+83f7f8afd	todo		none	auto: not examined yet	add logic to manual update to detect if default apache2 config doesn't match live config and copy across if needed	9.0	www	web
+7848b906f	todo		none	auto: not examined yet	pull in new apache and proxy changes via upgrade script and migrate old configs	9.0	upgrade	docker
+cef4858c5	todo		none	auto: not examined yet	load remote content through proxy and re-establish connect-src CSP rules	9.0	js	docker,web
+22170d524	todo		none	auto: not examined yet	fix proxy logic to ensure only defined and dhcp hosts work as proxies based on UI	9.0	api	web
+52f75a766	todo		none	auto: not examined yet	refactor proxy apache rules to move away from .htaccess and fix broken access	9.0	etc	docker
+6785ba8c7	todo		none	auto: not examined yet	move .htaccess content to server config for efficiency and centralisation	9.0	api	docker,web
+1197a1b4d	todo		none	auto: not examined yet	correctly escape printing of settings	9.0	www	web
+e5d2e9915	todo		none	auto: not examined yet	Next image will use the compressed kernel on PB2	9.0	drivers	device
+f606c681c	todo		none	auto: not examined yet	Move to 9 char  hash for git rev compare. As of right now, we have over 100 collisisons (over 63K objects) at 7, 3 at 8, none at 9.	9.0	www	web
+fe96f9ec1	todo		none	auto: not examined yet	Properly hide the by row/blank between row when addressing type changes on PB2	9.0	www	web
+70431457f	todo		none	auto: not examined yet	Simplify panel blanking between rows a bit	9.0	non-gpl	device:bb
+7ddb9e60e	todo		none	auto: not examined yet	Make sure the address is set before the blank row is setup	9.0	non-gpl	device:bb
+706cc6cef	todo		none	auto: not examined yet	Fix a potential conflict with use of the flags	9.0	non-gpl	device:bb
+8c54b1d0f	todo		none	auto: not examined yet	Need an extra  clock cycle for the dataclock on some panels	9.0	non-gpl	device:bb
+177010120	todo		none	auto: not examined yet	Add several more interleave handlers	9.0	channeloutput	docker,web
+2936b36bd	todo		none	auto: not examined yet	Remove KulpLights/WiredWatts/Hansen from CSP header by default, process the cape-info as part of cape-detect and update CSP as needed	9.0	non-gpl	device,docker
+520acccec	todo		none	auto: not examined yet	Don't disable tethering if a routable interface comes up and tethering is set to "Enabled"	9.0	boot	docker
+58bcbfb3c	todo		none	auto: not examined yet	If a script is loaded from a safe location, trust it and allow it to connect to where it needs to connect	9.0	scripts	docker
+a37a93866	todo		none	auto: not examined yet	Fix the deprecated "Remote" commands so they'll work for now.	9.0	commands	docker
+5e186a788	todo		none	auto: not examined yet	Use current link speed if network adapter doesn't report a speed	9.0	www	web
+31b4c3b51	todo		none	auto: not examined yet	Hopefully fix persistent network names for usb ethernet devices	9.0	api	os-image,web
+c2c1a1e51	todo		none	auto: not examined yet	Add Advanced UI icon	9.0	www	web
+31e138c0a	todo		none	auto: not examined yet	Support cape specific overlays on Pi to match BBB/BB64	9.0	drivers	device:pi,device,os-image
+f3f3f0057	todo		none	auto: not examined yet	Make sure various things stay in the color schemes we need, more work needs to be done for some things, but this is better.	9.0	css	web
+b135696d0	todo		none	auto: not examined yet	iFix compiling of pru code	9.0	non-gpl	device:bb
+febf29a1b	todo		none	auto: not examined yet	Update rpi-imager for beta1	9.0	SD	os-image
+c61695dd9	todo		none	auto: not examined yet	Updates for beta1 images	9.0	SD	os-image
+dc701f8a1	todo		none	auto: not examined yet	Update to latest rpi-rgb-leg-matrix	9.0	external	docker
+41756fcda	todo		none	auto: not examined yet	Try to make sure the browser stays in light mode as the CSS for "dark mode" is 90% the same at light mode and this keeps the few dark  differences from popping through	9.0	common	web
+0713ec875	todo		none	auto: not examined yet	Don't display error related to broadcast/multicast interface if it's not needed. Fix issues of not sending UDP out if broadcase/multicast interface isn't configured	9.0	channeloutput	docker
+8c7bfd8f1	todo		none	auto: not examined yet	Fix format string for excess level log	9.0	src	docker
+ae68355db	todo		none	auto: not examined yet	Another attempt to fix lockups in PixelOverlays	9.0	overlays	docker
+45fc97ea2	todo		none	auto: not examined yet	Should not lock the activeModels during effect update, can result in a lockup	9.0	overlays	docker
+9ace67e94	todo		none	auto: not examined yet	If there is a compatible plugin version, consider that before the untested flag.	9.0	www	web
+fe2187cb3	todo		none	auto: not examined yet	Make it a bit easier to use the callback code to do the initial setup as well	9.0	channeloutput	docker
+46d0e1a1f	named	scenarios/test_output_processors.py::test_processors_reload_when_the_file_is_saved	unreviewed	auto: a test names this commit; check it fails without it	Outputprocessors no longer need a restart	9.0	channeloutput	docker,web
+ddc5fdabe	todo		none	auto: not examined yet	Fix extra newline added to settings	9.0	src	docker
+f9488407c	todo		none	auto: not examined yet	FIx startup loop in some cases	9.0	src	docker
+6e4012f7c	todo		none	auto: not examined yet	Don't need to restart fro a couple of settings.	9.0	playlist	docker,web
+4353905c8	todo		none	auto: not examined yet	Move file monitoring into a utility singleton, re-implement based on inotify on Linux Allow settings to reload on change and allow listeners to listen for setting changes	9.0	commands	docker
+d7bf33d0e	todo		none	auto: not examined yet	Bump eazy-logger from 4.0.1 to 4.1.0 in /www	9.0	www	web
+86be51147	todo		none	auto: not examined yet	Re-add file that was deleted instead of renamed.....	9.0	www	web
+9b13176f1	todo		none	auto: not examined yet	Minor SD build updates	9.0	SD	os-image
+909939f0b	todo		none	auto: not examined yet	Fix a crash if multiple command presets are named the same	9.0	commands	docker
+6e63080e2	todo		none	auto: not examined yet	Some minor error checking, remove an absolute URL	9.0	src	docker,web
+fdf29237e	todo		none	auto: not examined yet	Auto reload command presets if they change on disk	9.0	commands	docker,web
+db0df6736	todo		none	auto: not examined yet	Fix a race condition when stopping effects and querying running effects	9.0	overlays	docker
+fd9e5dc00	todo		none	auto: not examined yet	chown needs to be sudo	9.0	scripts	docker
+6eeae4764	todo		none	auto: not examined yet	UI is all in "US" english...  Fix some miss-spellings	9.0	www	web
+8b1735ea9	todo		none	auto: not examined yet	Make sure plugins are build with sudo	9.0	scripts	docker
+6c22eff4d	todo		none	auto: not examined yet	Fix log caching #2262	9.0	etc	docker
+b963a298e	todo		none	auto: not examined yet	cosmetic alignment fix	9.0	www	web
+9a170622f	todo		none	auto: not examined yet	fix #2261	9.0	www	web
+1cc724483	todo		none	auto: not examined yet	Return DHCP leases in api/proxies, still testing #2261	9.0	api	web
+6a800d2d3	todo		none	auto: not examined yet	Move Kisok and OS Services settigns to a Services tab	9.0	www	web
+dff276d71	todo		none	auto: not examined yet	Rename time settings tab to localisation and clarify	9.0	www	web
+12151fb51	todo		none	auto: not examined yet	Pull common interleave handlers out into separate file so BBShiftPanel and BBBMatrix can share them. Fix bugs in ZigZag where it only worked properly for P10's with zigzag of 8	9.0	channeloutput	device:bb,docker,web
+da338f477	todo		none	auto: not examined yet	Add 32 and 40 pixel zig/zag options for panels on BBB	9.0	channeloutput	device:bb,web
+048b4709b	todo		none	auto: not examined yet	Disable some services that aren't needed/wanted, delay zram swap until after networking	9.0	boot	os-image,docker
+f201a4d2b	todo		none	auto: not examined yet	Fix handling of changes to config files on BBB and Pi and reboot if changes are made	9.0	non-gpl	device
+e74dc2394	todo		none	auto: not examined yet	Update rpi images for BBB	9.0	SD	os-image,web
+950a7c18d	todo		none	auto: not examined yet	Fix base overlay name register in chosen	9.0	drivers	device:bb
+ddd3cf918	todo		none	auto: not examined yet	Try a few different reboot methods	9.0	www	web
+e3a1f2558	todo		none	auto: not examined yet	Update BBB image	9.0	channeloutput	device:bb,os-image
+593874428	todo		none	auto: not examined yet	Update BBB device tree to work with new kernels and match bb64	9.0	drivers	device:bb
+59e22b4be	todo		none	auto: not examined yet	panels - set gpioslowdown default based on subplatform	9.0	www	web
+3f921682b	todo		none	auto: not examined yet	Stanardize Advanced level icon on Show Legacy OS setting.	9.0	www	web
+d37e4e084	todo		none	auto: not examined yet	multisync - enable save sort widget option	9.0	www	web
+35592d288	todo		none	auto: not examined yet	multisync - improve tooltip behaviour	9.0	www	web
+07d92ea5b	todo		none	auto: not examined yet	multisync - move wifi strength to icon by IP from text in Utilization	9.0	www	web
+38061b42f	todo		none	auto: not examined yet	improve tooltip behaviour	9.0	js	web
+da664c528	todo		none	auto: not examined yet	Hide the end time for non-repeating commands in Scheduler UI	9.0	www	web
+88c22165b	todo		none	auto: not examined yet	Display gpiod chip/line with the gpio name for gpio output and gpio command	9.0	api	web
+423631bd2	todo		none	auto: not examined yet	Use cape provided include/exclude for GPIO output and gpio command	9.0	api	device,web
+f47cb6c1b	todo		none	auto: not examined yet	Maybe fix failure on BBB	9.0	util	device:bb
+e4db3c3d9	todo		none	auto: not examined yet	Add deprecated method to not break some of the plugins	9.0	util	device
+413ec4070	todo		none	auto: not examined yet	Remove concept of "kernelGPIO" as much as possible and use chip+gpio	9.0	channeloutput	device:bb,device,docker,web
+67bdc832b	todo		none	auto: not examined yet	hopefully add espstick websocket status api call	9.0	api	web
+43620023f	todo		none	auto: not examined yet	remove some debugging code	9.0	www	web
+8606a9fda	todo		none	auto: not examined yet	multisync - add button to sort by color	9.0	www	web
+f942df97d	todo		none	auto: not examined yet	Update GPIO output to use the pin name instead of gpio number	9.0	channeloutput	device,web
+7b405cf83	todo		none	auto: not examined yet	multisync - initial code for grouping - initial set to group by color only	9.0	www	web
+2d0dd5c85	todo		none	auto: not examined yet	Set the interface up before the scan and restore afterwords	9.0	scripts	docker
+334d0d718	todo		none	auto: not examined yet	multisync - add hidden column to hold fpp color for grouping purposes	9.0	www	web
+926b8d52b	todo		none	auto: not examined yet	On the Pi5, automatically map the PiHat string config to the PiHat-DPIPixels on boot	9.0	boot	docker
+7976d8b41	todo		none	auto: not examined yet	Fix issues going to the storage tab directly if ui level is at basic	9.0	www	web
+182aa84e2	todo		none	auto: not examined yet	multisync - fix autorefresh not initialising on page load if set	9.0	www	web
+9bf7b665c	todo		none	auto: not examined yet	multisync - css for column selector	9.0	www	web
+028a9d86e	todo		none	auto: not examined yet	multisync - introduce column display selector	9.0	www	web
+13089f193	todo		none	auto: not examined yet	Allow the PiHat virtual eeprom to be installed on pi5, but don't allow any RPIWS281X variants to be selected.	9.0	www	web
+45d06fe8d	todo		none	auto: not examined yet	Fix "Add To Playlist" for files with strange characters	9.0	js	web
+b8cab40a7	todo		none	auto: not examined yet	updated local mqtt broker to enable and disable service	9.0	common	web
+34b4bd1f1	todo		none	auto: not examined yet	MQTT enhancement: local mosquito broker configuration	9.0	common	docker,web
+f40b4ad03	todo		none	auto: not examined yet	further setting definition creation	9.0	www	web
+1b718d4c6	todo		none	auto: not examined yet	add json sort vscode extension	9.0	.vscode	docker
+56ddb2c15	todo		none	auto: not examined yet	Update BBB kernel to 6.15.0-fpp14 to fix pinmux issues	9.0	SD	os-image
+f211108eb	todo		none	auto: not examined yet	settings - define UIBehavior settings correctly	9.0	www	web
+683dc3cdb	todo		none	auto: not examined yet	add setting for Service_MQTT_localbroker	9.0	www	web
+c77e0c17c	todo		none	auto: not examined yet	settings - proper definitions for device instance info	9.0	www	web
+70b3565c5	todo		none	auto: not examined yet	hide usage stats url setting from JS header	9.0	www	web
+9ba17bfb5	todo		none	auto: not examined yet	add file and dir locations to settings json to exclude from JS exposure	9.0	www	web
+bb041e025	todo		none	auto: not examined yet	panels - advanced UI canvas size fix	9.0	www	web
+d3f6a309e	todo		none	auto: not examined yet	panels - fix advanced mode when number of panels changed	9.0	www	web
+5892ff19a	todo		none	auto: not examined yet	panels - improve change detection for panel details	9.0	www	web
+7634c4052	todo		none	auto: not examined yet	panels - detect changes in panel orientation needing save	9.0	www	web
+901916ee4	todo		none	auto: not examined yet	panels - fix colorlight Panelsizes - fix #2236	9.0	www	web
+e475668d6	todo		none	auto: not examined yet	panels - more advancde mode UI fixes	9.0	www	web
+eea887007	todo		none	auto: not examined yet	remove ForceAudioID setting from video group to prevent duplicate id on settings-av	9.0	www	web
+83acf639e	untestable		none	auto: changes no runtime file (rpi-imager)	Add 9.0-alpha1 images to rpi-imager	9.0	rpi-imager	none
+43296512e	todo		none	auto: not examined yet	More updates for 9.0-alpha1	9.0	SD	os-image
+97f6363a6	todo		none	auto: not examined yet	Start updating info for 9.0-alpha1 images	9.0	SD	os-image
+ddd0f7297	todo		none	auto: not examined yet	Some updates for building bb64 images	9.0	SD	os-image
+6692080eb	todo		none	auto: not examined yet	panels - steps towards reenabling advanced layout	9.0	www	web
+87b156be2	todo		none	auto: not examined yet	Only check for 2M hugepages, change to LogDebug instead of printf	9.0	src	docker
+6ca38aa2b	todo		none	auto: not examined yet	Use hugepages when possible for sequence data, alloc with mmap instead of on normal heap	9.0	drivers	device,docker
+bf120277b	todo		none	auto: not examined yet	Disable GPU and reclaim some more memory	9.0	drivers	device
+59cc9dce8	todo		none	auto: not examined yet	Use actions from cape-info instead of system properties for reboot actions	9.0	boot	docker
+70cdf66a3	todo		none	auto: not examined yet	Disable optee and m4f to free up 35MB ram since we don't currently use them	9.0	drivers	device
+b2462d3c8	todo		none	auto: not examined yet	Compile with newer libkms++	9.0	src	docker
+9370f6428	todo		none	auto: not examined yet	panels - only detect changes on main form not modals	9.0	www	web
+60abede41	todo		none	auto: not examined yet	Search other locations for output driver	9.0	www	web
+fa623070f	todo		none	auto: not examined yet	Enable the reboot service	9.0	SD	os-image
+eadc4fd9c	todo		none	auto: not examined yet	Fix grammar/typo	9.0	www	web
+a21766223	todo		none	auto: not examined yet	Start porting device-tree-overlay support to BBB, allow capes to specify a gpio pin to pull up/down on reboot to reset hardware	9.0	drivers	device:bb,device,os-image,docker
+fb1469f1e	todo		none	auto: not examined yet	panels - only detect change on html inputs once	9.0	www	web
+56a211c17	todo		none	auto: not examined yet	panels - ensure GetCurrentActiveMatrix always returns a value	9.0	www	web
+4214d8993	todo		none	auto: not examined yet	Fix panel layout after change of size/panel size	9.0	www	web
+94277aa76	todo		none	auto: not examined yet	Update for vendor panel selection, get red warning to go away when saved	9.0	www	web
+695d94a2d	todo		none	auto: not examined yet	Add "reverse" checkbox to PWM/Servo page for LED's	9.0	channeloutput	device,web
+5bd1a7c5d	todo		none	auto: not examined yet	Fix crash in FPPOLED when using Reset functionality	9.0	oled	device
+f57f7d543	todo		none	auto: not examined yet	prevent PixelCountString color cycling	9.0	channeloutput	docker
+430cb451c	todo		none	auto: not examined yet	Add a "Vendor Panel Properties" button to allow setting panel properties automatically based on vendor requirements	9.0	www	web
+285231911	todo		none	auto: not examined yet	Unify the "Direct Row Select" option value between Pi and BBB	9.0	channeloutput	device:bb,web
+ce34e8513	todo		none	auto: not examined yet	Minor css update to make panel header area line up better	9.0	css	web
+371c0f1d9	todo		none	auto: not examined yet	Couple more fixes for LED panels	9.0	www	web
+e2caa46ec	todo		none	auto: not examined yet	Some fixes to get the panels page to start being useable	9.0	www	web
+0871c136b	todo		none	auto: not examined yet	Fix generating wrong PRU code for non-single PRU ShiftPanels	9.0	makefiles	device,docker
+94a565e87	todo		none	auto: not examined yet	Update thermal zone sensors to allow names defined in device tree to stick	9.0	sensors	device,web
+acb1865b3	todo		none	auto: not examined yet	Add pwm pin information to PB2 pinctrl	9.0	drivers	device
+4809c871a	todo		none	auto: not examined yet	Fix some issues compiling when not using precompiled headers	9.0	channeloutput	device:bb,device,docker
+cc618a607	todo		none	auto: not examined yet	Unify libgpiod handling from gpio.cpp into GPIOUtils.cpp so only one place "owns" the libgpiod chips and such	9.0	util	device
+ef24128d9	todo		none	auto: not examined yet	For ports without a separate eFuse interrupt pin, make sure status is properly reflected in UI	9.0	src	docker
+1430e7f67	todo		none	auto: not examined yet	panels - add logic to debug page save warning issue	9.0	www	web
+8d70bd6c3	todo		none	auto: not examined yet	panels  - DetectConfigChangesInUI handle new panel not yet in saved config	9.0	www	web
+7bc9d79d2	todo		none	auto: not examined yet	panels - fix removing panel display next tab logic	9.0	www	web
+de15d8d67	todo		none	auto: not examined yet	panels - added logic to only allow one cape panel output in addition to colorlights	9.0	www	web
+833d5b4ac	todo		none	auto: not examined yet	fix adding multiple panels up to max of 5	9.0	www	web
+bc891c624	todo		none	auto: not examined yet	fix setting select value on Panels COnnection	9.0	www	web
+400b853eb	todo		none	auto: not examined yet	work on pnael UI input changes detection	9.0	www	web
+dca5f6b77	todo		none	auto: not examined yet	fix incorrect panel config load order	9.0	www	web
+96b333075	todo		none	auto: not examined yet	fix removal off all panels causing failure on adding new	9.0	www	web
+4fd45edfc	todo		none	auto: not examined yet	Fix non-3channel settings on PB2	9.0	www	web
+75069d7a6	todo		none	auto: not examined yet	Fix the fallback/save boot on bb64	9.0	drivers	device
+cf08d1cd9	todo		none	auto: not examined yet	Rsync EEPROM to remote host	9.0	scripts	docker
+d91ed7389	todo		none	auto: not examined yet	Use panel name if provided to auto-create the model	9.0	channeloutput	device:bb,device
+fe8ee131d	todo		none	auto: not examined yet	Fix size/border of top box on panels page	9.0	css	web
+7930d9ca2	todo		none	auto: not examined yet	Fix exception on console	9.0	www	web
+3ca83a7e6	todo		none	auto: not examined yet	Fix "Add Panel" option on pb2's	9.0	www	web
+e6e2de46d	todo		none	auto: not examined yet	Hide interleave setting instead of just disabling it.	9.0	www	web
+d3e68b775	todo		none	auto: not examined yet	fix handling of matrix initialization if channeloutputs.json not exist	9.0	www	web
+f4b5cd242	todo		none	auto: not examined yet	add a little padding below search boxes in header row of multisync	9.0	css	web
+42b15c0fe	todo		none	auto: not examined yet	include popper extension in boostrap	9.0	css	web
+34abbaf3c	todo		none	auto: not examined yet	add popper.js to standard js	9.0	common	web
+23c204684	todo		none	auto: not examined yet	Update how start channel is assigned on Effect Start command.	9.0	commands	docker
+5069c6452	todo		none	auto: not examined yet	Fix 100% CPU usage bug.	9.0	js	web
+ea1611aac	todo		none	auto: not examined yet	Better pixel size support in Virtual Displays.	9.0	channeloutput	docker,web
+7d576ff5d	todo		none	auto: not examined yet	Fix segfault in X11FrameBuffer	9.0	framebuffer	device
+383cc0e61	todo		none	auto: not examined yet	add more detail to restart/reboot descriptions	9.0	www	web
+eb8f1aedd	todo		none	auto: not examined yet	add icon to fpp restart/reboot warning	9.0	www	web
+3f56005f7	todo		none	auto: not examined yet	add logic to flag if restart/reboot is required on fpp devices	9.0	www	web
+b7b3b42c1	todo		none	auto: not examined yet	fix - correctly return php $settings values which contain one or more '=' signs in the value	9.0	www	web
+d7afdf9db	todo		none	auto: not examined yet	filemanager Filter Display fix	9.0	js	web
+ecd5d1d48	todo		none	auto: not examined yet	Search for the DPI card instead of assuming it's either card0 or card1	9.0	non-gpl	device:pi
+684c89c8b	todo		none	auto: not examined yet	fix test button logic to correctly collect connection type	9.0	www	web
+b95a2fb58	todo		none	auto: not examined yet	fix typo of extra spaces	9.0	www	web
+30ea8ccc7	todo		none	auto: not examined yet	add logic to clean up removed panel data	9.0	www	web
+7672b1296	todo		none	auto: not examined yet	error condition fix for panels lacking orientation data	9.0	www	web
+c59a2527a	todo		none	auto: not examined yet	fix channel & pixel count display and auto-layout	9.0	www	web
+09990ed4d	todo		none	auto: not examined yet	first step in fix saving of LED Panel Size and Advanced layouts	9.0	www	web
+dd74f36aa	todo		none	auto: not examined yet	Fix syntax error preventing page from loading properly	9.0	www	web
+28711a76f	todo		none	auto: not examined yet	attempt to fix saving of panel size	9.0	www	web
+08428cfa5	todo		none	auto: not examined yet	more migration logic for panel configs	9.0	www	web
+8b3a9e8f6	todo		none	auto: not examined yet	remove black boarder and add background shading to matrices	9.0	css	web
+b855fe860	todo		none	auto: not examined yet	Use "require_once" instead of include to avoid php errors	9.0	www	web
+95f418358	todo		none	auto: not examined yet	auto generate panelMatrixID for legacy conversion	9.0	www	web
+f873067b8	todo		none	auto: not examined yet	pull in legacy panel settings to allow migration	9.0	www	web
+c224e3694	todo		none	auto: not examined yet	Fix issue with download link making header unnecessarily tall.	9.0	www	web
+7235bba66	todo		none	auto: not examined yet	fix format of refs in RowAddressTypeChanged	9.0	www	web
+17fd290da	todo		none	auto: not examined yet	reimplement RowAddressTypeChanged on Initialize Panel	9.0	www	web
+34e241ac0	todo		none	auto: not examined yet	fix missing "	9.0	www	web
+37ee80188	todo		none	auto: not examined yet	attempt to assign id's to legacy matrix configs	9.0	www	web
+17927b92a	todo		none	auto: not examined yet	if panelMatrixID is missing default to 1	9.0	www	web
+48be459f8	todo		none	auto: not examined yet	Remove Colorlight firmware v13.x incompatibility message.	9.0	www	web
+6b4377cdb	todo		none	auto: not examined yet	Add Advanced-level setting to force Colorlight FW version	9.0	channeloutput	device,web
+5e2689c88	todo		none	auto: not examined yet	default id to 1 if missing to populate first tab	9.0	www	web
+2eb7dc208	todo		none	auto: not examined yet	Attempt to port recent changes into new logic	9.0	www	web
+fd79c2713	todo		none	auto: not examined yet	change channeloutputs cfgversion from 2 to 3	9.0	www	web
+c13ed4eee	todo		none	auto: not examined yet	move & color download available icon to header	9.0	css	web
+94963b4e8	todo		none	auto: not examined yet	update copyright date to be dynamic	9.0	www	web
+c1fdc77ea	todo		none	auto: not examined yet	bootstrap 5.3.3 to 5.3.6	9.0	css	web
+487426f50	todo		none	auto: not examined yet	update to fabric 6.6.4	9.0	js	web
+d45cdbe6a	todo		none	auto: not examined yet	another step further with panels	9.0	api	web
+fc4f0a36f	todo		none	auto: not examined yet	bug fix -add missing semi-colons to packagesHelper	9.0	www	web
+f3158e3b9	todo		none	auto: not examined yet	layout and display fixes	9.0	www	web
+5e15b0380	todo		none	auto: not examined yet	build in changes suggested by mortification77 for rpi-matrix-panels	9.0	channeloutput	device,web
+711d2beca	todo		none	auto: not examined yet	addition of extra interleave values	9.0	www	web
+a673eeafa	todo		none	auto: not examined yet	canvas size text inputs changed to identify by class	9.0	www	web
+0775a4adc	todo		none	auto: not examined yet	add abillity to identify by class rather than id on PrintSettingText	9.0	www	web
+6c68c428b	todo		none	auto: not examined yet	fix canvas resizing	9.0	www	web
+2216da0d8	todo		none	auto: not examined yet	tidy up handling of different setting variable types	9.0	www	web
+93c8462f7	todo		none	auto: not examined yet	introdoce new api for editing subsettings held in JSON	9.0	api	web
+6cf9d6776	todo		none	auto: not examined yet	another step closer (canvas working)	9.0	www	web
+2138a769d	todo		none	auto: not examined yet	few steps closer to multipanel	9.0	www	web
+299bed42a	todo		none	auto: not examined yet	add phpinfo to troubleshooting commands	9.0	www	web
+b8e60740d	todo		none	auto: not examined yet	set standard php xdebug vscode settings	9.0	.vscode	docker
+f839e7085	untestable		none	auto: changes no runtime file (docs)	add instructions for configuring xDebug for PHP	9.0	docs	none
+ca39b4132	todo		none	auto: not examined yet	dont try to close a non existing file on pixelNetDMX api call	9.0	api	web
+1cd2fc9d4	todo		none	auto: not examined yet	add a json_validate function def for php <8.3	9.0	www	web
+c10796467	todo		none	auto: not examined yet	allow api for settings to accept json values	9.0	www	web
+b714bbdb3	todo		none	auto: not examined yet	start to move to matrixID based setting configs	9.0	www	web
+5af3fd60b	todo		none	auto: not examined yet	increase api test post data input size	9.0	api	web
+68bcec866	todo		none	auto: not examined yet	format before change	9.0	api	web
+67a5ccb4f	todo		none	auto: not examined yet	beginning of adding multi matrix capability	9.0	css	web
+64d358a8f	todo		none	auto: not examined yet	Re-enable Sound reactive effects,  start working on microphone input for Sound reactive (not working yet)	9.0	overlays	docker,web
+6f6d5c3e1	todo		none	auto: not examined yet	Fix colorlight compile on Mac.	9.0	channeloutput	device
+3a75e4a39	todo		none	auto: not examined yet	Reorder members in header to fix compiling on gcc 13.2.1.	9.0	channeloutput	device
+1b32f389d	todo		none	auto: not examined yet	Strip leading/trailing whitespace from host description in docker	9.0	boot	docker
+db1d65720	todo		none	auto: not examined yet	Add WLED/Overlay effects to  Status/Control -> Effects page	9.0	css	web
+4e2418c73	todo		none	auto: not examined yet	Use WLED metadata to set defaults for UI controls	9.0	overlays	docker
+b32972050	todo		none	auto: not examined yet	Change params for built in effect from int to range to allow easier selction in UI	9.0	overlays	docker
+810852c41	todo		none	auto: not examined yet	New WLED has additional effects beyond the sound reactive, use different method to flag the sound reactives	9.0	overlays	docker
+1d301eabd	todo		none	auto: not examined yet	Add flag to allow api to get the full description of all effects	9.0	overlays	docker
+d12124f86	todo		none	auto: not examined yet	Fix builds always trying to build one of the panel pru files	9.0	makefiles	docker
+d49ad41ed	todo		none	auto: not examined yet	ColorLight changes to support v13.x firmware	9.0	channeloutput	device,web
+fa1b4c79a	untestable		none	auto: changes no runtime file (docs)	Add sample cfgs for other outputs and gpio navigation buttons.	9.0	docs	none
+8082e6962	todo		none	auto: not examined yet	Add api/overlays/running to get list of running overlay effects Update Overlay Model Effect command to allow an "--All Models--" to apply the effect to all known models	9.0	commands	docker
+c96a73bd1	todo		none	auto: not examined yet	Increase max size for WLED effects	9.0	overlays	docker
+86190cbd2	todo		none	auto: not examined yet	Fix building on AM62x if -j is used	9.0	makefiles	docker
+5d35f9711	todo		none	auto: not examined yet	Hopefully cleanup PocketScroller panels	9.0	pru	device:bb
+e61db5abf	todo		none	auto: not examined yet	Update to latest WLED code	9.0	makefiles	docker
+2c7782b86	todo		none	auto: not examined yet	Attempt to fix some timing issues with older pocketscroller with newer pb2	9.0	channeloutput	device:bb
+88a9c40d9	todo		none	auto: not examined yet	BBBMatrix doesn't support PWM  panels, don't show the option	9.0	www	web
+bc48d41a5	todo		none	auto: not examined yet	Use bg threadpool to format the panel data	9.0	non-gpl	device:bb
+098006987	todo		none	auto: not examined yet	Get PWM panels to  show an actual image	9.0	non-gpl	device:bb,web
+31fc7f19b	todo		none	auto: not examined yet	Fix some issues with wpa_supplicant not starting after reboot from tether	9.0	boot	docker
+ec7f5e80a	untestable		none	auto: changes no runtime file (rpi-imager)	Re-upload the bb64 image	9.0	rpi-imager	none
+75e7f1d25	todo		none	auto: not examined yet	A bit more work on strange "pwm" based LED panels	9.0	makefiles	device:bb,docker
+1d6eb1474	todo		none	auto: not examined yet	Change default universe type from Multicast to Unicast	9.0	js	web
+5adeeef88	todo		none	auto: not examined yet	revert 13df48b8 fix but on e1.31 output page, interface not showing up	9.0	www	web
+13df48b89	todo		none	auto: not examined yet	fix but on e1.31 output page, interface not showing up	9.0	www	web
+71110fb41	todo		none	auto: not examined yet	update co-other UI to match backend options	9.0	www	web
+202ee2bb2	todo		none	auto: not examined yet	new Scale Value output processor	9.0	channeloutput	docker,web
+eb5c2b325	todo		none	auto: not examined yet	fix typo in numerous channel processors	9.0	channeloutput	docker
+764094326	todo		none	auto: not examined yet	new Clamp Value channel output processor	9.0	channeloutput	docker,web
+b433f977a	todo		none	auto: not examined yet	Enabling the m4 cores on the PB2 may cause remoteproc device files to change	9.0	util	device:bb
+2c666cae5	todo		none	auto: not examined yet	Remove various things that are in the minimal image that we don't need but take up almost a GB of space	9.0	SD	os-image
+ff4d2c6ba	untestable		none	auto: changes no runtime file (rpi-imager)	Update to rpi imager to latest bb64 image	9.0	rpi-imager	none
+a75d118a0	todo		none	auto: not examined yet	Use the 6.14 kernel on bb64	9.0	SD	os-image
+99f4666ce	todo		none	auto: not examined yet	Adjust how addressing is provided in the json for bb64	9.0	makefiles	device:bb,docker,web
+f0b86ca90	todo		none	auto: not examined yet	Don't do the expensive crypto tests at boot	9.0	drivers	device
+ca58b00bb	todo		none	auto: not examined yet	Don't try to config a pin for USB based UART devices	9.0	channeloutput	device
+dbb0c7098	todo		none	auto: not examined yet	Make sure the cape-info is loaded/initialized before using it	9.0	non-gpl	device
+d6df76774	todo		none	auto: not examined yet	syntax error	9.0	api	web
+2f0ae5488	todo		none	auto: not examined yet	Handle PB2 serial numbers.   Flip eeprom signing stuff to use curl.	9.0	non-gpl	device:bb,web
+45fc8a561	todo		none	auto: not examined yet	Fix crash if using very large matrices	9.0	non-gpl	device:bb
+58acc9c09	todo		none	auto: not examined yet	Enabling DDP input may result in timeout set to "null" instead of 1000ms.  Handle that as well as fix it for the future.	9.0	src	docker,web
+c7c9023c7	todo		none	auto: not examined yet	Get output by row, blank between rows, and other addressing types working with new PS	9.0	non-gpl	device:bb,web
+a24ff2d1f	todo		none	auto: not examined yet	wlan interfaces that don't have essid/etc... aren't valid so don't setup the network for them	9.0	boot	docker
+a57a26467	todo		none	auto: not examined yet	Use second PRU to handle the PWM for the OE signal	9.0	makefiles	device:bb,docker
+432f067b7	todo		none	auto: not examined yet	Update sensors OLED page to allow scrolling up/down.  On HTTP get, only update the sensor sources that will actually report	9.0	oled	device
+4dae8d8ef	todo		none	auto: not examined yet	Add ability to merge sensor sources into a single sensor source (so a single mux line can be used for multiple sensor sources)	9.0	makefiles	device,docker
+9a1a43552	todo		none	auto: not examined yet	Allow gpio configPin to provide a description to append to FPPD to show in gpioinfo	9.0	channeloutput	device:bb,device,docker
+301e7fe49	todo		none	auto: not examined yet	Update timing for v5 smart receivers receives, fix pru0in for pin P2-28	9.0	drivers	device:bb,device
+88eebc0e9	todo		none	auto: not examined yet	Get FalconV5 receivers working on BBB again	9.0	non-gpl	device:bb
+768d9578f	todo		none	auto: not examined yet	Fixes for BBShiftString/FalconListener on BBB	9.0	non-gpl	device:bb
+6bca8606e	todo		none	auto: not examined yet	Base overlay is way more than just reserving memory for bb64, rename.	9.0	drivers	device
+206587d43	todo		none	auto: not examined yet	Make sure spi pins boot up in gpio mode	9.0	drivers	device
+ae3aa005f	todo		none	auto: not examined yet	Fix first channel on each string not lighting for BBShiftString on BB64	9.0	non-gpl	device:bb
+0b77904a7	todo		none	auto: not examined yet	Don't restart avahi on hostname change, just flag the reboot	9.0	api	web
+3b5308dbc	todo		none	auto: not examined yet	Lock libkms++ to a version that works for now	9.0	SD	os-image
+de1ff5c33	todo		none	auto: not examined yet	Host description not really necessary at setup	9.0	www	web
+2e149baac	todo		none	auto: not examined yet	Add hostname and description back to initialsetup	9.0	www	web
+e0b31e532	todo		none	auto: not examined yet	More BBB build fixes	9.0	makefiles	device:bb,docker
+03185ff5d	todo		none	auto: not examined yet	Attempt #2	9.0	util	device:bb
+69ae3078f	todo		none	auto: not examined yet	Fix compile failure on BBB	9.0	util	device:bb
+976f10748	todo		none	auto: not examined yet	Compile BBShiftString pru code at build time for slightly faster startup	9.0	makefiles	device:bb,docker
+706cb6781	todo		none	auto: not examined yet	Get BBShiftString working with PB2	9.0	non-gpl	device:bb,device
+3dff1656c	todo		none	auto: not examined yet	Check JSON backup data is valid before referencing	9.0	api	web
+d13ab3cb4	todo		none	auto: not examined yet	Allow IIOSensorSource to specify the i2c bus/address to use to allow for deivce # changes	9.0	sensors	device
+530771242	todo		none	auto: not examined yet	Set 404 error code for files not found	9.0	api	web
+0e8822e68	todo		none	auto: not examined yet	Forget the labels...  if a pin has a name configured, use it as the pin name as the underlying gpiochip+offset may change from boot to boot	9.0	util	device,web
+eff47907b	todo		none	auto: not examined yet	Allow querying gpio pins by label as well	9.0	util	device
+1ef6a786c	todo		none	auto: not examined yet	Add ability for cape to hide specific settings and GPIO pins or only show specific gpio pins	9.0	non-gpl	device:bb,device,web
+2ffb48e04	todo		none	auto: not examined yet	Use a thread pool to boost data prep performance	9.0	non-gpl	device:bb
+da8f7c392	todo		none	auto: not examined yet	Hide EEPROMs that don't work on Pi 5.	9.0	www	web
+b7c9cb7a4	todo		none	auto: not examined yet	Improve support for Pi CM5	9.0	www	web
+49dd4c85a	todo		none	auto: not examined yet	Use the AM62x XFERBUS to asynchronously load data	9.0	non-gpl	device:bb
+d4601b313	todo		none	auto: not examined yet	First pass at new shift register based panel output for PB2	9.0	makefiles	device:bb,docker
+7fc63459c	todo		none	auto: not examined yet	Provide addess to cape provided panel information	9.0	non-gpl	device,web
+63349cade	todo		none	auto: not examined yet	Start working on getting BBShiftString working on BB64	9.0	makefiles	device:bb,docker
+ddf4102a8	todo		none	auto: not examined yet	add CM5 to allow 2 licensed outputs same as pi5	9.0	non-gpl	device:pi
+114ba4c29	todo		none	auto: not examined yet	include cm5 on check pi5 wifi	9.0	boot	docker
+2613874c2	todo		none	auto: not examined yet	Add auto-scroll to newly loaded plugin (#2186)	9.0	www	web
+37e8dac8b	todo		none	auto: not examined yet	Fix reading backups from alternative location	9.0	api	web
+fa0c0138c	todo		none	auto: not examined yet	"Fix z-index conflict and backdrop cleanup in DialogOK" (#2183)	9.0	js	web
+d644698d4	todo		none	auto: not examined yet	Added Visual Separation to Help.php (#2184)	9.0	www	web
+c2e0c272c	todo		none	auto: not examined yet	Fix Internet Health Check (#2180)	9.0	scripts	docker
+ace9b3ec5	todo		none	auto: not examined yet	detect CM5 as a Pi5 in RGBMatrix Logic	9.0	channeloutput	device
+5e755c402	todo		none	auto: not examined yet	detect pi cm5 as a pi5 in GPIOUtils	9.0	util	docker
+76225b7be	todo		none	auto: not examined yet	add pi CM5 to multisync system detection	9.0	src	docker
+5cd25ca4f	todo		none	auto: not examined yet	detect pi CM5 and displlay correct logo	9.0	www	web
+caac7c051	todo		none	auto: not examined yet	Squashed/Edited commit of the following:	9.0	channeloutput	device,web
+f4b497aaf	todo		none	auto: not examined yet	Fix typo in README.Debian (#2177)	9.0	SD	os-image
+95009388c	todo		none	auto: not examined yet	Fix typos in  README.Armbian (#2178)	9.0	SD	os-image
+70763d20e	todo		none	auto: not examined yet	Some more updates for oled boot information	9.0	oled	device
+faf7d304c	todo		none	auto: not examined yet	If FPPOLED cannot configure the edge interrupts for pins, flip to polling mode	9.0	non-gpl	device
+8e94aebf8	todo		none	auto: not examined yet	Provide some extra details on the OLED during boot, use cape logo from last boot if still there	9.0	oled	device
+9594b049a	todo		none	auto: not examined yet	Properly copy files from eeproms (trunc before copy), prevent never ending reboot loops	9.0	non-gpl	device
+b4b08763c	todo		none	auto: not examined yet	Add a "safe" mode for exlinux so if a cape overlay causes issues it can still boot and be fixed	9.0	drivers	device
+5e2358f57	todo		none	auto: not examined yet	Just copy the part of the eeprom we actually need	9.0	non-gpl	device
+0f0d6105e	todo		none	auto: not examined yet	move Output Processors and Script Repository to advanced mode	9.0	www	web
+6ca434cbf	todo		none	auto: not examined yet	additional settings changes	9.0	www	web
+8858f7025	todo		none	auto: not examined yet	Group settings more logically.  Move some to advanced UI mode	9.0	www	web
+997c3d244	todo		none	auto: not examined yet	Make help page responsive html	9.0	css	web
+5568da495	todo		none	auto: not examined yet	Fix Internet Health check	9.0	scripts	docker
+f56a4f5a3	todo		none	auto: not examined yet	Display warning if invalid network interface is used for multicast/broadcast Fix crash report file names on PB2	9.0	channeloutput	docker
+6efd4cf0b	todo		none	auto: not examined yet	Only use the "Source Interface" for UDP out for Broadcast and Multicast.  Allow OS to route others as needed. Fixes ##2082	9.0	channeloutput	docker,web
+7f1a8db5c	todo		none	auto: not examined yet	Add configuration to bb64 device tree to make it easier for capes to add audio	9.0	drivers	device
+fa7ecf6d6	todo		none	auto: not examined yet	declutter help menu, move resources to 'Get Help' page	9.0	www	web
+41936f777	todo		none	auto: not examined yet	Change NTP Override to advanced setting	9.0	www	web
+2fe5c5185	todo		none	auto: not examined yet	Output processors: allow overlay models for all except Fold	9.0	channeloutput	docker,web
+a7a88ea03	todo		none	auto: not examined yet	Fix edge case in outputprocessor UI	9.0	www	web
+229cdb45d	todo		none	auto: not examined yet	Fix a bug when using holiday names for scheduling.	9.0	src	docker,web
+681765fd2	todo		none	auto: not examined yet	Updates for Docker	9.0	makefiles	os-image,docker
+16b070966	todo		none	auto: not examined yet	update apache graceful config reload to check apache running	9.0	scripts	docker
+52c9049f0	todo		none	auto: not examined yet	change csp include to be optional incase it hasn't been generated to prevent apache fail	9.0	etc	docker
+2d30f9e5f	untestable		none	auto: changes no runtime file (rpi-imager)	Update to alpha5 level for bb64	9.0	rpi-imager	none
+3e6bea428	todo		none	auto: not examined yet	Some updates to get pocketscrollers showing something "reasonable".  Still some ghosting, but progress.	9.0	channeloutput	device:bb,web
+23add459e	todo		none	auto: not examined yet	Ability to format devices to exFAT	9.0	api	docker,web
+6cfbd6089	todo		none	auto: not examined yet	Fix exfat mount options #1633	9.0	api	web
+320b23d90	todo		none	auto: not examined yet	fix bug in Hostname banner	9.0	www	web
+68200fbca	todo		none	auto: not examined yet	missed one hostname	9.0	www	web
+5e5c8be2d	todo		none	auto: not examined yet	make wording of hostname/Host Name consistent	9.0	www	web
+1ec5d2983	todo		none	auto: not examined yet	Improvements to initial setup page/process	9.0	www	web
+87dd120d9	todo		none	auto: not examined yet	Implement GPIO Opposite, this is a change to the existing API	9.0	src	device
+0162b5150	todo		none	auto: not examined yet	Clarify Flash to SD/USB/NVMe wording	9.0	SD	os-image,web
+6e821e207	todo		none	auto: not examined yet	This allows File Manager to Delete and rename directories.  Viewing the contents of sub direcotries is not supported	9.0	api	web
+e0ae96aab	todo		none	auto: not examined yet	Fix Timezone setting restoration	9.0	www	web
+e5ccf755a	todo		none	auto: not examined yet	Fix 'System Settings' failing & generating HTTP 500	9.0	www	web
+314f22d12	todo		none	auto: not examined yet	Fix empty kiosk URL #2165	9.0	boot	docker
+cd35422c7	todo		none	auto: not examined yet	Add 8.5.1 images and 8.5-alpha3 for PB2	9.0	SD	os-image
+be0b66b2a	todo		none	auto: not examined yet	Another fix to restore "default" overlay if no cape is present	9.0	non-gpl	device
+257589f4f	todo		none	auto: not examined yet	Update README.BB64	9.0	SD	os-image
+47748e0f4	todo		none	auto: not examined yet	small NVMe fix	8.5.1	SD	os-image
+c3a9e9c25	todo		none	auto: not examined yet	Remove NO-CARRIER interfaces from UI header #2145	9.0	js	web
+4a09bd2cb	todo		none	auto: not examined yet	restore start_kiosh.sh	9.0	scripts	docker
+d0f4b6cf9	todo		none	auto: not examined yet	Really fix Lookup Time Zone	9.0	scripts	docker
+72ceb6cc3	todo		none	auto: not examined yet	Fix Lookup Time Zone	9.0	scripts	docker
+42b672c7c	todo		none	auto: not examined yet	complete script directory cleanup	9.0	scripts	docker
+786cba2fe	todo		none	auto: not examined yet	potentially fix NVMe #2094	8.5.1	SD	os-image
+7dab69b2c	todo		none	auto: not examined yet	Brightness Output Processor:  allow Models instead of hard coded start channels	9.0	channeloutput	docker,web
+70f38c3e8	todo		none	auto: not examined yet	Output Processors: respect active/disabled checkbox	9.0	channeloutput	docker
+6664766b5	todo		none	auto: not examined yet	 fix for handling white space in json for CSP multisync websocket handling	9.0	scripts	docker
+20497168b	todo		none	auto: not examined yet	revert to no ws version until json parse issue can be fixed	9.0	scripts	docker
+f39ff13ec	todo		none	auto: not examined yet	update CSP rules to handle ws rather than http for pixelsticks	9.0	scripts	docker
+2556051f3	todo		none	auto: not examined yet	fix typo in localhost address	9.0	scripts	docker
+9836227af	todo		none	auto: not examined yet	Fix null termination of network module detection	8.5.1	boot	docker
+8e4a5691f	todo		none	auto: not examined yet	Fix handling of cape supplied dtb, revert back to default dtb if cape removed/changes	9.0	drivers	device
+0b88e6a59	todo		none	auto: not examined yet	Remove dummy interfaces before waiting for IP's so ips on dummy interfaces aren't reported	9.0	boot	docker
+19be36585	todo		none	auto: not examined yet	add multisync IP's discovered by fppd to CSP	9.0	scripts	docker
+ae5903ca4	todo		none	auto: not examined yet	Attempt to fix kiosk mode for 8.5/9.master	8.5.1	SD	os-image
+de7c79a2d	todo		none	auto: not examined yet	Debian: Remove error on every page when /proc/device-tree/model doesn't exist	9.0	www	web
+3143b98ef	todo		none	auto: not examined yet	helper file and logic to regen CSP when any multisync action triggered	9.0	www	web
+017e6d87d	todo		none	auto: not examined yet	add multisync IP's to CSP	9.0	scripts	docker
+9b4e254f2	todo		none	auto: not examined yet	fix IP detection to only IPv4 addresses	9.0	scripts	docker
+f8f171cb3	todo		none	auto: not examined yet	add CSP regeneration to FPPUpdate	9.0	www	web
+94bca69a9	todo		none	auto: not examined yet	Stop tracking etc/apache2.csp	9.0	etc	docker
+ce4ae640c	todo		none	auto: not examined yet	add ip subnet and domain detection to csp logic	9.0	scripts	docker
+7e5294634	todo		none	auto: not examined yet	Fix handling null HostDescriptions in tooltip	9.0	www	web
+f6574cb8b	todo		none	auto: not examined yet	display host description as tooltip on hostname in header	9.0	www	web
+8b66ee665	todo		none	auto: not examined yet	fix css on effects page	9.0	css	web
+db9d33f63	todo		none	auto: not examined yet	Fix cronjob.php after check for updates	9.0	www	web
+4e31ef6fd	todo		none	auto: not examined yet	Fix scriptbrowser.php after adding upgrade check	9.0	www	web
+2750f4139	todo		none	auto: not examined yet	Fix 3 pages that didn't import 'common.php'	9.0	www	web
+c4fed817a	todo		none	auto: not examined yet	only domain name in CSP	9.0	etc	docker
+29b9396e5	todo		none	auto: not examined yet	add sorter and filter to effects table	9.0	www	web
+83b9d7a2c	todo		none	auto: not examined yet	Dissalow 'Start Playlist' command in scheduler #1966	9.0	www	web
+68c4feea3	untestable		none	auto: changes no runtime file (rpi-imager)	Add FPP 8.5 to rpi-imager	9.0	rpi-imager	none
+b35ef6bcb	todo		none	auto: not examined yet	mark Remote* FPP API commands as being deprecated in FPP 10	9.0	commands	docker
+aa2e54045	todo		none	auto: not examined yet	FIx hash compare	9.0	js	web
+25a79a02c	todo		none	auto: not examined yet	oops: Left in debug	9.0	js	web
+a7b58ba76	todo		none	auto: not examined yet	Check for Update (#2150)	9.0	css	docker,web
+ccc866144	todo		none	auto: not examined yet	clean up scripts directory	9.0	boot	docker
+f423a41d2	todo		none	auto: not examined yet	User packages part 2	9.0	boot	os-image,docker,web
+9de8071e1	todo		none	auto: not examined yet	fix multisync issue #2135	9.0	www	web
+68a0e126a	todo		none	auto: not examined yet	add comment	9.0	www	web
+593cda7dd	todo		none	auto: not examined yet	Try to improve reboot after FPPOS upgrade #2130	9.0	www	web
+6e3f8b991	todo		none	auto: not examined yet	Some more updates for BB64	9.0	SD	os-image
+dfba1d3d7	todo		none	auto: not examined yet	Fix race condition on pocketbeagle2 where cape-detect-done cannot be deleted as the filesystem is still ro	9.0	systemd	device,os-image
+b9cf627e1	todo		none	auto: not examined yet	Fix gpio mapping on mainline kernels	9.0	util	device:bb
+3a7e90bc7	todo		none	auto: not examined yet	Fix typos	9.0	SD	os-image
+616c46166	todo		none	auto: not examined yet	PB2 leds are numbered differently depending on kernel version.  Account for it	9.0	boot	os-image,docker
+558b0eda2	todo		none	auto: not examined yet	Don't need sudo as the script is running as root	9.0	SD	os-image
+0b60ab5c1	todo		none	auto: not examined yet	More bb64 FPP_Install.sh updates	9.0	SD	os-image
+df5891485	todo		none	auto: not examined yet	Some BB64 updats for FPP_Install	9.0	SD	os-image
+d9ee3f404	todo		none	auto: not examined yet	Start getting the pocketscrollers working with the new pocketbeagles (wip)	9.0	drivers	device:bb,device,web
+18c7a62d2	todo		none	auto: not examined yet	upgrade script to fix file manager	9.0	upgrade	docker
+2e8c734d8	todo		none	auto: not examined yet	fix date sorting in filemanager	9.0	js	web
+141134f0f	todo		none	auto: not examined yet	addition of sugar js for date sorting in tablesorter	9.0	js	web
+9a4fccd0e	untestable		none	auto: changes no runtime file (.gitignore)	git ignore sorted alphabetically for better readability	9.0	.gitignore	none
+230298cc7	todo		none	auto: not examined yet	move local json csp template to generation script	9.0	etc	docker
+2e10680c7	todo		none	auto: not examined yet	fix for CSP blocking tablesorter	9.0	scripts	docker
+3c1669235	todo		none	auto: not examined yet	Prevent remote access to the old api webserver on port 32332 #2068	9.0	src	docker
+e98db44b4	todo		none	auto: not examined yet	fix delete /api/channel/input/stats, solves #2142	9.0	src	docker
+544c62b2a	todo		none	auto: not examined yet	Update comments	9.0	SD	os-image
+30b5a7439	todo		none	auto: not examined yet	added fseq range checking	9.0	fseq	docker
+64004c1a4	todo		none	auto: not examined yet	Individually read contents of each backup file	8.5	api	web
+f6f09b40a	todo		none	auto: not examined yet	pull media location from variable rather than hardcode	9.0	scripts	docker
+216818085	todo		none	auto: not examined yet	Add cape domain auto detection for dynamic CSP generation	9.0	scripts	docker
+602320a77	todo		none	auto: not examined yet	add graceful apache config reload to prevent need to reboot	9.0	docs	docker
+e6a03e12f	todo		none	auto: not examined yet	move CSP local config to media directory	9.0	etc	docker
+8da8f6b56	todo		none	auto: not examined yet	add vendors to default img-src	9.0	etc	docker
+28adca0fc	todo		none	auto: not examined yet	Spell fix	9.0	non-gpl	device
+4ab0b8672	untestable		none	auto: changes no runtime file (.gitignore)	add generate etc/apache2.csp to git ignores	9.0	.gitignore	none
+8d5044547	todo		none	auto: not examined yet	accessibility fix on textarea	9.0	www	web
+db42a0970	todo		none	auto: not examined yet	add ata: to default CSP img-src	9.0	etc	docker
+f5928c01f	todo		none	auto: not examined yet	add execute permission to upgrade	9.0	upgrade	docker
+888e6b9a7	untestable		none	auto: changes no runtime file (docs)	update CSP documentation	9.0	docs	none
+4e8345970	todo		none	auto: not examined yet	create upgrade 94 to switch to apache config with CSP in seperate include file	9.0	upgrade	docker
+3afdaa98f	todo		none	auto: not examined yet	set skeleton apache.csp file	9.0	etc	docker
+00d9e3617	todo		none	auto: not examined yet	add FPP trusted domains to CSP defaults	9.0	scripts	docker
+650c62b70	untestable		none	auto: changes no runtime file (docs)	update documentation to explain Apache2 CSP	9.0	docs	none
+43d02cee5	todo		none	auto: not examined yet	add scripted capability to administer the Apache CSP directives	9.0	etc	docker
+c590b0be7	todo		none	auto: not examined yet	Add PCF8563 RTC    Fixes #2071	8.5	boot	device,web
+ab503be42	todo		none	auto: not examined yet	Move kiosk install stuff to a new service that would not be affected by the fpp_postnetwork timeout	9.0	systemd	os-image,docker
+7d7be1685	todo		none	auto: not examined yet	Fix saving of PWM outputs.  Fixes #2121	8.5	www	web
+790abc5ce	untestable		none	auto: changes no runtime file (README.md)	Update README.md	9.0	README.md	none
+9b0676523	untestable		none	auto: changes no runtime file (README.md)	Update README.md	9.0	README.md	none
+704e149cc	untestable		none	auto: changes no runtime file (README.md)	Update README.md	9.0	README.md	none
+c1e4b418e	todo		none	auto: not examined yet	stop docker related interfaces being in the header #1993	9.0	js	web
+e91265f12	todo		none	auto: not examined yet	Correct some instances of Multicast to Multisync #2016	8.5	js	web
+873408685	todo		none	auto: not examined yet	Update Dockerfile	9.0	Docker	os-image
+cb8d0798a	todo		none	auto: not examined yet	Remove DevContainer	9.0	.devcontainer	docker
+80ec87693	todo		none	auto: not examined yet	Fix reporting for one of the pins	9.0	drivers	device
+28f8796f5	todo		none	auto: not examined yet	Fixes to get K40 working with pb2 (typos in pin configuration)	9.0	drivers	device:bb,device
+ba6efd2a0	todo		none	auto: not examined yet	Allow capes to provide better labels for serial ports (Something like "DMX1" instead of "ttyS2")	9.0	drivers	device:bb,device:pi,device,docker,web
+8b6cd76ab	todo		none	auto: not examined yet	Allow a cape to provide a device tree overlay	9.0	non-gpl	device
+3b7ab03bd	untestable		none	auto: changes no runtime file (.github)	See if combining back into single build will work	9.0	.github	none
+c127abfa4	untestable		none	auto: changes no runtime file (.github)	Rumor has it that updating qemu may fix some of the instability	9.0	.github	none
+d21af85a5	todo		none	auto: not examined yet	Fix extra display of channle count on "Other" page	8.5	www	web
+87b6e674b	todo		none	auto: not examined yet	Grab serial for uuid on PB2	9.0	scripts	docker
+8a9ba3b31	todo		none	auto: not examined yet	Remove a debug printf	9.0	util	device:bb
+8ac476ffa	todo		none	auto: not examined yet	Fix build	9.0	util	device:bb
+7b70a09f9	todo		none	auto: not examined yet	Fix pinmux	9.0	drivers	device
+87ad82a77	todo		none	auto: not examined yet	Start mapping the ttyS pins	9.0	drivers	device:bb,device
+63b5ff7df	todo		none	auto: not examined yet	Give the PRU a little time to actually come online and startup	9.0	util	device:bb
+9a056c9dd	todo		none	auto: not examined yet	Add a "readonly" mode to fppcapedetect to just check the eeprom	8.5	non-gpl	device
+88713c725	todo		none	auto: not examined yet	Don't reference Connman anymore (not used), add USB tether info for PB2	8.5	www	web
+82d9eebea	todo		none	auto: not examined yet	Add UseDomains=true for DHCP	8.5	systemd	os-image,docker
+e28eddf0f	todo		none	auto: not examined yet	Fix configuring BBB leds shouldn't require a reboot, wire in PB2 leds	8.5	boot	docker,web
+74d51b1cd	todo		none	auto: not examined yet	Flip back to 250Mhz pru's	9.0	pru	device:bb
+2f9ae9d4f	todo		none	auto: not examined yet	Don't need the if	9.0	SD	os-image
+31d944982	todo		none	auto: not examined yet	On arm, just install vlc from the repository	9.0	SD	os-image
+7ef71d3fc	todo		none	auto: not examined yet	First set of instructions for BB64/PB2	9.0	SD	os-image
+2e0d62782	untestable		none	auto: changes no runtime file (.github)	Try flipping to gha caching	9.0	.github	none
+d6dbf14ff	untestable		none	auto: changes no runtime file (.github)	Attempt to use a matrix to build docker images	9.0	.github	none
+53cd0fca1	todo		none	auto: not examined yet	Maybe fix docker build?	9.0	SD	os-image
+f607ac576	todo		none	auto: not examined yet	Save the original boot file just in case	9.0	SD	os-image
+3ba7b12d1	todo		none	auto: not examined yet	Fix fppd startup on pre-production pb2	9.0	util	device:bb
+8c48d4b29	todo		none	auto: not examined yet	Update to FPP_Install for bb64 boot	9.0	SD	os-image
+b088f1688	todo		none	auto: not examined yet	Minor check for invalid condition	8.5	playlist	docker
+6791edad4	todo		none	auto: not examined yet	Update for some boot overlays, boot configuration ,etc...	9.0	drivers	device
+b65352476	todo		none	auto: not examined yet	Cleanup how fpp reservered memory is defined in the device tree	9.0	drivers	device
+1ee54560c	todo		none	auto: not examined yet	remove old	8.5	channeloutput	docker
+50c87ea59	todo		none	auto: not examined yet	Rename UDMX files	8.5	channeloutput	device
+8996bb271	todo		none	auto: not examined yet	browser accessibility fixes	9.0	css	web
+0b080ba09	todo		none	auto: not examined yet	fixes to display UI correct after make clean when fppversion unknown	9.0	www	web
+4831578b5	todo		none	auto: not examined yet	Collect stats on a few additional settings	8.5	www	web
+2382bf161	todo		none	auto: not examined yet	Update sensors configs to allow a scale and if not specified, scale appropriately for 1.8V vs 3.3v on BB64	9.0	sensors	device:bb,device,docker
+38ebee690	todo		none	auto: not examined yet	add fpp user to dialout grop #1989	8.5	SD	os-image
+9fb0681e0	todo		none	auto: not examined yet	Relax file name sanitization on deletes in file manager #2007	8.5	api	web
+e721577bb	todo		none	auto: not examined yet	API to dump MosquittoClient:messageCache (#2115)	9.0	api	docker,web
+2dd12eda2	todo		none	auto: not examined yet	attempt to resolve fpp detection after make	9.0	common	docker,web
+59c7a7aec	untestable		none	auto: changes no runtime file (docs)	start of extra documentation	9.0	docs	none
+6213df2c2	todo		none	auto: not examined yet	updated settings to expose more variables to JS	9.0	www	web
+f857af379	todo		none	auto: not examined yet	Fix equality operator	9.0	non-gpl	device:bb
+0a8f61017	todo		none	auto: not examined yet	fix typo on setting label on filtered item count	9.0	js	web
+151b8dbef	todo		none	auto: not examined yet	fix filemanager misnamed DIVs causing JS error	9.0	www	web
+6f26c45c4	todo		none	auto: not examined yet	start of process to lock down settings exposed as JS settings array	9.0	www	web
+385ed180a	todo		none	auto: not examined yet	add paypal to allowed img src's in security policy	9.0	etc	docker
+5dd8bb9b9	todo		none	auto: not examined yet	fix upgrade scripts to set rebootFlag rather than restarting apache	9.0	upgrade	docker
+2b48c3c6b	todo		none	auto: not examined yet	add execute permissions to upgrade script	9.0	upgrade	docker
+ff1405ede	todo		none	auto: not examined yet	upgrade script to lock down mod_status to localhost only	9.0	upgrade	docker
+24ffce948	todo		none	auto: not examined yet	add default config for apache2 mod_status to lockdown to only localhost access	9.0	SD	os-image,docker
+6d1a56de8	todo		none	auto: not examined yet	add phpinfo to troubleshooter output	9.0	www	web
+e6389fc64	todo		none	auto: not examined yet	create locally locked down phpinfo for troubleshooter	9.0	localonly	web
+ee0ec548b	todo		none	auto: not examined yet	add output of apache mod_status to troubleshooting page so config can be locked down to only run from localhost	9.0	www	web
+33e3d6297	todo		none	auto: not examined yet	add ico files to apache mime definitions	9.0	etc	docker
+7a6f731c0	todo		none	auto: not examined yet	fix bootstrap css issue	9.0	css	web
+103da962d	todo		none	auto: not examined yet	add minifyAll vscode extension	9.0	.vscode	docker
+73bfb4ae2	todo		none	auto: not examined yet	break html meta tags to a common include file	9.0	common	web
+48b571aec	todo		none	auto: not examined yet	add upgrade 92 script to enable new apache config	9.0	upgrade	docker
+b3ed55de8	todo		none	auto: not examined yet	Apache config hardening	9.0	etc	docker
+09707ac47	todo		none	auto: not examined yet	minor changes to update security hints	9.0	common	web
+8e612b365	todo		none	auto: not examined yet	security - Apache configs for mime and cache control as well as Prod Tokens	9.0	etc	docker
+64bb7392e	todo		none	auto: not examined yet	enable apache expires module for caching	9.0	SD	device:mac,os-image
+9d27cf783	todo		none	auto: not examined yet	security - add rel="noopener noreferrer" to logo link	9.0	www	web
+7887ede4b	todo		none	auto: not examined yet	security - add rel="noopener noreferrer" to _blank links	9.0	www	web
+c89ad0b5c	todo		none	auto: not examined yet	security - add apache config to lock down returned headers	9.0	etc	docker
+cc88de380	todo		none	auto: not examined yet	fontawesome from 6.5.2 to 6.7.2	9.0	common	web
+806d530b3	todo		none	auto: not examined yet	update zebra pin from 3.0.0 to 3.0.1	9.0	js	web
+0f658b015	todo		none	auto: not examined yet	change tablesorter references to min versions of js	9.0	www	web
+071f0bd37	todo		none	auto: not examined yet	update tablesorter from 2.31.3 to 2.32.0	9.0	jquery	web
+1858b4025	todo		none	auto: not examined yet	add alt attribute to img tag generated by print setting	9.0	www	web
+78b771200	todo		none	auto: not examined yet	update jquery-UI from 1.13.3 to 1.14.1	9.0	css	web
+2e79f4c86	todo		none	auto: not examined yet	security - add nosniff to x-content-type-options in apache conf	9.0	etc	docker
+77d78f89d	todo		none	auto: not examined yet	Uninstalling plugins will now show progress	9.0	api	docker,web
+85dd7bd90	todo		none	auto: not examined yet	refine User installed OS packages part 1	9.0	api	web
+2b4f0cc4f	todo		none	auto: not examined yet	Fix /api/sequence to only return fseq files #1995	8.5	api	web
+25fa49206	todo		none	auto: not examined yet	User installed OS packages part 1	9.0	api	web
+cc72faebb	todo		none	auto: not examined yet	Move file manage filter setting to bottom of screen	8.5	www	web
+7f99cbdd1	todo		none	auto: not examined yet	Fix bug in DPI & BBShiftString to match BB48String to allow 50 pixels rather than 49 when unlicensed.	8.5	non-gpl	device:bb,device:pi
+c70531ab8	todo		none	auto: not examined yet	Log IP address rather than key for UDPOutput errors	8.5	channeloutput	docker
+5d5dbb848	todo		none	auto: not examined yet	Go slightly larger during initial scaling in PlaylistEntryImage	8.5	playlist	docker
+fa6944547	todo		none	auto: not examined yet	1) Remove dmesg from Raspinfo section of Troubleshooting 2) Add dmesg -T (all platforms) to "Boot" section of Troubleshooting 3) add "-T" when creating dmesg for tmp/boot.log on crash	8.5	src	docker,web
+6ee57a954	todo		none	auto: not examined yet	Add Help menu item for reporting bug Closes #2093	8.5	www	web
+d94c478f7	todo		none	auto: not examined yet	Improve documentation of /api/channel/output/	8.5	api	web
+99b25c30d	todo		none	auto: not examined yet	Return a 404 if api/file/sequence called directly with no file	8.5	api	web
+585f215f2	todo		none	auto: not examined yet	minor css fixes	9.0	css	web
+9fa9c425b	todo		none	auto: not examined yet	fix accessibility button labelling	9.0	common	web
+6739aafe7	todo		none	auto: not examined yet	volume button labels	8.5	www	web
+6136f3a3a	todo		none	auto: not examined yet	add name to volume buttons	8.5	www	web
+502ffc3e1	todo		none	auto: not examined yet	If plugin script disappears while fppd is running (example: plugin uninstalled) don't polute logs with stack traces	8.5	src	docker
+fab1a90f4	todo		none	auto: not examined yet	Add another guard for Playlist:NextItem	8.5	playlist	docker
+3f834c729	todo		none	auto: not examined yet	Fix rare crash where playlist section was referenced after it was cleaned up	8.5	playlist	docker
+84e88f91c	todo		none	auto: not examined yet	Update GPIO output to catch libgpiod exceptions and display an error	8.5	channeloutput	device
+eb573d398	todo		none	auto: not examined yet	Fix some warnings on MacOS	8.5	channeloutput	device,docker
+c4efe2b3f	todo		none	auto: not examined yet	Don't crash if invalid start channel is set for various outputs	9.0	channeloutput	device:bb,docker
+f739d6372	todo		none	auto: not examined yet	Use full shared mem on PB2/BeaglePlay	9.0	non-gpl	device:bb
+4b53c59d4	todo		none	auto: not examined yet	Fix asm compiler issues on BB	9.0	pru	device:bb
+7a593bc24	todo		none	auto: not examined yet	Start working on getting BBB48String working on BB64	9.0	drivers	device:bb,device,docker
+aa29d4dab	todo		none	auto: not examined yet	Issue #2083 - Fix scraping for mixer devices.	8.5	boot	docker
+01d7bff69	untestable		none	auto: changes no runtime file (rpi-imager)	Update to point at 8.4.1	9.0	rpi-imager	none
+56829fe97	todo		none	auto: not examined yet	Fill in more pins for PB2	9.0	drivers	device
+6363b1195	todo		none	auto: not examined yet	Start working on pinmux for BB64, "fake" the PRU memories for now to allow progress	9.0	drivers	device:bb,device
+32244ca9a	todo		none	auto: not examined yet	Allow a plugin to  get notification when a playlist is inserted so it can prepare	8.5	playlist	docker
+02d593592	todo		none	auto: not examined yet	Set a timeout for blocking UDP send	8.5	channeloutput	docker
+46655bc58	untestable		none	auto: changes no runtime file (rpi-imager)	Update rpi_imager for 8.4	9.0	rpi-imager	none
