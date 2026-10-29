@@ -32,7 +32,7 @@ function writeIn(path: string, content: string, mode = '644') {
   execFileSync('docker', ['exec', '-i', container, 'sh', '-c', `cat > '${path}' && chmod ${mode} '${path}'`], { input: content });
 }
 
-function netAdmin(script: string) {
+export function netAdmin(script: string) {
   const image = docker('inspect', '-f', '{{.Config.Image}}', container).trim();
   docker('run', '--rm', '--cap-add', 'NET_ADMIN', '--network', `container:${container}`, image, 'sh', '-c', script);
 }

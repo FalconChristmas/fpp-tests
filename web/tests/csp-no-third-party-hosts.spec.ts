@@ -12,6 +12,8 @@ import type { APIRequestContext } from '@playwright/test';
 //   api.html turns Scalar's default fonts off.
 // - fpp 55f977d8a ("ipapi.co is no longer needed in CSP"): connect-src allowed
 //   https://ipapi.co, though the lookup goes through the player's api/geoip.
+// - fpp ceffffbec ("revert change as unneeded following testing"): took
+//   https://ipapi.co back out of default-src, the same day 2e593d623 put it in.
 // - fpp a0ba5016a ("www.w3.org is not needed in CSP"): default-src and img-src
 //   allowed http://www.w3.org.
 

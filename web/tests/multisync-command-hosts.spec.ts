@@ -20,7 +20,10 @@ test.describe(() => {
     // that one player had.  Also covers 9fae42ac3, which first filled the
     // lists from every picked host and counted them ("exists on 1/2 Hosts");
     // with the reload limited to a single host again, only the first host's
-    // entry is listed.
+    // entry is listed.  And cef4858c5, which sent those requests through
+    // /proxy/<host>/ rather than straight to each host, so that connect-src
+    // need not name every remote (csp-generator.spec.ts checks the policy
+    // half): fetched from the hosts directly, no list gets anything.
     const name = 'fpp-tests-ms-hosts';
     await request.post(`/api/playlist/${name}`, { data: { name, version: 4, leadIn: [], mainPlaylist: [], leadOut: [], playlistInfo: {} } });
     const asked: string[] = [];
