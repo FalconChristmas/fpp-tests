@@ -149,7 +149,9 @@ def build_box(sb, cpus, arch, memory, swap_entries):
 
 
 # Bash, with FPP's common and functions sourced from the tree under test.
-FUNCTIONS = 'PATH=/usr/local/sbin:$PATH; . /opt/fpp/scripts/common; . /opt/fpp/scripts/functions; PATH=/usr/local/sbin:$PATH\n'
+# FPPDIR is given: common works it out from $0, which under bash -c is "bash",
+# so it would be the working directory's parent (/ in the sandbox).
+FUNCTIONS = 'PATH=/usr/local/sbin:$PATH; export FPPDIR=/opt/fpp; . /opt/fpp/scripts/common; . /opt/fpp/scripts/functions; PATH=/usr/local/sbin:$PATH\n'
 
 ZRAM = ("/dev/zram0", "partition", 245000)
 

@@ -391,8 +391,11 @@ def test_auto_boot_delay_does_not_wait_for_the_time_with_no_network(fppinit, por
     if not lib:
         pytest.skip("no libfaketime")
     # The library itself: the faketime wrapper needs a /dev/shm the sandbox
-    # lacks. NO_FAKE_STAT keeps rfs_version's real (2026) timestamp.
-    clock = f"LD_PRELOAD={lib[0]} FAKETIME='@2020-01-01 00:00:00' DONT_FAKE_MONOTONIC=1 NO_FAKE_STAT=1"
+    # lacks. NO_FAKE_STAT keeps rfs_version's real (2026) timestamp. In an
+    # ASan build it comes before the ASan runtime, which ASan refuses unless
+    # told not to check (it intercepts nothing ASan does).
+    clock = (f"LD_PRELOAD={lib[0]} FAKETIME='@2020-01-01 00:00:00' DONT_FAKE_MONOTONIC=1 NO_FAKE_STAT=1 "
+             "ASAN_OPTIONS=\"$ASAN_OPTIONS:verify_asan_link_order=0\"")
     began = time.monotonic()
     r = None
     try:

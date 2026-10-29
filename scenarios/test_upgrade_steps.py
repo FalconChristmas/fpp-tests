@@ -9,6 +9,7 @@ upgrade step's own path.
 """
 
 import os
+import re
 import shutil
 import stat
 
@@ -17,6 +18,24 @@ import pytest
 from fppinit import MEDIA, fppinit  # noqa: F401 -- the fixture
 
 TREE = os.environ.get("FPP_TREE", "")
+
+
+def fpp_user(sb):
+    """The fpp user's uid in the sandbox. The scenario image has no fpp
+    user (a device does), so later runs get the image's passwd and group
+    with one added at the first free uid from 1000."""
+    with open("/etc/passwd") as f:
+        passwd = f.read()
+    with open("/etc/group") as f:
+        group = f.read()
+    m = re.search(r"^fpp:[^:]*:(\d+):", passwd, re.M)
+    if m:
+        return int(m.group(1))
+    taken = {int(l.split(":")[2]) for l in passwd.splitlines() + group.splitlines() if l.count(":") >= 2}
+    uid = next(u for u in range(1000, 60000) if u not in taken)
+    sb.root_file("/etc/passwd", passwd + f"fpp:x:{uid}:{uid}:FPP:/home/fpp:/bin/bash\n")
+    sb.root_file("/etc/group", group + f"fpp:x:{uid}:\n")
+    return uid
 
 
 def media_settings(sb):
@@ -446,9 +465,9 @@ def test_upgrade_114_restores_a_missing_profile_and_asks_for_a_reboot(fppinit):
     Regressions: 0e154d606 (with no ~/.profile, login shells never read
     ~/.bashrc and Kiosk mode never started on trixie) and bc6245d44 (the
     fix needed a reboot to take effect and nothing asked for one)."""
-    import pwd
     if not os.path.exists("/etc/skel/.profile"):
         pytest.skip("no /etc/skel/.profile here")
+    fpp = fpp_user(fppinit)
     no_profile(fppinit)
     r, out = step(fppinit, 114)
     profile = fppinit.written("/home/fpp/.profile")
@@ -456,7 +475,7 @@ def test_upgrade_114_restores_a_missing_profile_and_asks_for_a_reboot(fppinit):
     with open("/etc/skel/.profile") as f:
         assert profile == f.read()
     uid = os.stat(os.path.join(fppinit.upper, "home/fpp/.profile")).st_uid
-    assert uid == pwd.getpwnam("fpp").pw_uid, f"~/.profile is owned by uid {uid}"
+    assert uid == fpp, f"~/.profile is owned by uid {uid}"
     assert media_settings(fppinit).get("rebootFlag") == "1", f"no reboot asked for:\n{out[-3000:]}"
 
 
@@ -580,8 +599,7 @@ def test_upgrade_115_clears_stale_xauth_locks_and_fixes_home_ownership(fppinit):
     user owns back to fpp; a second run finds nothing to do.
 
     Added in 853cbb79d (kiosk fixes)."""
-    import pwd
-    fpp = pwd.getpwnam("fpp").pw_uid
+    fpp = fpp_user(fppinit)
     for f in (".Xauthority-c", ".Xauthority-l", ".fpp-test-root-owned"):
         fppinit.root_file(f"/home/fpp/{f}", "")
     fppinit.write("settings", "")

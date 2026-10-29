@@ -566,6 +566,9 @@ chmod +x /usr/bin/dpkg-query /usr/bin/apt-get
 
 def php_update(sb, installed, candidate, command):
     sb.unstub("dpkg")  # its --compare-versions; nothing here installs
+    # Debian's container images ship a policy-rc.d that refuses every
+    # restart; a device has none, and the script won't replace someone else's.
+    sb.root_file("/usr/sbin/policy-rc.d", None)
     with open(os.path.join(sb.state, "php-version"), "w") as f:
         f.write(installed + "\n")
     with open(os.path.join(sb.state, "php-candidate"), "w") as f:
@@ -675,8 +678,10 @@ def test_get_uuid_takes_a_pb2_industrial_serial(tmp_path):
     script.write_text(src.replace("/sys/bus/i2c/devices/0-0050/eeprom", str(eeprom))
                          .replace("/proc/cpuinfo", str(tmp_path / "cpuinfo"))
                          .replace("/proc/device-tree/serial-number", str(tmp_path / "no-serial")))
+    # Not a container (the scenario's is one), where get_uuid skips the hardware.
     r = subprocess.run(["bash", str(script)], capture_output=True, text=True, timeout=30,
-                       cwd=tmp_path, env=dict(os.environ, FPPDIR=TREE))
+                       cwd=tmp_path, env=dict(os.environ, FPPDIR=TREE, FPP_DOCKERENV=str(tmp_path / "no-dockerenv"),
+                                          FPP_CONTAINERFILE=str(tmp_path / "no-container")))
     assert r.stdout.strip() == f"M5-{serial}", f"get_uuid gave {r.stdout.strip()!r}\n{r.stderr[-2000:]}"
 
 
