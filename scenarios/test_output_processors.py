@@ -118,6 +118,8 @@ CASES = {
                                   remap(4, 61, 9, 1, 1)),
     "Remap reversed by pixel": ([proc("Remap", source=4, destination=61, count=9, loops=1, reverse=2)],
                                 remap(4, 61, 9, 1, 2)),
+    "Remap reversed over its own source": ([proc("Remap", source=4, destination=7, count=9, loops=1, reverse=1)],
+                                            remap(4, 7, 9, 1, 1)),
     "Brightness 50%": ([proc("Brightness", start=1, count=60, brightness=50, gamma=1.0)],
                        per_channel(1, 60, lambda v: int(127.5 * v / 255 + 0.5))),
     "Set Value": ([proc("Set Value", start=41, count=5, value=200)],

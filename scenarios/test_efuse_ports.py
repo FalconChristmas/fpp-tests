@@ -20,7 +20,7 @@ def high(pin):
     return os.path.exists(pin_file(pin))
 
 
-def config(fppd, pixels=50):
+def config(fppd, pixels=50, sim_pin=None):
     """co-pixelStrings.json: one PixelCountSim port with an enable and an
     eFuse pin."""
     return {"channelOutputs": [{
@@ -30,7 +30,7 @@ def config(fppd, pixels=50):
             "portNumber": 0, "protocol": "ws2811",
             "simCurrentFile": os.path.join(fppd.media, "tmp", "port1-ma"),
             "simWirePixels": pixels,
-            "simPin": {"enablePin": ENABLE, "eFusePin": EFUSE},
+            "simPin": sim_pin if sim_pin is not None else {"enablePin": ENABLE, "eFusePin": EFUSE},
             "virtualStrings": [{
                 "description": "port1", "startChannel": 0, "pixelCount": pixels,
                 "groupCount": 0, "reverse": 0, "colorOrder": "RGB", "nullNodes": 0,
@@ -191,3 +191,58 @@ def test_a_port_moved_to_another_enable_pin_drives_the_new_one(fppd):
     fppd.command("Outputs On")
     fppd.wait_for(lambda: high(moved), timeout=10,
                   what=f"the moved enable pin {moved} to go high (old pin high: {high(ENABLE)})")
+
+
+def start_with_pins(fppd, sim_pin):
+    throw_plugin.install(fppd, source="pixelcountsim.cpp", name="PixelCountSim")
+    fppd.write("config/co-pixelStrings.json", config(fppd, sim_pin=sim_pin))
+    for pin in (ENABLE, EFUSE):
+        if high(pin):
+            os.unlink(pin_file(pin))
+    fppd.start()
+
+
+def test_a_port_whose_enable_pin_does_not_exist_is_refused_and_fppd_goes_on(fppd):
+    """A port configured with an enable pin the machine does not have raises
+    the could-not-find-pin warning for it and is left unmonitored for
+    power, and Outputs On and Off, the ports list and the status all carry
+    on without a crash.
+
+    Regression: c9399e47c and 972377af9. The missing pin was used as if it
+    were there (a null pin dereferenced on the first Outputs Off), and the
+    pin lists were popped for a pin that was never pushed."""
+    start_with_pins(fppd, {"enablePin": "NOSUCHPIN", "eFusePin": EFUSE})
+    fppd.wait_for(lambda: any("Could not find pin NOSUCHPIN" in w for w in fppd.get("/fppd/warnings")),
+                  timeout=10, what="the could-not-find-pin warning")
+    fppd.command("Outputs On")
+    fppd.command("Outputs Off")
+    fppd.get("/fppd/ports")
+    fppd.get("/fppd/status")
+    fppd.check_alive()
+
+
+def test_a_port_with_no_efuse_pin_survives_outputs_off_and_on(fppd):
+    """A port with an enable pin and no eFuse pin turns off and on with
+    Outputs Off and Outputs On, and the enable pin follows.
+
+    Regression: 7833e6c39. The check for a tripped fuse that cleared its
+    warning read the missing pin: a null dereference on the first pass."""
+    start_with_pins(fppd, {"enablePin": ENABLE})
+    fppd.command("Outputs On")
+    fppd.wait_for(lambda: high(ENABLE), timeout=10, what="the enable pin to go high")
+    time.sleep(1.5)
+    fppd.command("Outputs Off")
+    fppd.wait_for(lambda: not high(ENABLE), timeout=10, what="the enable pin to go low")
+    fppd.check_alive()
+
+
+def test_set_port_status_turns_one_port_on_and_off(fppd):
+    """The Set Port Status command turns the named port's power off and on
+    again: the enable pin goes low for "Port 1" false and high for true.
+
+    Regression: 593df45c2 (the command added)."""
+    powered_port(fppd, eFuseRetryCount="0")
+    fppd.command("Set Port Status", "Port 1", "false")
+    fppd.wait_for(lambda: not high(ENABLE), timeout=10, what="the port to go off")
+    fppd.command("Set Port Status", "Port 1", "true")
+    fppd.wait_for(lambda: high(ENABLE), timeout=10, what="the port to come back on")

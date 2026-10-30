@@ -119,3 +119,32 @@ def test_an_led_port_can_be_reversed(fppd):
     except TimeoutError:
         raise AssertionError(f"OFF counts {got()}, wanted {want}")
     fppd.command("Test Stop")
+
+
+def test_a_16_bit_absolute_servo_port_reads_its_high_byte_first(fppd):
+    """A Servos-tab (co-pwm.json) port set to Absolute and 16 bit reads its
+    two channels as one number (2 us a step, as with 8 bit), the first the
+    high byte: channels 2 and 238 are 750 steps, a 1500 us pulse.
+
+    Regression: 5d29f9c14. The high byte was shifted but the first channel's
+    value was the one added unshifted, so the two channels were swapped."""
+    bus = Bus(fppd, [PCA])
+    capes = os.path.join(fppd.media, "fakecape")
+    fppd.write("fakecape/TestServos.json", {"driver": "PCA9685", "name": "TestServos",
+                                            "address": PCA, "bus": "i2c-1"})
+    port = {"type": "Servo", "min": 1000, "max": 2000, "is16bit": 1, "reverse": 0, "zero": "Hold",
+            "dataType": "Absolute", "description": "wide"}
+    fppd.write("config/co-pwm.json", {"channelOutputs": [{
+        "type": "PCA9685", "subType": "TestServos", "enabled": 1, "startChannel": 0,
+        "channelCount": -1, "frequency": "50hz", "outputs": [dict(port, startChannel=0)]}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start(preload=[shims.build("fakei2c.c"), shims.build("fakepwmcape.cpp", libs=(
+        "-ldl", "-I/usr/include/jsoncpp", "-ljsoncpp"))],
+        extra_env=dict(bus.env, FAKEPWMCAPE_DIR=capes))
+    single(fppd, "1-3", "#02EE00")  # channel 1 = 2, channel 2 = 238: 0x02EE = 750
+    want = rnd(ticks(1500))
+    try:
+        fppd.wait_for(lambda: servo_value(bus, PCA, 0) == want, timeout=5, what="the port's pulse")
+    except TimeoutError:
+        raise AssertionError(f"OFF count {servo_value(bus, PCA, 0)}, wanted {want}")
+    fppd.command("Test Stop")
