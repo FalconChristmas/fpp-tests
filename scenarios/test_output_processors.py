@@ -442,3 +442,69 @@ def test_a_model_processor_running_past_the_model_is_clamped_to_it(fppd, start, 
         got = rx.last()
         diff = [(i + 1, frames[0][i], want[i], got[i]) for i in range(CHANNELS) if want[i] != got[i]]
         assert not diff, f"channel (in, expected, got): {diff[:12]}"
+
+
+def wait_processed(fppd, rx, frames, want, what):
+    """Wait for a frame that carries the marker processor's work, then
+    compare it with `want` everywhere."""
+    latest(fppd, rx, lambda f: f[149] == 7, "the sequence through the processors")
+    time.sleep(0.3)
+    got = rx.last()
+    diff = [(i + 1, frames[0][i], want[i], got[i]) for i in range(CHANNELS) if want[i] != got[i]]
+    assert not diff, f"{what}: channel (in, expected, got): {diff[:12]}"
+
+
+def test_a_processor_that_is_switched_off_does_nothing(fppd):
+    """A processor with "active": 0 is skipped, and the active processors
+    around it still apply.
+
+    Regression: 70f38c3e8 (with the per-processor active flag its processors
+    read from their config). The checkbox on the Output Processors page was
+    saved but never read, so a processor that had been switched off went on
+    working."""
+    with DdpReceiver(CHANNELS) as rx:
+        frames = run(fppd, [proc("Set Value", start=1, count=5, value=222, active=0),
+                            proc("Set Value", start=21, count=5, value=111, active=1),
+                            proc("Set Value", start=150, count=1, value=7)])
+        want = per_channel(150, 1, lambda v: 7)(per_channel(21, 5, lambda v: 111)(frames[0]))
+        wait_processed(fppd, rx, frames, want, "an inactive processor")
+
+
+def test_brightness_on_a_model_counts_from_the_models_first_channel(fppd):
+    """A Brightness processor with a model scales the model's channels,
+    counting its start from the model's first channel, and no others.
+
+    Regression: 7dab69b2c. Brightness took only a hard-coded start channel,
+    so a model's brightness limit landed on channels 1-24 and the lights it
+    was meant for stayed at full brightness."""
+    span_model(fppd)
+    with DdpReceiver(CHANNELS) as rx:
+        frames = run(fppd, [proc("Brightness", model="Span", start=1, count=MODEL_PIXELS * 3, brightness=50, gamma=1.0),
+                            proc("Set Value", start=150, count=1, value=7)])
+        want = per_channel(MODEL_START, MODEL_PIXELS * 3, half)(frames[0][:149] + b"\x07" + frames[0][150:])
+        wait_processed(fppd, rx, frames, want, "brightness on a model")
+
+
+MODEL_PROCESSORS = {
+    "Override Zero": (lambda: proc("Override Zero", model="Span", start=1, count=MODEL_PIXELS * 3, value=9),
+                      per_channel(MODEL_START, MODEL_PIXELS * 3, lambda v: v or 9)),
+    "Reorder Colors": (lambda: proc("Reorder Colors", model="Span", start=1, count=MODEL_PIXELS, colorOrder=321),
+                       reorder(MODEL_START, MODEL_PIXELS, 321)),
+}
+
+
+@pytest.mark.parametrize("what", list(MODEL_PROCESSORS))
+def test_most_processors_take_a_model_for_their_channels(fppd, what):
+    """Override Zero and Reorder Colors (with Set Value, Hold Value, Remap
+    and Three to Four) work on a named overlay model's channels, counted from
+    the model's first channel.
+
+    Regression: 2fe5c5185. Only Brightness knew about models; on the others
+    the model name was ignored and the processor worked on channels counted
+    from channel 1."""
+    span_model(fppd)
+    make, fn = MODEL_PROCESSORS[what]
+    with DdpReceiver(CHANNELS) as rx:
+        frames = run(fppd, [make(), proc("Set Value", start=150, count=1, value=7)])
+        want = fn(frames[0][:149] + b"\x07" + frames[0][150:])
+        wait_processed(fppd, rx, frames, want, what)

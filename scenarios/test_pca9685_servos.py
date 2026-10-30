@@ -86,3 +86,36 @@ def test_a_2x_absolute_servo_port_takes_two_steps_a_microsecond(fppd):
     except TimeoutError:
         raise AssertionError(f"OFF counts {got()}, wanted {want} (the minimum is {rnd(lo)})")
     fppd.command("Test Stop")
+
+
+def test_an_led_port_can_be_reversed(fppd):
+    """A Servos-tab (co-pwm.json) LED port with "reverse" set outputs the
+    inverse of its channel (255 - value for an 8 bit port), and one beside it
+    without goes out as it is: channel values 200 and 40 at full brightness
+    and gamma 1 are 55/255 and 40/255 of the chip's 4095 steps.
+
+    Regression: 695d94a2d. The page's Reverse box was saved for LED ports
+    but only servos read it."""
+    bus = Bus(fppd, [PCA])
+    capes = os.path.join(fppd.media, "fakecape")
+    fppd.write("fakecape/TestServos.json", {"driver": "PCA9685", "name": "TestServos",
+                                            "address": PCA, "bus": "i2c-1"})
+    led = {"type": "LED", "brightness": 100, "gamma": 1.0, "is16bit": 0, "zero": "Hold",
+           "dataType": "Scaled"}
+    fppd.write("config/co-pwm.json", {"channelOutputs": [{
+        "type": "PCA9685", "subType": "TestServos", "enabled": 1, "startChannel": 0,
+        "channelCount": -1, "frequency": "1000hz",
+        "outputs": [dict(led, startChannel=0, reverse=1, description="reversed"),
+                    dict(led, startChannel=1, reverse=0, description="plain")]}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start(preload=[shims.build("fakei2c.c"), shims.build("fakepwmcape.cpp", libs=(
+        "-ldl", "-I/usr/include/jsoncpp", "-ljsoncpp"))],
+        extra_env=dict(bus.env, FAKEPWMCAPE_DIR=capes))
+    single(fppd, "1-3", "#C82800")  # channel 1 = 200, channel 2 = 40
+    want = (rnd(4095 * 55 / 255), rnd(4095 * 40 / 255))
+    got = lambda: (servo_value(bus, PCA, 0), servo_value(bus, PCA, 1))
+    try:
+        fppd.wait_for(lambda: got() == want, timeout=5, what="both ports' counts")
+    except TimeoutError:
+        raise AssertionError(f"OFF counts {got()}, wanted {want}")
+    fppd.command("Test Stop")
