@@ -6,12 +6,16 @@
 //                               state their callback captured by value
 //   "Timer Test Self Readd <n>" the same, but each re-adds itself under its
 //                               own name with a new callback instead
+//   "Timer Test Oneshot Add <n>" arms n one-shot timers due at the same moment,
+//                               each adding another named timer from its
+//                               callback while the others are still due
 //   "Timer Test Ran"            how many callbacks finished
 //
 // A captured std::string lives in the std::function, so a callback that
 // outlives its timer's TimerInfo reads freed memory.
 
 #include <atomic>
+#include <chrono>
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -68,6 +72,21 @@ public:
                     if (payload.size() == 256 && payload[255] == 'p') {
                         ran++;
                     }
+                });
+            }
+            return std::string("armed");
+        });
+        add("Timer Test Oneshot Add", [this](const std::vector<std::string>& a) {
+            int n = a.empty() ? 1 : std::atoi(a[0].c_str());
+            long long due = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::system_clock::now().time_since_epoch()).count() + 200;
+            for (int i = 0; i < n; i++) {
+                std::string name = "Oneshot" + std::to_string(armed++);
+                std::string later = name + "Later";
+                names.push_back(later);
+                Timers::INSTANCE.addTimer(name, due, [later]() {
+                    Timers::INSTANCE.addTimer(later, 4102444800000LL, []() {});
+                    ran++;
                 });
             }
             return std::string("armed");

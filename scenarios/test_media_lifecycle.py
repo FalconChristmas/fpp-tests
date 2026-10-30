@@ -104,7 +104,9 @@ def test_a_remotes_next_file_does_not_report_the_last_ones_position(fppd, audio)
     pipeline produced a position they still described the previous file:
     status showed B.wav five seconds in, and the first sync packet's
     AdjustSpeed() took that stale position for a 5 s drift and issued a
-    flushing seek into the unprerolled pipeline (issue #2727)."""
+    flushing seek into the unprerolled pipeline (issue #2727).
+    Also bd9ed2b1e: the remote's media_filename carried the media
+    directory's path, not the file name alone."""
     import socket
 
     import shims

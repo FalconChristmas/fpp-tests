@@ -88,6 +88,24 @@ def test_a_pca9685_with_more_ports_than_the_chip_writes_only_its_16(fppd):
     assert not past, f"frames of {sorted(set(past))} bytes from LED0 run past LED15"
 
 
+def test_a_16_port_pca9685_frame_reaches_all_16_ports(fppd):
+    """A PCA9685 with all 16 ports gets each frame as one 64-byte write from
+    LED0, so ports 9 to 16 get their pulse too.
+
+    Regression: 152adce7f. Frames went out through the SMBus block write,
+    which carries at most 32 bytes: ports 9 to 16 were never written."""
+    bus = Bus(fppd, [PCA])
+    fppd.write("config/co-other.json", other_output(pca9685(ports=16)))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    bus.start(fppd)
+    single(fppd, "1-32")
+    fppd.wait_for(lambda: any(r == 0x06 for _, _, r, _ in bus.writes(PCA)), what="a frame sent")
+    fppd.command("Test Stop")
+    sizes = sorted({len(d) for _, _, r, d in bus.writes(PCA) if r == 0x06})
+    assert sizes == [64], f"frames from LED0 of {sizes} bytes"
+    assert servo_value(bus, PCA, 15) > 0, "port 16 never got a pulse"
+
+
 def servo_value(bus, addr, port):
     """Port's (0-based) OFF count as the chip at addr last got it."""
     regs = bus.registers(addr)

@@ -145,7 +145,9 @@ def test_hostile_command_is_survived(fppd, cmd):
     empty datagram) and keeps running.
 
     Regression: 79f087671 (its empty-command half). "," and ",,,," left
-    strtok_r with no token, and the NULL went to strncpy: SIGSEGV."""
+    strtok_r with no token, and the NULL went to strncpy: SIGSEGV.
+    Regression: df831028c. "LogLevel" and "LogLevel,," handed
+    FPPLogger::SetLevel a NULL name or level, which strcmp dereferenced."""
     fppd.start()
     # An empty datagram has nothing to answer, and gets nothing.
     send(cmd, reply=bool(cmd))
@@ -242,6 +244,26 @@ def test_fpp_cli_quit_stops_fppd_cleanly(fppd):
     rc = fppd.proc.wait(timeout=30)
     assert rc == 0, f"fppd exited {rc} after fpp -q"
     fppd.exit_expected = True
+
+
+def test_fpp_cli_restart_restarts_fppd(fppd):
+    """`fpp -r`, what systemd's reload and the reset page run, restarts
+    fppd in place: it comes back, answering, with its uptime started over.
+
+    Regression: b0f7c49bf. Taking out the options the API covers (8f48e8fc4)
+    took -r with them, so `fpp -r` printed the usage and fppd carried on."""
+    fppd.start()
+    fppd.wait_for(lambda: status(fppd).get("uptimeTotalSeconds", 0) >= 4, timeout=15,
+                  what="fppd to be up 4 s")
+    rc, out = fpp(fppd, "-r")
+    assert "Usage" not in out, f"fpp -r is not a command:\n{out[-1500:]}"
+
+    def restarted():
+        try:
+            return status(fppd).get("uptimeTotalSeconds", 99) < 3
+        except Exception:  # noqa: BLE001 -- not answering while it restarts
+            return False
+    fppd.wait_for(restarted, timeout=30, interval=0.3, what="fppd to restart with its uptime reset")
 
 
 def test_fpp_cli_without_fppd_gives_up(fppd):

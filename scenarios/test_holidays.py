@@ -124,3 +124,21 @@ def test_islamic_holidays_fall_on_their_dates(fppd, name, hijri, month):
     days = scheduled_days(fppd)
     assert len(days) == 1 and abs((next(iter(days)) - want).days) <= 1, \
         f"{name} {want.year} is about {want}; scheduled on {sorted(days)[:5]}"
+
+
+@pytest.mark.parametrize("name, day", [("NewYearsEve", (12, 31)), ("NewYearsDay", (1, 1))])
+def test_the_global_locale_knows_new_years(fppd, name, day):
+    """The Global holiday table, the default locale's, has New Year's Eve
+    and New Year's Day, so an entry naming one runs on that day only.
+
+    Regression: 5a1fc61ae. Global had only Christmas Eve and Christmas, so
+    on the default locale neither name was known and the entry ran every
+    day."""
+    want = datetime.date(YEAR if day[0] == 12 else YEAR + 1, *day)
+    show(fppd)
+    fppd.settings(Locale="Global")
+    fppd.write("config/schedule.json", [entry(7, "19:00:00", "20:00:00",
+                                              startDate=name, endDate=name)])
+    fppd.start(fake_time=f"{YEAR}-12-28 12:00:00", tz=ZONE)
+    days = scheduled_days(fppd)
+    assert days == {want}, f"{name} is {want}; scheduled on {sorted(days)[:5]}"

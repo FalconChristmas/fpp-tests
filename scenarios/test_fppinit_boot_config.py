@@ -174,11 +174,11 @@ def test_a_container_description_has_no_stray_whitespace(fppinit):
     assert desc[0] == desc[0].strip() and '\\n' not in desc[0] and not desc[0].endswith(' "'), desc
 
 
-def tether_removal(sb, enable):
+def tether_removal(sb, enable, hostapd=True):
     """maybeRemoveTether for a new interface on a box with hostapd running
-    and a lease on eth0."""
+    (or, hostapd=False, disabled and stopped) and a lease on eth0."""
     set_setting(sb, EnableTethering=str(enable), bootDelay="0")
-    sb.service("hostapd", enabled=True, active=True)
+    sb.service("hostapd", enabled=hostapd, active=hostapd)
     sb.root_file("/etc/systemd/network/10-wlan0.network", "[Match]\nName=wlan0\n")
     return sb._run(["unshare", "--net", "sh", "-c",
                     "ip link add eth0 type veth peer name eth0p && ip link set eth0 up && "
@@ -196,3 +196,14 @@ def test_a_routable_interface_does_not_end_tethering_that_is_set_to_enabled(fppi
     assert "systemctl stop hostapd.service" in fppinit.calls(), fppinit.calls()
     assert_clean(tether_removal(fppinit, 1))
     assert not [c for c in fppinit.calls() if "hostapd" in c and "stop" in c], fppinit.calls()
+
+
+def test_a_tether_that_is_already_off_is_left_alone(fppinit):
+    """When another interface comes up and hostapd is already disabled and
+    stopped, boot doesn't stop or disable it again, or reload the network.
+
+    Regression: a96588812. Every interface coming up on a box without a
+    tether ran systemctl stop and disable on hostapd anyway."""
+    assert_clean(tether_removal(fppinit, 0, hostapd=False))
+    calls = [c for c in fppinit.calls() if c.startswith("systemctl") and "is-" not in c]
+    assert not [c for c in calls if "hostapd" in c or "networkd" in c], calls

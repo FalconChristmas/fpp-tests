@@ -8,6 +8,7 @@ broker through a TCP relay here, and closing the relay cuts fppd off while
 the broker (and what it has retained) stays up."""
 
 import contextlib
+import json
 import shutil
 import socket
 import subprocess
@@ -136,6 +137,8 @@ def test_the_ready_topic_is_left_at_0_when_the_connection_drops(fppd):
     Regression: 344445e20. The will was set with retain false: the broker
     sent ready=0 to whoever was subscribed at that moment, and every later
     subscriber was handed the retained ready=1 of a player that was gone.
+    Also 20dca47fc (#1755), which set a last will at all: before it nothing
+    ever replaced the retained ready=1.
     """
     with through_relay(fppd) as relay:
         relay.cut()
@@ -234,3 +237,63 @@ def test_the_message_cache_api_answers_with_each_topics_last_payload(fppd):
         publish(topic, "second")
         fppd.wait_for(lambda: fppd.get("/fppd/mqtt/cache").get(topic) == "second", timeout=10,
                       interval=0.5, what="the cache to hold the newer payload")
+
+
+def test_fppd_status_names_the_player_and_its_build(fppd):
+    """The fppd_status topic says which player it is and what it runs: its
+    host name and description, platform, FPP version and branch.
+
+    Regression: f041a7d44 (version and branch) and 35bb00a7a (host name,
+    description and platform). Without them a subscriber watching several
+    players could only tell them apart by the topic, and not at all what
+    each one ran."""
+    def fppd_status():
+        # retained() reads one line per message; this payload is JSON over
+        # several lines.
+        out = subprocess.run(["mosquitto_sub", "-h", "127.0.0.1", "-p", PORT, "-q", "1",
+                              "--retained-only", "-W", "2", "-C", "1", "-t", f"{BASE}/fppd_status"],
+                             capture_output=True, text=True, timeout=30).stdout
+        return json.loads(out) if out.strip() else None
+
+    with through_relay(fppd, MQTTStatusFrequency="1", HostDescription="fpp-tests desk player"):
+        st = fppd.wait_for(fppd_status, timeout=10, interval=0.5, what="a retained fppd_status")
+    api = fppd.get("/fppd/version")
+    assert st.get("host_name") == HOST and st.get("host_description") == "fpp-tests desk player", st
+    assert st.get("version") == api.get("version") and st.get("branch") == api.get("branch"), (st, api)
+    assert "platform" in st, st
+
+
+def test_a_short_broker_drop_raises_no_disconnected_warning(fppd):
+    """A connection that drops and comes back within a few seconds (a broker
+    rotating its logs) raises no "MQTT Disconnected" warning; one that stays
+    down past 10 s raises it, with its id, and reconnecting clears it.
+
+    Regression: b2a6caa8e, 65806caf7 and 4759fdade. The warning went up the
+    moment the connection dropped; then after 3 s, too soon for a broker
+    that takes 4-7 s to come back; and then the 10 s timer was armed with
+    a relative time where it takes an absolute one, so it fired at once.
+    Regression: dccccd5aa. The warning had no id.
+    Regression: 04fafd123 (run under TSan). The connected flag was a plain
+    bool, written on mosquitto's thread and read by the status API."""
+    def disconnected():
+        return [w for w in fppd.get("/fppd/warnings_full") if w.get("message") == "MQTT Disconnected"]
+
+    with through_relay(fppd) as relay:
+        relay.cut()
+        fppd.wait_for(lambda: not connected(fppd), timeout=15, what="fppd to see the drop")
+        seen = []
+        began = time.monotonic()
+        while time.monotonic() - began < 3:
+            seen += disconnected()
+            time.sleep(0.2)
+        relay.restore()
+        fppd.wait_for(lambda: connected(fppd), timeout=30, interval=0.5, what="fppd to reconnect")
+        assert not seen, f"warned during a {time.monotonic() - began:.0f} s drop: {seen}"
+
+        relay.cut()
+        fppd.wait_for(lambda: not connected(fppd), timeout=15, what="fppd to see the second drop")
+        fppd.wait_for(disconnected, timeout=20, interval=0.5, what="the warning once down past 10 s")
+        assert disconnected()[0].get("id") == 4, disconnected()
+        relay.restore()
+        fppd.wait_for(lambda: connected(fppd), timeout=30, interval=0.5, what="fppd to reconnect")
+        fppd.wait_for(lambda: not disconnected(), timeout=10, what="the warning to clear")

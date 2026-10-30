@@ -42,7 +42,9 @@ def test_remote_status_polled_across_media_changes(fppd, audio):
     through the global mediaOutput with no lock, while every media change
     deletes that object under mediaOutputLock on the main loop (TSan: data
     race between the status read in GetCurrentFPPDStatus and the delete in
-    CloseMediaOutput; a use-after-free when they meet)."""
+    CloseMediaOutput; a use-after-free when they meet).
+    Also bd9ed2b1e (#1756): a remote reported media_filename (and the MQTT
+    status, which is built from the same) with its media directory's path."""
     for name in ("A.wav", "B.wav"):
         write_tone_wav(os.path.join(fppd.media, "music", name), 10)
     fppd.settings(fppMode="remote")

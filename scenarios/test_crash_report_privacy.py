@@ -353,3 +353,22 @@ def test_plugin_binaries_are_hashed_and_upgrade_logs_ship_at_level_3(fppd):
     assert upgrades and "Error 1" in upgrades and manager and "linker failed" in manager, \
         f"a level-3 crash report lacks the upgrade logs: {sorted(texts)}"
     assert not leaks(texts), leaks(texts)
+
+
+def test_a_settings_level_report_carries_fpp_info_without_the_host(fppd):
+    """At "and settings" (level 2) the report carries fpp-info.json, the
+    build string and platform crash triage works from, with the host name,
+    addresses and description taken out.
+
+    Regression: 3d1301802 (fpp-info.json added to crash reports); its
+    scrubbing is c1bc859af's."""
+    fppd.write("fpp-info.json", {"hostname": "LEAK-host", "HostDescription": "LEAK-desc",
+                                 "addresses": ["LEAK-addr"], "version": "fpp-tests-9.9",
+                                 "platform": "fpp-tests-platform"})
+    r, texts = build_report(fppd, 2)
+    built(r, texts)
+    info = file_named(texts, "fpp-info.json")
+    assert info is not None, f"no fpp-info.json at level 2: {sorted(texts)}"
+    info = json.loads(info)
+    assert info.get("version") == "fpp-tests-9.9" and info.get("platform") == "fpp-tests-platform", info
+    assert not leaks(texts, skip=[n for n in texts if n.endswith("contact.json")]), leaks(texts)

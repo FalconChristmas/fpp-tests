@@ -99,6 +99,20 @@ def test_crash_report_is_written_in_this_media_folder(fppd):
     assert os.path.getsize(os.path.join(crashes, zips[0])) > 1000, "the report is empty"
 
 
+def test_crash_report_is_named_for_the_system_uuid(fppd):
+    """The report's file name carries the system's UUID, so reports from one
+    system can be found and put together on the crash server.
+
+    Regression: 4eacec20b. The name was platform, version and time only."""
+    fppd.settings(SystemUUID="M1-fpptests0123abcd")
+    crashes = os.path.join(fppd.media, "crashes")
+    os.makedirs(crashes, exist_ok=True)
+    run_crash_handler(fppd)
+    zips = [n for n in os.listdir(crashes) if n.endswith(".zip")]
+    assert zips, f"no report in {crashes}: {os.listdir(crashes)}"
+    assert all("-M1-fpptests0123abcd-" in n for n in zips), zips
+
+
 def report_texts(fppd, crashes):
     """Every file in the newest report in crashes/, as text."""
     import zipfile

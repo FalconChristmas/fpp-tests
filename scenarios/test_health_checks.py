@@ -13,6 +13,7 @@ whose default route is a real one, read with the real ip.
 
 import os
 import subprocess
+import time
 
 import pytest
 
@@ -207,3 +208,65 @@ def test_saving_the_ntp_server_keeps_the_lan_gateway_fallback(fppinit):
     out = r.stdout + r.stderr
     assert conf and "server 10.1.2.3 iburst" in conf and "pool " not in conf, f"{conf!r}\n{out[-2000:]}"
     assert len(gateway_lines(conf)) == 1, f"{conf!r}\n{out[-2000:]}"
+
+
+HC_MAIN = "# Main Health Check routines here"
+
+
+@pytest.mark.parametrize("off, want", [
+    (0, "aligned to the browser"),
+    (20 * 60, "more than 10 mins different"),
+    (-20 * 60, "more than 10 mins different"),
+    (6 * 3600, "significantly different"),
+])
+def test_the_browser_time_check_warns_past_10_minutes_and_fails_past_4_hours(tmp_path, off, want):
+    """The date/time check against the browser's clock passes within 10
+    minutes, warns beyond that, and fails beyond 4 hours.
+
+    Regression: 713679369. The warning branch sat inside the failure one
+    with its comparisons reversed, so 10 minutes to 4 hours off passed, and
+    past 4 hours it warned instead of failing."""
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_DateTime",
+                     BROWSER_TIME=str(int(time.time()) - off))
+    assert want in out, out[-2000:]
+
+
+def test_the_health_check_lists_fppds_warnings(tmp_path):
+    """The FPPD Warnings item lists the warnings fppd has up, from
+    www/warnings.json, with their count, and says so when there are none.
+
+    Regression: 2e712086e (the check's introduction)."""
+    fake = tmp_path / "fpp"
+    (fake / "www").mkdir(parents=True)
+    (fake / "www" / "warnings.json").write_text('["Disk nearly full", "MQTT Disconnected"]')
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_Warnings", FPPDIR=str(fake))
+    assert "2 FPPD WARNINGS: Disk nearly full,MQTT Disconnected" in out, out[-2000:]
+    (fake / "www" / "warnings.json").write_text("[]")
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_Warnings", FPPDIR=str(fake))
+    assert "No Warnings Found" in out, out[-2000:]
+
+
+def test_the_health_check_says_when_the_fppd_executable_is_missing(tmp_path):
+    """With no src/fppd in the tree the FPPD item says the executable is
+    missing and needs a rebuild, rather than only that fppd isn't running.
+
+    Regression: 9bcb69eef."""
+    fake = tmp_path / "fpp"
+    (fake / "src").mkdir(parents=True)
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_FPPD", FPPDIR=str(fake))
+    assert "FPPD executable is missing. Rebuild required." in out, out[-2000:]
+
+
+@pytest.mark.parametrize("status, label", [(1, "Pass"), (2, "Warning"), (0, "Fail")])
+def test_the_text_report_labels_each_status(tmp_path, status, label):
+    """Run without --php (the copy a crash report carries in
+    logs/healthCheck.log), each item reads Pass, Warning or Fail by its
+    status.
+
+    Regression: c9ddc60bf. The Warning label sat inside the Fail branch,
+    where a warning's status never reaches, so warnings read "Pass" (since
+    3259a36ac)."""
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN,
+                     f'PrintItemHead "fpp-tests item"; STATUS={status}; '
+                     f'STATUSSTR="fpp-tests status"; PrintItemFoot')
+    assert f"{label} - fpp-tests status" in out, out[-2000:]

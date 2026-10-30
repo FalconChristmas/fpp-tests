@@ -278,7 +278,11 @@ def test_dynamic_entry_with_a_missing_file(fppd):
 
 
 def test_dynamic_entry_from_a_url(fppd):
-    """A dynamic entry of subType url fetches its entries over HTTP."""
+    """A dynamic entry of subType url fetches its entries over HTTP.
+
+    Also 817081728: CurlManager::add deleted the request's private data in
+    its callback, and the completion path deleted it again (ASan
+    heap-use-after-free on the first request)."""
     body = json.dumps({"mainPlaylist": [step(7), step(8)]})
     with http_server({"/items": body}) as (port, got):
         fppd.write("playlists/P.json", playlist("P", main=[

@@ -101,7 +101,10 @@ def lit_with_token(tw, token, fragment=0, length=None):
 
 def test_handshake_then_frames_carry_the_token(fppd):
     """Login, verify with the token login gave, realtime mode with it, and
-    then every frame carries it."""
+    then every frame carries it.
+
+    Also 2569d5819, which gave CurlManager requests a body: login is a POST
+    whose body the lights need, and without it realtime mode never came."""
     setup(fppd, 300)
     with lights() as tw:
         fppd.start()

@@ -12,7 +12,7 @@ import pytest
 TREE = os.environ.get("FPP_TREE", "")
 
 
-def get_uuid(tmp_path, eeprom=None, dt_serial=None, dmi_serial=None):
+def get_uuid(tmp_path, eeprom=None, dt_serial=None, dmi_serial=None, machine_id=None):
     """Run the tree's get_uuid with the given stand-ins (None: absent) and
     no CPU serial, as on a BeagleBone; its output."""
     if not TREE:
@@ -20,10 +20,11 @@ def get_uuid(tmp_path, eeprom=None, dt_serial=None, dmi_serial=None):
     with open(os.path.join(TREE, "scripts", "get_uuid")) as f:
         src = f.read()
     # The sources that would otherwise be read from the machine running this.
-    for path in ("/proc/cpuinfo", "/proc/device-tree/serial-number", "/sbin/dmidecode", "sudo dmidecode"):
+    for path in ("/proc/cpuinfo", "/proc/device-tree/serial-number", "/sbin/dmidecode", "sudo dmidecode",
+                 "/etc/machine-id"):
         assert path in src, f"get_uuid no longer reads {path}, so this test needs a rewrite"
     (tmp_path / "cpuinfo").write_text("processor\t: 0\n")
-    files = {"eeprom": eeprom, "serial-number": dt_serial}
+    files = {"eeprom": eeprom, "serial-number": dt_serial, "machine-id": machine_id}
     for name, content in files.items():
         if content is not None:
             (tmp_path / name).write_bytes(content)
@@ -35,6 +36,7 @@ def get_uuid(tmp_path, eeprom=None, dt_serial=None, dmi_serial=None):
     script.write_text(src.replace("/proc/cpuinfo", str(tmp_path / "cpuinfo"))
                          .replace("/proc/device-tree/serial-number", str(tmp_path / "serial-number"))
                          .replace("/sys/bus/i2c/devices/0-0050/eeprom", str(tmp_path / "eeprom"))
+                         .replace("/etc/machine-id", str(tmp_path / "machine-id"))
                          .replace("sudo dmidecode", str(dmi))
                          .replace("/usr/sbin/dmidecode", str(dmi))
                          .replace("/sbin/dmidecode", str(dmi)))
@@ -68,3 +70,14 @@ def test_get_uuid_prefers_the_device_tree_serial_to_dmidecode(tmp_path):
     firmware, or be a vendor default) never used its device-tree serial."""
     out, err = get_uuid(tmp_path, dt_serial=b"FPPDT0012345\x00", dmi_serial="DMI98765432")
     assert out == "M3-FPPDT0012345", f"get_uuid gave {out!r}\n{err[-2000:]}"
+
+
+def test_get_uuid_falls_back_to_the_machine_id(tmp_path):
+    """A system with no hardware serial at all (no CPU, device-tree, board
+    EEPROM or dmidecode serial) takes systemd's machine-id: M4-<id>.
+
+    Regression: a5e625e50. Such a system went straight to a generated
+    UUID."""
+    mid = "3f2a9c0e5b7d4e1f8a6c2b9d0e4f7a13"
+    out, err = get_uuid(tmp_path, machine_id=f"{mid}\n".encode())
+    assert out == f"M4-{mid}", f"get_uuid gave {out!r}\n{err[-2000:]}"

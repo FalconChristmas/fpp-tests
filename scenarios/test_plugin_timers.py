@@ -42,3 +42,18 @@ def test_periodic_timer_that_stops_or_replaces_itself(fppd):
                   what="every timer's callback to finish")
     time.sleep(0.5)
     assert int(str(fppd.command("Timer Test Ran"))) == 40
+
+
+def test_one_shot_timers_due_together_can_add_timers(fppd):
+    """Several one-shot timers due at the same moment each add another named
+    timer from their callback, and every callback runs.
+
+    Regression: d61a5e4aa. A one-shot taken out to fire leaves an empty slot
+    in the timer list until the pass ends, and adding a named timer walked
+    the list without skipping empty slots: the first callback that added
+    one dereferenced the slot of a timer fired with it."""
+    install(fppd)
+    fppd.start()
+    fppd.command("Timer Test Oneshot Add", "8")
+    fppd.wait_for(lambda: int(str(fppd.command("Timer Test Ran"))) >= 8, timeout=10,
+                  what="every one-shot's callback to finish")

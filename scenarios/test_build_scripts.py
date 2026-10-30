@@ -14,6 +14,7 @@ import subprocess
 
 import pytest
 
+import shims
 from fppinit import MEDIA, fppinit  # noqa: F401 -- the fixture
 
 TREE = os.environ.get("FPP_TREE", "")
@@ -169,3 +170,72 @@ def test_plugins_are_cleaned_built_and_chowned_through_sudo(fppinit):
     chown = [c for c in plugin if "chown" in c]
     assert chown and all(c.startswith("sudo ") for c in chown), f"chown not through sudo: {plugin}"
     assert os.path.exists(os.path.join(fppinit.media, "plugins/fpp-tests-native/built.so")), plugin
+
+
+# A command that only records its call.
+RECORDING = """#!/bin/sh
+printf '%s\\n' "$(basename "$0") $*" >> /fppinit-calls.log
+exit 0
+"""
+
+
+def compile_with_memory(sb, kb):
+    """compileBinaries in /opt/fpp, fppd running, on a box with `kb` of RAM
+    and no swap; the calls it made, in order."""
+    sb.unstub("mount")
+    sb.root_file("/usr/bin/sudo", RECORDING_SUDO)
+    sb.root_file("/usr/bin/make", RECORDING_MAKE)
+    sb.root_file("/usr/bin/pgrep", '#!/bin/sh\ncase "$*" in *fppd*) echo 4242 ;; *) exit 1 ;; esac\n')
+    # fallocate leaves the file behind: the build's cleanup only swaps off
+    # a swapfile that exists.
+    for name in ("fallocate", "mkswap", "swapon", "swapoff"):
+        body = RECORDING.replace("exit 0", 'for a; do f=$a; done; mkdir -p "$(dirname "$f")"; touch "$f"\nexit 0') \
+            if name == "fallocate" else RECORDING
+        for d in ("/usr/bin", "/usr/sbin", "/sbin", "/bin"):
+            sb.root_file(f"{d}/{name}", body)
+    sb.write("fake/meminfo", f"MemTotal:       {kb} kB\nMemFree:        {kb // 2} kB\n")
+    sb.write("fake/swaps", "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n")
+    with open(shims.build("fakesys.c"), "rb") as f:
+        sb.write_bytes("fakesys.so", f.read())
+    fake = f"/proc/meminfo={MEDIA}/fake/meminfo:/proc/swaps={MEDIA}/fake/swaps"
+    r = sb._run(["bash", "-c",
+                 f"echo {MEDIA} > /tmp/media_root.txt && "
+                 "mount --bind /tmp/media_root.txt /opt/fpp/www/media_root.txt && "
+                 f"export LD_PRELOAD={MEDIA}/fakesys.so FAKESYS={fake} && "
+                 "export FPPDIR=/opt/fpp && . /opt/fpp/scripts/common && . /opt/fpp/scripts/functions && "
+                 "compileBinaries; echo \"compileBinaries exited $?\""], timeout=120)
+    out = r.stdout + r.stderr
+    assert "compileBinaries exited 0" in out, out[-3000:]
+    return out, [c for c in sb.calls() if not c.startswith(("systemctl", "pgrep"))]
+
+
+def test_a_low_memory_build_runs_with_a_swapfile_made_through_sudo(fppinit):
+    """compileBinaries on a box with under 512MB of RAM and no swap (a Pi
+    Zero, an older Pi) makes a swapfile in the media directory through sudo
+    before the build, and takes it away through sudo after; with 1GB it
+    makes none.
+
+    Regression: 59b73be98. The build stopped fppd instead (and only under
+    256MB), and the larger files still ran a 512MB box out of memory.
+    Regression: 2cd247c87. The swapfile commands ran without sudo, which
+    as the fpp user an update from the UI runs as can't do."""
+    out, calls = compile_with_memory(fppinit, 448000)
+    tools = ("fallocate", "mkswap", "swapon", "swapoff")
+    ran = [c for c in calls if c.split()[0] in tools]  # the commands themselves
+    def sudo_command(c):  # "sudo -E mkswap ..." -> "mkswap ..."
+        words = c.split()[1:]
+        while words and words[0].startswith("-"):
+            words.pop(0)
+        return " ".join(words)
+    via_sudo = [sudo_command(c) for c in calls if c.startswith("sudo ")]
+    via_sudo = [c for c in via_sudo if c.split()[0] in tools]
+    assert ran, f"no swapfile on a 448MB box:\n{calls}\n{out[-2000:]}"
+    assert all(c.endswith("media/tmp/swapfile") for c in ran), ran
+    assert ran == via_sudo, f"swapfile commands not through sudo: ran {ran}, through sudo {via_sudo}"
+    made = [i for i, c in enumerate(calls) if " swapon " in c]
+    build = [i for i, c in enumerate(calls) if "make -j" in c]
+    gone = [i for i, c in enumerate(calls) if " swapoff " in c]
+    assert made and build and gone and made[0] < build[0] < gone[0], calls
+
+    out, calls = compile_with_memory(fppinit, 1000000)
+    assert not [c for c in calls if "swap" in c], f"a swapfile on a 1GB box: {calls}"
