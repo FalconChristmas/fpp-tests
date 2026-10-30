@@ -132,7 +132,10 @@ test('selecting a tab neither scrolls the page nor adds to history', async ({ pa
   // Regression: 77f8f68fb.  The shared tab wiring assigned location.hash,
   // which scrolled the pane to the top of the window and pushed a history
   // entry per click, and then called scrollToTop().
-  await page.setViewportSize({ width: 1280, height: 500 });
+  // Short enough that every pane scrolls 200 px: the System pane in Docker
+  // has only a few hundred pixels more than this since 7e5913f47 dropped
+  // its empty headings.
+  await page.setViewportSize({ width: 1280, height: 400 });
   await page.goto('/settings.php#settings-playback');
   await page.waitForLoadState('load');
   await expect(page.locator('#settings-playback-tab')).toHaveClass(/active/);
