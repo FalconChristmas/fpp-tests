@@ -293,7 +293,10 @@ class FppinitSandbox:
                 # bound over, not copied: the tree is mounted through
                 root_lines.append(f"mount --bind {shlex.quote(src)} {dest}")
             else:
-                root_lines.append(f'mkdir -p "$(dirname {dest})"; cp {shlex.quote(src)} {dest}; chmod {mode} {dest}')
+                # rm first: a destination that is an absolute symlink (/usr/bin/php ->
+                # /etc/alternatives/php) would otherwise be written through to the
+                # machine's own file, since "$R" is not a chroot for this shell.
+                root_lines.append(f'mkdir -p "$(dirname {dest})"; rm -f {dest}; cp {shlex.quote(src)} {dest}; chmod {mode} {dest}')
         fake_lines = []
         for i, (path, content) in enumerate(self.fakes.items()):
             src = os.path.join(run_dir, f"fake-{i}")
