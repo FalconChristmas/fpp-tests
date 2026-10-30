@@ -113,3 +113,37 @@ def test_boot_installs_the_kiosk_only_when_asked_and_missing(fppinit):
     fppinit.root_file("/etc/fpp/kiosk", "")
     start(fppinit)
     assert not [c for c in fppinit.calls() if "enable fpp-install-kiosk" in c], fppinit.calls()
+
+
+def audio_env_after_setup(sb, backend):
+    """setupAudio on a USB card with the given MediaBackend; the audio
+    environment file it left in /run/fppd (a tmpfs of the sandbox's, so the
+    run itself copies it out)."""
+    maps = fake_boards(sb, cards=USB_CARD)
+    sb.stub_output("aplay", "-l", "**** List of PLAYBACK Hardware Devices ****\n"
+                   "card 0: Device [USB Audio Device], device 0: USB Audio [USB Audio]\n"
+                   "  Subdevices: 1/1\n  Subdevice #0: subdevice #0\n")
+    sb.stub_output("amixer", "scontrols", "Simple mixer control 'PCM',0\n")
+    set_setting(sb, AudioOutput="Device", MediaBackend=backend)
+    sb.root_file("/.dockerenv", None)
+    r = sb._run(["sh", "-c",
+                 "env LD_PRELOAD=/fpp-test-media/fakesys.so FAKESYS=" + maps +
+                 " ASAN_OPTIONS=verify_asan_link_order=0:detect_leaks=0 /opt/fpp/src/fppinit setupAudio; "
+                 "cat /run/fppd/fpp-audio.env > /fpp-test-media/tmp/audio.env"], timeout=240, media_home=True)
+    assert "AddressSanitizer" not in r.stdout + r.stderr and "terminate called" not in r.stdout + r.stderr
+    return dict(l.split("=", 1) for l in sb.media_file("tmp/audio.env").split()) if sb.media_exists("tmp/audio.env") else {}
+
+
+def test_the_audio_environment_file_is_in_run_and_names_the_backend_for_sdl_and_openal(fppinit):
+    """setupAudio writes fppd's audio environment to /run/fppd/fpp-audio.env
+    -- not into the source tree -- with SDL and OpenAL both on pulse for a
+    PipeWire backend (the ALSA backend it also covered is retired).
+
+    Regressions: b4ef3df01 (the file lived in /opt/fpp/etc/systemd, inside
+    the git tree, and dirtied it) and 8296032ca (OpenAL was not named in the file; fppd's own default for it is not
+    tested here)."""
+    env = audio_env_after_setup(fppinit, "pipewire-simple")
+    assert env.get("SDL_AUDIODRIVER") == "pulse" and env.get("ALSOFT_DRIVERS") == "pulse", env
+    assert env.get("PIPEWIRE_RUNTIME_DIR") == "/run/pipewire-fpp", env
+    assert not os.path.exists(os.path.join(fppinit.tree, "etc/systemd/fpp-audio.env")), \
+        "the audio environment was written into the source tree"
