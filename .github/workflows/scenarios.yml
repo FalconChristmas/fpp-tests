@@ -507,14 +507,24 @@ jobs:
   # player, with the ASan fppd behind them, driven by Playwright from the
   # runner. A dispatched flavor is the fppd behind the pages, except coverage,
   # which has no web counterpart and runs it with ASan (so a hand-published
-  # dashboard still gets the web column).
+  # dashboard still gets the web column). A whole run takes over an hour on a
+  # hosted runner, so it runs as four Playwright shards side by side and
+  # web-results puts them back together.
   web:
     if: github.event.inputs.suites != 'scenarios'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        # A dispatch with its own playwright arguments may name files, so it
+        # runs whole, in one job.
+        shard: ${{ fromJSON(github.event.inputs.playwright_args != '' && github.event.inputs.playwright_args != null && '[1]' || '[1,2,3,4]') }}
     env:
       FPP_REF: ${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}
       FLAVOR: ${{ github.event.inputs.flavor != '' && github.event.inputs.flavor != 'coverage' && github.event.inputs.flavor || 'asan' }}
+      SHARD: ${{ matrix.shard }}
+      SHARDS: ${{ (github.event.inputs.playwright_args != '' && github.event.inputs.playwright_args != null) && '1' || '4' }}
     steps:
       - name: Checkout fpp-tests
         uses: actions/checkout@v6
@@ -532,7 +542,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .ccache
-          key: ccache-web-${{ env.FLAVOR }}-${{ github.run_id }}
+          key: ccache-web-${{ env.FLAVOR }}-${{ github.run_id }}-${{ matrix.shard }}
           restore-keys: |
             ccache-web-${{ env.FLAVOR }}-
             ccache-${{ env.FLAVOR }}-
@@ -555,8 +565,14 @@ jobs:
           FPP_TESTS_CCACHE: .ccache
           PLAYWRIGHT_ARGS: ${{ github.event.inputs.playwright_args }}
           NOPCH: ${{ (github.event_name != 'workflow_dispatch' || github.event.inputs.fpp_ref == 'master') && '--nopch' || '' }}
-        # PLAYWRIGHT_ARGS is left unquoted on purpose, to split into arguments.
-        run: ./run-web.sh --fpp fpp --ref HEAD --flavor "$FLAVOR" $NOPCH $PLAYWRIGHT_ARGS
+        # PLAYWRIGHT_ARGS and SHARDARG are left unquoted on purpose, to split
+        # into arguments.
+        run: |
+          SHARDARG=
+          if [ "$SHARDS" -gt 1 ]; then
+            SHARDARG="--shard=$SHARD/$SHARDS"
+          fi
+          ./run-web.sh --fpp fpp --ref HEAD --flavor "$FLAVOR" $NOPCH $PLAYWRIGHT_ARGS $SHARDARG
 
       # meta.json's flavor is the dashboard's column for this suite.
       - name: Make the artifacts readable
@@ -572,7 +588,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: web-report
+          name: web-report-${{ matrix.shard }}
           path: artifacts/web/
           if-no-files-found: ignore
           retention-days: 14
@@ -580,6 +596,47 @@ jobs:
       - name: Summarize
         if: always()
         run: python3 scripts/ci-summary.py artifacts/web >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the shard's results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: shard-web-${{ matrix.shard }}
+          path: |
+            artifacts/web/meta.json
+            artifacts/web/junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The web shards, put back together as one results-web: what the dashboard
+  # reads. A shard that never finished leaves the suite failed.
+  web-results:
+    needs: [web]
+    if: always() && needs.web.result != 'skipped'
+    runs-on: ubuntu-latest
+    env:
+      SHARDS: ${{ (github.event.inputs.playwright_args != '' && github.event.inputs.playwright_args != null) && '1' || '4' }}
+    steps:
+      - name: Checkout fpp-tests
+        uses: actions/checkout@v6
+
+      - name: Download the shards
+        uses: actions/download-artifact@v8
+        with:
+          pattern: shard-web-*
+          path: shards
+
+      - name: Merge them
+        run: |
+          mkdir -p artifacts/web
+          set --
+          for i in $(seq 1 "$SHARDS"); do set -- "$@" "shards/shard-web-$i/junit.xml"; done
+          status=0
+          python3 scripts/merge-junit.py artifacts/web/junit.xml "$@" || status=$?
+          meta=$(ls shards/shard-web-*/meta.json 2>/dev/null | head -1)
+          [ -n "$meta" ] && cp "$meta" artifacts/web/meta.json
+          python3 scripts/ci-summary.py artifacts/web >> "$GITHUB_STEP_SUMMARY"
+          exit $status
 
       - name: Upload the results
         if: always()
@@ -597,7 +654,7 @@ jobs:
   # latest coverage report, line by line. Each deploy replaces the whole site,
   # so only a run with a coverage build publishes by hand.
   publish:
-    needs: [results, web, am335x]
+    needs: [results, web-results, am335x]
     if: always() && !cancelled() && (github.event_name == 'schedule' || (github.event.inputs.publish == 'true' && github.event.inputs.fpp_ref == 'master' && github.event.inputs.flavor == 'coverage'))
     runs-on: ubuntu-latest
     permissions:
