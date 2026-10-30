@@ -184,6 +184,11 @@ def test_a_layout_with_an_empty_panel_slot_runs(fppd):
     Regression: 6b277b1bc. The unmapped channels kept the 0xFFFFFFFF fill
     in the channel offset map, and the prep loop scattered through it to
     wild addresses: fppd crash-looped on such layouts.
+
+    Also covers dbb0c7098: BBShiftPanelOutput::Init asks
+    CapeUtils::getLicensedOutputs() before anything else has loaded the
+    cape info, and with that call not initializing it fppd died there on a
+    null pointer.
     """
     fake_pru(fppd)
     # both on output 1 (the only one an unsigned cape licenses), first and

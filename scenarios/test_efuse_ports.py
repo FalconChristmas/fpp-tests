@@ -69,7 +69,11 @@ def test_an_efuse_warning_comes_down_when_the_strings_are_reloaded(fppd):
     only be taken down by the text stored on its port, and the reload's
     RemovePortConfiguration() reset the port, text and all: the banner
     stayed until fppd restarted. (The pixel-count warning, the same id
-    held the same way, is not exercised here.)"""
+    held the same way, is not exercised here.)
+
+    Also b3a8244a6, which made a reload remove each port and add it again:
+    with the port only re-registered by name, the old trip state stayed
+    and so did the banner."""
     powered_port(fppd, eFuseRetryCount="0")
     trip()
     fppd.wait_for(lambda: efuse_warnings(fppd), timeout=10, what="the eFuse warning")
@@ -161,3 +165,29 @@ def test_the_retry_count_applies_without_a_restart(fppd):
     trip()
     fppd.wait_for(lambda: "Attempting reset retry" in fppd.log(), timeout=10, what="a retry after the trip")
     assert not efuse_warnings(fppd), "the trip raised its warning at once instead of retrying"
+
+
+def test_a_port_moved_to_another_enable_pin_drives_the_new_one(fppd):
+    """The string config is saved again with the port's enable pin moved
+    to another line: after the reload, Outputs On drives the new pin high
+    and the old one is no longer the port's.
+
+    Regression: b3a8244a6. A reload re-registered each port by name only:
+    a port already known kept the pins it was first given, so a changed
+    enable or eFuse pin took effect only after fppd restarted.
+    """
+    moved = "TF-13"
+    powered_port(fppd, eFuseRetryCount="0")
+    if high(moved):
+        os.unlink(pin_file(moved))
+    cfg = config(fppd)
+    cfg["channelOutputs"][0]["outputs"][0]["simPin"]["enablePin"] = moved
+    loads = fppd.log().count("Calling Init() on PixelCountSim output")
+    time.sleep(1.1)  # a save in a later second, as a person makes it
+    fppd.write("config/co-pixelStrings.json", cfg)
+    fppd.wait_for(lambda: fppd.log().count("Calling Init() on PixelCountSim output") > loads, timeout=20,
+                  what="the outputs to reload")
+    fppd.command("Outputs Off")
+    fppd.command("Outputs On")
+    fppd.wait_for(lambda: high(moved), timeout=10,
+                  what=f"the moved enable pin {moved} to go high (old pin high: {high(ENABLE)})")

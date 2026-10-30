@@ -207,7 +207,8 @@ def test_a_plain_gpio_output_on_a_uart_pad_is_requested(pads, pinctrl, debugfs, 
     assert "consumer=" in info and "output" in info, info
 
 
-PWM_PINS = {"P1-13": 27, "P1-32": 12, "P1-33": 13, "P1-12": 18, "P1-35": 19}
+# P1-13 (GPIO27) has no PWM function; fppd stopped offering it in d2061bc52
+PWM_PINS = {"P1-32": 12, "P1-33": 13, "P1-12": 18, "P1-35": 19}
 
 
 def test_a_pwm_output_whose_pwm_cannot_be_set_up_starts(pads, pinctrl, debugfs, fppd):

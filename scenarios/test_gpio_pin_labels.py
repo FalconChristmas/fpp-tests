@@ -89,3 +89,40 @@ def test_the_gpio_lists_follow_the_capes_show_and_hide_filters(fppd):
     assert "TF-1" not in hidden and "TF-2" in hidden, hidden
     only = filtered(fppd, {"show": {"gpio": ["^TF-2$"]}})
     assert only == ["TF-2"], only
+
+
+HIDE_SETTING_PHP = r"""
+chdir($argv[1] . '/www');
+require_once 'common.php';
+$settings['uiLevel'] = 3;
+$settings['cape-info'] = json_decode($argv[2], true);
+$out = array();
+foreach (array(0, 1) as $all) {
+    $settings['showAllOptions'] = $all;
+    foreach (array('piRTC', 'LEDDisplayType') as $name) {
+        $out[$all ? 'all' : 'cape'][$name] = ShouldPrintSetting(array('name' => $name));
+    }
+}
+echo "\n@@SHOWN@@" . json_encode($out);
+"""
+
+
+def test_a_setting_the_cape_hides_is_not_printed(fppd):
+    """A setting the cape's cape-info.json lists under hide.settings is
+    left off the settings pages (ShouldPrintSetting() is false for it)
+    unless "show all options" is on; the others still print.
+
+    Regression: 1ef6a786c, which added the cape's hide list for settings
+    (and its show/hide patterns for the GPIO input page, not covered
+    here). The settings were printed whatever the cape said.
+    """
+    if not shutil.which("php"):
+        pytest.skip("no php-cli")
+    fppd.start()
+    r = subprocess.run(["php", "-d", "short_open_tag=1", "-r", HIDE_SETTING_PHP, "--", fppd.tree,
+                        json.dumps({"hide": {"settings": ["piRTC"]}})],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0 and "@@SHOWN@@" in r.stdout, r.stdout[-2000:] + r.stderr[-2000:]
+    shown = json.loads(r.stdout.split("@@SHOWN@@", 1)[1])
+    assert shown == {"cape": {"piRTC": False, "LEDDisplayType": True},
+                     "all": {"piRTC": True, "LEDDisplayType": True}}, shown

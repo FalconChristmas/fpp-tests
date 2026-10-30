@@ -141,6 +141,9 @@ def test_a_gpio_output_on_a_missing_pin_is_refused_with_a_warning(fppd, pin):
     onto the used-pins list before checking it, a null dereference (SIGSEGV)
     as the output loaded at startup; the by-name path only logged "GPIO Pin
     not configured", with no warning.
+
+    Also f942df97d (the by-name case): the output read only "gpio", so a
+    "pin" name was ignored and the output went to GPIO 0 instead.
     """
     fppd.write("config/co-other.json", {"channelOutputs": [dict({
         "type": "GPIO", "enabled": 1, "startChannel": 1, "channelCount": 1,

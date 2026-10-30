@@ -777,6 +777,9 @@ def test_channel_outputs_enabled_means_universe_outputs(fppd):
     Regression: 6cc92025f. It reported any channel output at all, so a
     player driving only a serial or control channel output showed as
     sending universes.
+
+    Also 812bdaab3: a co-universes.json saved while fppd runs is loaded
+    without a restart; before it outputs were read only at startup.
     """
     fppd.write("config/co-other.json", {"channelOutputs": [{
         "type": "ControlChannel", "enabled": 1, "startChannel": 1, "channelCount": 1,

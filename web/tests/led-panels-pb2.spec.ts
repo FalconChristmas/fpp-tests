@@ -148,3 +148,19 @@ test('a PocketBeagle2 is offered the BeagleBone interleaves, the 32 and 40 pixel
   await page.locator('#tab-LEDPanels input[type=button][value="Save"]:not(.Zebra_Pin_Clone *)').click();
   await expect.poll(async () => (await saved(request)).channelOutputs[0].panelInterleave, { timeout: 15_000 }).toBe('32z');
 });
+
+test("a panel cape's driver and name are what a saved matrix gets", async ({ page, request }) => {
+  // Regression: 7fc63459c (the page half; CapeUtils::getPanelConfig, its
+  // fppd half, is what BBShiftPanel reads the cape's panel config with --
+  // scenarios/test_am62x_panels.py on a panel cape).  The cape's
+  // media/tmp/panels config names its driver and its name: the matrix is
+  // saved with that driver as subType and the name as configName, not the
+  // generic Beagle "LEDscapeMatrix" with no config name.  (Its Test
+  // Pattern half, "BB64 Panels" for a BBShiftPanel cape, is not checked.)
+  cape('BBShiftPanel');
+  writeOutputs([matrix('LEDscapeMatrix')]);
+  await openPanels(page);
+  await page.locator('#tab-LEDPanels input[type=button][value="Save"]:not(.Zebra_Pin_Clone *)').click();
+  await expect.poll(async () => (await saved(request)).channelOutputs[0].subType, { timeout: 15_000 }).toBe('BBShiftPanel');
+  expect((await saved(request)).channelOutputs[0].configName).toBe('FppTestsScroller');
+});

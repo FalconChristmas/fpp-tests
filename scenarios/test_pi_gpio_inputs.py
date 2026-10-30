@@ -272,6 +272,8 @@ def test_an_inputs_edges_are_published_over_mqtt(pads, fppd):
 
     Regression: f740b4465. aa80695fa's rewrite of doAction() dropped the
     Events::Publish() calls, so nothing was published for GPIO inputs.
+    Also af574eaab, which added the publishing (red on a Pi 4 against
+    master with the Publish calls removed).
     """
     b = Button(fppd)
     host = "gpiotest"

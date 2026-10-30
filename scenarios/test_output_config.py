@@ -953,6 +953,10 @@ def test_a_save_in_place_reloads_the_outputs_once(fppd):
     kernel merges events still queued), the first time on the empty file
     and the next on the half-written one ("Error parsing"). It now watches IN_CLOSE_WRITE: one event per save, once the
     file is complete.
+
+    Also 812bdaab3, which made a saved Other/universe output config reload
+    at runtime at all: before it the outputs were read once at startup and
+    a save needed a restart (no reload for any save).
     """
     path = os.path.join(fppd.media, "config", "co-other.json")
 
@@ -981,3 +985,28 @@ def test_a_save_in_place_reloads_the_outputs_once(fppd):
     parse_errors = [line for line in fppd.log().splitlines()
                     if "Error parsing" in line and "co-other.json" in line]
     assert not parse_errors, parse_errors
+
+
+def test_an_output_starting_at_channel_zero_is_refused(fppd):
+    """An output config with "startChannel": 0 (one-based, so channel -1)
+    and channels to send is refused with a warning naming its type, and
+    the outputs beside it keep sending.
+
+    Regression: c4efe2b3f (its ChannelOutputSetup.cpp half; the BBBUtils
+    half, kernel GPIO numbers, was replaced by later chip mapping). The
+    loader took the -1 as the output's offset into the channel buffer, so
+    the output read from before the buffer on every frame.
+    """
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "GenericUDP", "enabled": 1, "startChannel": 0, "channelCount": 10,
+        "address": "127.0.0.1", "port": 9999, "tokens": "{data}"}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        range_on(fppd, 10, 42)
+        fppd.wait_for(lambda: rx.last() is not None and rx.last()[:10] == bytes([42] * 10),
+                      timeout=10, what="the good output to send")
+    w = warnings(fppd)
+    assert "Could not initialize output type GenericUDP. Invalid start channel." in w, w
+    assert "Calling Init() on GenericUDP" not in fppd.log(), fppd.tail()

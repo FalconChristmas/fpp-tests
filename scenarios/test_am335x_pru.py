@@ -53,7 +53,17 @@ def warnings_of(fppd):
 
 def test_a_bbb48string_output_starts_on_the_fake_pru(fppd):
     """Smoke: a two-port BBB48String output builds its firmware, loads it
-    on PRU1 and sends frames."""
+    on PRU1 and sends frames.
+
+    Regression: b9cf627e1. On a mainline kernel (no /sys/class/gpio) the
+    pin map's opendir() came back NULL and readdir() on it killed fppd
+    with SIGSEGV as the first pin was looked up.
+
+    Regression: b135696d0 and 4b53c59d4, the AM335x program assembled at
+    runtime: DISABLE_PIN_INTERRUPTS lost its .endm, and NSPERCLK (used by
+    the timeout waits) had no AM335x value; either way the program failed
+    to build and the output never started.
+    """
     pru = FakePruss(fppd)
     pins, _ = string_pins()
     write_string_cape("TestTwo", {"outputs": [{"pin": p} for p in pins[:2]]})

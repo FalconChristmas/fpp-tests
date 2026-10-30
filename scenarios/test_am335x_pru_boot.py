@@ -23,6 +23,10 @@ def test_a_core_that_never_comes_up_fails_its_output_and_says_so(fppd):
     online"). The loader wrote "start" and went straight on, never looking
     at the state again: a core that had not come up (yet, or at all) was
     taken as running, and the output fed frames to nothing.
+
+    Regression: 0a91328f1. BBBPru::run() returned the same value whether or
+    not the core came up, and the outputs ignored it: with enable()'s
+    result dropped the output was added ("Init succeeded") all the same.
     """
     pru = FakePruss(fppd, states=("offline", "offline"), noboot=(1,))
     pins, _ = string_pins()

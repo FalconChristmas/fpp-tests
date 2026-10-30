@@ -184,6 +184,28 @@ def test_fppoled_clear_drops_the_cached_logo_when_there_is_none(fppinit):
     assert fppinit.written(CACHE) == XBM
 
 
+def test_fppoled_clear_removes_the_cape_detection_marker_and_exits(fppinit):
+    """fppoled.service's ExecStartPre, `fppoled clear`, removes
+    media/tmp/cape_detect_done (so the display waits for this boot's cape
+    detection, not the last one's) and exits, without starting the
+    display.
+
+    Regression: dfba1d3d7. ExecStartPre was an `rm -rf`, which lost the
+    race on a PocketBeagle2 whose filesystem was still read-only; the
+    "clear" pass retries the unlink for up to 10 s. Without the pass,
+    `fppoled clear` was the display daemon itself and never returned."""
+    if not os.path.exists(os.path.join(fppinit.tree, "src", "fppoled")):
+        pytest.skip("no fppoled in the tree under test")
+    fppinit.settings(LEDDisplayType=0)
+    fppinit.write("tmp/cape_detect_done", "")
+    try:
+        r = fppinit._run(["/opt/fpp/src/fppoled", "clear"], media_home=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        pytest.fail("`fppoled clear` did not exit")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert not fppinit.media_exists("tmp/cape_detect_done"), "the marker was left"
+
+
 def test_cape_detection_keeps_the_cached_logo_in_step(fppinit):
     """A detect run whose EEPROM carries no image removes the /var/tmp copy
     of the logo; one that has an image refreshes it; a -ro run leaves it.
@@ -335,7 +357,10 @@ def test_a_cape_image_whose_last_byte_shares_the_brace_is_drawn(oled_media, scre
 
     Regression: 635bf758f. The parser dropped the token holding the brace,
     so the image came out a byte short of width x height and, since
-    bb1d47557 checks that, was not drawn at all.
+    bb1d47557 checks that, was not drawn at all. Also 8e94aebf8, which put
+    the boot stage ("FPP - Cape Detection") and the cape logo on the boot
+    notice (red on a Pi 4 against master with the notice back to a plain
+    "FPP Booting..." and no image).
     """
     capeimage(oled_media, "0x00 };")
     oled_media.put("tmp/cape_detect_done", None)

@@ -441,6 +441,10 @@ def test_ch340_relays_send_only_what_changes(fppd):
     Regression: 234a66c86. Every relay's 4-byte command went out every
     frame, 1280 bytes a second of repeated state at 40 fps through a port
     that carries 960.
+
+    Feature: caac7c051 (the CH340 subtype and its A0/relay/state/checksum
+    commands). Without the subtype mapping Init refuses the output as an
+    invalid type and nothing reaches the port.
     """
     with PtyReader() as pty:
         fppd.write("config/co-other.json", {"channelOutputs": [{

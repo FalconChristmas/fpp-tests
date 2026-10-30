@@ -13,11 +13,14 @@ pad as it is. Skipped elsewhere.
 import ctypes
 import mmap
 import os
+import re
 import shutil
 import time
 
 import pytest
 
+from am335x import _bind_tree_sources
+from bbcape import fake_pru, write_string_cape
 import cape_eeprom as ee
 from pru import real_pru  # noqa: F401 (a fixture)
 
@@ -158,3 +161,32 @@ def test_a_serial_output_on_a_pin_with_no_uart_transmit_is_sent_from_a_pru(real_
         pytest.skip(f"cannot map the GPIO controller: {e}")
     data = uart_bytes(line.edges(1.5, away_from=fppd.proc.pid), 9600)
     assert b"FPPAAAA" in data, data
+
+
+def test_a_pru_serial_output_builds_its_program_for_the_am62x(fppd):
+    """A BBBSerial DMX output (the PRU bit-banged serial of the older
+    capes, run on PRU0) on a PocketBeagle 2 assembles its program for the
+    AM62x: its delays count the AM62x PRU's 4 ns clock, so the DMX bits
+    come out at 250 kbaud.
+
+    Regression: dcec8a4f2. compileSerial.sh always preprocessed and linked
+    for the AM335x (5 ns cycles, its link map), so on a PocketBeagle 2 every
+    bit came out a fifth short. A check of the program fppd built: the PRUs
+    here never answer (see bbcape.py).
+    """
+    fake_pru(fppd)
+    _bind_tree_sources(fppd.tree)  # compileSerial.sh is run from /opt/fpp/src/pru
+    write_string_cape("TestSerialPB2", {"serial": [{"pin": "P2-25"}, {"pin": "P2-27"}]})
+    fppd.write("config/co-bbbStrings.json", {"channelOutputs": [{
+        "type": "BBBSerial", "subType": "DMX", "enabled": 1, "startChannel": 1,
+        "channelCount": 1024, "device": "TestSerialPB2", "pinoutVersion": "1.x",
+        "outputs": [{"outputNumber": 0, "startChannel": 1, "channelCount": 512},
+                    {"outputNumber": 1, "startChannel": 513, "channelCount": 512}]}]})
+    fppd.start(timeout=60)
+    fppd.wait_for(lambda: os.path.exists("/tmp/FalconSerial.out"), timeout=30,
+                  what=f"the serial program to build ({fppd.tail()})")
+    with open("/tmp/FalconSerial.asm") as f:
+        asm = f.read()
+    delays = re.findall(r"\(\(ns(?: / 2)?\) / (\d+)\)", asm)
+    assert delays, "no delay macros in the program"
+    assert set(delays) == {"4"}, f"delays divide ns by {sorted(set(delays))}, not the AM62x's 4"

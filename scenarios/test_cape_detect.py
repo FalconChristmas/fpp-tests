@@ -455,6 +455,36 @@ def test_an_unsigned_boot_config_removal_takes_whole_lines(fppinit):
     assert "dtoverlay=fpp-test-remove-me" not in lines, cfg
 
 
+@pytest.mark.skipif(not on_pi(), reason="bootConfig edits config.txt, on a Pi")
+def test_a_boot_config_change_alone_asks_for_a_reboot(fppinit):
+    """A cape whose base overlay is already installed (so the overlay step
+    changes nothing) and whose bootConfig adds a line config.txt lacks:
+    the line is written to config.txt and a reboot is asked for, since
+    the firmware reads config.txt only at boot. Detected again, with the
+    line now present, nothing changes and no reboot is asked for.
+
+    Regression: f201a4d2b. processBootConfig() built the new config.txt
+    and never wrote it, and its "changed" result was dropped -- the
+    overlay step then set the reboot flag on its own -- so a cape's boot
+    config change neither landed nor rebooted."""
+    boot_write(fppinit, f"{OVERLAYS}/{DEFAULT}", b"default overlay")
+    boot_write(fppinit, f"{OVERLAYS}/{BASE}", b"base overlay")
+    original = "dtparam=audio=on\n[all]\ndtoverlay=fpp-cape-overlay\n\n"
+    boot_write(fppinit, "config.txt", original)
+    image = ee.image(ee.cape_info(bootConfig={"append": ["dtoverlay=fpp-test-overlay"]}),
+                     files={"fpp-cape-overlay-rpi.dtb": "base overlay"})
+    fppinit.write_bytes(EEPROM, image)
+    out = detect(fppinit)
+    cfg = fppinit.boot_file("config.txt")
+    assert "dtoverlay=fpp-test-overlay" in [l.strip() for l in cfg.splitlines()], cfg
+    assert boot_read(fppinit, f"{OVERLAYS}/{BASE}") == b"base overlay", out
+    assert asked_to_reboot(fppinit), f"config.txt changed, which needs a reboot\n{out}"
+
+    out = detect(fppinit)
+    assert fppinit.boot_file("config.txt") == cfg, fppinit.boot_file("config.txt")
+    assert not asked_to_reboot(fppinit), f"a no-op asked for a reboot\n{out}"
+
+
 @pytest.mark.parametrize("jurisdiction,applied", [("EU", False), (None, False), ("US", True)],
                          ids=["EU", "unknown", "US"])
 def test_a_cape_cannot_switch_on_vendor_logos_where_consent_is_needed(fppinit, jurisdiction, applied):
@@ -554,7 +584,12 @@ def test_a_cape_overlay_variant_comes_and_goes_with_its_cape(fppinit):
     Feature: 6bdebe83d (board specific overlay variants), including its two
     fixes: "dtoverlay=fpp-cape-overlay" was found as a substring of the
     variant's line, so the base line was never written, and when it was it
-    was appended under whatever filter config.txt ended in."""
+    was appended under whatever filter config.txt ended in.
+
+    Also 31e138c0a (cape specific overlays on a Pi): the cape's base
+    overlay goes to overlays/fpp-cape-overlay.dtbo, the name config.txt's
+    dtoverlay= line loads; before it, it went to a .dtb no line names.
+    Shown on a Pi 5 with the .dtb target put back on master."""
     boot_write(fppinit, f"{OVERLAYS}/{DEFAULT}", b"default overlay")
     boot_write(fppinit, f"{OVERLAYS}/{BASE}", b"default overlay")
     original = "dtparam=audio=on\n[pi4]\ndtoverlay=fpp-cape-overlay-pi5\n"
@@ -625,7 +660,11 @@ def test_no_cape_puts_the_default_overlay_back_over_one_that_never_resolved(fppi
     /proc/device-tree/chosen/overlays/fpp-cape-overlay, which exists only
     for an overlay that resolved, so the broken overlay stayed installed on
     every boot. (On a box whose node names a non-default overlay, the old
-    check also restored on every run, and asked for a reboot each time.)"""
+    check also restored on every run, and asked for a reboot each time.)
+
+    Also 31e138c0a: the default comes from overlays/fpp-cape-overlay-
+    default.dtbo onto fpp-cape-overlay.dtbo; it copied the .dtb names, so
+    the overlay config.txt loads was never put back (shown on a Pi 5)."""
     boot_write(fppinit, f"{OVERLAYS}/{DEFAULT}", b"default overlay")
     boot_write(fppinit, f"{OVERLAYS}/{BASE}", b"previous cape's overlay")
     boot_write(fppinit, "config.txt", "dtparam=audio=on\n[all]\ndtoverlay=fpp-cape-overlay\n")

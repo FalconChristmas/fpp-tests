@@ -91,6 +91,25 @@ int lstat64(const char* path, struct stat64* st) {
     return real_lstat64(map(path, buf, sizeof(buf)), st);
 }
 
+/* A 32-bit build with 64-bit time_t (armhf since Debian trixie) calls
+ * these instead of stat()/lstat(), as in fakeadc.c; the struct is passed
+ * through. Without them FileExists() there sees the real /sys. */
+int __stat64_time64(const char* path, void* st) {
+    static int (*real)(const char*, void*);
+    if (!real)
+        real = dlsym(RTLD_NEXT, "__stat64_time64");
+    char buf[512];
+    return real(map(path, buf, sizeof(buf)), st);
+}
+
+int __lstat64_time64(const char* path, void* st) {
+    static int (*real)(const char*, void*);
+    if (!real)
+        real = dlsym(RTLD_NEXT, "__lstat64_time64");
+    char buf[512];
+    return real(map(path, buf, sizeof(buf)), st);
+}
+
 int access(const char* path, int mode) {
     REAL(access);
     char buf[512];

@@ -220,7 +220,7 @@ class FppinitSandbox:
 
     def fake_path(self, path, content):
         """Bind something of the scenario's over a path the kernel provides
-        under /proc or /sys, for each later run: a file's content (a str), or
+        under /proc or /sys, for each later run: a file's content (a str or bytes), or
         a directory given as {relative path: content} -- say /proc/asound
         with a sound card that isn't there, or a connector's status. The
         path must exist on the machine; nothing else in /proc or /sys moves.
@@ -307,11 +307,11 @@ class FppinitSandbox:
                     if isinstance(text, Link):
                         os.symlink(text.target, f)
                         continue
-                    with open(f, "w") as fh:
+                    with open(f, "wb" if isinstance(text, bytes) else "w") as fh:
                         fh.write(text)
                 os.makedirs(src, exist_ok=True)
             else:
-                with open(src, "w") as fh:
+                with open(src, "wb" if isinstance(content, bytes) else "w") as fh:
                     fh.write(content)
             fake_lines.append(f'mount --bind {shlex.quote(src)} "$R"{shlex.quote(path)}')
         # A device's coverage run sends the counts outside the tree

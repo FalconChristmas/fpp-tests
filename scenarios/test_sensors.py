@@ -98,3 +98,16 @@ def test_a_thermal_zone_type_with_a_dashed_suffix(fppd):
     sensors = thermal_zone(fppd, "soc-thermal-zone\n")
     assert [s["label"] for s in sensors] == ["SOC: "], sensors
     assert abs(sensors[0]["value"] - 42.0) < 0.01, sensors
+
+
+def test_a_thermal_zone_named_in_the_device_tree_keeps_its_case(fppd):
+    """A zone whose type has capitals in it -- a name a device tree gave it,
+    "PMIC-Temp" -- keeps that name as written, dashes and all; an all
+    lower-case type is still upper-cased, its "-thermal" suffix dropped
+    ("cpu-thermal" is "CPU", the rest of the file's cases).
+
+    Regression: 94a565e87. Every type was upper-cased and cut at its
+    first dash, so the device tree's name came out as "PMIC".
+    """
+    sensors = thermal_zone(fppd, "PMIC-Temp\n")
+    assert [s["label"] for s in sensors] == ["PMIC-Temp: "], sensors

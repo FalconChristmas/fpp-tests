@@ -71,6 +71,11 @@ def test_a_gpio_output_error_warning_comes_down_when_the_pin_works(fppd):
     its message changed, but never remembered the message: the warning was
     re-added on every frame, raised with no timeout, and stayed up until
     fppd restarted.
+
+    Also 84e88f91c: SendData() caught nothing, so the pin's exception
+    escaped the output thread and terminate() took fppd down. And f942df97d:
+    the output read only "gpio", so its "pin" (TF-3) was ignored and the
+    output never drove the pin.
     """
     flag = os.path.join(fppd.media, "tmp", "gpio-throws")
     fppd.write("config/co-other.json", {"channelOutputs": [{
