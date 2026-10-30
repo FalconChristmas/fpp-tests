@@ -453,3 +453,22 @@ def test_a_virtual_display_pixel_size_draws_a_filled_circle(fppd):
         px = fb.pixels()
         return {(x, y) for y in range(H) for x in range(W) if px[y][x] == (255, 128, 1)}
     fppd.wait_for(lambda: lit() == want, timeout=10, what=f"the disc ({len(want)} pixels; lit {len(lit() or [])})")
+
+
+def test_a_virtual_display_leaves_its_model_disabled(fppd):
+    """The model a Virtual Display creates for its device starts disabled
+    (isActive 0): the display draws the lights into it and only the model's
+    overlay state decides whether it reaches the device.
+
+    Regression: 8db386097. Init() switched the model on, so every start put
+    the virtual display's image over whatever else the model was drawing."""
+    fb = FakeFb(fppd, width=W, height=H, bpp=32)
+    fppd.write("config/co-other.json", virtual_display(description="state"))
+    fppd.write("config/virtualdisplaymap", f"{W},{H}\n10,5,0,3,RGB\n")
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fb.start()
+    fppd.wait_for(lambda: [m for m in fppd.get("/overlays/models") if m["Name"] == "FB - fb1"], timeout=10,
+                  what="the auto-created model")
+    time.sleep(1)
+    model = [m for m in fppd.get("/overlays/models") if m["Name"] == "FB - fb1"][0]
+    assert model["isActive"] == 0, model

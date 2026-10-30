@@ -291,3 +291,46 @@ def test_the_image_cache_is_trimmed_to_its_entry_limit(fppd):
     assert len(left) == 200, f"{len(left)} cached copies left of 210"
     assert left[0] == "pei-old010.png", f"not the oldest removed: first left is {left[0]}"
     assert os.path.exists(os.path.join(cache, "other.txt"))
+
+
+def tiff(path, w, h, pixels, orientation):
+    """A little-endian uncompressed RGB TIFF with an EXIF-style Orientation
+    tag. `pixels` is rows of (r, g, b)."""
+    import struct
+    data = b"".join(bytes(p) for row in pixels for p in row)
+    n = 9
+    ifd_at = 8
+    ifd_len = 2 + n * 12 + 4
+    bits_at = ifd_at + ifd_len            # 3 x SHORT bits-per-sample
+    strip_at = bits_at + 6
+    entries = [
+        (256, 4, 1, w), (257, 4, 1, h), (258, 3, 3, bits_at), (262, 3, 1, 2), (273, 4, 1, strip_at),
+        (274, 3, 1, orientation), (277, 3, 1, 3), (278, 4, 1, h), (279, 4, 1, len(data)),
+    ]
+    out = b"II*\x00" + struct.pack("<I", ifd_at) + struct.pack("<H", n)
+    for tag, typ, count, value in entries:
+        out += struct.pack("<HHI", tag, typ, count) + (struct.pack("<HH", value, 0) if typ == 3 and count == 1
+                                                      else struct.pack("<I", value))
+    out += struct.pack("<I", 0) + struct.pack("<HHH", 8, 8, 8) + data
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(out)
+
+
+def test_an_image_turned_by_its_exif_orientation_is_drawn_upright(fppd):
+    """A picture stored 5 across and 10 down with an orientation of 6 (turn
+    it a quarter clockwise to see it) is drawn on a 10 by 5 model upright:
+    the red corner stored top left shows at the top right.
+
+    Regression: 2c70e53be. The orientation was ignored, so a phone photo
+    came out on its side."""
+    setup(fppd, [matrix()])
+    red, green = (255, 0, 0), (0, 255, 0)
+    pixels = [[green] * 5 for _ in range(10)]
+    pixels[0][0] = red
+    tiff(os.path.join(fppd.media, "images", "Phone.tif"), 5, 10, pixels, orientation=6)
+    frame = show_image(fppd, "Phone.tif")
+    assert frame is not None
+    top_right = (0 * WIDTH + WIDTH - 1) * 3
+    assert frame[top_right:top_right + 3] == bytes(red), frame[:WIDTH * 3].hex()
+    assert frame[0:3] == bytes(green), frame[:6].hex()

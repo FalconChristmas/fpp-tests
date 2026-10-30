@@ -124,3 +124,25 @@ def test_seed_pixels_on_a_noisy_sensor_are_counted(fppd):
     status = fppd.wait_for(lambda: (p := port(fppd)) and p.get("pixelCount", -1) >= 0 and p,
                            timeout=300, interval=0.5, what="the count to finish")
     assert abs(status["pixelCount"] - 37) <= 1, status
+
+
+def test_the_check_pixel_count_command_counts_and_warns_of_a_mismatch(fppd):
+    """The Check Pixel Count command runs the current-based count on every
+    port and, when a port's string is not the length it is configured for
+    (50 configured, 40 on the wire), raises the warning "Port 1 configured
+    for 50 pixels but 40 pixels detected." (id 16); the test mode it started
+    is over afterwards.
+
+    Feature: 54e8d5586 (the command added). Before it the count could be
+    asked for only from the Pixel Count page."""
+    throw_plugin.install(fppd, source="pixelcountsim.cpp", name="PixelCountSim")
+    fppd.write("config/co-pixelStrings.json", outputs(fppd, 50, 40))
+    fppd.settings(LogLevel_ChannelOut="info", E131BridgingInterval="10")
+    fppd.start()
+    fppd.wait_for(lambda: port(fppd), what=f"{PORT} to be monitored")
+    fppd.command("Check Pixel Count", "--ALL--", "2", "Warn")
+    want = "Port 1 configured for 50 pixels but 40 pixels detected."
+    fppd.wait_for(lambda: want in fppd.get("/fppd/status").get("warnings", []), timeout=180, interval=0.5,
+                  what="the pixel-count mismatch warning")
+    fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "idle", timeout=15,
+                  what="the test mode to end")
