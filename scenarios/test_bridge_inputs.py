@@ -833,3 +833,21 @@ def test_clearing_the_input_stats_clears_the_ignored_universes_too(fppd):
     fppd.request("DELETE", "/fppd/e131stats")
     time.sleep(0.5)
     assert "Ignored" not in stats(fppd), stats(fppd).get("Ignored")
+
+
+def test_the_status_says_whether_channel_inputs_are_enabled(fppd):
+    """channelInputsEnabled in /fppd/status is true while an input
+    (E1.31, Art-Net or DDP universes, or a DMX device) is configured and
+    enabled, and false once the inputs are saved empty: the status follows
+    the reload.
+
+    Regression: 45d4b2eaa. The status had only the outputs' flag, so the
+    UI could not tell an input that was off from one that was never set
+    up."""
+    setup(fppd)
+    fppd.start()
+    enabled = lambda: fppd.get("/fppd/status").get("channelInputsEnabled")
+    fppd.wait_for(lambda: enabled() is True, timeout=10, what="the inputs to be reported enabled")
+    time.sleep(1.1)  # a save in a later second, as a person makes it
+    fppd.write("config/ci-universes.json", {"channelInputs": []})
+    fppd.wait_for(lambda: enabled() is False, timeout=15, what="the inputs to be reported off")

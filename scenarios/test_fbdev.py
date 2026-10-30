@@ -423,3 +423,33 @@ def test_a_virtual_display_takes_its_auto_created_model_with_it(fppd):
     time.sleep(1.1)
     fppd.write("config/co-other.json", {"channelOutputs": []})
     fppd.wait_for(lambda: "FB - fb1" not in models(), timeout=10, what="the model to go with its output")
+
+
+def test_a_virtual_display_pixel_size_draws_a_filled_circle(fppd):
+    """A Virtual Display with a pixel size of 4 draws each mapped light as a
+    disc of that size (radius 2) in the model, clipped to it, and nothing
+    outside the disc.
+
+    Feature: ea1611aac (pixel size support). Before it a pixel size of 2
+    or more lit the pixel and its four neighbours, dimmed."""
+    import math
+    fb = FakeFb(fppd, width=W, height=H, bpp=32)
+    cfg = virtual_display(description="discs")
+    cfg["channelOutputs"][0]["pixelSize"] = 4
+    fppd.write("config/co-other.json", cfg)
+    x0, y0 = 30, 15
+    fppd.write("config/virtualdisplaymap", f"{W},{H}\n{x0},{y0},0,3,RGB\n")
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fb.start()
+    fppd.command("Test Start", 1000, "RGB Single Color", "1-3", "#FF8001")
+    radius = 2
+    want = {(x0 + xo, H - 1 - y0 + yo)
+            for xo in range(-radius, radius) for yo in range(-radius, radius)
+            if math.sqrt(xo * xo + yo * yo) <= radius}
+
+    def lit():
+        if fb.mode() is None:
+            return None
+        px = fb.pixels()
+        return {(x, y) for y in range(H) for x in range(W) if px[y][x] == (255, 128, 1)}
+    fppd.wait_for(lambda: lit() == want, timeout=10, what=f"the disc ({len(want)} pixels; lit {len(lit() or [])})")
