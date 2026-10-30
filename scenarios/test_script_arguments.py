@@ -241,6 +241,33 @@ def test_uninstall_plugin_removes_only_the_plugin_named(fppinit):
     assert not fppinit.media_exists("plugins/fpp-keep"), out[-3000:]
 
 
+def test_uninstall_plugin_tells_the_plugin_whether_this_is_a_reinstall(fppinit):
+    """A plugin's fpp_uninstall.sh sees FPP_PLUGIN_REINSTALL=1 when the
+    uninstall is the first half of a Reinstall, and 0 on any other
+    uninstall: one run by something that never set it, or with anything
+    but 1 in it, which reaches the script as 0 rather than as it was.
+
+    Feature: 4e019e14d. The wrapper names it on the $SUDO command line, as
+    it does FPPDIR (the sandbox's sudo keeps the environment, so that part
+    is not what this covers; the API test in plugin-history.spec.ts runs
+    the real one).
+    """
+    view = f"{MEDIA}/tmp/fppdir"
+    fppdir_view(fppinit)
+    script = "#!/bin/sh\necho \"${FPP_PLUGIN_REINSTALL-unset}\" > /fpp-test-media/reinstall.txt\n"
+    for given, expected in (("1", "1"), ("0", "0"), (None, "0"), ("yes", "0"), ("1 /bin/true", "0")):
+        fppinit.write("reinstall.txt", "")
+        fppinit.write("plugins/fpp-keep/scripts/fpp_uninstall.sh", script)
+        os.chmod(os.path.join(fppinit.media, "plugins", "fpp-keep", "scripts", "fpp_uninstall.sh"), 0o755)
+        env = [f"FPP_PLUGIN_REINSTALL={given}"] if given is not None else []
+        r = fppinit._run(["env", *env, "unshare", "--net", f"{view}/scripts/uninstall_plugin", "fpp-keep"])
+        out = r.stdout + r.stderr
+        seen = fppinit.media_file("reinstall.txt").strip()
+        assert seen == expected, \
+            f"FPP_PLUGIN_REINSTALL={given!r}: the plugin saw {seen!r}\n{out[-3000:]}"
+        assert not fppinit.media_exists("plugins/fpp-keep"), out[-3000:]
+
+
 def test_plugin_scripts_run_on_macos_where_sudo_is_empty(fppinit):
     """A plugin's fpp_install.sh and fpp_uninstall.sh run, with FPPDIR
     set, on macOS, where scripts/common sets SUDO="".

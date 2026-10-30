@@ -188,3 +188,30 @@ test('an uninstall script running under set -u can source scripts/common', async
   expect(u.Status, JSON.stringify(u)).toBe('OK');
   expect(readFile(marker).trim(), 'the uninstall script stopped before its last line').toBe('/opt/fpp');
 });
+
+test("an uninstall script is told whether it is the uninstall half of a Reinstall", async ({ request }) => {
+  // Feature: 4e019e14d.  The Reinstall flow's uninstall
+  // (reinstall=1, or keepPackages=1 from before it had that name) gives the
+  // plugin's fpp_uninstall.sh FPP_PLUGIN_REINSTALL=1 so it can keep its state;
+  // any other uninstall gives it 0.  reinstall, when given, decides over
+  // keepPackages, and only exactly '1' counts.  Both the streamed and the
+  // JSON paths.
+  const marker = '/tmp/fpp-tests-hist-reinstall';
+  repo.init({}, { 'scripts/fpp_uninstall.sh': `#!/bin/sh\necho "\${FPP_PLUGIN_REINSTALL-unset}" > ${marker}\n` });
+  for (const [query, expected] of [
+    ['', '0'], ['?reinstall=1', '1'], ['?keepPackages=1', '1'], ['?reinstall=0', '0'],
+    ['?reinstall=0&keepPackages=1', '0'], ['?reinstall=01', '0'],
+    ['?stream=true', '0'], ['?stream=true&reinstall=1', '1'],
+  ] as const) {
+    sh(`rm -f ${marker}`);
+    expect((await installPlugin(request, repo.info())).Status).toBe('OK');
+    const before = historyOf(PLUGIN).length;
+    await uninstallPlugin(request, PLUGIN, query);
+    expect(repo.installed(), query).toBe(false);
+    expect(exists(marker), `${query}: the uninstall script did not run`).toBe(true);
+    expect(readFile(marker).trim(), query).toBe(expected);
+    const h = historyOf(PLUGIN).slice(before);
+    expect(h.map((e) => e.action), query).toEqual(['uninstall']);
+    expect(h[0].reinstall, query).toBe(expected === '1' ? true : undefined);
+  }
+});
