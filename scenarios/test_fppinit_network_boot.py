@@ -15,7 +15,7 @@ import time
 
 import pytest
 
-from fppinit import Link, fppinit  # noqa: F401 -- the fixture
+from fppinit import MEDIA, Link, fppinit  # noqa: F401 -- the fixture
 from test_fppinit import assert_clean
 
 LEASE_DIR = "/var/lib/systemd/network/dhcp-server-lease"
@@ -411,3 +411,40 @@ def test_auto_boot_delay_does_not_wait_for_the_time_with_no_network(fppinit, por
     assert took < 90, f"postNetwork took {took:.0f} s with no network ({port}):\n{out[-3000:]}"
     assert "Waiting until system date" not in out, out[-3000:]
     assert not fppinit.media_exists("tmp/boot_delay"), "the countdown was left for the UI to show"
+
+
+def test_the_time_is_set_once_the_network_has_an_address(fppinit):
+    """In the automatic boot delay mode, with the clock behind the image's
+    build date, postNetwork waits for an address first and only then asks the
+    time server (chrony.conf's first server) for the time: an eth0 that
+    gets its address 3 s in is followed by an SNTP query, not skipped.
+
+    Regression: 5a38493b3. The time sync ran before the wait for the
+    network, found no interface that could reach a server, and gave up, so
+    a box with no RTC started its show with the wrong time."""
+    import glob
+    lib = glob.glob("/usr/lib/*/faketime/libfaketime.so.1")
+    if not lib:
+        pytest.skip("no libfaketime")
+    fppinit.settings(LogLevel="info")  # bootDelay unset: automatic
+    fppinit.root_file("/etc/fpp/rfs_version", "v2026-06\n")
+    fppinit.root_file("/etc/chrony/chrony.conf", "server 10.99.0.2 iburst\n")
+    fppinit.root_file("/tmp/sntp-responder.py",
+                      "import socket\n"
+                      "s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n"
+                      "s.bind(('0.0.0.0', 123))\n"
+                      "while True:\n"
+                      "    data, peer = s.recvfrom(512)\n"
+                      f"    open('{MEDIA}/tmp/sntp-query', 'a').write('%d\\n' % len(data))\n")
+    clock = (f"LD_PRELOAD={lib[0]} FAKETIME='@2020-01-01 00:00:00' DONT_FAKE_MONOTONIC=1 NO_FAKE_STAT=1 "
+             "ASAN_OPTIONS=\"$ASAN_OPTIONS:verify_asan_link_order=0\"")
+    r = fppinit._run(["unshare", "--net", "sh", "-c",
+                      "ip link set lo up && ip link add eth0 type veth peer name eth0p && ip link set eth0 up && ip link set eth0p up && "
+                      f"python3 /tmp/sntp-responder.py 2> {MEDIA}/tmp/responder.err & "
+                      "(sleep 3; ip addr add 10.99.0.2/24 dev eth0) & "
+                      f"exec env {clock} /opt/fpp/src/fppinit postNetwork"], timeout=200, media_home=True)
+    assert_clean(r)
+    out = r.stdout + r.stderr
+    assert "doing a quick SNTP set from 10.99.0.2" in out, out[-3000:]
+    err = fppinit.media_file("tmp/responder.err") if fppinit.media_exists("tmp/responder.err") else ""
+    assert fppinit.media_exists("tmp/sntp-query"), f"the time server was never asked (responder: {err!r}):\n{out[-1500:]}"
