@@ -208,6 +208,27 @@ def test_artnet_deduplicate_keeps_working(fppd):
     assert 2 <= sent <= 10, f"a static ArtNet universe was sent {sent} times in 3 s (keepalive is every 11th frame)"
 
 
+@pytest.mark.parametrize("udp_type, port, name", [(5, DDP_PORT, "DDP"), (1, E131_PORT, "E1.31")])
+def test_deduplicate_keeps_working_for_ddp_and_e131(fppd, udp_type, port, name):
+    """With deDuplicate on, a DDP or E1.31 universe that doesn't change is
+    resent only as a keepalive for the whole run: about one packet in eleven
+    frames, three seconds after the first ten skipped frames, not one every
+    frame.
+
+    Regression: 36fc2f718. The skipped-frame counter was kept for ArtNet
+    alone; the others never reset it, so after the first ten skipped frames
+    de-duplication was off for good."""
+    frames = [bytes([0x30] * 100)] * 200  # static, 10 s
+    with Listener(port) as rx:
+        play(fppd, frames, [output(udp_type, 1, 1, 100, deDuplicate=1)])
+        time.sleep(2)  # well past the first ten skipped frames
+        start = time.monotonic()
+        time.sleep(3)
+        with rx.lock:
+            sent = sum(1 for t, p in rx.packets if t >= start)
+    assert 2 <= sent <= 14, f"a static {name} universe was sent {sent} times in 3 s (keepalive is every 11th frame)"
+
+
 KINET_PORT = 6038
 
 

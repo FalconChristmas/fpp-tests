@@ -246,3 +246,15 @@ def test_set_port_status_turns_one_port_on_and_off(fppd):
     fppd.wait_for(lambda: not high(ENABLE), timeout=10, what="the port to go off")
     fppd.command("Set Port Status", "Port 1", "true")
     fppd.wait_for(lambda: high(ENABLE), timeout=10, what="the port to come back on")
+
+
+def test_a_ports_bank_label_is_in_its_status(fppd):
+    """A port configured with a "bank" label (the group a controller totals
+    its current by) carries it in /fppd/ports, and one without carries none.
+
+    Regression: 429970c25. The monitor was built without reading its config
+    through setConfig(), so the bank label from the cape never reached the
+    status and the page's per-bank totals were all labelled alike."""
+    start_with_pins(fppd, {"enablePin": ENABLE, "eFusePin": EFUSE, "bank": "A"})
+    fppd.wait_for(lambda: port_status(fppd), timeout=10, what="Port 1 to be monitored")
+    assert port_status(fppd)[0].get("bank") == "A", port_status(fppd)

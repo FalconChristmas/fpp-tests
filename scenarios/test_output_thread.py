@@ -575,3 +575,25 @@ def test_a_sequence_started_just_after_the_output_thread_idles_starts_its_own_ca
             time.sleep(3)  # past the output thread's 2.5 s idle wait
     crowded = [(d, g) for d, g in rounds if g < 40]
     assert not crowded, f"(ms after the blank B started, ms from its first frame to its second): {rounds}"
+
+
+@pytest.mark.parametrize("style, threaded, blocking", [(0, 0, 1), (1, 1, 1), (2, 0, 0), (3, 1, 0)])
+def test_the_output_style_sets_threading_and_blocking(fppd, style, threaded, blocking):
+    """A universes output's "threaded" style says in the log what it does:
+    0 is unthreaded and blocking, 1 threaded and blocking, 2 neither, 3
+    threaded and not blocking, and frames arrive in each style.
+
+    Regression: 622e08d8c. The blocking mode was added with the styles; the
+    one-way threaded flag before them could not say a send should not wait."""
+    import re
+    config = ddp_output(CHANNELS)
+    config["channelOutputs"][0]["threaded"] = style
+    fppd.write("config/co-universes.json", config)
+    fppd.settings(LogLevel_ChannelOut="debug", DisableFakeNetworkBridges="1")
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fppd.request("PUT", f"/overlays/range/1-{CHANNELS}", {"Value": 9})
+        fppd.wait_for(lambda: rx.last() is not None and rx.last()[0] == 9, timeout=10, what="frames")
+    m = re.search(r"Threaded\s*:\s*(\d)\s.*?Blocking\s*:\s*(\d)", fppd.log(), re.S)
+    assert m and (int(m.group(1)), int(m.group(2))) == (threaded, blocking), \
+        [l for l in fppd.log().splitlines() if "Threaded" in l or "Blocking" in l]

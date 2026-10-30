@@ -117,3 +117,24 @@ def test_large_frames_with_few_of_them_get_more_than_one_zstd_block(tmp_path):
     assert blocks >= 10, f"{blocks} blocks for {count} frames of {channels} channels"
     hdr, got = read_fseq(out)
     assert hdr["compression"] == 1 and got == frames
+
+
+def test_zstd_frames_of_eight_million_channels_read_back_whole(tmp_path):
+    """Converting a sequence of 8M-channel frames of data that does not
+    compress to zstd writes every frame out whole: each reads back as it
+    went in.
+
+    Regression: a34507b20 (fixes ported from xLights). The writer fed the
+    compressor an incompressible frame bigger than its output buffer and
+    lost what did not fit."""
+    channels, count = 8 * 1024 * 1024, 3
+    frames = [os.urandom(channels) for _ in range(count)]
+    path = str(tmp_path / "huge.fseq")
+    write_fseq_reference(path, frames, step_ms=50)
+    out = str(tmp_path / "huge-zstd.fseq")
+    r = run_tool(["-c", "zstd", "-o", out, path], timeout=300)
+    assert r.returncode == 0 and "Sanitizer" not in r.stderr, (r.stdout + r.stderr)[-2000:]
+    hdr, got = read_fseq(out)
+    assert hdr["compression"] == 1 and hdr["channels"] == channels, hdr
+    bad = [i for i in range(count) if got[i] != frames[i]]
+    assert not bad, f"frames {bad} of {count} read back different"
