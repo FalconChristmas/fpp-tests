@@ -7,6 +7,8 @@ import { container } from './container';
 test.skip(!container, 'runs the troubleshooting commands inside the run-web.sh container');
 
 test('the PHP tab shows the command line phpinfo and the Webserver tab the web one', async ({ page }) => {
+  // Feature: 299bed42a (the PHP tab's php -i) and 6d1a56de8 (the Webserver
+  // tab's phpinfo(), from localonly/cleanedphpinfo.php).
   // Regression: 630044006.  Both commands had the key "PHPInfo": the second
   // replaced the first in the decoded JSON, so both tabs ran the web one, and
   // the two output elements shared one id.  Found here by tab, not by key.

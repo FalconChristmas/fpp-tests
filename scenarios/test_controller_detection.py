@@ -263,7 +263,8 @@ def test_baldrick_boards_are_read_from_system_state_and_settings(fppd):
       Baldrick: it falls through every other detector and is listed as
       Unknown, with nothing of the Baldrick guess left on it.
 
-    Feature: f6a283460 (the board's own id), dfa5b5b7a (buddies). Regression:
+    Feature: 49c4b2e1b (Baldrick detection: without it no board here is a
+    Baldrick), f6a283460 (the board's own id), dfa5b5b7a (buddies). Regression:
     f921827d9 (version from ota.updatable, hostname from /settings).
     """
     old = {

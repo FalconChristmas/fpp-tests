@@ -130,6 +130,37 @@ def test_start_channel_moves_the_effect(fppd):
             f"the moved effect also drew elsewhere: {list(last(rx))}"
 
 
+def test_effect_on_a_model_with_no_start_channel_starts_at_the_model(fppd):
+    """Effect Start with a model and the start channel left empty (the
+    command's default) draws the effect from the model's first channel; a
+    start channel given with a model counts from 1 at the model's start.
+
+    Regression: 23c204684 (#2041). An empty start channel was 0, and the
+    model's start plus 0 put the effect one channel before the model."""
+    frames = solid(20, SIZE, 0x5A)
+    write_eseq(fppd, "fx", frames, START)
+    outputs_only(fppd)
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [{
+        "Name": "M", "Type": "Channel", "StartChannel": 31, "ChannelCount": SIZE + 3,
+        "ChannelCountPerNode": 3, "Orientation": "horizontal", "StartCorner": "TL",
+        "StringCount": 1, "StrandsPerString": 1}]})
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fppd.command("Effect Start", "fx", "", "true", "false", "false", "M")
+        at_model = set(range(30, 30 + SIZE))
+        wait_output(fppd, rx, lambda f: any(f), "the effect on the wire")
+        time.sleep(0.3)
+        assert last(rx)[30:30 + SIZE] == frames[0] and dark_outside(last(rx), at_model), \
+            f"the effect did not land on the model's channels 31-{30 + SIZE}: {list(last(rx)[:60])}"
+        fppd.command("Effect Stop", "fx")
+        wait_output(fppd, rx, lambda f: not any(f), "the output to go dark after Effect Stop")
+        fppd.command("Effect Start", "fx", "4", "true", "false", "false", "M")
+        moved = set(range(33, 33 + SIZE))
+        wait_output(fppd, rx, lambda f: f[33:33 + SIZE] == frames[0],
+                    "the effect at the model's fourth channel")
+        assert dark_outside(last(rx), moved), list(last(rx)[:60])
+
+
 def test_effect_that_does_not_loop_ends_by_itself(fppd):
     """A non-looping effect plays its frames once, then leaves the running
     list and the output dark (f2ab6fef1, 897084f16)."""

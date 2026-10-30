@@ -28,6 +28,9 @@ const rows = (page: Page) => page.locator('#fppSystems tr.systemRow');
 test('with auto refresh on, a system that joins appears without a reload', async ({ page, request }) => {
   // Regression: 36bc7e7b1.  The list was read once at page load; auto refresh
   // only re-polled the rows already shown, so a new system never appeared.
+  // Regression: 182aa84e2.  autoRefreshToggled() was not run at page load,
+  // so a saved auto refresh never started (today it starts the discovery
+  // poll that finds the newcomer).
   test.setTimeout(60_000);
   let joined = false;
   await serve(page, () => (joined ? [LOCAL, REMOTE, NEWCOMER] : [LOCAL, REMOTE]));

@@ -41,7 +41,9 @@ def test_preset_slot_runs_every_preset_in_that_slot(fppd):
 
     Regression: 32ebc1f40. Both commands read the slot with atoi(), so "0"
     or "x" ran every preset with no slot, and an empty slot answered "Preset
-    Triggered"."""
+    Triggered". And 909939f0b: the slot trigger unlocked the presets lock
+    once per matching preset, so a second preset in the slot threw
+    (std::system_error, "Operation not permitted") and fppd crashed."""
     names = ["A", "B", "C", "D", "Loop"]
     fppd.write("config/commandPresets.json", {"commands": [
         slotted("A", 3), slotted("B", 3), slotted("C", 4), slotted("D", 0),
@@ -86,7 +88,11 @@ def test_preset_slot_runs_every_preset_in_that_slot(fppd):
 def test_trigger_multiple_presets_by_name(fppd):
     """Trigger Multiple Command Presets runs each named preset in turn
     (all of a preset's commands), skips empty names and names no preset
-    has, and runs a preset named twice twice."""
+    has, and runs a preset named twice twice.
+
+    Regression: 909939f0b. Two presets sharing a name (A here) unlocked the
+    presets lock once each, and the second unlock threw
+    (std::system_error, "Operation not permitted"): fppd crashed."""
     names = ["A", "B", "C"]
     fppd.write("config/commandPresets.json", {"commands": [
         preset("A", counter("A")), preset("A", counter("A")),

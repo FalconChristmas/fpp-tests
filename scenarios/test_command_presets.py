@@ -24,7 +24,9 @@ def test_edit_reloads_without_wedging(fppd):
 
     Regression: 7e171ae48. The file-monitor callback held presetsMutex around
     the reload, which took it again; the first edit after startup deadlocked
-    the main loop, and every later preset trigger hung.
+    the main loop, and every later preset trigger hung. And fdf29237e, which
+    made fppd reload the presets when the file changes at all (they were
+    read only at startup; the reload is now a FileMonitor callback).
     """
     fppd.write("config/commandPresets.json", {"commands": [set_variable("X", 1)]})
     fppd.start()
