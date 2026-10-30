@@ -150,3 +150,49 @@ def test_an_unreachable_twinkly_deleted_by_a_reload_leaves_no_timer(fppd):
             fppd.check_alive()
             time.sleep(1)
         fppd.get("/fppd/status")
+
+
+# Lights whose login "succeeds" with a page that is not JSON (a captive
+# portal, a half-booted controller): the output must carry on.
+BAD_LOGIN = """\
+import http.server, sys
+ADDR = sys.argv[1]
+class H(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        body = b"<html><body>please wait</body></html>"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+    do_GET = do_POST
+    def log_message(self, *a):
+        pass
+srv = http.server.ThreadingHTTPServer((ADDR, 80), H)
+srv.daemon_threads = True
+print("ready", flush=True)
+srv.serve_forever()
+"""
+
+
+def test_a_login_answered_with_something_that_is_not_json_does_not_take_fppd_down(fppd):
+    """Lights that answer the login with an HTML page leave the output
+    waiting to log in again, say so in the log, and fppd goes on running
+    and answering while they do.
+
+    Regression: 458214811, 7638be7a7 and e8dd769bc. The reply was parsed
+    without a guard, and the JSON exception it threw ended fppd on the
+    first light that was not quite a Twinkly."""
+    setup(fppd, 300)
+    with device_network([ADDR]) as run:
+        srv = run(sys.executable, "-I", "-c", BAD_LOGIN, ADDR)
+        assert srv.stdout.readline().strip() == "ready"
+        fppd.start()
+        show_color(fppd, 300)
+        fppd.wait_for(lambda: "login failed" in fppd.log() or "Twinkly" in fppd.log(), timeout=20,
+                      what="the Twinkly output to try the login")
+        time.sleep(3)
+        fppd.get("/fppd/status")
+        fppd.check_alive()

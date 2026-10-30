@@ -1010,3 +1010,27 @@ def test_an_output_starting_at_channel_zero_is_refused(fppd):
     w = warnings(fppd)
     assert "Could not initialize output type GenericUDP. Invalid start channel." in w, w
     assert "Calling Init() on GenericUDP" not in fppd.log(), fppd.tail()
+
+
+def test_control_channel_fires_the_preset_for_its_value(fppd):
+    """A control channel output set after channel 150, with a preset for the
+    value 100, runs that preset when that channel is set to 100 (and not
+    before): here a Set Variable.
+
+    Regression: 2ce00e903 (#1641). The output was handed its own channel
+    already and read it again at its start channel's offset, so it looked
+    at some other channel and never saw its value."""
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "ControlChannel", "enabled": 1, "startChannel": CHANNELS + 1, "channelCount": 1,
+        "values": [{"value": 100, "preset": "Mark"}]}]})
+    fppd.write("config/commandPresets.json", {"commands": [{
+        "name": "Mark", "command": "Set Variable", "presetSlot": 0,
+        "args": ["Fired", "Value", "yes", "1", "0", "100", ""]}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    time.sleep(1)
+    assert (fppd.get("/variables") or {}).get("Fired", {}).get("value") != "yes"
+    fppd.request("PUT", f"/overlays/range/{CHANNELS + 1}-{CHANNELS + 1}", {"Value": 100})
+    fppd.wait_for(lambda: (fppd.get("/variables") or {}).get("Fired", {}).get("value") == "yes", timeout=10,
+                  what="the control channel's preset to run")
