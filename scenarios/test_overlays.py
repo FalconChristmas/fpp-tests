@@ -1490,3 +1490,65 @@ def test_a_pixel_outside_the_model_is_ignored(fppd, x, y):
     assert raw_data() == before, "a pixel outside the model changed it"
     put(fppd, "model/M/pixel", {"X": 0, "Y": 0, "RGB": [9, 8, 7]})
     assert raw_data()[:3] == bytes([9, 8, 7]), "fppd stopped taking pixels"
+
+
+def test_the_all_models_choice_is_offered_only_when_asked_for(fppd):
+    """GET /models?simple=true&all=true lists "--All Models--" first, ahead
+    of the models, which is what the Overlay Model Effect command's model
+    picker asks for; without all=true the list is the model names alone.
+
+    Feature: 8082e6962."""
+    setup(fppd, [matrix()])
+    fppd.start()
+    assert fppd.get("/models?simple=true&all=true") == ["--All Models--", "M"]
+    assert fppd.get("/models?simple=true") == ["M"]
+
+
+def test_the_full_effects_list_has_each_effects_description(fppd):
+    """GET /overlays/effects lists the names; with full=true, each effect's
+    description (its args) in the same order, and "Stop Effects" is
+    first.
+
+    Regression: 1d301eabd (the flag added) and b32972050 (Stop Effects at
+    the head of the list)."""
+    setup(fppd, [matrix()])
+    fppd.start()
+    names = fppd.get("/overlays/effects")
+    full = fppd.get("/overlays/effects?full=true", timeout=60)
+    assert names[0] == "Stop Effects", names[:3]
+    assert len(full) == len(names)
+    assert all(isinstance(d, dict) for d in full) and all("args" in d for d in full[1:]), full[:2]
+    one = fppd.get("/overlays/effects/" + urllib.parse.quote(names[1]))
+    assert full[1] == one, "the full list's entry is not the effect's own description"
+
+
+def test_bars_and_text_take_their_numbers_as_ranges(fppd):
+    """The Bars (iterations, colorRep, colors) and Text (FontSize, Speed)
+    arguments are ranges with limits, which the effect picker shows as
+    sliders, not free integers.
+
+    Regression: b32972050."""
+    setup(fppd, [matrix()])
+    fppd.start()
+
+    def kinds(effect):
+        return {a["name"]: a["type"] for a in fppd.get("/overlays/effects/" + effect)["args"]}
+    bars, text = kinds("Bars"), kinds("Text")
+    assert [bars[k] for k in ("iterations", "colorRep", "colors")] == ["range"] * 3, bars
+    assert [text[k] for k in ("FontSize", "Speed")] == ["range"] * 2, text
+
+
+def test_wled_effects_take_their_defaults_from_the_effects_own_settings(fppd):
+    """A WLED effect's arguments default to what WLED gives that effect, not
+    128 and the first palette: Aurora's speed is 24 and its palette Aurora;
+    Fire 2012's cooling is 64 and its palette Fire.
+
+    Regression: 4e2418c73."""
+    setup(fppd, [matrix()])
+    fppd.start()
+
+    def defaults(effect):
+        return {a["name"]: a.get("default") for a in fppd.get("/overlays/effects/" + urllib.parse.quote(effect))["args"]}
+    aurora, fire = defaults("WLED - Aurora"), defaults("WLED - Fire 2012")
+    assert (aurora["Speed"], aurora["palette"]) == ("24", "Aurora"), aurora
+    assert (fire["Cooling"], fire["palette"]) == ("64", "Fire"), fire
