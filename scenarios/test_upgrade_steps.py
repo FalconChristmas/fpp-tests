@@ -610,3 +610,48 @@ def test_upgrade_115_clears_stale_xauth_locks_and_fixes_home_ownership(fppinit):
     assert not left, f"{left} still there:\n{out[-3000:]}"
     owned = os.stat(os.path.join(fppinit.upper, "home/fpp/.fpp-test-root-owned")).st_uid
     assert owned == fpp, f"a root-owned file in fpp's home is still uid {owned}:\n{out[-3000:]}"
+
+
+def test_upgrade_98_moves_the_ui_password_out_of_htaccess(fppinit):
+    """Upgrade 98 recopies the Apache site (which includes the separate
+    ui-password-config.conf), removes the media directory's .htaccess, and
+    writes an open password config for the new file, owned by fpp, then
+    reloads Apache.
+
+    Added in d8cb94998: the UI password moved from config/.htaccess to an
+    Apache config file; a box still on the old layout lost its (open) access
+    rules."""
+    fpp_user(fppinit)
+    fppinit.service("apache2", active=True)
+    fppinit.root_file("/etc/apache2/sites-enabled/000-default.conf", "# a stale site\n")
+    fppinit.write("config/.htaccess", "Require valid-user\n")
+    r = fppinit._run(["sh", "-c", "/opt/fpp/upgrade/98/upgrade.sh; "
+                                  "cmp /opt/fpp/etc/apache2.site /etc/apache2/sites-enabled/000-default.conf "
+                                  "&& echo site-current; "
+                                  "stat -c %U /home/fpp/media/config/ui-password-config.conf"],
+                     timeout=120, media_home=True)
+    out = r.stdout + r.stderr
+    assert "site-current" in out and out.strip().endswith("fpp"), out[-3000:]
+    assert not fppinit.media_exists("config/.htaccess")
+    assert "LOCAL_PROTECT=0" in fppinit.media_file("config/ui-password-config.conf")
+    assert [c for c in fppinit.calls() if "reload apache2" in c], fppinit.calls()
+
+
+def test_upgrade_99_recopies_the_apache_site_with_the_proxy_rules_first(fppinit):
+    """Upgrade 99 replaces a stale Apache site with the tree's, whose
+    proxy-config.conf include comes before the generic /api rules, and
+    reloads Apache.
+
+    Added in 451411658: the proxy rewrite rules sat after the generic rules
+    and a Falcon v5 controller's proxied pages were answered by the wrong
+    rule."""
+    fppinit.service("apache2", active=True)
+    fppinit.root_file("/etc/apache2/sites-enabled/000-default.conf", "# a stale site\n")
+    r = fppinit._run(["sh", "-c", "/opt/fpp/upgrade/99/upgrade.sh; "
+                                  "cmp /opt/fpp/etc/apache2.site /etc/apache2/sites-enabled/000-default.conf "
+                                  "&& echo site-current"], timeout=120, media_home=True)
+    assert "site-current" in r.stdout + r.stderr, r.stdout + r.stderr
+    assert [c for c in fppinit.calls() if "reload apache2" in c], fppinit.calls()
+    with open(os.path.join(fppinit.tree, "etc/apache2.site")) as f:
+        site = f.read()
+    assert site.index("config/proxy-config.conf") < site.index("RewriteRule ^(192"), "the proxy rules come after the generic api rules"
