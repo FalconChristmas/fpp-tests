@@ -330,7 +330,7 @@ for d in {' '.join(DEVICES + self.devices)}; do touch "$R/dev/$d"; mount --bind 
 ln -s /proc/self/fd "$R/dev/fd"
 mount -t proc proc "$R/proc"
 mount --bind "$R/proc/sys" "$R/proc/sys"; mount -o remount,bind,ro "$R/proc/sys"
-mount --bind /dev/null "$R/proc/sysrq-trigger"
+[ -e "$R/proc/sysrq-trigger" ] && mount --bind /dev/null "$R/proc/sysrq-trigger"
 mount --rbind /sys "$R/sys"; mount -o remount,bind,ro "$R/sys"
 {chr(10).join(fake_lines)}
 mount -t tmpfs tmpfs "$R/run"
