@@ -77,8 +77,11 @@ test.describe('schedule preview scrolling', () => {
     await page.waitForTimeout(500);
     const g = await geometry();
     expect(g!.scrollTop).toBeGreaterThan(0);
-    // The heading row is entirely inside the scrolling box's visible area.
-    expect(g!.headTop, JSON.stringify(g)).toBeGreaterThanOrEqual(g!.boxTop - 0.5);
+    // The heading row is inside the scrolling box's visible area.  floatThead
+    // pins it at an offset worked out from the header heights, which can
+    // land a pixel or so above the box's top edge, in the dialog body's
+    // padding (1.3 px with the CI runner's fonts).
+    expect(g!.headTop, JSON.stringify(g)).toBeGreaterThanOrEqual(g!.boxTop - 2);
     expect(g!.headBottom, JSON.stringify(g)).toBeLessThanOrEqual(g!.boxBottom);
   });
 });

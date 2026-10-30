@@ -231,7 +231,11 @@ def test_graph_stall_mid_song_recovers_in_that_song(fppd, audio):
     print(f"lights minus audio before the stall {before}, after {after} (ms)")
     assert before and after, f"bursts not heard: before {before}, after {after}"
     shift = statistics.median(after) - statistics.median(before)
-    assert abs(shift) <= 50, \
+    # After the flush the sound settles at the same offset from the lights
+    # each run (-50 ms on the Pi 5 nightly), but where it starts varies by
+    # run (-32 to +10 ms), so the shift does too (-20 to -60 ms); the
+    # parent's was -209.
+    assert abs(shift) <= 100, \
         f"a {stall} ms stall moved the sound {shift:.0f} ms against the lights for the rest of the song"
 
 
