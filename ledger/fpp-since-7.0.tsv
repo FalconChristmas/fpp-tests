@@ -3965,10 +3965,10 @@ d94c478f7	todo		none	auto: not examined yet	Improve documentation of /api/channe
 6739aafe7	new-test	web/tests/volume-button-names.spec.ts::the volume buttons have names, and the named ones set the volume	red-green-revert	revert (player view's aria-labels removed): no button named DecrementVolume in #playerModeInfo; receiving end: clicking the named buttons moved fppd's own volume 50->51->50 (/api/fppd/status)	volume button labels	8.5	www	Web UI (shared JS/CSS/pages)	web
 6136f3a3a	new-test	web/tests/volume-button-names.spec.ts::the volume buttons have names, and the named ones set the volume	red-green-revert	revert (remote view's aria-labels removed): no button named DecrementVolume in #remoteModeInfo (0, expected 1); the player-view pair (6739aafe7) still passed on that revert	add name to volume buttons	8.5	www	Web UI (shared JS/CSS/pages)	web
 502ffc3e1	todo		none	auto: not examined yet	If plugin script disappears while fppd is running (example: plugin uninstalled) don't polute logs with stack traces	8.5	src	Plugins	docker
-fab1a90f4	new-test	scenarios/test_playlist_sync_load.py::test_pause_and_next_after_a_sync_loads_another_playlist[Next Playlist Item]	red-green-revert	the null-section guard now lives in 8f47496ac's CurrentEntry(); revert of both parts on master: Next Playlist Item after a plugin's SyncPlaylistToMS() loaded another playlist in place crashed fppd (SIGSEGV in Playlist::NextItem indexing the null section). The else-return half alone is not red: with CurrentEntry() guarding the stop, going on with section 'New' did no harm	Add another guard for Playlist:NextItem	8.5	playlist	Playlists, schedule & sequences	docker
-3f834c729	coverage-only	scenarios/test_playlist_sync_load.py; scenarios/test_playlist_b_races.py; scenarios/test_playlist_b_teardown.py	none	three parts: StopNow()'s bounds check now lives in 8f47496ac's CurrentEntry(); Cleanup() under the playlist lock and Process() returning on section 'New' are still on master. With the 'New' return removed, every sync-load, race and teardown scenario still passed: Cleanup() runs under the recursive playlist lock Process() takes, so Process() never sees the half-cleaned state the check was for	Fix rare crash where playlist section was referenced after it was cleaned up	8.5	playlist	Playlists, schedule & sequences	docker
-84e88f91c	covered-marked	scenarios/test_gpio_outputs.py::test_a_gpio_output_error_warning_comes_down_when_the_pin_works	red-green-revert	Control on master: the try/catch around SendData's pin writes removed (body kept). Red: FppdDied, "terminate called after throwing an instance of 'std::runtime_error' what(): gpiothrow: the pin is gone". Green on master. Docstring names it.	Update GPIO output to catch libgpiod exceptions and display an error	8.5	channeloutput	Other channel outputs	device
-eb573d398	untestable		none	Build-only: macOS compiler warning fixes (override/const/cast) in UDPOutput, Playlist and two sensor headers; no behaviour change.	Fix some warnings on MacOS	8.5	channeloutput	OLED, GPIO & sensors	device,docker
+fab1a90f4	new-test	scenarios/test_playlist_sync_load.py::test_pause_and_next_after_a_sync_loads_another_playlist[Next Playlist Item]	red-green-revert	the null-section guard now lives in 8f47496ac's CurrentEntry(); revert of both parts on master: Next Playlist Item after a plugin's SyncPlaylistToMS() loaded another playlist in place crashed fppd (SIGSEGV in Playlist::NextItem indexing the null section). The else-return half alone is not red: with CurrentEntry() guarding the stop, going on with section 'New' did no harm	Add another guard for Playlist:NextItem	8.4.2	playlist	Playlists, schedule & sequences	docker
+3f834c729	coverage-only	scenarios/test_playlist_sync_load.py; scenarios/test_playlist_b_races.py; scenarios/test_playlist_b_teardown.py	none	three parts: StopNow()'s bounds check now lives in 8f47496ac's CurrentEntry(); Cleanup() under the playlist lock and Process() returning on section 'New' are still on master. With the 'New' return removed, every sync-load, race and teardown scenario still passed: Cleanup() runs under the recursive playlist lock Process() takes, so Process() never sees the half-cleaned state the check was for	Fix rare crash where playlist section was referenced after it was cleaned up	8.4.2	playlist	Playlists, schedule & sequences	docker
+84e88f91c	covered-marked	scenarios/test_gpio_outputs.py::test_a_gpio_output_error_warning_comes_down_when_the_pin_works	red-green-revert	Control on master: the try/catch around SendData's pin writes removed (body kept). Red: FppdDied, "terminate called after throwing an instance of 'std::runtime_error' what(): gpiothrow: the pin is gone". Green on master. Docstring names it.	Update GPIO output to catch libgpiod exceptions and display an error	8.4.2	channeloutput	Other channel outputs	device
+eb573d398	untestable		none	Build-only: macOS compiler warning fixes (override/const/cast) in UDPOutput, Playlist and two sensor headers; no behaviour change.	Fix some warnings on MacOS	8.4.2	channeloutput	OLED, GPIO & sensors	device,docker
 c4efe2b3f	new-test	scenarios/test_output_config.py::test_an_output_starting_at_channel_zero_is_refused	red-green-revert	the ChannelOutputSetup.cpp half; hand revert, Docker: a GenericUDP output with startChannel 0 got no "Invalid start channel" warning (only the later range check's "Output disabled"), and was handed to the range check instead of being refused; the DDP output beside it kept sending either way. The BBBUtils half (kernel GPIO numbers from sysfs chip bases) was replaced by b9cf627e1 and later chip mapping. test_output_config.py additive	Don't crash if invalid start channel is set for various outputs	9.0	channeloutput	BB pixel strings & PRU	device:bb,docker
 f739d6372	untestable		none	BBB48String puts a frame's bytes past 15248 into shared RAM; under run-local the cape is presented unsigned, so every string is clamped to 50 pixels (48 x 150 = 7200 bytes at most) and the 12K/32K shared-RAM bound is never reached; no signed cape image can be made for a test	Use full shared mem on PB2/BeaglePlay	9.0	non-gpl	BB pixel strings & PRU	device:bb
 4b53c59d4	covered-marked	scenarios/test_am335x_pru.py::test_a_bbb48string_output_starts_on_the_fake_pru	red-green-device	the NSPERCLK half; hand patch dropping the AM335x NSPERCLK define, a BBB with the fake PRUSS: the runtime build of FalconWS281x (its timeout waits use NSPERCLK) failed and the output never started. The #ifndef AM33XX guard half only silences cpp's redefinition warning when -DAM33XX is passed	Fix asm compiler issues on BB	9.0	pru	BB pixel strings & PRU	device:bb
@@ -3978,5 +3978,928 @@ aa29d4dab	new-test	scenarios/test_fppinit_boot_misc.py::test_the_chosen_mixer_is
 56829fe97	coverage-only	scenarios/test_pb2_pinctrl.py; scenarios/test_bb64_boot_config.py::test_the_pixel_buffer_memory_is_reserved_and_the_overlay_named	none	More PB2 pins in the pinctrl table and the first fpp_reserved@8f000000 overlay; both exercised, a red would be removing what it added.	Fill in more pins for PB2	9.0	drivers	Capes & EEPROM	device
 6363b1195	coverage-only	scenarios/test_pb2_pinctrl.py; scenarios/test_am62x_fake_pru_hands_off.py	none	The start of the BB64 pinmux tool (since moved to capes/drivers/pinctrl, 740a718bd) and the FAKE_PRU memories; exercised, a red would be removing the feature.	Start working on pinmux for BB64, "fake" the PRU memories for now to allow progress	9.0	drivers	Capes & EEPROM	device:bb,device
 32244ca9a	todo		none	auto: not examined yet	Allow a plugin to  get notification when a playlist is inserted so it can prepare	8.5	playlist	Plugins	docker
-02d593592	todo		none	triaged (hard): blockingOutput UDP sockets get SO_SNDTIMEO=1 ms and give up after one retry. A scenario would need a shim for setsockopt (record SO_SNDTIMEO) or a sendmsg that blocks, with the output set to the blocking style (style 0/1 in UDPOutput.cpp:673); blocksend.c is a model (it covers multisync, not UDPOutput). The red-on-revert check is that sendmsg returns within a bound and the log shows "sendmsg() failed" and not a stalled frame thread. Hard to force the full-buffer condition.	Set a timeout for blocking UDP send	8.5	channeloutput	Other channel outputs	docker
+02d593592	todo		none	triaged (hard): blockingOutput UDP sockets get SO_SNDTIMEO=1 ms and give up after one retry. A scenario would need a shim for setsockopt (record SO_SNDTIMEO) or a sendmsg that blocks, with the output set to the blocking style (style 0/1 in UDPOutput.cpp:673); blocksend.c is a model (it covers multisync, not UDPOutput). The red-on-revert check is that sendmsg returns within a bound and the log shows "sendmsg() failed" and not a stalled frame thread. Hard to force the full-buffer condition.	Set a timeout for blocking UDP send	8.4.1	channeloutput	Other channel outputs	docker
 46655bc58	untestable		none	auto: changes no runtime file (rpi-imager)	Update rpi_imager for 8.4	9.0	rpi-imager	Boot, OS image & install	none
+3cf935973	todo		none	auto: not examined yet	Schedule Preview - mark items that will be skipped in red and note priority reason	8.4	css	Web UI (shared JS/CSS/pages)	web
+269a87c90	todo		none	auto: not examined yet	Get basic gpio working on PB2.  FPPOLED working on PB2.   FPPD starts up.	8.4	oled	BB pixel strings & PRU	device:bb,device,os-image,docker,web
+622e08d8c	todo		none	auto: not examined yet	Update UDP output to support a "blocking" mode to slow down the output a bit.  Make that the default as very few shows would be large enough to need the non-blocking mode.	8.4	channeloutput	Other channel outputs	device,docker,web
+669454472	todo		none	auto: not examined yet	Prevent a crash if a fseq file is corrupt	8.4	playlist	Playlists, schedule & sequences	docker
+66b900229	todo		none	auto: not examined yet	Another couple c_str removals	8.4	playlist	Playlists, schedule & sequences	docker
+29fa8071c	todo		none	auto: not examined yet	Keep filename as a std::string when possible	8.4	playlist	Playlists, schedule & sequences	docker
+ec480f0cb	todo		none	auto: not examined yet	Add some verification for the wled commands to prevent a crash	8.4	commands	Pixel overlays	docker
+5d23f0b50	todo		none	auto: not examined yet	Make sure rgbmatrix can work on older Pi's	8.4	makefiles	Build & makefiles	docker
+11e671edd	todo		none	auto: not examined yet	Couple more index guards in MuxSensorSource	8.4	sensors	OLED, GPIO & sensors	device
+da6c2c9f5	todo		none	auto: not examined yet	Try to detect invalid overlay model configuration and not crash	8.4	overlays	Pixel overlays	docker
+438ac4a04	todo		none	auto: not examined yet	Add some null pointer guards with dynamic playlists to avoid crashes	8.4	playlist	Playlists, schedule & sequences	docker
+7a6ba68cb	todo		none	auto: not examined yet	Add more plumbing for BB64 platform	8.4	makefiles	MultiSync & remotes	device:bb,docker,web
+a6cdccee5	todo		none	auto: not examined yet	Fix Truncated tooltip when single or double quote is present. Closes #2061	8.4	www	Web UI (shared JS/CSS/pages)	web
+998405d04	todo		none	auto: not examined yet	Slightly better docs on Model API	8.4	api	Web API	web
+493cc437a	todo		none	auto: not examined yet	Stub in a platform for the 64bit Beagles, get fppd compiling and running	8.4	boot	BB pixel strings & PRU	device:bb,device,docker
+a5e625e50	todo		none	auto: not examined yet	Use machine-id for uuid if no serial number, cpuinfo, dmidecode, etc...	8.4	scripts	fppd core & utilities	docker
+7c8bcc993	todo		none	auto: not examined yet	Save/restore machine_id and make sure it's not burned into the images/fppos	8.4	SD	Boot, OS image & install	os-image
+2a6fc4d62	todo		none	auto: not examined yet	If c++ exception occurs while trying to create an output, log a warning, but don't crash	8.4	channeloutput	Other channel outputs	docker
+5d76dea3b	todo		none	auto: not examined yet	If a pin cannot be configured, display a warning, but don't crash	8.4	oled	OLED, GPIO & sensors	device
+a117c89a7	named	scenarios/test_channel_tester.py::test_bad_test_start_arguments_are_survived	unreviewed	auto: a test names this commit; check it fails without it	Prevent crash if Chase/Cycle custom pattern is selected but pattern is empty	8.4	channeltester	fppd core & utilities	docker
+bd9140d7b	todo		none	auto: not examined yet	Fix a crash where PLAYLIST_STOPPED command preset is called before it's completely cleaned up.	8.4	playlist	Playlists, schedule & sequences	docker
+972377af9	todo		none	auto: not examined yet	Don't crash if an enable pin cannot be configured.   Display warning and continue.	8.4	src	Other channel outputs	docker
+1ee560a64	todo		none	auto: not examined yet	Possibly fix HDMI audio out on Pi's	8.4	boot	Boot, OS image & install	docker
+7a362c3b9	untestable		none	auto: changes no runtime file (rpi-imager)	Update rpi imager to grab 8.3.1 image for bbb	8.4	rpi-imager	Boot, OS image & install	none
+c8afe5ec3	todo		none	auto: not examined yet	Update rpi_ws281x to support newer Pi 3A+/3B/3B+/CM3	8.4	external	Pi outputs (DPI/spixels)	docker
+139ee0303	todo		none	auto: not examined yet	Improve failed plugin install messaging	8.4	scripts	Plugins	docker
+9afe200d2	todo		none	auto: not examined yet	Improve failed plugin install messaging	8.4	scripts	Plugins	docker
+1b7735102	todo		none	auto: not examined yet	add Advanced option to stop Colorlight outputs from being disabled if ethernet link is down when fppd starts	8.4	channeloutput	LED panels	device,web
+68c0e3e7a	todo		none	auto: not examined yet	api/events/:eventId/trigger was also likely broken	8.4	api	Web API	web
+ddbe1524d	todo		none	auto: not examined yet	Fix api/scripts/<scriptname>/run	8.4	api	Web API	web
+f52860c51	todo		none	auto: not examined yet	Fix pixel output on right half of  K128	8.3.1	non-gpl	BB pixel strings & PRU	device:bb
+13456ff06	todo		none	auto: not examined yet	Maybe fix crash in AlphaPix detection	8.3.1	src	Network, Apache & security	docker
+ff3db598c	todo		none	auto: not examined yet	Use the gpiochip symlnks to determine the gpio ordering instead of line labels Fixes FPPd on BBE as BBE doesn't have any line labels.  #2047	8.3.1	util	BB pixel strings & PRU	device:bb
+20e39e4a9	todo		none	auto: not examined yet	Fix crash when manually stopping playlist using ArtNet/SMPTE plugins as timecode generator	8.3.1	playlist	Playlists, schedule & sequences	docker
+f14f73827	todo		none	auto: not examined yet	Fix file copy from SD card	8.3.1	boot	Boot, OS image & install	docker
+7d071c74b	todo		none	auto: not examined yet	Update hashes for fixed bbb images	8.4	SD	Boot, OS image & install	os-image
+db22fa2bc	untestable		none	auto: changes no runtime file (rpi-imager)	Update rpi_imager for 8.3	8.4	rpi-imager	Boot, OS image & install	none
+61e8f4084	todo		none	auto: not examined yet	Update Pi readme	8.3	SD	Boot, OS image & install	os-image
+8462fe3c6	todo		none	auto: not examined yet	Pi5 does not have external wifi adapters	8.3	boot	Boot, OS image & install	docker
+de3bbabe0	todo		none	auto: not examined yet	More pi wifi updates	8.3	SD	Boot, OS image & install	os-image
+962675f91	todo		none	auto: not examined yet	More updates for wifi drivers	8.3	SD	Boot, OS image & install	os-image
+6c307324b	todo		none	auto: not examined yet	Add ccache to docker initial packages	8.3	Docker	Boot, OS image & install	os-image
+e9ba1885e	todo		none	auto: not examined yet	Updates for building wifi drivers on pi	8.3	SD	Boot, OS image & install	os-image
+320a5f8f2	todo		none	auto: not examined yet	Some additional Warnings refactor	8.3	src	fppd core & utilities	docker
+286f28d33	todo		none	auto: not examined yet	Limit USBDMX to 512 channels to prevent overrun/crash Change start and channel count to number input type to prevent any characters from being entered	8.3	channeloutput	Other channel outputs	device,docker,web
+af51b9736	todo		none	auto: not examined yet	Changed to experimental level	8.3	www	Settings & config	web
+81b488990	todo		none	auto: not examined yet	Added check for ForceAudioId parameter to set the audioDeviceName	8.3	mediaoutput	Media: audio & video	docker
+8fb510699	todo		none	auto: not examined yet	Adding Experimental Force Audio Id parameter to AV settings	8.3	www	Settings & config	web
+039e08db3	todo		none	auto: not examined yet	Add fold output processor that reverses a strand in the middle and interleaves the pixels.	8.3	channeloutput	Other channel outputs	docker,web
+ff020f19d	todo		none	auto: not examined yet	Wrap  v5 listener code in a null ptr guard	8.3	non-gpl	BB pixel strings & PRU	device:bb
+511794736	todo		none	auto: not examined yet	Optimize html discovery by not converting to c_str for every regex	8.3	src	Network, Apache & security	docker
+93bab0a9c	todo		none	auto: not examined yet	Load vendor image for menu asynchronously to avoid pause if image cannot be downloaded	8.3	www	Web UI (shared JS/CSS/pages)	web
+f14de88e2	todo		none	auto: not examined yet	Fixes	8.3	src	fppd core & utilities	docker
+8ea08153b	todo		none	auto: not examined yet	fix cast error	8.3	js	Web UI (shared JS/CSS/pages)	web
+effd594e1	todo		none	auto: not examined yet	update volume sliders to trigger only on value change and rate limit api volume call	8.3	js	Web UI (shared JS/CSS/pages)	web
+9d6ca9e42	todo		none	auto: not examined yet	Add some error handling around sensor sources, particularly if wrong eeprom is installed and sensor doesn't exist	8.3	sensors	OLED, GPIO & sensors	device
+a3e3c24c8	todo		none	auto: not examined yet	Return filelist (name only) via API - sorted alphabetically	8.3	api	Web API	web
+ded00bfa3	todo		none	auto: not examined yet	Reduce lock contention in warnings by using shared_mutex for reading	8.3	.vscode	fppd core & utilities	docker
+ca1cd1166	todo		none	auto: not examined yet	Avoid pam auth logs when going to file manager by not using sudo if the user is already fpp or root	8.3	api	Web API	web
+d680d12d2	todo		none	auto: not examined yet	Fix playlist item display on status page for mobiles	8.3	css	Web UI (shared JS/CSS/pages)	web
+ee41f398f	todo		none	auto: not examined yet	Support multiple gpio expanders on Pi3B	8.3	SD	Boot, OS image & install	os-image,docker
+155619385	todo		none	auto: not examined yet	Add some advanced settings for controllering the buffer/period size for the audio card	8.3	boot	Media: audio & video	docker,web
+0f9b22f58	todo		none	auto: not examined yet	Fix an issue with multiple gpio expanders on Pi3	8.3	SD	Boot, OS image & install	os-image
+331adfd11	todo		none	auto: not examined yet	Make sure socket send buffers are set to a reasonable size, reduce receive buffers for sockets that won't be used to receive data.	8.3	boot	Other channel outputs	docker
+b170bbca9	todo		none	auto: not examined yet	update fpp.js/validateIPaddress() to fail on leading zeroes (#2011)	8.3	js	Web UI (shared JS/CSS/pages)	web
+8accc17b4	todo		none	auto: not examined yet	update wifiscan command parameters and description	8.3	www	Commands & presets	web
+10b9f1f32	todo		none	auto: not examined yet	Update wifi_scan.sh to handle different format of signal quality between pi and BB	8.3	scripts	Network, Apache & security	docker
+ce0603072	todo		none	auto: not examined yet	Some work to get setupNetwork to work to disable tethering and get an ip	8.3	networkd-dispatcher	Boot, OS image & install	os-image,docker
+86231bc07	todo		none	auto: not examined yet	Copy the new tether enable/disable things	8.3	networkd-dispatcher	Boot, OS image & install	os-image,docker
+947365239	todo		none	auto: not examined yet	New networkd-dispatcher scrips for updating tether status	8.3	networkd-dispatcher	Boot, OS image & install	os-image
+470e2f5b7	todo		none	auto: not examined yet	When called from the tethering scripts, don't wait as long for ip address	8.3	boot	Boot, OS image & install	docker
+2a233c99d	todo		none	auto: not examined yet	If the tethering is disabled and the wifi QR code removed, stop displaying it	8.3	oled	OLED, GPIO & sensors	device
+3be665b7a	todo		none	auto: not examined yet	Add some more calls to fppinit for re-checking tethering	8.3	boot	Boot, OS image & install	docker
+42099c3dd	todo		none	auto: not examined yet	Dynamically find wifi network interfaces for wifi_scan	8.3	scripts	Network, Apache & security	docker
+0dcd5dec2	todo		none	auto: not examined yet	Show current connected AP on wifi_scan script	8.3	scripts	Network, Apache & security	docker
+8a8103d25	todo		none	auto: not examined yet	Update troubleshoot-commands.json to include Wifi_scan	8.3	www	Commands & presets	web
+2eab459ac	todo		none	auto: not examined yet	Addition of wifi_scan.sh	8.3	scripts	Network, Apache & security	docker
+4f2ba778b	untestable		none	auto: changes no runtime file (rpi-imager)	Fix BBB hashes	8.3	rpi-imager	Boot, OS image & install	none
+8693f4c1c	untestable		none	auto: changes no runtime file (rpi-imager)	Fix extra letter/type in url	8.3	rpi-imager	Boot, OS image & install	none
+a4af2995a	untestable		none	auto: changes no runtime file (rpi-imager)	Update rpi_imager	8.3	rpi-imager	Boot, OS image & install	none
+c1b60cd58	todo		none	auto: not examined yet	Avoid a div/0 situation, add fppinit/fppoled/fpp_postnetwork boot logs to crash report	8.2	playlist	Playlists, schedule & sequences	docker
+c9399e47c	todo		none	auto: not examined yet	Add some nullptr checks	8.2	src	Other channel outputs	docker
+67c0d6248	todo		none	auto: not examined yet	If there are less than 8 ports, don't make the default bank 1-8	8.2	www	Web UI (shared JS/CSS/pages)	web
+5e1eebbc1	todo		none	auto: not examined yet	Bump send and browser-sync in /www	8.2	www	Web UI (shared JS/CSS/pages)	web
+3542f3fff	todo		none	auto: not examined yet	Bump cookie, socket.io and engine.io in /www	8.2	www	Web UI (shared JS/CSS/pages)	web
+ffd19747b	todo		none	auto: not examined yet	Make sure the rfkill has enabled the wlan interface before putting it in access point mode	8.2	boot	Boot, OS image & install	docker
+78d3f292b	todo		none	auto: not examined yet	Make sure libzip and others are properly replaced on fppos	8.2	SD	Boot, OS image & install	os-image
+1d0b40abd	todo		none	auto: not examined yet	Fix kiosk install  script	8.2	SD	Boot, OS image & install	os-image
+d2dec48e7	todo		none	auto: not examined yet	Make sure timezone is set at os level when set via UI	8.2	common	Settings & config	web
+6aa657c26	todo		none	auto: not examined yet	Re-order how timezone is configured and try again after network	8.2	boot	Boot, OS image & install	docker
+f05a1c711	todo		none	auto: not examined yet	Check if co-universes.json exists before trying to load it	8.2	src	MultiSync & remotes	docker
+26650b05b	todo		none	auto: not examined yet	Fix mac compile failures	8.2	mediaoutput	MultiSync & remotes	docker
+00bf173d5	todo		none	auto: not examined yet	Make sure plugin install script output starts on a new line	8.2	api	Plugins	web
+1b96eb87c	todo		none	auto: not examined yet	Update Multisync plugins to also allow them to respond to packets in remote mode	8.2	mediaoutput	MultiSync & remotes	docker
+81644540f	todo		none	auto: not examined yet	Maybe fix docker build	8.2	commands	Commands & presets	docker
+dca097622	todo		none	auto: not examined yet	Fix crash when using Play Media command Fix stopping and looping of Play Media, re-enable Stop Media and Stop All Media commands Fixes #1990	8.2	commands	Media: audio & video	docker
+a6a16e8d8	todo		none	auto: not examined yet	Fix channel count	8.2	www	Other channel outputs	web
+41c32940e	todo		none	auto: not examined yet	Remove the "PixelSize" for "Auto Create" Virtual Matrix and have it auto-scale to screen resolution	8.2	channeloutput	fppd core & utilities	device,web
+5ffd25d6e	todo		none	auto: not examined yet	Fix problems when drawing virtual matrices into sub-framebuffers	8.2	overlays	Pixel overlays	docker
+94a028f09	todo		none	auto: not examined yet	Add Composite-# to possible media outputs	8.2	mediaoutput	Media: audio & video	docker,web
+227697cc3	todo		none	auto: not examined yet	It can sometimes take more than 10 seconds to register GPIO expanders and other drivers during cape detect process, allow 20s so hopefully everything is OK before proceeding with the OLED updates	8.2	oled	OLED, GPIO & sensors	device
+14cd94551	todo		none	auto: not examined yet	Clarify hoverover over on Automatically turn off outputs Closes #1986	8.2	www	Settings & config	web
+bd0a2e28d	todo		none	auto: not examined yet	Update rpi_imager for 8.1	8.2	SD	Boot, OS image & install	os-image
+b87f6a373	todo		none	auto: not examined yet	Update OS level	8.1	SD	Boot, OS image & install	os-image
+e6bea760c	todo		none	auto: not examined yet	Fix compile on mac	8.1	util	OLED, GPIO & sensors	device,docker
+476fe9617	todo		none	auto: not examined yet	VLC and other may trigger exceptions, catch and log/ignore to avoid crash	8.1	mediaoutput	Media: audio & video	docker
+d61a5e4aa	todo		none	auto: not examined yet	Fix some potential crashes with timers	8.1	src	fppd core & utilities	docker
+068768fd5	todo		none	auto: not examined yet	With large channel counts but shorter sequences, use more blocks in the fseq file	8.1	fseq	Playlists, schedule & sequences	docker
+1e7eb1dfd	todo		none	auto: not examined yet	Fail (instead of hang) if RGBMatrix configured on Pi5	8.1	channeloutput	LED panels	device
+fd5e3bbeb	todo		none	auto: not examined yet	Only display "icon for help" message if there actually is an ID that would display help	8.1	js	Web UI (shared JS/CSS/pages)	web
+9375ccabd	todo		none	auto: not examined yet	Fix problems with FileExists and files > 2G	8.1	src	fppd core & utilities	docker
+69d50367f	todo		none	auto: not examined yet	On master brach, add line number debug info to compile flags for better stack traces from crashes	8.1	makefiles	Build & makefiles	docker
+0f4590afa	todo		none	auto: not examined yet	Ping controllers asynchronously and in parallel to allow faster startup, particularly if there are a bunch of unavailable controllers	8.1	channeloutput	fppd core & utilities	docker
+9f2e393dd	todo		none	auto: not examined yet	Allow "export FPPDEBUG=1" to set debug flags so local targets can be built with debug	8.1	makefiles	Build & makefiles	docker
+f5c711cef	todo		none	auto: not examined yet	Make sure option is added for local fppos files	8.1	www	Web UI (shared JS/CSS/pages)	web
+455c8faa8	todo		none	auto: not examined yet	Update kernel version for BBB	8.1	SD	Boot, OS image & install	os-image
+45aa28fee	todo		none	auto: not examined yet	Call the correct process to update the network interface	8.1	api	Network, Apache & security	web
+b0386d9e7	todo		none	auto: not examined yet	Make use of ieee80211w frames optional, not required	8.1	boot	Boot, OS image & install	docker
+3c3a9adb9	todo		none	auto: not examined yet	The Pi5 does not number the gpiod chips sequentially so use the chip names instead.	8.1	util	OLED, GPIO & sensors	device,docker
+c62d9dad5	todo		none	auto: not examined yet	Don't try to re-register lm75 drivers every fppd restart (thus adding to system logs)	8.1	non-gpl	Capes & EEPROM	device
+176a056c0	todo		none	auto: not examined yet	FPPInit will now handle the regeneration of SSH keys, don't enable the service that will regenerate them again	8.1	boot	Boot, OS image & install	os-image,docker
+b07d2a609	todo		none	auto: not examined yet	For local eFuses, allow advanced mode settings to control auto retries and retry interval	8.1	src	Other channel outputs	docker,web
+e2741d13f	todo		none	auto: not examined yet	Make sure Kiosk URL is set before chrome starts, properly disable Kiosk	8.1	boot	Boot, OS image & install	os-image,docker,web
+9cae9f861	todo		none	auto: not examined yet	Fix issues on channeloutputs page if cape eeprom does not contain a "provides" attribute	8.1	www	LED panels	web
+afebeef13	todo		none	auto: not examined yet	Don't display the Pi power warning unless it's flagged multiple times in a row.	8.1	src	fppd core & utilities	docker
+ea6daf05d	todo		none	auto: not examined yet	Add some settings to enabel WPA3/SAE	8.1	boot	Network, Apache & security	docker,web
+18dc6edfa	todo		none	auto: not examined yet	Some updates for 8192cu wifi driver on beagles	8.1	SD	Boot, OS image & install	os-image
+d5ad88de8	todo		none	auto: not examined yet	Update help for 'Pause Playlist' command	8.1	commands	Playlists, schedule & sequences	docker
+da62426d3	todo		none	auto: not examined yet	Make it clear that the ntp server  field is an override to the default ntp server	8.1	www	Settings & config	web
+128c0c79c	todo		none	auto: not examined yet	Default gateway checks can be bypassed with higher UI levels	8.1	www	Network, Apache & security	web
+4991ae242	todo		none	auto: not examined yet	Remove unccessary reboots from network settings page	8.1	www	Network, Apache & security	web
+47bc2b5e1	todo		none	auto: not examined yet	Revert "Remove unnecessary reboots from network settings page"	8.1	www	Network, Apache & security	web
+6b4caba5c	todo		none	auto: not examined yet	Remove unnecessary reboots from network settings page	8.1	www	Network, Apache & security	web
+1b78e1a31	todo		none	auto: not examined yet	Fix problems with a remote media not being able to start in the middle of the media.  Fix rsponse messages for Pause/Resume	8.1	commands	Playlists, schedule & sequences	docker
+fd4404856	todo		none	auto: not examined yet	Adjust the minsane ntpd setting if server or pool is used	8.1	common	Settings & config	web
+0ddda23a7	todo		none	auto: not examined yet	fix array declaration in setting tab array	8.1	www	Settings & config	web
+a21acf918	todo		none	auto: not examined yet	fix missing declaration of global $SUDO	8.1	www	LED panels	web
+a1f54eeae	todo		none	auto: not examined yet	fixed @ param declaration on media_duration_cache	8.1	www	Web UI (shared JS/CSS/pages)	web
+2ca178c8c	todo		none	auto: not examined yet	fix unneeded variable passing to get_remote_git_version()	8.1	www	Web UI (shared JS/CSS/pages)	web
+3d1301802	todo		none	auto: not examined yet	Add fpp-info.json to crash reports	8.1	src	fppd core & utilities	docker
+0ce908942	todo		none	auto: not examined yet	Minor optimization to avoid some work if fseq doesnt have a preset track	8.1	src	Playlists, schedule & sequences	docker
+ff828a178	todo		none	auto: not examined yet	Add device model to log banner so if there are issues specific to a device, we can track that	8.1	src	fppd core & utilities	docker
+365903dcc	todo		none	auto: not examined yet	Fix potential  race condition when opening a sequence when one is already running	8.1	src	Playlists, schedule & sequences	docker
+a0fba43ff	todo		none	auto: not examined yet	Fix "Insert Random Item from Playlist"  not being random	8.1	playlist	Playlists, schedule & sequences	docker
+050f33a9a	todo		none	auto: not examined yet	Fix panel test pattern on Beagle panels	8.1	www	LED panels	web
+57a03031c	todo		none	auto: not examined yet	remove debug code	8.1	www	Web UI (shared JS/CSS/pages)	web
+a43af6f78	todo		none	auto: not examined yet	remove debug step	8.1	www	Web UI (shared JS/CSS/pages)	web
+03360a8a7	todo		none	auto: not examined yet	fix upgrade re-downloading a OS file already local	8.1	www	Web UI (shared JS/CSS/pages)	web
+3451f91c4	todo		none	auto: not examined yet	Revert "Clarify NTP Server must be an IP #1956"	8.1	www	Settings & config	web
+8145faed2	todo		none	auto: not examined yet	Fix packages on Docker package Closes #1962	8.1	Docker	Boot, OS image & install	os-image
+1a7150d49	todo		none	auto: not examined yet	Allow proxying of websocket connections	8.1	boot	Boot, OS image & install	docker,web
+4c1196044	todo		none	auto: not examined yet	fix Command Presets layout when warning alerts present	8.1	www	Commands & presets	web
+b4387068c	todo		none	auto: not examined yet	format before changes	8.1	www	Commands & presets	web
+b9e699e4c	todo		none	auto: not examined yet	Workaround issues with controllers that aren't properly putting their IP address in the ping packets...	8.1	src	MultiSync & remotes	docker
+943643dd2	todo		none	auto: not examined yet	Clarify NTP Server must be an IP #1956	8.1	www	Settings & config	web
+1fd5cbc52	untestable		none	auto: changes no runtime file (rpi-imager)	Update rpi-imager_falcon_player.json update ordering	8.1	rpi-imager	Boot, OS image & install	none
+08cd1bd41	untestable		none	auto: changes no runtime file (rpi-imager)	Update rpi-imager_falcon_player.json attempt to stop BBB showing for Pi4 etc	8.1	rpi-imager	Boot, OS image & install	none
+bbf4ad8b7	todo		none	auto: not examined yet	update interface dropdown to show max advertised supported NIC speed rather than currently connected speed	8.1	www	LED panels	web
+6274fbf57	todo		none	auto: not examined yet	Fix detection of RGBMatrix at boot and don't load snd_bcm2835 On FPPD restart, if snd_bcm2835 is loaded in RGBMatrix, try to unload it	8.1	boot	LED panels	device,docker
+93268ac0e	todo		none	auto: not examined yet	update item count on filter in filemanager	8.1	js	Upgrade, backup & files	web
+c303ad921	untestable		none	auto: changes no runtime file (rpi-imager)	Add pi5-32bit to pi imager.  Not sure yet if that will work.	8.1	rpi-imager	Boot, OS image & install	none
+87c7579d7	todo		none	auto: not examined yet	filemanager - update file item count on file deletion	8.1	js	Upgrade, backup & files	web
+ed7b612f7	untestable		none	auto: changes no runtime file (rpi-imager)	Add 8.0 to rpi imager	8.1	rpi-imager	Boot, OS image & install	none
+2c6cbde97	todo		none	auto: not examined yet	Back to master for install	8.1	SD	Boot, OS image & install	os-image
+b37f15f1b	todo		none	auto: not examined yet	Prepare for 8.0	8.0	SD	Boot, OS image & install	os-image
+3af8a0a92	todo		none	auto: not examined yet	Restore compatability with api/files Sort by name, sizes < 2G are ints in json, not strings	8.0	api	Web API	web
+1d78c9cf3	todo		none	auto: not examined yet	Update sensors to only grab requested/enabled channels	8.0	sensors	OLED, GPIO & sensors	device
+2220817b5	todo		none	auto: not examined yet	add file/directory count to file manager tabs display	8.0	js	Upgrade, backup & files	web
+29b9a9749	todo		none	auto: not examined yet	iFix compile with discc	8.0	src	Plugins	docker
+b7d22c4f7	todo		none	auto: not examined yet	massive improve speed of api/files/DIR to support backups filemanager	8.0	api	Web API	web
+48658c5d2	todo		none	auto: not examined yet	add php func for size in bytes to human readable	8.0	www	Web UI (shared JS/CSS/pages)	web
+94e969614	todo		none	auto: not examined yet	Make sure values are flushed when the mux changes	8.0	sensors	OLED, GPIO & sensors	device
+b813a041b	todo		none	auto: not examined yet	Make sure startup scripts are executed in the background, pass FPPDIR and SRCDIR into scripts	8.0	boot	Boot, OS image & install	docker
+7f9f40acc	todo		none	auto: not examined yet	Keep "fppd/warnings" data format the same as 7.x for compatibility, add warnings_full for full warnings	8.0	src	fppd core & utilities	docker
+3fa1d4988	todo		none	auto: not examined yet	Enable DSI- interfaces for video output	8.0	mediaoutput	Media: audio & video	docker,web
+06aabe775	todo		none	auto: not examined yet	Remove a warning/notice about compatibility with 1.x-3.x backup jsons	8.0	www	Upgrade, backup & files	web
+0272a81d8	todo		none	auto: not examined yet	add cape logo alt image tag	8.0	www	Web UI (shared JS/CSS/pages)	web
+e35d2e8ca	todo		none	auto: not examined yet	format before changes	8.0	www	Web UI (shared JS/CSS/pages)	web
+487fea903	todo		none	auto: not examined yet	fix option html tag to correct spelling	8.0	www	Web UI (shared JS/CSS/pages)	web
+06f6518ea	todo		none	auto: not examined yet	remove unused divs from about page	8.0	www	Web UI (shared JS/CSS/pages)	web
+12669b24a	todo		none	auto: not examined yet	remove unused fieldset tag	8.0	www	Web UI (shared JS/CSS/pages)	web
+ce7a5b195	todo		none	auto: not examined yet	remove duplicate id	8.0	www	Web UI (shared JS/CSS/pages)	web
+313795901	todo		none	auto: not examined yet	add l locally downloaded OS files only if the git api has failed to connect	8.0	www	Web UI (shared JS/CSS/pages)	web
+fd7764166	todo		none	auto: not examined yet	only show alpha and betas in advanced UI	8.0	www	Web UI (shared JS/CSS/pages)	web
+fd22ccf55	todo		none	auto: not examined yet	Remove extraneuous space causing issues with the layout/stylesheets	8.0	common	Web UI (shared JS/CSS/pages)	web
+193c92344	todo		none	auto: not examined yet	add backup tab to file manager	8.0	js	Upgrade, backup & files	web
+4dd0eb8bb	todo		none	auto: not examined yet	Force drm_vout to make video startup slightly faster, only disable the overlay model if it was disabled to start with	8.0	mediaoutput	Media: audio & video	docker
+6428ed27b	todo		none	auto: not examined yet	Fix a race condition with VLC not always starting a video if other framebuffers are being used (DPI Pixels for example)	8.0	framebuffer	Media: audio & video	device,docker
+37311c45c	todo		none	auto: not examined yet	revert allowing empty proxies list, Stuart fix is better	8.0	api	Network, Apache & security	web
+db72a416a	todo		none	auto: not examined yet	Add "Range Limits" testing for PWM/Servos	8.0	channeloutput	Other channel outputs	device,docker,web
+20e1bab66	todo		none	auto: not examined yet	For capes/hats that have multiple output types (pixel + panels, pwm + pixels, etc...) make sure the per output testing is only testing that output	8.0	channeloutput	LED panels	device:bb,device:pi,device,docker,web
+129919f4c	todo		none	auto: not examined yet	Update README.Debian for Bookworm	8.0	SD	Boot, OS image & install	os-image
+d4b8d082e	todo		none	auto: not examined yet	upgradeOS.php: Include error message is download fails	8.0	www	Boot, OS image & install	web
+a207dfd42	todo		none	auto: not examined yet	Don't log some ignorable warnings from VLC	8.0	mediaoutput	Media: audio & video	docker
+451d9e886	todo		none	auto: not examined yet	"Stop" the video player if the end is reached but the sequence is still running to allow virtual matrix to take over	8.0	mediaoutput	Media: audio & video	docker
+af30d09f1	todo		none	auto: not examined yet	Address some issues with remotes being both a virtual matrix and video player causeing issues with both trying to output at the same time	8.0	framebuffer	Media: audio & video	device,docker
+831830eab	todo		none	auto: not examined yet	Change older methods from inline to compiled into the .o so older binary plugins will work	8.0	src	fppd core & utilities	docker
+2a6ca119f	todo		none	auto: not examined yet	Fix default gateway error #1936	8.0	www	Network, Apache & security	web
+39546d885	todo		none	auto: not examined yet	Add FPDEnabled setting to gathered stats to help determine fpd code needs to be retained	8.0	www	Settings & config	web
+1975e2468	todo		none	auto: not examined yet	Fix Storage Device sort order #1871	8.0	www	Settings & config	web
+2466493b4	todo		none	auto: not examined yet	label fuction Sequence::SingleStepSequenceBack as broken	8.0	src	Playlists, schedule & sequences	docker
+8287c7408	todo		none	auto: not examined yet	SingleStepSequenceBack broken for > 3 years, remove for now #986	8.0	api	Web API	docker,web
+a78c721b2	todo		none	auto: not examined yet	Fix randomisation of playlists with 2 entries #1893	8.0	playlist	Playlists, schedule & sequences	docker
+1c6f0c7e0	todo		none	auto: not examined yet	Also check the fppd directory for the shlib if it fails to load.	8.0	src	Plugins	docker
+c9647eef9	todo		none	auto: not examined yet	Check for shlib existence only on failure	8.0	src	Plugins	docker
+e9eb6ea23	todo		none	auto: not examined yet	Fix warnings if crash report is available	8.0	api	Web API	web
+e9007dfc7	todo		none	auto: not examined yet	Only the c++ plugins should have "cannot load" warnings	8.0	src	Plugins	docker
+b34efb531	todo		none	auto: not examined yet	Fix warning when fppd is not running	8.0	js	Web UI (shared JS/CSS/pages)	web
+10a9b9802	todo		none	auto: not examined yet	Use warning information from status if available, use the warning icon to replace li dot	8.0	js	Web UI (shared JS/CSS/pages)	web
+05044d56d	untestable		none	auto: changes no runtime file (www)	Add a warning if a plugin cannot be loaded	8.0	help	Web UI (shared JS/CSS/pages)	none
+3e66ab3cc	todo		none	auto: not examined yet	Make sure Logging warnings are removed when no longer necessary	8.0	src	Commands & presets	docker,web
+0e671acb0	todo		none	auto: not examined yet	Update add/remove warnings to take an optional plugin name so plugins can provide additional context	8.0	src	fppd core & utilities	docker
+15b90df1b	todo		none	auto: not examined yet	fix more modal popups height	8.0	www	Capes & EEPROM	web
+163179da8	todo		none	auto: not examined yet	fix scrollable modal popup on fpp upgradel	8.0	www	Web UI (shared JS/CSS/pages)	web
+817f0428b	todo		none	auto: not examined yet	fix not deleting all proxies issue #1934	8.0	www	Network, Apache & security	web
+49d694a82	todo		none	auto: not examined yet	addition of ajax delete function	8.0	js	Web UI (shared JS/CSS/pages)	web
+ef393ef7b	todo		none	auto: not examined yet	prevent caching of warning retrievals	8.0	js	Web UI (shared JS/CSS/pages)	web
+62d3e1e2f	todo		none	auto: not examined yet	differentiate flash buttons by labelling one that uses BTRFS	8.0	www	Settings & config	web
+3848350a8	todo		none	auto: not examined yet	fix method for determining storage partition device for cross platform compatibility	8.0	www	Settings & config	web
+02b0fb0bb	todo		none	auto: not examined yet	fix scrollable modal popup on plugin install	8.0	css	Web UI (shared JS/CSS/pages)	web
+f71ec4b0c	todo		none	auto: not examined yet	accept empty proxy list to clear file	8.0	api	Network, Apache & security	web
+b98dcd1b6	todo		none	auto: not examined yet	Fix uptime display on about page	8.0	www	Web UI (shared JS/CSS/pages)	web
+59f9f7a75	untestable		none	auto: changes no runtime file (www)	minor tweaks to warning md definitions	8.0	help	Web UI (shared JS/CSS/pages)	none
+079c52381	todo		none	auto: not examined yet	warnings tidy up ready for PR	8.0	js	Web UI (shared JS/CSS/pages)	web
+2c41758fd	todo		none	auto: not examined yet	change definitions to use HelpPageType and add MQTT warning type	8.0	www	Web UI (shared JS/CSS/pages)	web
+54790c25c	todo		none	auto: not examined yet	change warning definition to have a fileType rather than specific file	8.0	js	Web UI (shared JS/CSS/pages)	web
+4ba6cb407	todo		none	auto: not examined yet	set warnings to only link if valid HelpTxt or Helper file in place	8.0	js	Web UI (shared JS/CSS/pages)	web
+dccccd5aa	todo		none	auto: not examined yet	add warning id to MQTT disconnect	8.0	src	fppd core & utilities	docker
+5f64d4afa	todo		none	auto: not examined yet	fix viewport refresh when restart/reboot alerts are shown and hidden	8.0	js	Web UI (shared JS/CSS/pages)	web
+b2e921c55	todo		none	auto: not examined yet	only determine warning Function is helper page define in config	8.0	js	Web UI (shared JS/CSS/pages)	web
+34c253712	untestable		none	auto: changes no runtime file (docs)	add zero-md usage to developer notes	8.0	docs	Other	none
+b3b3f1e3c	untestable		none	auto: changes no runtime file (docs)	change mqtt file to md from txt	8.0	docs	Other	none
+283ed01c8	untestable		none	auto: changes no runtime file (docs)	change developer notes to .md file from txt	8.0	docs	Other	none
+5e1bde7fe	todo		none	auto: not examined yet	format warning list in UI as a UL	8.0	js	Web UI (shared JS/CSS/pages)	web
+53c6db5d5	todo		none	auto: not examined yet	add handling for basic warning txt definitions	8.0	js	Web UI (shared JS/CSS/pages)	web
+7bd33d85f	untestable		none	auto: changes no runtime file (docs)	add dev docs on new warning handling	8.0	docs	Other	none
+a7f5237b2	todo		none	auto: not examined yet	add a reduced set of zero-md docs for future dev reference	8.0	js	Web UI (shared JS/CSS/pages)	web
+17653774e	todo		none	auto: not examined yet	configure zero-md to run css locally	8.0	common	Web UI (shared JS/CSS/pages)	web
+3a8619da9	untestable		none	auto: changes no runtime file (www)	couple of example md warning files	8.0	help	Web UI (shared JS/CSS/pages)	none
+efab45770	todo		none	auto: not examined yet	create modal popup to display warning help for warnings with md file in place	8.0	help	Web UI (shared JS/CSS/pages)	web
+91b35657e	todo		none	auto: not examined yet	include zero-md as a js module across fpp	8.0	common	Web UI (shared JS/CSS/pages)	web
+cb1a16649	todo		none	auto: not examined yet	formatting before changes	8.0	common	Web UI (shared JS/CSS/pages)	web
+d574c3546	todo		none	auto: not examined yet	set vscode to display/format footer.inc and menuHead.inc as php	8.0	.vscode	Settings & config	docker
+ba3e8ddbd	todo		none	auto: not examined yet	inclusion of zero-md 3.1.2	8.0	js	Web UI (shared JS/CSS/pages)	web
+6c5567b1d	untestable		none	auto: changes no runtime file (www)	addition of a md formatted help page (for an initial example)	8.0	warning-helpers	Web UI (shared JS/CSS/pages)	none
+6bde8fe60	todo		none	auto: not examined yet	first stage of making warnings links to detailed help	8.0	js	Web UI (shared JS/CSS/pages)	web
+2dcd6db60	todo		none	auto: not examined yet	format warning message links	8.0	css	Web UI (shared JS/CSS/pages)	web
+f14442278	todo		none	auto: not examined yet	initial creation of warnings definitions format	8.0	www	Web UI (shared JS/CSS/pages)	web
+6edeecb95	todo		none	auto: not examined yet	start to introduce new WarningHolder calls	8.0	src	Commands & presets	docker
+298fe0eb8	todo		none	auto: not examined yet	clarify incompatible script verbage	8.0	www	Web UI (shared JS/CSS/pages)	web
+805ff257f	todo		none	auto: not examined yet	Fix default gateway error in #1931	8.0	www	Network, Apache & security	web
+bd9ed2b1e	todo		none	auto: not examined yet	Fix #1756 remove path from mqtt media files on remotes	8.0	src	fppd core & utilities	docker
+971ebe2c9	todo		none	auto: not examined yet	Show incompatible scripts in Advanced mode	8.0	www	Web UI (shared JS/CSS/pages)	web
+88ab7a2c4	todo		none	auto: not examined yet	Show incompatible srcipts in Advanced UI mode	8.0	www	Web UI (shared JS/CSS/pages)	web
+912dfc6d0	todo		none	auto: not examined yet	Fix branch being used to query remote verion	8.0	www	Web UI (shared JS/CSS/pages)	web
+ad9229d0c	todo		none	auto: not examined yet	Faster way to get uptime and ability to not return network information for status	8.0	api	Web API	web
+6d8b7a840	todo		none	auto: not examined yet	Add some flags to allow turning off some status things the caller may not need	8.0	api	Web API	web
+fc558ffc4	todo		none	auto: not examined yet	Change how the www filecache stuff works to allow a grace period where other requests can return the older data while the new data is being recalculated	8.0	www	Web UI (shared JS/CSS/pages)	web
+b0df4971a	todo		none	auto: not examined yet	Semi-cache the uuid in tmp file to remove forking of a process during status API	8.0	api	Web API	web
+d3a9b9c0a	todo		none	auto: not examined yet	fix missing status update on playlist resume	8.0	playlist	Playlists, schedule & sequences	docker
+a6bf19c54	todo		none	auto: not examined yet	Fix compile on mac	8.0	mediaoutput	Media: audio & video	docker
+3b58fe1ca	todo		none	auto: not examined yet	Don't add the same warning over and over	8.0	src	fppd core & utilities	docker
+37efb1d91	todo		none	auto: not examined yet	Attempt to put a better URL for warnings that have href's in them	8.0	www	MultiSync & remotes	web
+636e59b57	todo		none	auto: not examined yet	Make sure the dtbo's for the ADC and eMMC are copied to lib/firmware where the older bootloaders expect them	8.0	SD	Boot, OS image & install	os-image
+067705ffd	todo		none	auto: not examined yet	Don't crash if IIOSensorSource is not available (doesn't fix the problem, just the crash)	8.0	framebuffer	Pixel overlays	device,docker
+b2e1dc9ce	todo		none	auto: not examined yet	Update Warnings API to take an ID and extra data	8.0	mediaoutput	fppd core & utilities	docker,web
+e94cbbecf	todo		none	auto: not examined yet	Fix custom NTP	8.0	common	Settings & config	web
+a4b0b5e10	todo		none	auto: not examined yet	Stick with vlc3 by default	8.0	SD	Boot, OS image & install	os-image
+248a0f037	todo		none	auto: not examined yet	If HDMI is not connected, don't consider it HDMI	8.0	mediaoutput	Media: audio & video	docker
+cad418b3e	todo		none	auto: not examined yet	Try to interpolate between the 1/4s resolution of vlc3	8.0	mediaoutput	Media: audio & video	docker
+24dc6ff5b	todo		none	auto: not examined yet	Flip back to building vlc4 as vlc3 doesn't provide accurate enough timing to be able to multisync	8.0	SD	Boot, OS image & install	os-image
+0b6c5e2ce	todo		none	auto: not examined yet	Add a description for the command to the editor (when available)	8.0	commands	Commands & presets	docker,web
+52f4e54a0	todo		none	auto: not examined yet	Fix hang when stopping videos if no monitor attached	8.0	mediaoutput	Media: audio & video	os-image,docker
+f91bda09b	todo		none	auto: not examined yet	Fix Pi5 gpio with latest kernel	8.0	util	OLED, GPIO & sensors	docker
+fe96f9e02	todo		none	auto: not examined yet	disable duplicate logging for new OS builds	8.0	SD	Boot, OS image & install	os-image
+5fd38c876	todo		none	auto: not examined yet	Disallow multiple default gateways, and heavily warn that one is required.	8.0	www	Network, Apache & security	web
+240ecc941	todo		none	auto: not examined yet	Improve colorlight errors	8.0	channeloutput	LED panels	device
+b21e9b343	todo		none	auto: not examined yet	Make it much more obvious that DNS servers are needed when using static IP	8.0	www	Network, Apache & security	web
+3dc743f7a	todo		none	auto: not examined yet	Fix handling of hdmi sound devices while attempting to detect if monitor is connected or not	8.0	boot	Boot, OS image & install	docker
+fb979bb1f	todo		none	auto: not examined yet	Update for beta2	8.0	SD	Boot, OS image & install	os-image
+03949a826	todo		none	auto: not examined yet	Update platform version for beta2 Add libavahi	8.0	Docker	Boot, OS image & install	os-image
+24f0d446f	todo		none	auto: not examined yet	Switch to --drm-vout-no-modeset by default for videos	8.0	mediaoutput	Media: audio & video	docker
+a7c440155	todo		none	auto: not examined yet	Update rpi-led-matrix library	8.0	external	LED panels	docker
+8db386097	todo		none	auto: not examined yet	Fix problem with Virtual Display always running the channel output thread.  Fixes #1922	8.0	channeloutput	Other channel outputs	docker
+33a2a2d1a	todo		none	auto: not examined yet	Prevent a crash if KMS framebuffer cannot be associated with a connection	8.0	framebuffer	fppd core & utilities	device
+56d686dcc	todo		none	auto: not examined yet	Save as int, not string	8.0	www	OLED, GPIO & sensors	web
+032873141	todo		none	auto: not examined yet	Add a debounce setting for GPIO inputs	8.0	src	OLED, GPIO & sensors	device,web
+a514ef1a4	todo		none	auto: not examined yet	Don't query the voltage status as often.	8.0	src	fppd core & utilities	docker
+c30f26f79	todo		none	auto: not examined yet	Change way pi  voltage error is detected to hopefully work  on pi5	8.0	src	fppd core & utilities	docker
+6fa534a38	todo		none	auto: not examined yet	Display a lightning bolt and warning if the Raspberry Pi voltage thing triggers	8.0	js	fppd core & utilities	docker,web
+2cd247c87	todo		none	auto: not examined yet	Need to be sudo	8.0	scripts	fppd core & utilities	docker
+59b73be98	todo		none	auto: not examined yet	Create a swapfile on devices with lower memory during compile	8.0	scripts	fppd core & utilities	docker
+81354db8f	todo		none	auto: not examined yet	Add a message if handle cannot be found	8.0	api	Web API	web
+6d2acd62a	todo		none	auto: not examined yet	add query_next plugin callback	8.0	playlist	Playlists, schedule & sequences	docker
+fdc1cb7f6	todo		none	auto: not examined yet	Fix bug that caused significant excess CPU usage and delayed mqtt updates by ~1s	8.0	src	fppd core & utilities	docker
+4fc6118b8	todo		none	auto: not examined yet	Bunch of timecode handling fixes	8.0	playlist	Playlists, schedule & sequences	docker,web
+4d6686a9b	todo		none	auto: not examined yet	networkconfig.php : escape HTML special chars in scanned SSIDs	8.0	www	Network, Apache & security	web
+326a2bd50	todo		none	auto: not examined yet	fix proxy page not saving	8.0	www	Network, Apache & security	web
+d58a68c85	todo		none	auto: not examined yet	fix mistake in 17ce05e	8.0	www	Upgrade, backup & files	web
+bba4ca43d	todo		none	auto: not examined yet	remove unused code that is not referred to elsewhere in the code base	8.0	src	Commands & presets	docker,web
+17ce05ee3	todo		none	auto: not examined yet	Remove ancient unused F16v2-pi  code for unreleased board	8.0	api	Upgrade, backup & files	web
+74d579002	todo		none	auto: not examined yet	Add ability to set a screen dpms timeout for kiosk mode	8.0	SD	Boot, OS image & install	os-image,docker,web
+b0f7c49bf	todo		none	auto: not examined yet	"fpp -r" needs to remain as the systemd scripts use it for reload	8.0	src	fppd core & utilities	docker
+2e6b63a5b	todo		none	auto: not examined yet	Jquery canvas seems to be having issues with hidpi displays, just use straigh HTML canvas/context apis	8.0	www	Web UI (shared JS/CSS/pages)	web
+dc635bb74	todo		none	auto: not examined yet	Add millisecond position to status, add "api/player/current" REST endpoint for quicker status query without needing the entire playlist json	8.0	playlist	Playlists, schedule & sequences	docker
+0eb2b9207	todo		none	auto: not examined yet	Fix schedule preview	8.0	www	Web UI (shared JS/CSS/pages)	web
+98c2912bc	todo		none	auto: not examined yet	update cli help	8.0	scripts	Capes & EEPROM	docker
+ce920df1b	todo		none	auto: not examined yet	Maybe fix virtualdisplay on windows	8.0	www	Web UI (shared JS/CSS/pages)	web
+9a320d35a	todo		none	auto: not examined yet	Fix auto-install of Kiosk after fppos update.	8.0	boot	Boot, OS image & install	os-image,docker
+c8d423366	todo		none	auto: not examined yet	If the configured sound output is HDMI, but nothing is connected to the HDMI port, flip to the dummy output	8.0	boot	Boot, OS image & install	docker
+7ea2ac5d5	todo		none	auto: not examined yet	NVMe fix typo	8.0	SD	Boot, OS image & install	os-image
+bc771b2c0	todo		none	auto: not examined yet	text clarifications #1896	8.0	www	Settings & config	web
+f821717f9	todo		none	auto: not examined yet	NVMe improvements	8.0	SD	Boot, OS image & install	os-image,web
+9803d21ce	todo		none	auto: not examined yet	Fix Backup SSID #1647	8.0	www	Network, Apache & security	web
+c12d20540	todo		none	auto: not examined yet	Update playlist media/sequence entries to support an optional Time Code setting (Advanced UI only) that plugins that use timecodes can leverage	8.0	playlist	Playlists, schedule & sequences	docker,web
+862e28e23	todo		none	auto: not examined yet	deprecate help->fpp & fppmm Usage menu item	8.0	www	Web UI (shared JS/CSS/pages)	web
+676c230e1	todo		none	auto: not examined yet	fpp: fix error in last commit	8.0	src	fppd core & utilities	docker
+da3eaa699	todo		none	auto: not examined yet	 fpp: deprecate options that are available via API phase 2	8.0	src	fppd core & utilities	docker
+8f48e8fc4	todo		none	auto: not examined yet	fpp: deprecate options that are available via API phase 1	8.0	src	fppd core & utilities	docker
+ed5892f3d	todo		none	auto: not examined yet	Bump ws and socket.io-adapter in /www	8.0	www	Web UI (shared JS/CSS/pages)	web
+99eb17213	todo		none	auto: not examined yet	Bump ws, engine.io-client, socket.io and engine.io in /www	8.0	www	Web UI (shared JS/CSS/pages)	web
+c1cb40533	todo		none	auto: not examined yet	tweak for edge compatibility	8.0	www	Web UI (shared JS/CSS/pages)	web
+7643eca09	todo		none	auto: not examined yet	remove debug code	8.0	www	Web UI (shared JS/CSS/pages)	web
+c96ba818d	todo		none	auto: not examined yet	fix troubleshooting page tabs to reload to exact previous location	8.0	js	Web UI (shared JS/CSS/pages)	web
+8c4544d84	todo		none	auto: not examined yet	improve js logic for tabs to prevent calling url # if not a tab	8.0	js	Web UI (shared JS/CSS/pages)	web
+e280b8c6b	todo		none	auto: not examined yet	php formatting before changes	8.0	www	Web UI (shared JS/CSS/pages)	web
+4c40f3916	todo		none	auto: not examined yet	fix links to storage settings tab	8.0	www	Web UI (shared JS/CSS/pages)	web
+3e55e3844	todo		none	auto: not examined yet	Get HTTP Virtual display somewhat working	8.0	jquery	Web UI (shared JS/CSS/pages)	web
+32fd7fc66	todo		none	auto: not examined yet	PixelOverlay fix column headings on insert and deletion of table rows	8.0	www	Pixel overlays	web
+c0aaaff31	todo		none	auto: not examined yet	add model confirmation of fpp device shutdown	8.0	js	Web UI (shared JS/CSS/pages)	web
+0a9d5bfcd	todo		none	auto: not examined yet	add modal popup for confirm FPP device reboot	8.0	js	Web UI (shared JS/CSS/pages)	web
+04c212936	todo		none	auto: not examined yet	only show 1Gbps NIC warning if Panel set to enabled	8.0	www	LED panels	web
+fb1525e73	todo		none	auto: not examined yet	Make sure mac configures the right php	8.0	SD	Boot, OS image & install	device:mac
+5b93e5c95	todo		none	auto: not examined yet	Create the virtual framebuffers on the Mac	8.0	src	fppd core & utilities	docker
+b32f8f13d	todo		none	auto: not examined yet	change healthcheck from cloudflare 1.1.1.1 to iana example ip	8.0	scripts	fppd core & utilities	docker
+1fb3caf2c	todo		none	auto: not examined yet	Table heading position fixes for when restart banner displayed and hidden (#1903)	8.0	www	Web UI (shared JS/CSS/pages)	web
+f2a4350cc	todo		none	auto: not examined yet	add warning msg on ColorLight config page is interface less than 1000Mbps	8.0	www	LED panels	web
+a8c727e86	todo		none	auto: not examined yet	Hopefully get BBMatrix memory initialized and mapped properly	8.0	channeloutput	LED panels	device:bb
+f7d42d177	untestable		none	auto: changes no runtime file (docs)	More notes for using distcc as a service	8.0	docs	Other	none
+a8e4a7fd9	todo		none	auto: not examined yet	Remove extra printf	8.0	util	OLED, GPIO & sensors	device
+132658102	todo		none	auto: not examined yet	add interface speed to select option display	8.0	www	LED panels	web
+966a6ea86	todo		none	auto: not examined yet	Install new systemd files for startup race condition	8.0	SD	Boot, OS image & install	os-image,docker
+1ae59d607	todo		none	auto: not examined yet	Try to fix some startup race conditions on Pi3's	8.0	systemd	Boot, OS image & install	os-image,docker
+71f76237f	todo		none	auto: not examined yet	add interface speed check on Colorlight init	8.0	channeloutput	LED panels	device
+b961922a6	todo		none	auto: not examined yet	Try other drm header	8.0	framebuffer	fppd core & utilities	device
+dd725c9ba	todo		none	auto: not examined yet	Minor updates to  KMSFrameBuffer to work in ubuntu/debian parallels	8.0	framebuffer	fppd core & utilities	device
+c258d0029	todo		none	auto: not examined yet	Hopefully some fixes to install on ubuntu 2024.04	8.0	framebuffer	Boot, OS image & install	device,os-image
+04135c3e4	todo		none	auto: not examined yet	Proper setting of correct output video port for VLC	8.0	mediaoutput	Media: audio & video	docker,web
+1ae3a0aea	todo		none	auto: not examined yet	Update PiGPIOUtils.cpp to fix PWM mapping on Pi (not Pi5)	8.0	util	OLED, GPIO & sensors	docker
+fc59a39c8	untestable		none	auto: changes no runtime file (docs)	update pi eeprom example with new image variable	8.0	docs	Capes & EEPROM	none
+e5ad2b5b0	untestable		none	auto: changes no runtime file (docs)	update bbb eeprom example for new image variable	8.0	docs	Capes & EEPROM	none
+1fe9c75ef	todo		none	auto: not examined yet	add ability to have different header logo's defined in cape eeprom, separate to vendor logo	8.0	www	Web UI (shared JS/CSS/pages)	web
+84263e9d5	todo		none	auto: not examined yet	php formatting before making changes	8.0	www	Capes & EEPROM	web
+ab6f66754	todo		none	auto: not examined yet	php formatting before making changes	8.0	www	Web UI (shared JS/CSS/pages)	web
+0d2851092	todo		none	auto: not examined yet	add VSCode setting to format menu.inc as php	8.0	.vscode	Settings & config	docker
+167d8170f	todo		none	auto: not examined yet	sort available OS html select options in descending order	8.0	www	Web UI (shared JS/CSS/pages)	web
+7d0aa9af7	todo		none	auto: not examined yet	php formatting before making changes	8.0	www	Web UI (shared JS/CSS/pages)	web
+0c18b7768	todo		none	auto: not examined yet	addition of general use HTML Select sort JS function	8.0	js	Web UI (shared JS/CSS/pages)	web
+4713c35a2	todo		none	auto: not examined yet	Don't crash if Text overlay effect cannot find the specified font. Only list fonts for which we can find the proper file	8.0	overlays	Pixel overlays	docker
+304540735	todo		none	auto: not examined yet	Add more video resolutions (for various touch panels and such)	8.0	www	Web UI (shared JS/CSS/pages)	web
+10d67bea0	todo		none	auto: not examined yet	add Stuart to the credits page	8.0	www	Web UI (shared JS/CSS/pages)	web
+731eacbba	todo		none	auto: not examined yet	add confirmation warning on uninstalling plugins	8.0	www	Plugins	web
+59be28f94	todo		none	auto: not examined yet	Need another service for kiosk mode to work on a Pi5	8.0	SD	Boot, OS image & install	os-image
+f797839fd	todo		none	auto: not examined yet	Provide a better error message if pluginInfo cannot be parsed	8.0	www	Plugins	web
+e90faebc0	todo		none	auto: not examined yet	Another attempt to get the rootfs device	8.0	SD	Boot, OS image & install	os-image
+0a4de2b17	todo		none	auto: not examined yet	Some fixes for fppos upgrade on SATA/NVMe drives	8.0	SD	Boot, OS image & install	os-image
+e34595c75	todo		none	auto: not examined yet	Fix compiling the DPI overlays	8.0	SD	Boot, OS image & install	os-image
+434ae88b8	todo		none	auto: not examined yet	Make sure libfmt is installed	8.0	Docker	Boot, OS image & install	os-image
+c75c7f3f8	todo		none	auto: not examined yet	Need libfmt-dev as well	8.0	SD	Boot, OS image & install	os-image
+21e250df4	todo		none	auto: not examined yet	Update DPI Pixels to allow two strings on Pi5 to allow traditional/legacy pihats to work	8.0	non-gpl	BB pixel strings & PRU	device:pi,web
+a3dcb99e6	todo		none	auto: not examined yet	Mkae sure libkms++ is built/installed	8.0	SD	Boot, OS image & install	os-image
+df0076096	todo		none	auto: not examined yet	Prepare for "beta1" images	8.0	SD	Boot, OS image & install	os-image
+812d74a7e	todo		none	auto: not examined yet	Also make the overlays	8.0	upgrade	Upgrade, backup & files	docker
+6bdd6f399	todo		none	auto: not examined yet	Fix issues with  HDMI output on Pi5 with DPI configured	8.0	framebuffer	fppd core & utilities	device,docker
+713562941	todo		none	auto: not examined yet	Must be lower case	8.0	upgrade	Upgrade, backup & files	docker
+25c3bcce7	todo		none	auto: not examined yet	Don't use deprecated function	8.0	mediaoutput	Media: audio & video	docker
+977bf6217	todo		none	auto: not examined yet	Fix compile on macOS	8.0	framebuffer	fppd core & utilities	device,docker
+0289cffb9	todo		none	auto: not examined yet	Get sound working over vc4 HDMI ports	8.0	boot	Media: audio & video	docker
+936ad3e30	todo		none	auto: not examined yet	Updates for video handling with Bookworm Refactor FrameBuffer.cpp into separate classes Add overlays for Pi DPIPixel timing Handle screenblanking and forced HDMI resolution with KMS	8.0	drivers	Capes & EEPROM	device:pi,device,os-image,docker,web
+37a0d5797	todo		none	auto: not examined yet	Fix backup list tables not rendering correctly	8.0	www	Upgrade, backup & files	web
+527f6bc36	todo		none	auto: not examined yet	Code formatting	8.0	www	Upgrade, backup & files	web
+e3cb4b0e0	todo		none	auto: not examined yet	Add support to backup multiple files under Channel Inputs	8.0	www	Upgrade, backup & files	web
+9de61d272	todo		none	auto: not examined yet	change boot device detection to only flag one partition on the physical drive as the boot device	8.0	external	Settings & config	docker,web
+2ea321e2b	todo		none	auto: not examined yet	fix Next and Previous buttons to return to default state after being pressed	8.0	www	Web UI (shared JS/CSS/pages)	web
+7ccd88709	todo		none	auto: not examined yet	update button format to bootstrap 5.3 standard	8.0	www	Web UI (shared JS/CSS/pages)	web
+3f06c0216	todo		none	auto: not examined yet	correct logic used to detect the device hosting the media directory, which in turn fixes default device shown in the dropdown	8.0	www	Settings & config	web
+aa1251bb9	todo		none	auto: not examined yet	php auto formatting before making changes	8.0	external	Settings & config	docker,web
+82c2ec8bf	todo		none	auto: not examined yet	Allow multiple plugin versions with max of 0	8.0	www	Plugins	web
+45ce52fac	todo		none	auto: not examined yet	Set all plugins that don't explicitely have a "major version" equal to the current major version to "untested". Hide the untested in "Basic" UI level Hide the incompatible for all levels other than developer	8.0	www	Plugins	web
+7f472b1a8	todo		none	auto: not examined yet	Implement DMX serial channel INPUT similar to e1.31/ddp bridging	8.0	channeloutput	Other channel outputs	device,docker,web
+bfeb0ff01	todo		none	auto: not examined yet	Reformat php	8.0	www	Web UI (shared JS/CSS/pages)	web
+e7c9dc63c	todo		none	auto: not examined yet	Make sure capeinfo is initialized	8.0	non-gpl	Capes & EEPROM	device
+66745d8c4	todo		none	auto: not examined yet	add executable bit to upgrade script	8.0	upgrade	Upgrade, backup & files	docker
+4e68f73aa	todo		none	auto: not examined yet	add one off cleanup script to remove duplicate safe.directories from git global config	8.0	upgrade	Upgrade, backup & files	docker
+927de9f2f	todo		none	auto: not examined yet	support xLights bool for easier deleting of xLights Generated Models	8.0	www	Pixel overlays	web
+04741805f	todo		none	auto: not examined yet	Updated Proxy API to support Descriptions, switch proxy UI to use API	8.0	api	Web API	web
+1eba147ef	todo		none	auto: not examined yet	add git config output to troubleshooting commands	8.0	www	Commands & presets	web
+970bc1b48	todo		none	auto: not examined yet	add logic to only add safe directory during pull if doesn't already exist in the global git config	8.0	scripts	Upgrade, backup & files	docker
+d463b03c7	todo		none	auto: not examined yet	Repair the remote command execution vulnerability in www/flash-pi-usb.php file and use escapeshellarg function to format the incoming parameters. Issue: https://github.com/FalconChristmas/fpp/issues/1863	8.0	www	Web UI (shared JS/CSS/pages)	web
+49f1e9ca0	todo		none	auto: not examined yet	25 May - Some appearance behaviour improvements (#1851)	8.0	css	Web UI (shared JS/CSS/pages)	web
+713679369	todo		none	auto: not examined yet	Update healthCheck browser time logic for correct threshold behaviour	8.0	scripts	fppd core & utilities	docker
+dc536c0d3	todo		none	auto: not examined yet	Add a check to compare fpp system time against the browser time	8.0	scripts	Web UI (shared JS/CSS/pages)	docker,web
+99c22e687	todo		none	auto: not examined yet	Make sure the 16K page kernel is removed so it's not loaded	8.0	SD	Boot, OS image & install	os-image
+4a552a090	todo		none	auto: not examined yet	Fix commit a987bcc	8.0	www	MultiSync & remotes	web
+b3b5a33ad	todo		none	auto: not examined yet	Updates for alpha5	8.0	SD	Boot, OS image & install	os-image
+fa61f2a6c	todo		none	auto: not examined yet	Copy ccache config to fpp user	8.0	SD	Boot, OS image & install	os-image
+a987bcce1	todo		none	auto: not examined yet	Update Falcon multisync IDs	8.0	www	MultiSync & remotes	web
+3005caa48	todo		none	auto: not examined yet	Make sure capeutils is built/linked before PCA9685	8.0	makefiles	Build & makefiles	docker
+78f6cd892	todo		none	auto: not examined yet	install libssll during install - fix for #1847	8.0	SD	Boot, OS image & install	os-image
+17b32a216	todo		none	auto: not examined yet	Fix issue showing/reporting second receievers in chain	8.0	non-gpl	BB pixel strings & PRU	device:bb
+bf35d938d	todo		none	auto: not examined yet	Make sure the UART is actually enabled on Pi4/5	8.0	SD	Boot, OS image & install	os-image
+d26fd3179	todo		none	auto: not examined yet	Fixes for compiling with distcc	8.0	channeloutput	Other channel outputs	device
+6ddef56ea	todo		none	auto: not examined yet	Switch to using "setFuses" falconv5 packet as it's quicker.	8.0	non-gpl	BB pixel strings & PRU	device:bb
+7e9e4370c	todo		none	auto: not examined yet	Bump braces and gulp in /www	8.0	www	Web UI (shared JS/CSS/pages)	web
+86deb38d4	todo		none	auto: not examined yet	add extra comment	8.0	www	Web UI (shared JS/CSS/pages)	web
+1353510b8	todo		none	auto: not examined yet	Update healthCheck.php to fix issue on firefox	8.0	www	Web UI (shared JS/CSS/pages)	web
+35bb00a7a	todo		none	auto: not examined yet	[MQTT] fppd_status add additional fields Add Hostname, Description, and Platform. This addresses part of the requirements in #1782	8.0	src	fppd core & utilities	docker
+40e657d6b	todo		none	auto: not examined yet	[MQTT] Add option to publish output port information  including current draw (#1827)	8.0	docs	Other channel outputs	docker,web
+36d02bcdc	todo		none	auto: not examined yet	Clean up logic for Upgrade options	8.0	www	Web UI (shared JS/CSS/pages)	web
+3f385f430	todo		none	auto: not examined yet	Refactor EventThread before adding opiton to publish power	8.0	src	fppd core & utilities	docker
+6075c6f73	todo		none	auto: not examined yet	Fix about page if fppd is not running	8.0	js	Web UI (shared JS/CSS/pages)	web
+5d35aff24	todo		none	auto: not examined yet	Bump follow-redirects from 1.15.4 to 1.15.6 in /www	8.0	www	Web UI (shared JS/CSS/pages)	web
+f3cb79c8c	todo		none	auto: not examined yet	Update FPP_install to latest config level	8.0	SD	Boot, OS image & install	os-image
+7a480f235	todo		none	auto: not examined yet	Don't build vlc on Pi as we need the version with accelerated stuff that Pi builds. Might as well not build it on BBB either, save a ton of time on image creation	8.0	SD	Boot, OS image & install	os-image
+c8221b85c	todo		none	auto: not examined yet	Keep the v3d driver, needed for accelerated video with bookworm	8.0	SD	Boot, OS image & install	os-image
+f1f5ec664	todo		none	auto: not examined yet	formatting cleanup	8.0	www	Upgrade, backup & files	web
+ab18abbe4	todo		none	auto: not examined yet	Update multisync.php to fix warning msgs on filter (#1821)	8.0	www	MultiSync & remotes	web
+359a4dd8c	todo		none	auto: not examined yet	Dont set mmal_vout (no longer available), let vlc determine best outout	8.0	mediaoutput	Media: audio & video	docker
+df20a34c5	todo		none	auto: not examined yet	Only put usr/local/lib for vlc4	8.0	makefiles	Build & makefiles	docker
+9453f81aa	todo		none	auto: not examined yet	Work on compiling VLC with  VLC 3 and 4	8.0	mediaoutput	Media: audio & video	docker
+5c09dd959	todo		none	auto: not examined yet	Added logic control for toggling of table filter on/off for filemanager	8.0	css	Settings & config	web
+feaacc8b0	todo		none	auto: not examined yet	fixed override extend function to go deep and added filter option	8.0	js	Upgrade, backup & files	web
+34de210b3	untestable		none	auto: changes no runtime file (rpi-imager)	Add the 32bit flags to the tags	8.0	rpi-imager	Boot, OS image & install	none
+e1d27740c	untestable		none	auto: changes no runtime file (rpi-imager)	Remove extra ,	8.0	rpi-imager	Boot, OS image & install	none
+5c1804e33	untestable		none	auto: changes no runtime file (rpi-imager)	Try a bunch of devices	8.0	rpi-imager	Boot, OS image & install	none
+a8a7a15b8	untestable		none	auto: changes no runtime file (rpi-imager)	Remove devices to see if that helps burn pi images	8.0	rpi-imager	Boot, OS image & install	none
+202f211b8	todo		none	auto: not examined yet	Fix PHP error/warning	8.0	www	Web UI (shared JS/CSS/pages)	web
+ce670c97f	todo		none	auto: not examined yet	Add missing header file	8.0	src	fppd core & utilities	docker
+d361423a7	todo		none	auto: not examined yet	removed filemanager.js which isn't used	8.0	js	Upgrade, backup & files	web
+368509045	todo		none	auto: not examined yet	remove docs.php as not used or referenced anywhere	8.0	www	Web UI (shared JS/CSS/pages)	web
+b8c52fdbe	todo		none	auto: not examined yet	turnoff debugging on tablesorter and code cleanup	8.0	js	Upgrade, backup & files	web
+897374476	todo		none	auto: not examined yet	fix interaction of cssStickyHeader and metric-parser on tablesorter when running in a JQuery UI tab setup	8.0	js	Upgrade, backup & files	web
+c36751c84	todo		none	auto: not examined yet	There is always at least one receiver in the chain	8.0	non-gpl	BB pixel strings & PRU	device:bb
+63cfed940	todo		none	auto: not examined yet	Use second PRU as listener for FalconV5 smart receivers Detect blown fuses on first FalconV5 receiver in chain and display warning Reset FalconV5 receiver fuses when output starts	8.0	makefiles	BB pixel strings & PRU	device:bb,docker,web
+794152860	todo		none	auto: not examined yet	working table sort for filemanager	8.0	js	Upgrade, backup & files	web
+b885ebece	todo		none	auto: not examined yet	include and comment out jquery-migrate to aid jquery updates testing	8.0	common	Web UI (shared JS/CSS/pages)	web
+4ff6e7ca9	todo		none	auto: not examined yet	fix jquery depreciated removeAttr call	8.0	js	Web UI (shared JS/CSS/pages)	web
+dd84b5b59	todo		none	auto: not examined yet	fix deprec. jquery function calls	8.0	common	Web UI (shared JS/CSS/pages)	web
+a11394da0	todo		none	auto: not examined yet	fix deprec jquery funcs	8.0	www	Playlists, schedule & sequences	web
+1bd406125	todo		none	auto: not examined yet	update deprec .click usage	8.0	www	Playlists, schedule & sequences	web
+ea1820a36	todo		none	auto: not examined yet	remove depreciated .click function	8.0	js	Web UI (shared JS/CSS/pages)	web
+b98179484	todo		none	auto: not examined yet	clean filemanager.js - fix mouseclick handler to ignore header clicks affecting button visibility	8.0	js	Upgrade, backup & files	web
+13e75564b	todo		none	auto: not examined yet	rename uploadfile.php to filemanager.php	8.0	api	Web UI (shared JS/CSS/pages)	web
+e33616139	todo		none	auto: not examined yet	css updates for filemanager tablesorter	8.0	css	Web UI (shared JS/CSS/pages)	web
+78094c358	todo		none	auto: not examined yet	moved filemanger inline js to seperate file and removed redundant code	8.0	js	Upgrade, backup & files	web
+9091518c7	todo		none	auto: not examined yet	GetFiles() changes to return table rows formatter for tablesorter jquery	8.0	js	Web UI (shared JS/CSS/pages)	web
+2dedf6653	todo		none	auto: not examined yet	addition of tablesorter Options for each file type in filemanager	8.0	www	Web UI (shared JS/CSS/pages)	web
+6e9668aad	todo		none	auto: not examined yet	fix human_filesize to return format compatible with jquery tablesorter (kB not KB)	8.0	www	Web UI (shared JS/CSS/pages)	web
+bf63b30e6	todo		none	auto: not examined yet	display 'no files found' in file manager if not exist	8.0	js	Web UI (shared JS/CSS/pages)	web
+a76a5abd9	todo		none	auto: not examined yet	update tablesorter to v2.31.3	8.0	jquery	Web UI (shared JS/CSS/pages)	web
+434c16a06	todo		none	auto: not examined yet	start adding tablesorter to filemanager	8.0	js	Upgrade, backup & files	web
+53683f4e3	todo		none	auto: not examined yet	video duration title	8.0	www	Web UI (shared JS/CSS/pages)	web
+9d9f7d613	todo		none	auto: not examined yet	filemanager - add column headings to file tables	8.0	js	Web UI (shared JS/CSS/pages)	web
+4306be667	todo		none	auto: not examined yet	Start work on supporting inverted ws2811 protol (TM18xx) for BBShiftString	8.0	channeloutput	BB pixel strings & PRU	device:bb,docker
+c45ab8738	todo		none	auto: not examined yet	Optimize ShiftString asm code to free up space in PRU program ram	8.0	non-gpl	BB pixel strings & PRU	device:bb
+4c9d62490	todo		none	auto: not examined yet	If restoring config from a K16 v1.x (using BBB48String driver) onto a K16 v2 (BBShiftString), the string config cannot be edited or the entire configuration gets wiped out and becomes invalid.	8.0	www	BB pixel strings & PRU	web
+0c0774c6f	todo		none	auto: not examined yet	Fixing an issue with duplicated code in commit!	8.0	www	LED panels	web
+66cf7b70f	todo		none	auto: not examined yet	Added RGBMatrix led_row_address_type Option for Additional LED Panel Compatibility on Raspberry Pi.	8.0	channeloutput	LED panels	device,web
+d1ec8350f	todo		none	auto: not examined yet	More trouble shoot fixes (#1810)	8.0	www	Commands & presets	web
+aec993b62	todo		none	auto: not examined yet	added a few ; on ends of commands	8.0	www	Commands & presets	web
+80fbd0a42	todo		none	auto: not examined yet	added commentry explaing the php variable substitution to help devs in future	8.0	www	Web UI (shared JS/CSS/pages)	web
+5766db2ef	todo		none	auto: not examined yet	suppress the javascript settings array in the outputs	8.0	www	Web UI (shared JS/CSS/pages)	web
+8b3a2dd00	todo		none	auto: not examined yet	remove redundant file	8.0	www	Commands & presets	web
+e7ee3d748	todo		none	auto: not examined yet	More tweaks to Dockerfile for FPP 8.x	8.0	Docker	Boot, OS image & install	os-image
+a8f4d3596	todo		none	auto: not examined yet	make title h3	8.0	www	Web UI (shared JS/CSS/pages)	web
+02e0419c2	todo		none	auto: not examined yet	add [[ ]] notation handling to be able reference php variables in bash command	8.0	www	Web UI (shared JS/CSS/pages)	web
+a8b40b8ea	todo		none	auto: not examined yet	fix loading image spinner	8.0	www	Web UI (shared JS/CSS/pages)	web
+688da9d26	todo		none	auto: not examined yet	fix commands for i2c and rtc	8.0	www	Commands & presets	web
+3de456931	todo		none	auto: not examined yet	fix default gateway command	8.0	www	Commands & presets	web
+68eff2708	todo		none	auto: not examined yet	added loading gif	8.0	images	Web UI (shared JS/CSS/pages)	web
+73a4d889c	todo		none	auto: not examined yet	output trouble shooting command results as text for api	8.0	www	Web UI (shared JS/CSS/pages)	web
+8052f4302	todo		none	auto: not examined yet	Revert "Healthcheck page updates"	8.0	scripts	Web UI (shared JS/CSS/pages)	docker,web
+a8c0561f7	todo		none	auto: not examined yet	Revert "healthcheck: fix missing `]' error"	8.0	scripts	fppd core & utilities	docker
+6d6448ffc	todo		none	auto: not examined yet	healthcheck: fix missing `]' error	8.0	scripts	fppd core & utilities	docker
+7dc33ea40	todo		none	auto: not examined yet	Update copyright dates	8.0	channeloutput	fppd core & utilities	docker
+ad628b0e5	todo		none	auto: not examined yet	remove redundant code from help pages following the split of REST and command help pages	8.0	api	Commands & presets	web
+632519365	todo		none	auto: not examined yet	fix for #1522 - fixes for firefox render on windows	8.0	www	Web UI (shared JS/CSS/pages)	web
+bb9166bc4	todo		none	auto: not examined yet	Fix logic to display check on Media Directory	8.0	scripts	fppd core & utilities	docker
+8e67e87f8	todo		none	auto: not examined yet	remove deprecated capedetect logs from troubleshooting	8.0	www	Commands & presets	web
+f3a8a60ce	todo		none	auto: not examined yet	fix S.M.A.R.T troubleshooting command	8.0	www	Commands & presets	web
+952f877e5	todo		none	auto: not examined yet	addition of jgrowl map file	8.0	js	Web UI (shared JS/CSS/pages)	web
+ecf118de8	todo		none	auto: not examined yet	FPP Mods to timepicker to allow second midnight	8.0	js	Web UI (shared JS/CSS/pages)	web
+9f824bbd3	todo		none	auto: not examined yet	sheetjs (xlsx) updated to 0.20.1	8.0	js	Web UI (shared JS/CSS/pages)	web
+63c0a9088	todo		none	auto: not examined yet	jquery timepicker update 1.13.17 to 1.14.1	8.0	css	Web UI (shared JS/CSS/pages)	web
+d51102796	todo		none	auto: not examined yet	fabric updated from 5.2.1 to 5.3.0	8.0	js	Web UI (shared JS/CSS/pages)	web
+c1643b819	todo		none	auto: not examined yet	jquery-form update 3.50.0 to 4.3.0	8.0	jquery	Plugins	web
+cccd0681e	todo		none	auto: not examined yet	Update jcanvas to 22.0.1	8.0	jquery	Web UI (shared JS/CSS/pages)	web
+bf75d0d8c	todo		none	auto: not examined yet	Updated TableSorter to 2.31.3	8.0	jquery	Web UI (shared JS/CSS/pages)	web
+bd92ceb70	todo		none	auto: not examined yet	Updated File Pond to 4.30.6	8.0	css	Web UI (shared JS/CSS/pages)	web
+59f2e6199	todo		none	auto: not examined yet	update to latest jquery and bootstrap minor versions	8.0	js	Web UI (shared JS/CSS/pages)	web
+4d1baa9ae	todo		none	auto: not examined yet	addition of dtc command to RPI troubleshooter	8.0	www	Commands & presets	web
+c40d47574	todo		none	auto: not examined yet	add non valid return logic to troubleshooting help	8.0	www	Web UI (shared JS/CSS/pages)	web
+5bcc94c49	todo		none	auto: not examined yet	added SMART device info to troubleshooting json	8.0	www	Commands & presets	web
+1d1ae7f67	todo		none	auto: not examined yet	removed "\" breaking css style syntax	8.0	www	Web UI (shared JS/CSS/pages)	web
+1563824ce	todo		none	auto: not examined yet	minor UI improvements on trouble page	8.0	www	Web UI (shared JS/CSS/pages)	web
+4606e313b	todo		none	auto: not examined yet	changed troubleshoot ajax to run commands on tab change to reduce initial load and give latest view to user	8.0	www	Web UI (shared JS/CSS/pages)	web
+63176893d	todo		none	auto: not examined yet	remove raspinfo txt file from filesystem after trouble cmds	8.0	www	Commands & presets	web
+27028776f	todo		none	auto: not examined yet	addition of vclog to rpi troubleshooting utils	8.0	www	Commands & presets	web
+13d7bd4d7	todo		none	auto: not examined yet	added trouble shooting command description to UI	8.0	www	Web UI (shared JS/CSS/pages)	web
+bc2ae6aad	todo		none	auto: not examined yet	addition of pinctrl command for rpi systems	8.0	www	Commands & presets	web
+296fbb8d1	todo		none	auto: not examined yet	spelling fix	8.0	www	Web UI (shared JS/CSS/pages)	web
+a60e125b5	todo		none	auto: not examined yet	logic to only display troubleshoot commands for current platform	8.0	www	Commands & presets	web
+23fede467	todo		none	auto: not examined yet	changed trouble shooting page to run from json file and group commands with a new bootstrap layout	8.0	www	Web UI (shared JS/CSS/pages)	web
+5f7364495	todo		none	auto: not examined yet	added raspinfo to commands	8.0	www	Commands & presets	web
+b9d756e11	todo		none	auto: not examined yet	move trouble shooting commands to json file for new UI experience	8.0	www	Commands & presets	web
+dabb9f5e1	todo		none	auto: not examined yet	Update FPP_Install.sh dtoverlay=pi3-miniuart-bt	8.0	SD	Boot, OS image & install	os-image
+a15edeb84	todo		none	auto: not examined yet	Update changelog.php	8.0	www	Web UI (shared JS/CSS/pages)	web
+685317293	todo		none	auto: not examined yet	Expand output width on troubleshooting commands page	8.0	www	Web UI (shared JS/CSS/pages)	web
+2233abad4	todo		none	auto: not examined yet	minor spelling fixes	8.0	boot	Boot, OS image & install	docker
+b12beb4af	todo		none	auto: not examined yet	Fix some ntpsec, exim4, tzdata problems	8.0	SD	Boot, OS image & install	os-image,docker
+c46e65374	todo		none	auto: not examined yet	fix fpp.local resolution which was broken until you did a hostname change	8.0	boot	Boot, OS image & install	docker
+360f8b38e	todo		none	auto: not examined yet	Add S.M.A.R.T stats for SSD/HDD/NVMe in troubleshooting	8.0	SD	Commands & presets	os-image,docker,web
+6f95d6939	todo		none	auto: not examined yet	NVMe upate	8.0	SD	Boot, OS image & install	os-image,web
+018ff3670	todo		none	auto: not examined yet	NVMe update	8.0	SD	Boot, OS image & install	os-image
+d63701ab0	todo		none	auto: not examined yet	Initial work towards NVMe support	8.0	SD	Boot, OS image & install	os-image,web
+5548d5b0e	todo		none	auto: not examined yet	enhance sequence api to support .eseq files #1790	8.0	api	Web API	web
+f2871c181	todo		none	auto: not examined yet	bring back syslog file	8.0	SD	Boot, OS image & install	os-image
+19b6d0032	todo		none	auto: not examined yet	fppinit - ensure all execs are absolute	8.0	boot	Boot, OS image & install	docker
+46abaf8c7	todo		none	auto: not examined yet	Fix ssh key generation on bootup	8.0	boot	Boot, OS image & install	docker
+8cde148b3	todo		none	auto: not examined yet	Updates and tweaks to docker for 8.2	8.0	Docker	Boot, OS image & install	os-image
+736745b3a	todo		none	auto: not examined yet	Add a 'local' target to make local files without updating externals	8.0	src	Build & makefiles	docker
+b76332edf	todo		none	auto: not examined yet	Hopefully fix upgrade/downgrade between Raspbian 12 and pre-12.	8.0	SD	Boot, OS image & install	os-image
+a712ed74d	todo		none	auto: not examined yet	Allow testing remote media files.	8.0	mediaoutput	Media: audio & video	docker
+b072bf73f	todo		none	auto: not examined yet	Fix display of checkboxes for upgrade OS UI.	8.0	www	Web UI (shared JS/CSS/pages)	web
+a56ac0e5a	todo		none	auto: not examined yet	Only look in FPP settings when pluginName is not set.	8.0	www	Web UI (shared JS/CSS/pages)	web
+18da77b49	todo		none	auto: not examined yet	Updates for docker to use fppinit	8.0	boot	Boot, OS image & install	os-image,docker
+aad1533fd	todo		none	auto: not examined yet	If the time updates via NTP/RTC, reset the oled timer to keep the oled on at boot	8.0	oled	OLED, GPIO & sensors	device
+65e5cba78	todo		none	auto: not examined yet	Fix extra "log" dir being created	8.0	boot	Boot, OS image & install	docker
+5e532173a	todo		none	auto: not examined yet	Fix gpio mapping on pocketbeagle, fix BBB48String and BBBMatrix output	8.0	channeloutput	BB pixel strings & PRU	device:bb,device
+5e6150e3c	todo		none	auto: not examined yet	Make sure [all] is added to bottom of config.txt so additions will apply to all	8.0	SD	Boot, OS image & install	os-image
+8b2359668	todo		none	auto: not examined yet	Wrong license header	8.0	boot	Boot, OS image & install	device,docker
+fc918337d	todo		none	auto: not examined yet	Fix compile with distcc	8.0	util	OLED, GPIO & sensors	docker
+ffd062e6d	todo		none	auto: not examined yet	Add some timeouts to fppini and fpp_postnetwork "just in case"	8.0	systemd	Boot, OS image & install	os-image
+b6316ae66	todo		none	auto: not examined yet	When reconfiguring network, we need to background the various calls to systemctrl	8.0	boot	Boot, OS image & install	docker
+a98c7fb9a	todo		none	auto: not examined yet	If RTC fails to be setup (configured wrong, cape removed, etc..) remove the device to not spam sys log with errors	8.0	boot	Boot, OS image & install	device
+9a8ea1169	todo		none	auto: not examined yet	Display wifi regulatory domain even if external wifi drivers are not available	8.0	common	Settings & config	web
+20627675f	todo		none	auto: not examined yet	More updates for fppoled/capedetect	8.0	systemd	Boot, OS image & install	os-image
+69c026498	todo		none	auto: not examined yet	Fix loading interface.* properties with quotes, fix navigation buttons on oled if using gpio expanders	8.0	oled	OLED, GPIO & sensors	device,docker
+996ed26c1	todo		none	auto: not examined yet	Update for some BBB image things	8.0	SD	Boot, OS image & install	os-image
+33a568c3f	todo		none	auto: not examined yet	Remove debug sleep left in	8.0	boot	Boot, OS image & install	docker
+4d574cf8c	todo		none	auto: not examined yet	Didn't mean to commit these	8.0	www	Web UI (shared JS/CSS/pages)	web
+8b327a19f	todo		none	auto: not examined yet	eeprom signature verification uses openssl which seems to need entropy to do anything.   Delay fppinit until after haveged.service.	8.0	systemd	Web UI (shared JS/CSS/pages)	os-image,web
+5a47c9d99	todo		none	auto: not examined yet	Couple of fixes for boot_delay setting	8.0	boot	Boot, OS image & install	docker
+4780ff6fd	todo		none	auto: not examined yet	Add _ to logrotate regex	8.0	logrotate.d	fppd core & utilities	docker
+5e7065a84	todo		none	auto: not examined yet	More work on bootup	8.0	systemd	OLED, GPIO & sensors	device,os-image,docker
+39779ced0	todo		none	auto: not examined yet	Fix errors restoring from setting backups	8.0	api	Upgrade, backup & files	web
+1b74a4010	todo		none	auto: not examined yet	Move fppinit later for now to make sure the filesystem is read/write	8.0	systemd	Boot, OS image & install	os-image
+ffdf735ff	todo		none	auto: not examined yet	Re-write the boot scripts into a C++ process, combine fppcapedetect and fppinit,	8.0	systemd	Boot, OS image & install	device:bb,device:pi,device,os-image,docker
+121a2107f	todo		none	auto: not examined yet	Some minor capedetect updates	8.0	makefiles	Capes & EEPROM	device,docker
+64c065d5c	todo		none	auto: not examined yet	Change piRTC to C++ program (slightsly faster boot)	8.0	systemd	Build & makefiles	device:bb,device:pi,device,os-image,docker,web
+24236434c	todo		none	auto: not examined yet	Update fppcapedetect systemd service to call fppcapedirect directly (saves about 2 seconds on beagle boot)	8.0	systemd	Capes & EEPROM	device,os-image
+b28a829dd	todo		none	auto: not examined yet	GPIO chip mapping for pocketbeagle	8.0	util	BB pixel strings & PRU	device:bb
+557a9d4fd	todo		none	auto: not examined yet	Scheduler fixes and enhancements	8.0	src	Playlists, schedule & sequences	docker,web
+69ef6aeaf	todo		none	auto: not examined yet	Fix Pi5GPIODCapabilities, maybe for real this time.	8.0	util	OLED, GPIO & sensors	docker
+a92f7cb27	untestable		none	auto: changes no runtime file (rpi-imager)	add device tag for rpi-imager -  requested by rpi people	8.0	rpi-imager	Boot, OS image & install	none
+c6d23bb31	todo		none	auto: not examined yet	DPIPixels updates	8.0	non-gpl	Pi outputs (DPI/spixels)	device:pi
+2aaa4c4b3	todo		none	auto: not examined yet	Minor bugfix for new Pi5GPIODCapabilities	8.0	util	OLED, GPIO & sensors	docker
+e7e7f291d	todo		none	auto: not examined yet	Update cape audio device tree overlays for 6.x kernels	8.0	drivers	Capes & EEPROM	device:bb
+236a1cf8e	todo		none	auto: not examined yet	Update docker to bookworm	8.0	Docker	Boot, OS image & install	os-image
+13823f630	todo		none	auto: not examined yet	Minor install updates for Beagles	8.0	makefiles	Boot, OS image & install	os-image,docker
+b6a9bb348	todo		none	auto: not examined yet	Update BBBUtils to use libgpiod	8.0	util	BB pixel strings & PRU	device:bb
+70d5e5563	todo		none	auto: not examined yet	Update to latest bootloader	8.0	bin.bbb	Boot, OS image & install	device:bb,docker
+c12bf59f5	todo		none	auto: not examined yet	Debug information in BBBUtils (so stored and retrievable later)	8.0	util	BB pixel strings & PRU	device:bb
+2c70e53be	todo		none	auto: not examined yet	Honor exif orientation when loading images	8.0	playlist	Playlists, schedule & sequences	docker
+ce8bf70bb	todo		none	auto: not examined yet	Add default value for new disableAudioVolumeSlider setting	8.0	www	Settings & config	web
+2e712086e	todo		none	auto: not examined yet	Add check of warnings.json to Health Check	8.0	scripts	fppd core & utilities	docker
+3f6163e1c	todo		none	auto: not examined yet	Add jq upgrade for #1671	8.0	upgrade	Upgrade, backup & files	docker
+7f54b64c7	untestable		none	auto: changes no runtime file (rpi-imager)	rpi-imager: remove everything older than 7.5	8.0	rpi-imager	Boot, OS image & install	none
+463a89663	todo		none	auto: not examined yet	Fix basename error printed when ssh-ing into system	8.0	scripts	fppd core & utilities	docker
+ab0a831d3	todo		none	auto: not examined yet	update help text	8.0	www	Settings & config	web
+1e0b29306	todo		none	auto: not examined yet	Add configurable home page URL for kiosk mode	8.0	common	Boot, OS image & install	os-image,docker,web
+3a0cfa850	todo		none	auto: not examined yet	Stop trying to backup Events #1603	8.0	api	Upgrade, backup & files	web
+306e93009	todo		none	auto: not examined yet	Add disabling volume slider for remotes too #1726	8.0	www	Web UI (shared JS/CSS/pages)	web
+d48cd9389	todo		none	auto: not examined yet	Remove UI pause when enabling services (smb/ftp/rsync) #1766	8.0	common	Settings & config	web
+63454ffd6	todo		none	auto: not examined yet	Fix persistent names problem introduced in commit 01efb505483ca0f13337eb8af448dfb19ea7e0e7	8.0	api	Web API	web
+4d42b6aa7	todo		none	auto: not examined yet	Allow for a backup SSID to connect to #1647	8.0	api	Network, Apache & security	docker,web
+f70dcfe60	todo		none	auto: not examined yet	Option to disable Volume slider on status page #1726	8.0	www	Settings & config	web
+ed0a43374	todo		none	auto: not examined yet	Hide the nobody CIFS share	8.0	SD	Boot, OS image & install	os-image
+8ad07fcfa	todo		none	auto: not examined yet	Sort interfaces in the UI	8.0	js	Web UI (shared JS/CSS/pages)	web
+7e73e5e0b	todo		none	auto: not examined yet	Show UP interfaces in status bar (eg colorlight) #1645	8.0	js	Web UI (shared JS/CSS/pages)	web
+0677fb44c	todo		none	auto: not examined yet	Remove debug echos	8.0	scripts	fppd core & utilities	docker
+f4d30c4e8	todo		none	auto: not examined yet	Fix "command not found" bug cause by 88b1606d	8.0	scripts	fppd core & utilities	docker
+90cd4b452	todo		none	auto: not examined yet	Start working on handling Beagle pinmuxing directly	8.0	channeloutput	BB pixel strings & PRU	device:bb,device,docker
+01efb5054	todo		none	auto: not examined yet	fix persistentNames function spelling so devs can find the linkages in the code base	8.0	api	Network, Apache & security	web
+51e41a0b1	todo		none	auto: not examined yet	 Fix #1596 by pushing a default start channel of 1	8.0	commands	Commands & presets	docker
+169353ba7	todo		none	auto: not examined yet	don't try to save invalid command presets	8.0	www	Commands & presets	web
+ab7888463	todo		none	auto: not examined yet	 fix wifi scanning api for FPP8 #1560	8.0	api	Network, Apache & security	web
+61d4b26aa	todo		none	auto: not examined yet	 Sort WLED palettes list entries #1482	8.0	overlays	Pixel overlays	docker
+ed7f0103f	todo		none	auto: not examined yet	Fix a couple of minor errors in Pi-FlashUSB.sh	8.0	SD	Boot, OS image & install	os-image
+8ca4abc82	todo		none	auto: not examined yet	HDMI 2 Force resolution setting for Pi5	8.0	www	Settings & config	web
+b1230c096	todo		none	auto: not examined yet	Flash to USB for Pi5	8.0	www	Settings & config	web
+1342df9c8	todo		none	auto: not examined yet	copyright 2023->2024	8.0	www	Web UI (shared JS/CSS/pages)	web
+909859364	untestable		none	auto: changes no runtime file (docs)	Add sensor to MQTT documentation	8.0	docs	Other	none
+bd7e6ca82	untestable		none	auto: changes no runtime file (docs)	Clean up MQTT.txt for fppd_status to match reality. Fixes #1761	8.0	docs	Other	none
+4a22fc4cc	todo		none	auto: not examined yet	Document fppd/ports api	8.0	api	Web API	web
+7d4021a0b	todo		none	auto: not examined yet	Add MultiSync type for Pi 5.	8.0	src	MultiSync & remotes	docker
+67bbdf9b6	todo		none	auto: not examined yet	Detect if should use /boot/firmware instead of /boot	8.0	channeloutput	Boot, OS image & install	device:pi,device,os-image,docker,web
+9bcb69eef	todo		none	auto: not examined yet	Healthcheck: More clearly call out if fppd file is missing	8.0	scripts	fppd core & utilities	docker
+bcace96ba	todo		none	auto: not examined yet	Allow adding sequences/media/scripts to playlist from File Manager	8.0	js	Web UI (shared JS/CSS/pages)	web
+609c3ef29	todo		none	auto: not examined yet	Don't hardcode /opt/fpp path so new commands work on a MAC	8.0	commands	Commands & presets	docker
+296526545	todo		none	auto: not examined yet	change chown to user:group from user.group	8.0	api	Boot, OS image & install	os-image,docker,web
+391c7c8f9	todo		none	auto: not examined yet	Squelch warning about bitwise operation on different enum types	8.0	channeloutput	Other channel outputs	docker
+5e13bdaf1	todo		none	auto: not examined yet	Few more UI enhancements for scheduling FPP Commands on Remotes.	8.0	www	Playlists, schedule & sequences	web
+af8f6bf3d	todo		none	auto: not examined yet	Allow scheduling FPP Commands on systems running in Remote Mode.	8.0	js	Playlists, schedule & sequences	docker,web
+9248b19db	todo		none	auto: not examined yet	Add FPP Commands to switch between Player and Remote modes	8.0	commands	Commands & presets	docker
+88b1606d7	todo		none	auto: not examined yet	Add a way to call script helper functions directly	8.0	scripts	fppd core & utilities	docker
+6da66a3fb	todo		none	auto: not examined yet	Add option to delay boot until until system time looks valid	8.0	scripts	Boot, OS image & install	docker,web
+46441b5f3	todo		none	auto: not examined yet	Setup php config for 1999M to be under 2G limit	8.0	SD	Boot, OS image & install	os-image
+181810001	todo		none	auto: not examined yet	On 32bit php8.2, must be LESS than 2G	8.0	www	Web UI (shared JS/CSS/pages)	web
+70a203335	todo		none	auto: not examined yet	Only load portion of playlist when start/end positions given.	8.0	playlist	Playlists, schedule & sequences	docker
+fbdb29f7d	todo		none	auto: not examined yet	Allow uploading existing authorized_keys file	8.0	www	Settings & config	web
+7246fedde	todo		none	auto: not examined yet	Allow configfile API call to take a directly uploaded file.	8.0	api	Web API	web
+ee6232f36	todo		none	auto: not examined yet	Fix compile on 2023 OS images with older OpenSSL	8.0	non-gpl	Capes & EEPROM	device
+ce2e621f3	todo		none	auto: not examined yet	Maybe get Pi5 alt gpio modes working	8.0	util	BB pixel strings & PRU	device:bb,docker
+66bc74877	todo		none	auto: not examined yet	Update some Pi instructions for bookworm	8.0	SD	Boot, OS image & install	os-image
+cf8691866	todo		none	auto: not examined yet	Remove support for older VLC	8.0	mediaoutput	Media: audio & video	os-image,docker
+d6373aa67	todo		none	auto: not examined yet	Start fixing some of the gcc 12 warnings	8.0	channeloutput	fppd core & utilities	device,docker
+6ee9c289b	todo		none	auto: not examined yet	Cleanup warnings in CapeUtils.cpp	8.0	non-gpl	Capes & EEPROM	device
+8ce4f7786	todo		none	auto: not examined yet	Basic GPIO working on Pi5 (fppoled pushbuttons for PiOLED)	8.0	oled	OLED, GPIO & sensors	device,docker
+ff36f5cf7	todo		none	auto: not examined yet	Multisync page: Fix possible javascript error when curStatus iswas null, it would prevent all other devices from refreshing.	8.0	www	MultiSync & remotes	web
+8c898a4b2	todo		none	auto: not examined yet	Start working on Debian 12 updates	8.0	SD	Boot, OS image & install	os-image
+ee3ebfc28	todo		none	auto: not examined yet	Add warning if Playlist not saved Closes #1724	8.0	css	Playlists, schedule & sequences	web
+8e67257d0	todo		none	auto: not examined yet	Added basic capeInfo to system/info	8.0	www	Web UI (shared JS/CSS/pages)	web
+86bb93edc	untestable		none	auto: changes no runtime file (docs)	Add ready topic to mqtt documentation	8.0	docs	Other	none
+20dca47fc	todo		none	auto: not examined yet	Add Last Will and Testament to Ready Topic in MQTT	8.0	src	fppd core & utilities	docker
+f041a7d44	todo		none	auto: not examined yet	Add FPP version and branch to mqtt /fppd_status topic.	8.0	src	fppd core & utilities	docker
+b0e65c33a	untestable		none	auto: changes no runtime file (rpi-imager)	Update rpi_imager for 7.5	8.0	rpi-imager	Boot, OS image & install	none
+422a14add	todo		none	auto: not examined yet	Bump axios and browser-sync in /www	7.5	www	Web UI (shared JS/CSS/pages)	web
+660c3dcd9	todo		none	auto: not examined yet	Bump follow-redirects from 1.15.2 to 1.15.4 in /www	7.5	www	Web UI (shared JS/CSS/pages)	web
+e3a7cf772	todo		none	auto: not examined yet	Set the thread name for forked threads to help with crash logs	7.5	channeloutput	Playlists, schedule & sequences	docker
+ddec08e9a	todo		none	auto: not examined yet	Another minor optimzation to avoid a big json copy	7.5	playlist	Playlists, schedule & sequences	docker
+0b9723778	todo		none	auto: not examined yet	Some optimizations to help load large playlists faster, reduce some copying.	7.5	playlist	Playlists, schedule & sequences	docker
+131bec5db	todo		none	auto: not examined yet	Prompt for optional email address. Add additional information to crash logs.	7.4.1	src	Settings & config	docker,web
+1904735d4	todo		none	auto: not examined yet	Fix potential crash with command preset tracks	7.4.1	src	Playlists, schedule & sequences	docker
+df831028c	todo		none	auto: not examined yet	Add a nullptr guard when setting log levels	7.4.1	src	fppd core & utilities	docker
+593df45c2	todo		none	auto: not examined yet	Add ability to turn on/off individual eFuse ports.	7.5	src	Other channel outputs	docker,web
+93c58844e	todo		none	auto: not examined yet	Start updating FPP_Install.sh for Debian 12	7.5	SD	Boot, OS image & install	os-image
+38dd28b51	todo		none	auto: not examined yet	Adding setting name to callbacks for PrintSetting*	7.5	www	Web UI (shared JS/CSS/pages)	web
+e8dd769bc	todo		none	auto: not examined yet	Return empty Json::Value instead of false when Twinkly curl times out.	7.4.1	channeloutput	Other channel outputs	docker
+3904f98ed	todo		none	auto: not examined yet	const method	7.5	fseq	Playlists, schedule & sequences	docker
+73e9719b5	todo		none	auto: not examined yet	Added Sequence Info Button to View FSEQ header data	7.5	fseq	Playlists, schedule & sequences	docker,web
+2843f288e	todo		none	auto: not examined yet	If inputs are enabled, make the default warn if data received and sequence is running.  Advanced users can select a different option.	7.4.1	src	Playlists, schedule & sequences	docker,web
+7638be7a7	todo		none	auto: not examined yet	Put a try/catch for invalid twinkly auth json	7.4.1	channeloutput	Other channel outputs	docker
+36fc2f718	todo		none	auto: not examined yet	Hopefully fix de-dup setting	7.4.1	channeloutput	Other channel outputs	docker
+962b83e4a	todo		none	auto: not examined yet	Fix filter text color to match green used in other places on the page	7.5	css	Web UI (shared JS/CSS/pages)	web
+18de928a3	todo		none	auto: not examined yet	Remove reference to old Advanced View	7.5	www	MultiSync & remotes	web
+df8a84ff2	todo		none	auto: not examined yet	Highlight MultiSync UI filter search text to make it more obvious	7.5	css	Web UI (shared JS/CSS/pages)	web
+16c8e8818	todo		none	auto: not examined yet	Try to detect Falcon v5's with http discovery	7.5	src	Network, Apache & security	docker
+a43d50ddc	todo		none	auto: not examined yet	Fix display of temp/voltage on multisync page for Falcon controllers	7.5	src	MultiSync & remotes	docker,web
+96d9f8642	untestable		none	auto: changes no runtime file (rpi-imager)	add 7.4 to rpi-imager	7.5	rpi-imager	Boot, OS image & install	none
+b308a6d13	todo		none	auto: not examined yet	Updates from 7.4 image building	7.5	SD	Boot, OS image & install	os-image
+d3e6aa4ab	todo		none	auto: not examined yet	Improvments to settings backup file maintenance for plugins	7.4	api	Upgrade, backup & files	web
+8e47a4948	todo		none	auto: not examined yet	Update upgrade 81 script file permission	7.4	upgrade	Upgrade, backup & files	docker
+d13dcc15c	todo		none	auto: not examined yet	Simplyfi logic around old backup deletion	7.4	upgrade	Upgrade, backup & files	docker,web
+f82bf5b11	todo		none	auto: not examined yet	Start preparing for 7.4	7.4	SD	Boot, OS image & install	os-image
+778730f55	todo		none	auto: not examined yet	Decorate output on changelog page to show tagged versions.	7.4	www	Web UI (shared JS/CSS/pages)	web
+4167816a5	todo		none	auto: not examined yet	Show version tags in changelog when viewing from the UI.	7.4	scripts	Upgrade, backup & files	docker
+993b6510c	todo		none	auto: not examined yet	On multi-core Pi's, if not specifically configured, use a 5s boot delay to allow sound card and ntp and such to be detected and settle.	7.4	scripts	Boot, OS image & install	docker
+37ee06a9d	todo		none	auto: not examined yet	Fix Install Script Escaping	7.4	SD	Boot, OS image & install	os-image
+3642d4c01	todo		none	auto: not examined yet	Use FalconPlayer NTP Pool	7.4	common	Boot, OS image & install	os-image,web
+5339462bf	todo		none	auto: not examined yet	Add ability to examine sequence channel data using fsequtils.	7.4	fseq	Playlists, schedule & sequences	docker
+f4ee8a649	todo		none	auto: not examined yet	Bump postcss from 8.4.23 to 8.4.31 in /www	7.4	www	Web UI (shared JS/CSS/pages)	web
+0e09c6e88	todo		none	auto: not examined yet	Remove extra letter	7.4	SD	Boot, OS image & install	os-image
+bd9c4f9f5	todo		none	auto: not examined yet	Make sure external URL's on multisync page are not shown if they shouldn't be	7.4	www	MultiSync & remotes	web
+c9d35e9b8	todo		none	auto: not examined yet	Make Proxies Open in new tab	7.4	www	Network, Apache & security	web
+ae937dea6	todo		none	auto: not examined yet	Hide Scheduler menu entry and Status box if FPP is in Remote mode.	7.4	www	Web UI (shared JS/CSS/pages)	web
+5560f9f61	todo		none	auto: not examined yet	Fix segfault if passed an empty string for a playlist filename.	7.4	playlist	Playlists, schedule & sequences	docker
+64082b25b	todo		none	auto: not examined yet	Put 'Select a type' back at the top of the Other dropdown.	7.4	www	Other channel outputs	web
+e51f9541a	todo		none	auto: not examined yet	Turn on syntax highlighting in vim config	7.4	SD	Boot, OS image & install	os-image
+8da7740e7	todo		none	auto: not examined yet	Remove .local from hostname link	7.4	www	MultiSync & remotes	web
+dfe40b11a	todo		none	auto: not examined yet	Fix a bunch of memory leaks	7.3.6	channeloutput	Playlists, schedule & sequences	docker
+d3f5eb8a2	todo		none	auto: not examined yet	Fix fseq generation issue with uncompressed sequences > 4G.  (fsequtils impact only)	7.4	fseq	Playlists, schedule & sequences	docker
+458214811	todo		none	auto: not examined yet	Catch json exceptions in Twinkly to prevent crashes Fixes #1692	7.3.6	channeloutput	Other channel outputs	docker
+c445310d8	todo		none	auto: not examined yet	Need to replaceAll in a few places.	7.4	js	Web UI (shared JS/CSS/pages)	web
+b5cd8a8ff	todo		none	auto: not examined yet	Need to replace all occurrences, not just the first.	7.4	js	Web UI (shared JS/CSS/pages)	web
+16f8ea7ab	todo		none	auto: not examined yet	Fix erroneous Image File Not Found message.	7.4	js	Web UI (shared JS/CSS/pages)	web
+78d7b8d0d	todo		none	auto: not examined yet	Add 'Save As New' button when editing an existing playlist entry.	7.4	www	Playlists, schedule & sequences	web
+0a2e7bb8c	todo		none	auto: not examined yet	Honor Group Count in auto-created Pixel String models	7.4	channeloutput	BB pixel strings & PRU	docker
+1cc8bdf58	todo		none	auto: not examined yet	Change hostname link to go to main status page.	7.4	www	Web UI (shared JS/CSS/pages)	web
+042bd9beb	todo		none	auto: not examined yet	Fix bug causing unicast sync message to be replaced by description	7.4	www	MultiSync & remotes	web
+e592a5630	todo		none	auto: not examined yet	Fix next playlist scheduledStartTime in status API.	7.4	src	Playlists, schedule & sequences	docker
+0ec97516d	todo		none	auto: not examined yet	Allow LED Panels in Advanced UI mode w/ non-panel cape installed	7.4	www	Other channel outputs	web
+8f4d934cb	todo		none	auto: not examined yet	Pixel Strings UI bugfixes	7.4	www	BB pixel strings & PRU	web
+084cecf54	todo		none	auto: not examined yet	Add --now to services are restarted after an OS upgrade.	7.4	scripts	Boot, OS image & install	docker
+ba43f290b	todo		none	auto: not examined yet	Use curl instead of wget.  Remove more unnecessary Pi packages.	7.4	SD	Boot, OS image & install	os-image
+8bb9b0575	todo		none	auto: not examined yet	Fix typo in note and sort Other Channel Output types in dropdown.	7.4	www	Other channel outputs	web
+9a8e20015	todo		none	auto: not examined yet	Add jq package when building images.	7.4	SD	Boot, OS image & install	os-image
+d5c86f5e2	todo		none	auto: not examined yet	Add a space between the Remote's IP and MultiSync checkbox.	7.4	www	MultiSync & remotes	web
+8aa7521a0	todo		none	auto: not examined yet	Compile updates	7.4	makefiles	Build & makefiles	docker
+3dda9b01a	todo		none	auto: not examined yet	Update regex in ReadSettingFromFile to parse setting values with spaces.	7.4	www	Web UI (shared JS/CSS/pages)	web
+bb4f4004e	todo		none	auto: not examined yet	Update fppd.cpp to fix spelling issue (#1657)	7.4	src	fppd core & utilities	docker
+18145e6e8	todo		none	auto: not examined yet	Install .vimrc for root as well.	7.4	SD	Boot, OS image & install	os-image
+97f8dcac2	todo		none	auto: not examined yet	Add Proxy info to relative URLs in warnings for proxied IPs	7.4	www	MultiSync & remotes	web
+49ef39c3f	todo		none	auto: not examined yet	Log output of mp3gain	7.4	www	Web UI (shared JS/CSS/pages)	web
+d45cc47f5	todo		none	auto: not examined yet	Remove incorrect closedir()	7.4	www	Capes & EEPROM	web
+4c04f754e	todo		none	auto: not examined yet	Fix compile issues on newer Fedora.	7.4	non-gpl	Pixel overlays	device,docker
+8e19a1239	todo		none	auto: not examined yet	Squelch a warning and compile issue on newer Fedora.	7.4	channeloutput	LED panels	device,docker
+e9b2955c9	todo		none	auto: not examined yet	If eeprom fails to download, give a better error message and don't try to flash an invalid eeprom .	7.4	www	Capes & EEPROM	web
+9387ce0c1	todo		none	auto: not examined yet	Try to detect corrupt eeprom and not crash	7.3.5	non-gpl	Capes & EEPROM	device
+887a68c48	todo		none	auto: not examined yet	Add a nullptr guard when publishing mqtt status, use recursive_mutex for overlay model race condition	7.3.5	overlays	Pixel overlays	docker
+4eacec20b	todo		none	auto: not examined yet	Add UUID to crash report filenames to make it easier to find/combine report from same system	7.4	src	fppd core & utilities	docker
+fb4ecdd32	todo		none	auto: not examined yet	Update fppd.cpp (#1650)	7.4	src	fppd core & utilities	docker
+c9eb5014c	todo		none	auto: not examined yet	If playlist json is invalid, try to display warning and not crash	7.3.4	playlist	Playlists, schedule & sequences	docker
+93f17aafc	todo		none	auto: not examined yet	Make sure mutex is aquired whenever using the running effect	7.3.4	overlays	Pixel overlays	docker
+03d71aa52	todo		none	auto: not examined yet	this break refresh opps	7.4	www	MultiSync & remotes	web
+ee01ff488	todo		none	auto: not examined yet	make hostname a link	7.4	www	MultiSync & remotes	web
+b58eb9ad2	todo		none	auto: not examined yet	Use Hostname as part of key if not empty	7.4	www	MultiSync & remotes	web
+c0bd0fceb	todo		none	auto: not examined yet	Show playlist entry note as a tooltip in playlist editor.	7.4	js	Web UI (shared JS/CSS/pages)	web
+355a0111d	todo		none	auto: not examined yet	Fix GPIO info in channel output UI for shared outputs.	7.4	www	BB pixel strings & PRU	web
+599941df9	todo		none	auto: not examined yet	Playlist auto-generation fixes.	7.3.3	playlist	Playlists, schedule & sequences	docker
+3b4e49591	todo		none	auto: not examined yet	Add Advanced Mode action to multisync to change branches on selected remotes	7.4	api	Web API	docker,web
+2b5ca2082	todo		none	auto: not examined yet	Fix permissions on upgrade script.	7.3.3	upgrade	Upgrade, backup & files	docker
+a4ebd7e23	todo		none	auto: not examined yet	Sequence multisync packets are sending timesstamp of media, not sequence.	7.4	channeloutput	Other channel outputs	docker
+2ce00e903	todo		none	auto: not examined yet	Fix control channel output.  Fixes #1641	7.3.3	channeloutput	Other channel outputs	docker
+f98ed7aa9	todo		none	auto: not examined yet	Add workaround for 1600x900 mode.	7.3.3	www	Web UI (shared JS/CSS/pages)	web
+347a81104	todo		none	auto: not examined yet	Show current Upgrade Source even if currently unreachable.	7.3.3	www	Web UI (shared JS/CSS/pages)	web
+c18da6d36	todo		none	auto: not examined yet	Match case of Click vs CLICK	7.4	www	Web UI (shared JS/CSS/pages)	web
+203ca5eaa	todo		none	auto: not examined yet	Add message about SHIFT+Click working in File Manager UI.	7.4	www	Web UI (shared JS/CSS/pages)	web
+d19d3c7d4	todo		none	auto: not examined yet	Fix auto-generated overlay model names for smart recievers	7.4	channeloutput	BB pixel strings & PRU	docker
+df0f4125c	todo		none	auto: not examined yet	Add missing ;s	7.4	api	Capes & EEPROM	web
+2da831eb6	todo		none	auto: not examined yet	Fix variable name	7.4	api	Capes & EEPROM	web
+7396108d3	todo		none	auto: not examined yet	Re-mount eeprom for signing/backup	7.4	api	Capes & EEPROM	web
+1faec2532	todo		none	auto: not examined yet	macOS: add target to create a fsequtils zip	7.4	makefiles	Playlists, schedule & sequences	docker
+44cd0174f	todo		none	auto: not examined yet	Fix issue unpacking cape serial number from eeprom.	7.4	www	Capes & EEPROM	web
+33856d7dd	todo		none	auto: not examined yet	File Manager updates	7.4	api	Web API	web
+e04452d0e	todo		none	auto: not examined yet	Run scripts in popup vs new tab.  Allow plugins to run their scripts.	7.4	www	Web UI (shared JS/CSS/pages)	web
+f243e4484	untestable		none	auto: changes no runtime file (rpi-imager)	Update pi sha's again	7.4	rpi-imager	Boot, OS image & install	none
+deedce0e0	untestable		none	auto: changes no runtime file (rpi-imager)	Updated 7.3.1 image for Pi	7.4	rpi-imager	Boot, OS image & install	none
+9c46acb68	untestable		none	auto: changes no runtime file (rpi-imager)	Update to 7.3.1 images	7.4	rpi-imager	Boot, OS image & install	none
+10fe789d6	todo		none	auto: not examined yet	Script are copied so would be at config 80	7.4	SD	Boot, OS image & install	os-image
+6ad36d8b6	todo		none	auto: not examined yet	Only copy networkd-dispatcher script if creating imaage	7.3.1	SD	Boot, OS image & install	os-image
+a598819c1	todo		none	auto: not examined yet	Update the /etc scripts	7.3.1	networkd-dispatcher	Boot, OS image & install	os-image,docker
+699e89822	todo		none	auto: not examined yet	Maybe fix wifi issue on Pi, not really sure	7.3.1	networkd-dispatcher	Boot, OS image & install	os-image
+4c186889f	untestable		none	auto: changes no runtime file (rpi-imager)	Add 7.3 to rpi imager	7.4	rpi-imager	Boot, OS image & install	none
+5c3d6a1a7	todo		none	auto: not examined yet	Fix for building new drivers on  Rasp Pi	7.4	SD	Boot, OS image & install	os-image
+94e9f498a	todo		none	auto: not examined yet	Allow more GPU memory on PiZero2	7.3	SD	Boot, OS image & install	os-image
+a296c9751	todo		none	auto: not examined yet	Updates for BBB images	7.3	SD	Boot, OS image & install	os-image
+6d091224f	todo		none	auto: not examined yet	Display Pi 5 Logo if detected	7.4	www	Settings & config	web
+2b43c31a7	todo		none	auto: not examined yet	Updates to prepare for 2023.11 OS level	7.3	SD	Boot, OS image & install	os-image
+1d3480489	todo		none	auto: not examined yet	Add some WIFI6 drivers	7.3	SD	Boot, OS image & install	os-image
+d4e15599b	todo		none	auto: not examined yet	Add some media extensions	7.3	www	Web UI (shared JS/CSS/pages)	web
+2b9547555	todo		none	auto: not examined yet	Add true parameter to tag functions to preserve unicode characters	7.3	src	Media: audio & video	docker
+80ae56ff0	todo		none	auto: not examined yet	Darken the stats banner background a bit so the white text is more readable	7.3	css	Web UI (shared JS/CSS/pages)	web
+a63c7f074	todo		none	auto: not examined yet	Make sure reboot flag is set	7.3	www	Settings & config	web
+2151afba9	todo		none	auto: not examined yet	Fix if less than 1M unpartitioned space	7.3	scripts	Boot, OS image & install	docker
+1d008bb85	todo		none	auto: not examined yet	Devices aren't regular files, use -e	7.3	scripts	Boot, OS image & install	docker
+0d6a88404	todo		none	auto: not examined yet	Change how unpartitioned space is determined, always show banner and storage tab if more than 1G unpartitioned.	7.3	scripts	Settings & config	docker,web
+20aab09a5	todo		none	auto: not examined yet	added POST to proxies endpoint	7.3	api	Web API	web
+f7832784b	todo		none	auto: not examined yet	Add Missing APIs	7.3	api	Web API	web
+9ad971d4b	todo		none	auto: not examined yet	Update rpi-rgb-led-matrix, add ffmpeg and mp3gain to docker	7.3	Docker	LED panels	os-image,docker
+c36f85712	todo		none	auto: not examined yet	Fixed comment	7.3	www	Web UI (shared JS/CSS/pages)	web
+62837b33e	todo		none	auto: not examined yet	Updated endpoints.json documentation	7.3	api	Web API	web
+8583e858e	todo		none	auto: not examined yet	Matched output formatting to prior code	7.3	www	Web UI (shared JS/CSS/pages)	web
+7cd20d508	todo		none	auto: not examined yet	Initial changes to improve handling of /api/file/:Dir/:Name with subdirs	7.3	api	Web API	web
+fc5b676bc	todo		none	auto: not examined yet	Fix long-distance preview of Odd/Even schedule entries.	7.3	src	Playlists, schedule & sequences	docker
+68d0086cc	todo		none	auto: not examined yet	Don't keep eeprom mounted as a file to prevent any overwriting of the file	7.3	non-gpl	Capes & EEPROM	device,docker,web
+a07affd90	todo		none	auto: not examined yet	minor css tweak to fix issue 1524 with some browsers css logic processing causing incorrect display of hidden items (#1589)	7.3	css	Web UI (shared JS/CSS/pages)	web
+4759fdade	todo		none	auto: not examined yet	Use proper addTimer call	7.3	src	fppd core & utilities	docker
+e97e424ea	todo		none	auto: not examined yet	Added manifest.json file and app icons	7.3	images	Web UI (shared JS/CSS/pages)	web
+04fafd123	todo		none	auto: not examined yet	m_isConnected is accessed on different threads, needs to be atomic	7.3	src	fppd core & utilities	docker
+d3ca83d9c	todo		none	auto: not examined yet	BBB Support for 80x40 10scan Outdoor P4 panels sold by YourPixelStore	7.3	channeloutput	LED panels	device:bb,web
+3e5cb42e2	todo		none	auto: not examined yet	Update networkconfig.php	7.3	www	Network, Apache & security	web
+f15c9cc56	todo		none	auto: not examined yet	Renamed	7.3	www	Commands & presets	web
+0e3f778c3	todo		none	auto: not examined yet	Replaced text with newline	7.3	www	Commands & presets	web
+1a273535f	todo		none	auto: not examined yet	Redid ethtool command	7.3	www	Commands & presets	web
+46c664678	todo		none	auto: not examined yet	Update rpi_ws281x for RPi 3B+ Rev 1.4 hardware.	7.3	external	Pi outputs (DPI/spixels)	docker
+6c1722a9f	todo		none	auto: not examined yet	Sort WiFi regulatory domain alphabetically, with common countries above	7.3	www	Settings & config	web
+8881129d0	todo		none	auto: not examined yet	Fix no output on BBShiftString caused by fixes for BBB pru data initialization	7.2.1	non-gpl	BB pixel strings & PRU	device:bb
+a6e288cec	todo		none	auto: not examined yet	Update testing.php to default to RGB Cycle	7.3	www	Web UI (shared JS/CSS/pages)	web
+65806caf7	todo		none	auto: not examined yet	It's taking between 4 and 7 seconds to reconnect for me so increase the timout to 10s	7.3	src	fppd core & utilities	docker
+b2a6caa8e	todo		none	auto: not examined yet	Mosquitto brokers sometimes will disconnect clients to rotate logs.  We'll  wait three seconds before issuing a warning to allow for reconnect.	7.3	src	fppd core & utilities	docker
+058910d4d	todo		none	auto: not examined yet	In SOME cases, the pru ram cannot be cleared until after the PRU has started.	7.2.1	util	fppd core & utilities	device:bb
+1a41c5fe5	untestable		none	auto: changes no runtime file (rpi-imager)	Add FPP 7.2 to rpi-imager	7.3	rpi-imager	Boot, OS image & install	none
+648f8b383	todo		none	auto: not examined yet	Update multisync.php	7.2	www	MultiSync & remotes	web
+ba86815ce	todo		none	auto: not examined yet	added new Genius Controllers	7.2	src	MultiSync & remotes	docker,web
+04cc83b74	todo		none	auto: not examined yet	Fix randomize of playlist if using Start Playlist command Fixes #1585	7.2	playlist	Playlists, schedule & sequences	docker
+d3e09f8b3	todo		none	auto: not examined yet	Fix channel count for virtal string with start null's. Fixes #1584	7.2	channeloutput	BB pixel strings & PRU	docker
+f417afe58	todo		none	auto: not examined yet	added new logo for the new RPI 5 board	7.4	images	Web UI (shared JS/CSS/pages)	web
+1113e513f	todo		none	auto: not examined yet	Fix e1.31/ddp stats table with bootstrap 5 Increase receive buffers for sockets and increase number of packets removed per loop.	7.2	src	Other channel outputs	docker,web
+0c6be934e	todo		none	auto: not examined yet	Fix restoring Panel Layout and Single Panel Size settings	7.2	www	LED panels	web
+a96588812	todo		none	auto: not examined yet	Don't "disable" hostapd if it's already disabled.	7.2	scripts	fppd core & utilities	docker
+9b485be2c	todo		none	auto: not examined yet	Change count to count-2 on RGB pixel reversing	7.2	channeloutput	Other channel outputs	docker
+434ad275e	todo		none	auto: not examined yet	Remove extra spaces	7.2	channeloutput	Other channel outputs	docker
+4619bf013	todo		none	auto: not examined yet	Fixed memory leaks and removed formatting changes	7.2	channeloutput	Other channel outputs	docker
+bad37109b	todo		none	auto: not examined yet	Made remap output processor more intuitive when reversing to source	7.2	channeloutput	Other channel outputs	docker
+0b240b0c8	todo		none	auto: not examined yet	Create PCF8574 support	7.2	channeloutput	Other channel outputs	device,docker,web
+6bb97653f	todo		none	auto: not examined yet	fpermissive is not needed now that we compile C code with a C compiler	7.2	makefiles	OLED, GPIO & sensors	docker
+6557987cf	todo		none	auto: not examined yet	Fix C compile of oled files	7.2	oled	OLED, GPIO & sensors	device
+39cf6cea9	todo		none	auto: not examined yet	Update some makefile things to use clang directly on MacOS, reduce some warnings	7.2	makefiles	Build & makefiles	docker
+37aaf4d1a	todo		none	auto: not examined yet	Remove some warnings on MacOS	7.2	scripts	fppd core & utilities	docker
+7c2f69942	todo		none	auto: not examined yet	Make sure zstd will overrite the file	7.2	makefiles	BB pixel strings & PRU	docker
+dd1874c90	todo		none	auto: not examined yet	Attempt to keep the hostname on first reboot from fppos update	7.2	SD	Boot, OS image & install	os-image
+517912745	todo		none	auto: not examined yet	Start the output thread at startup once from the main thread to make sure everything is initialized properly.	7.2	src	fppd core & utilities	docker
+c5a3d7500	todo		none	auto: not examined yet	Make sure uEnv and config.txt are loaded with null termination to avoid extraneous charcters in files	7.2	non-gpl	Capes & EEPROM	device
+c3fb85c7f	todo		none	auto: not examined yet	Add an optimized method for copying files	7.2	util	fppd core & utilities	device:bb,docker
+f55ae9684	todo		none	auto: not examined yet	mp3gain is in a  different spot in  some cases.	7.2	www	Web UI (shared JS/CSS/pages)	web
+f5015966e	todo		none	auto: not examined yet	Mark executable	7.2	upgrade	Upgrade, backup & files	docker
+abd64fe85	todo		none	auto: not examined yet	Add MP3Gain to to music tab.	7.2	SD	Web UI (shared JS/CSS/pages)	os-image,docker,web
+638710e2e	todo		none	auto: not examined yet	Fix output with BB48String	7.2	non-gpl	BB pixel strings & PRU	device:bb
+937745e7c	todo		none	auto: not examined yet	Fix log entries from initial setup page	7.2	www	Web UI (shared JS/CSS/pages)	web
+bdd444026	todo		none	auto: not examined yet	Fix GPIO command not being able to cycle gpiod based pins due to inability to reconfigure Fix FPPD_STARTED and other event firing before commands are registered (and thus commands are unavilable)	7.2	util	OLED, GPIO & sensors	device,docker
+35b3a03e7	todo		none	auto: not examined yet	missed square brackets	7.2	src	MultiSync & remotes	docker
+e5b41aab9	todo		none	auto: not examined yet	added getters for MultiSync System info	7.2	src	MultiSync & remotes	docker
+9e17aab9f	todo		none	auto: not examined yet	fix color order to be consistent with convention.	7.2	channeloutput	Other channel outputs	docker
+ca36ccd7c	todo		none	auto: not examined yet	Increase missed limit for Colorlight 24 output change	7.2	channeloutput	LED panels	docker
+577a800c2	todo		none	auto: not examined yet	 Colorlight panel size from 16x24 to 24x24 #1571	7.2	www	LED panels	web
+78e6a3733	todo		none	auto: not examined yet	Colorlight panel size from 16x24 to 24x24 #1571	7.2	www	LED panels	web
+e612ec4cc	todo		none	auto: not examined yet	Fix mac install	7.2	SD	Boot, OS image & install	device:mac
+ab0d879d2	todo		none	auto: not examined yet	Fix build from Upgrade button	7.2	makefiles	BB pixel strings & PRU	docker
+71c6d3193	todo		none	auto: not examined yet	Fix undefined variables in sequence API Fixes  #1567	7.2	api	Web API	web
+921d45c3a	todo		none	auto: not examined yet	Update BBShiftString to support pixel counting	7.2	non-gpl	BB pixel strings & PRU	device:bb
+6cf038899	todo		none	auto: not examined yet	Stub in some initial support for sending packets to FalconV5 smart receivers	7.2	channeloutput	BB pixel strings & PRU	device:bb,device,docker,web
+b83a25a7a	todo		none	auto: not examined yet	Increase maximum number of virtual strings per port from 30 to 100	7.2	www	BB pixel strings & PRU	web
+568b1632f	todo		none	auto: not examined yet	Fix multisync page when proxied	7.2	www	MultiSync & remotes	web
+25d55a273	todo		none	auto: not examined yet	Make sure the proxy htaccess link is created	7.2	scripts	Boot, OS image & install	docker
+cb67a3b17	untestable		none	auto: changes no runtime file (rpi-imager)	Add 7.1 to rpi_imager	7.2	rpi-imager	Boot, OS image & install	none
+c18034384	todo		none	auto: not examined yet	Merge "Update FPP" fixes for bootstrap 5 from v7.0 branch	7.2	js	Upgrade, backup & files	docker,web
+f74896cae	todo		none	auto: not examined yet	Fix install script	7.1	SD	Boot, OS image & install	os-image
+091329170	todo		none	auto: not examined yet	Do some error checking when loading commandPresets to make sure it's a valid json file	7.1	www	Other channel outputs	web
+54e8d5586	todo		none	auto: not examined yet	Add command to run the pixel count and compare to the configured counts, warning or logging if different	7.1	channeloutput	Other channel outputs	docker
+df6ab2cf1	todo		none	auto: not examined yet	Fix some memory leaks, memory underruns, etc...  from valgrind	7.1	channeloutput	BB pixel strings & PRU	device:bb,docker
+7b882c6b8	todo		none	auto: not examined yet	Add api to remove commands by name	7.1	commands	Commands & presets	docker
+afeb1f879	todo		none	auto: not examined yet	Allow timers to be reset/set while firing a timer. (don't hold lock while firing timer)	7.1	src	fppd core & utilities	docker
+9c64174df	todo		none	auto: not examined yet	More updates to allow auto-install of kiosk	7.1	scripts	Boot, OS image & install	docker
+c524f5169	todo		none	auto: not examined yet	Allow a cape to default to installing kiosk setup	7.1	common	Boot, OS image & install	docker,web
+b57a22907	todo		none	auto: not examined yet	Kiosk takes up 470MB	7.1	www	Settings & config	web
+6d19e9868	todo		none	auto: not examined yet	When using fppos upgrade method, if the original device has kiosk installed, re-install on first boot Change delete-after to delete-during for rsync.  Fixes #1551	7.1	SD	Boot, OS image & install	os-image,docker
+e874ce1fb	todo		none	auto: not examined yet	Create a proper link for SSH shell if running through a proxy Fixes #1558	7.1	www	Web UI (shared JS/CSS/pages)	web
+a300805d3	todo		none	auto: not examined yet	restart ntpd when interface reconnects to force re-resolving pool servers	7.1	SD	Boot, OS image & install	os-image
+e2b699085	todo		none	auto: not examined yet	Port fix from xLights	7.1	src	fppd core & utilities	docker
+10687e813	todo		none	auto: not examined yet	Increase timeout for doing Wifi Scan Closes #1560	7.1	www	Network, Apache & security	web
+ee034a2e6	todo		none	auto: not examined yet	FASTOPEN prevents keep-alives from working	7.1	api	Web API	web
+03e3588df	todo		none	auto: not examined yet	Allow an HTTP header to be set to disable the external links	7.1	www	Settings & config	web
+f1d08371d	todo		none	auto: not examined yet	Fix some absolute->relative path issues	7.1	css	Web UI (shared JS/CSS/pages)	web
+2569d5819	todo		none	auto: not examined yet	Updates to allow easier creation of POST requests	7.1	src	fppd core & utilities	docker
+4c3dea36d	todo		none	auto: not examined yet	Auto Scroll Playlist on main screen in Div Put the playlist in a scrollable div and only scroll inside the div vs scrolling whole screen	7.1	css	Web UI (shared JS/CSS/pages)	web
+c125b3a42	todo		none	auto: not examined yet	Add setting playlistAutoScroll to give user the ablity enable/disable auto scroll Closes #1554	7.1	js	Web UI (shared JS/CSS/pages)	web
+817081728	todo		none	auto: not examined yet	Fix crash in curlmanager	7.1	src	fppd core & utilities	docker
+6f01247c7	todo		none	auto: not examined yet	Update CurlMangaer based on fixes/changes discovered while working with it in xLights	7.1	src	fppd core & utilities	docker
+654042b53	todo		none	auto: not examined yet	If string config doesn't exist, return 404 error	7.1	api	Capes & EEPROM	web
+330e8be83	todo		none	auto: not examined yet	Make sure various settings that affect the OS are applied on fppos update or cape install	7.1	non-gpl	Capes & EEPROM	device,docker
+85e36bd44	todo		none	auto: not examined yet	Add some docs for the other output processors. For next images, for 32bit kernel on Pi	7.1	help	Boot, OS image & install	os-image
+7833e6c39	todo		none	auto: not examined yet	avoid SEGV if no eFuse pin	7.1	src	Other channel outputs	docker
+5a1fc61ae	todo		none	auto: not examined yet	New years seems like a global holiday	7.1	locale	fppd core & utilities	docker
+c425de84a	untestable		none	auto: changes no runtime file (rpi-imager)	Hopefully add 7.0 to raspberry pi imager	7.1	rpi-imager	Boot, OS image & install	none
+bafc0c63c	todo		none	auto: not examined yet	Minor updates found while building images	7.1	SD	Boot, OS image & install	os-image
+a0fc19bec	todo		none	auto: not examined yet	Update Debian version required	8.0	SD	Boot, OS image & install	os-image
+3c98fdbcb	todo		none	auto: not examined yet	up /tmp from 50M to 75M for VS Code	8.0	SD	Boot, OS image & install	os-image
+f15d5d75e	untestable		none	auto: changes no runtime file (docs)	Document multisync for Falcon v5 controllers	8.0	docs	Other	none
+306f0f606	todo		none	auto: not examined yet	Colorlight firmware warning + 48x48 1/6th scan panels	8.0	www	LED panels	web
+4ebd41683	todo		none	auto: not examined yet	Add new "PWM" tab for channel outputs for signed capes/hats that include a PWM controller Update PCA9685 output to better handle LED's, external clocks, etc...	8.0	channeloutput	Other channel outputs	device,docker,web
+e27c6d8b1	todo		none	auto: not examined yet	Add Author to git Change Log on about page and API (#1856)	8.0	api	Web API	docker,web
+429970c25	todo		none	auto: not examined yet	Fix the "Total power" bank labels	8.0	src	Other channel outputs	docker,web
+45f88c76f	todo		none	auto: not examined yet	Fix issue with "FPP Booting" displaying on oleds indefinitely	8.0	oled	OLED, GPIO & sensors	device
+13ad61eca	todo		none	auto: not examined yet	Fix pixel string output page not saving correctly	8.0	www	BB pixel strings & PRU	web
+03fbc510b	todo		none	auto: not examined yet	Fix loading of pixelstring page	8.0	www	Other channel outputs	web
+a8b3ac917	todo		none	auto: not examined yet	about page to new page load logic	8.0	www	Web UI (shared JS/CSS/pages)	web
+eb288c6d1	todo		none	auto: not examined yet	further refinement of stickyThead to auto reflow and clean up during respawning	8.0	js	BB pixel strings & PRU	web
+ef44f5e95	todo		none	auto: not examined yet	remove legacy page load logic	8.0	www	Other channel outputs	web
+d7f27e42f	todo		none	auto: not examined yet	fix output-other tab to use new page load order to resolve layout on initial load and also minor css tweak to fix display of top row top border	8.0	css	Web UI (shared JS/CSS/pages)	web
+1aab94a92	todo		none	auto: not examined yet	adding Mac scroll logic	8.0	js	Web UI (shared JS/CSS/pages)	web
+ba1aec23d	todo		none	auto: not examined yet	update Status Title when fppmode changes and remove references to old select control	8.0	js	Web UI (shared JS/CSS/pages)	web
+0bceccfdb	todo		none	auto: not examined yet	jquery-ui upgrade to 1.13.3	8.0	css	Web UI (shared JS/CSS/pages)	web
+4fada386a	todo		none	auto: not examined yet	jquery jgrowl update to 1.4.49	8.0	js	Web UI (shared JS/CSS/pages)	web
+0c3312104	todo		none	auto: not examined yet	Allow settings to specify classes for the label/field	8.0	www	Web UI (shared JS/CSS/pages)	web
+460786619	todo		none	auto: not examined yet	include the plugin filemanager tab instead of echo so php snippets will work	8.0	www	Upgrade, backup & files	web
+4e58c8ee1	todo		none	auto: not examined yet	PlayerModeInfo Visibility watcher to reset pinned player controls (#1848)	8.0	js	Web UI (shared JS/CSS/pages)	web
+bc7717703	todo		none	auto: not examined yet	17th May 2024 UI Fixes (#1844)	8.0	css	Web UI (shared JS/CSS/pages)	web
+9b8a18142	todo		none	auto: not examined yet	Fix some more issues with special characters in file names	8.0	js	Upgrade, backup & files	web
+fbe202b00	todo		none	auto: not examined yet	hide protocol column for BB strings in the sticky header	8.0	www	Other channel outputs	web
+b625d80be	todo		none	auto: not examined yet	add auto sizing to select form controls	8.0	www	Web UI (shared JS/CSS/pages)	web
+0c69bb4ed	todo		none	auto: not examined yet	add bootstrap form-select class to input select elements (fixes responsive design issues with forms over spilling)	8.0	www	Web UI (shared JS/CSS/pages)	web
+ff003cc76	todo		none	auto: not examined yet	add data-bs-target to bootstrap tabs	8.0	www	Network, Apache & security	web
+b889b3239	todo		none	auto: not examined yet	Respons design bootstrap 5 alterations index.php	8.0	css	Web UI (shared JS/CSS/pages)	web
+8eafa61b8	todo		none	auto: not examined yet	Fix some uint32_t overflows in PCA9685 driver when using high frequencies	8.0	channeloutput	Other channel outputs	device
+152adce7f	todo		none	auto: not examined yet	Provide method to transfer more that 32bytes across I2C in one transfer	8.0	util	fppd core & utilities	device
+46b0281cd	todo		none	auto: not examined yet	Allow plugins to re-trigger their onUpload actions via API	8.0	api	Web API	web
+6d7d6ca22	todo		none	auto: not examined yet	Update files.php for some php8 errors	8.0	api	Upgrade, backup & files	web
+4f55f2ec4	todo		none	auto: not examined yet	Fix some issues with  uploading files via drag/drop not updating the filemanager lists correctly	8.0	api	Upgrade, backup & files	web
+2604accec	todo		none	auto: not examined yet	If settings.json doesn't exist, don't abort.  Makes libfpp.so usable/linkable outside /opt/fpp/src	8.0	src	Settings & config	docker
+06d7f9e02	todo		none	auto: not examined yet	Fix navigation to specific file manager tab, fix refresh of file lists on plugin tabs after upload.	8.0	js	Upgrade, backup & files	web
+d8982f87e	todo		none	auto: not examined yet	fix stickyheader alignment issue on tabbed pages	8.0	js	Web UI (shared JS/CSS/pages)	web
+48a25f7a8	todo		none	auto: not examined yet	add missing $ sign to ensure no errors detected in code	8.0	www	BB pixel strings & PRU	web
+6811fe71b	todo		none	auto: not examined yet	multiple changes for cross browser compatibility of sticky controls	8.0	css	Web UI (shared JS/CSS/pages)	web
+e0df774f1	todo		none	auto: not examined yet	fix player buttons when pinned on xs viewport	8.0	css	Web UI (shared JS/CSS/pages)	web
+a7727a443	todo		none	auto: not examined yet	position volume value in centre under heading	8.0	css	Web UI (shared JS/CSS/pages)	web
+5a0e0a2b3	todo		none	auto: not examined yet	fix indentation on .tblPlaylistHeaderDetails for index.php	8.0	css	Web UI (shared JS/CSS/pages)	web
+5d29f9c14	todo		none	auto: not examined yet	PCA9685 is not properly decoding 16bit data	8.0	channeloutput	Other channel outputs	device
+f8453aba6	todo		none	auto: not examined yet	Start adding hooks for plugins to use to handle custom file extensions/types	8.0	api	Upgrade, backup & files	web
+76c5d7cc9	todo		none	auto: not examined yet	fix <? ?> formatting on about.php	8.0	www	Web UI (shared JS/CSS/pages)	web
+7f12aea3a	todo		none	auto: not examined yet	Update index.php	8.0	www	Web UI (shared JS/CSS/pages)	web
+3b8d8f3e2	todo		none	auto: not examined yet	Update fpp.css	8.0	css	Web UI (shared JS/CSS/pages)	web
+37f951f24	todo		none	auto: not examined yet	Fix playlist validate call if playlist doesn't have a description set	8.0	api	Playlists, schedule & sequences	web
+23dc8e9b0	todo		none	auto: not examined yet	Fix RF24 hash	8.0	external	fppd core & utilities	docker
+50f13911f	todo		none	auto: not examined yet	Many UI changes (May 2024) (#1836)	8.0	api	Playlists, schedule & sequences	docker,web
+d9c268c50	todo		none	auto: not examined yet	Sort commands by name including "extra" commands.  Allow commands to disable the Multicast checkbox.	8.0	js	OLED, GPIO & sensors	web
+a34507b20	todo		none	auto: not examined yet	Port some fixes from xLights for fseqfile generation with large channel counts	8.0	fseq	Playlists, schedule & sequences	docker
+3cf77f0b8	todo		none	auto: not examined yet	Show total power for each bank/smart receiver	8.0	www	Web UI (shared JS/CSS/pages)	web
+9cc22f970	todo		none	auto: not examined yet	Make sure /bin/ip is installed	8.0	SD	Boot, OS image & install	os-image
+e02bc9f49	todo		none	auto: not examined yet	Move SmartReceiver eFUSe warnings into OutputMonitor to be handled with other eFuses Add sequence filename and timestamp if sequence is running to efUse warnings	8.0	non-gpl	BB pixel strings & PRU	device:bb,docker,web
+ba45c2a93	todo		none	auto: not examined yet	Start exposing the FalconV5 smart receiver pixel counting, current monitoring, and fuse toggling in the UI	8.0	channeloutput	BB pixel strings & PRU	device:bb,docker,web
+56085d9d9	todo		none	auto: not examined yet	Fix compile error with distcc	8.0	src	fppd core & utilities	docker
+777ea1ac4	todo		none	auto: not examined yet	ssh-keygen is generating a 4096 bit key which is taking over a minute to generate on a beagle at boot.   Reduce to 2048 but generate the faster keys first so sshd can startup.wq	8.0	boot	Boot, OS image & install	docker
+c485f2301	todo		none	auto: not examined yet	Send ssh-keygen into background so it doesn't timeout waiting for entropy	8.0	boot	Boot, OS image & install	docker
+c2a870702	todo		none	auto: not examined yet	Some updates for beagle wifi drivers	8.0	SD	Boot, OS image & install	os-image
+2fc186283	todo		none	auto: not examined yet	StickyTable Headers throughout UI and addition of search on script browser (#1829)	8.0	common	Other channel outputs	web
+dc53bd54d	todo		none	auto: not examined yet	Update to handle BootAction=settings quite a bit faster (over 20s faster on beagles) Handle changing of wifi drivers from external <-> kernel better for FPP8/Beagles	8.0	common	Settings & config	web
+48382eb6c	todo		none	auto: not examined yet	Update external wifi driver blacklist	8.0	etc	Network, Apache & security	docker
+e172a8ac0	todo		none	auto: not examined yet	Updates for BBB kernel/wifi	8.0	SD	Boot, OS image & install	os-image
+861bf5d9f	todo		none	auto: not examined yet	Update to configure i2c bus with new kernels/device trees	8.0	drivers	Capes & EEPROM	device:bb
+1746fddbb	todo		none	auto: not examined yet	Fix off-by-1 error in custom model node positions.	8.0	overlays	Pixel overlays	docker
+59b6f7aa0	todo		none	auto: not examined yet	Fix channel mapping in models with custom layouts	8.0	overlays	Pixel overlays	docker
+43388269a	todo		none	auto: not examined yet	Make sure enable pin is configured for capes that support FalconV5 receivers	8.0	non-gpl	BB pixel strings & PRU	device:bb

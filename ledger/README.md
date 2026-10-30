@@ -4,9 +4,11 @@ One row per fpp commit, saying whether the suite covers it and how that was
 established. A commit is listed whether or not it got a test, so a row is the
 record that it was examined.
 
-`fpp-since-8.5.1.tsv` covers every non-merge fpp commit after 8.5.1, up to master
-(tab-separated, newest first). It replaces `fpp-10.0-10.2.tsv`, whose rows it
-carries unchanged.
+`fpp-since-7.0.tsv` covers every non-merge fpp commit on master since 7.0
+(tab-separated, newest first). It replaces `fpp-since-8.5.1.tsv` (which had
+replaced `fpp-10.0-10.2.tsv`), whose rows it carries unchanged; the 923 commits
+of 7.0..8.5.1 were added as `todo` rows. Many of those are expected to be
+`superseded`: two Debian releases, new hardware and rewrites came after them.
 
 | column  | meaning |
 |---------|---------|
@@ -23,7 +25,7 @@ carries unchanged.
 
 ## Keeping it current
 
-    python3 scripts/ledger-update.py ledger/fpp-since-8.5.1.tsv
+    python3 scripts/ledger-update.py ledger/fpp-since-7.0.tsv
 
 adds a row for each new fpp commit (from `../fpp`'s `origin/master`; fetch it
 first) and refreshes the rows it filled in itself, whose note starts with
@@ -35,8 +37,8 @@ rows in place and change the note; never regenerate the file over them.
 Pick rows by `release`, `feature` or `where`, e.g. every Docker row of 10.0 still
 to do, or the open rows of each feature, most first:
 
-    awk -F'\t' '$2=="todo" && $7=="10.0" && $10 ~ /docker/' ledger/fpp-since-8.5.1.tsv
-    awk -F'\t' '$2=="todo" || $2=="named" {print $9}' ledger/fpp-since-8.5.1.tsv | sort | uniq -c | sort -rn
+    awk -F'\t' '$2=="todo" && $7=="10.0" && $10 ~ /docker/' ledger/fpp-since-7.0.tsv
+    awk -F'\t' '$2=="todo" || $2=="named" {print $9}' ledger/fpp-since-7.0.tsv | sort | uniq -c | sort -rn
 
 For each: write a test that fails without the commit and passes with it
 (`scripts/verify-fix.sh`), name the commit in the test, and set the row's

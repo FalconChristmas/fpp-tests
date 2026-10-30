@@ -1,6 +1,6 @@
 """Bring a coverage ledger (ledger/*.tsv) up to date with fpp's history.
 
-    python3 scripts/ledger-update.py [--fpp ../fpp] [--since 8.5.1] [--to origin/master]
+    python3 scripts/ledger-update.py [--fpp ../fpp] [--since 7.0] [--to origin/master]
         [--merge OLD.tsv ...] LEDGER.tsv
 
 Every non-merge fpp commit in since..to gets a row. A row someone has filled
@@ -93,7 +93,7 @@ def releases(fpp, since, to, rows):
     """The first release tag each commit shipped in, counting cherry-picks."""
     tags = [t for t in git(fpp, "tag", "-l").split() if re.fullmatch(r"\d+\.\d+(\.\d+)?", t)]
     key = lambda t: tuple(int(x) for x in t.split("."))
-    # since's own release line (8.5 and 8.5.1 for since 8.5.1) can have
+    # since's own release line (7.0 and any 7.0.x for since 7.0) can have
     # shipped cherry-picks of the range's commits before since itself.
     tags = sorted((t for t in tags if key(t) > key(since) or key(t)[:2] == key(since)[:2]), key=key)
     full = {r[1] for r in rows}
@@ -324,7 +324,7 @@ def main():
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--fpp", default=os.path.join(here, "..", "fpp"))
-    ap.add_argument("--since", default="8.5.1")
+    ap.add_argument("--since", default="7.0")
     ap.add_argument("--to", default="origin/master")
     ap.add_argument("--merge", action="append", default=[])
     ap.add_argument("ledger")
