@@ -76,3 +76,18 @@ def test_an_upgrade_sets_the_local_mqtt_broker_back_up(fppinit):
     boot_actions(fppinit, Service_MQTT_localbroker="1")
     conf = fppinit.written("/etc/mosquitto/conf.d/fpp_local_broker.conf") or ""
     assert "listener 1883" in conf and "password_file /etc/mosquitto/passwd" in conf, conf
+
+
+def test_an_upgrade_starts_the_services_it_enables_right_away(fppinit):
+    """The settings restored after an FPPOS upgrade enable rsync with
+    --now, so the service is running as well as enabled.
+
+    Regression: 084cecf54. The services were enabled for the next boot
+    only, and rsync did not answer until then."""
+    import time
+    out = boot_actions(fppinit, Service_rsync="1")
+    deadline = time.time() + 20
+    while time.time() < deadline and not any("--now" in c for c in fppinit.calls()):
+        time.sleep(1)
+    calls = fppinit.calls()
+    assert any("enable" in c and "--now" in c and "rsync" in c for c in calls), calls + [out[-1500:]]
