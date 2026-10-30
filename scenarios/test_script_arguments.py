@@ -241,6 +241,34 @@ def test_uninstall_plugin_removes_only_the_plugin_named(fppinit):
     assert not fppinit.media_exists("plugins/fpp-keep"), out[-3000:]
 
 
+def test_plugin_scripts_run_on_macos_where_sudo_is_empty(fppinit):
+    """A plugin's fpp_install.sh and fpp_uninstall.sh run, with FPPDIR
+    set, on macOS, where scripts/common sets SUDO="".
+
+    Regression: 69ca9e4c2. The wrappers ran "$SUDO FPPDIR=... script",
+    which with an empty $SUDO ran "FPPDIR=..." as the command ("No such
+    file or directory"): neither script ran, and the plugin's directory was
+    removed all the same.
+    """
+    view = f"{MEDIA}/tmp/fppdir"
+    fppdir_view(fppinit)
+    fppinit.root_file("/etc/fpp/platform", "MacOS\n")
+    seen = "#!/bin/sh\necho \"$1 ${FPPDIR:+set}\" > /fpp-test-media/$1.txt\n"
+    for name in ("install", "uninstall"):
+        fppinit.write(f"plugins/fpp-keep/scripts/fpp_{name}.sh", seen.replace("$1", name))
+        os.chmod(os.path.join(fppinit.media, "plugins", "fpp-keep", "scripts", f"fpp_{name}.sh"), 0o755)
+        fppinit.write(f"{name}.txt", "")
+    r = fppinit._run(["unshare", "--net", f"{view}/scripts/install_plugin", "--run-install-script", "fpp-keep"])
+    out = r.stdout + r.stderr
+    assert fppinit.media_file("install.txt").strip() == "install set", \
+        f"fpp_install.sh did not run, or ran without FPPDIR:\n{out[-3000:]}"
+    r = fppinit._run(["unshare", "--net", f"{view}/scripts/uninstall_plugin", "fpp-keep"])
+    out = r.stdout + r.stderr
+    assert fppinit.media_file("uninstall.txt").strip() == "uninstall set", \
+        f"fpp_uninstall.sh did not run, or ran without FPPDIR:\n{out[-3000:]}"
+    assert not fppinit.media_exists("plugins/fpp-keep"), out[-3000:]
+
+
 EVIL = "#!/bin/sh\ntouch /fpp-test-media/pwned\nexit 1\n"
 
 
