@@ -1423,3 +1423,70 @@ def test_a_parentless_submodel_shown_while_states_change(fppd):
             t.join()
         assert not errors, errors[0]
         keeps_sending(rx)
+
+
+def test_a_custom_model_with_a_blank_or_text_node_still_draws_its_real_nodes(fppd):
+    """A custom model whose layout has a blank cell, a cell holding a space and
+    one holding text draws its numbered nodes and leaves the others dark.
+
+    Regression: 604f2a395. A cell that was a space or not a number reached
+    std::stoi, which throws: the model's constructor threw out of the
+    overlay manager and the model (and fppd's start) went with it."""
+    custom = {"Name": "C", "Type": "Channel", "StartChannel": 1, "ChannelCount": 9,
+              "ChannelCountPerNode": 3, "Orientation": "custom", "StartCorner": "TL",
+              "StringCount": 1, "StrandsPerString": 1, "data": "1, ,3;a,2"}
+    setup(fppd, [custom])
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fill(fppd, "C", [0, 0, 55])
+        wait_output(fppd, rx, lambda f: f[:9] == bytes([0, 0, 55] * 3), "the custom model's three nodes to fill")
+        keeps_sending(rx)
+
+
+def test_a_custom_model_is_capped_at_600_by_600_nodes(fppd):
+    """Layers of a custom model that would take it past 600 x 600 nodes are
+    dropped (the first layer is kept), so a layout cannot ask for more
+    memory than a small board has.
+
+    Regression: b010b392e. The model grew to whatever its data asked for."""
+    wide = ",".join(["1"] * 700)
+    layers = "1,2,3|" + ";".join([wide] * 600)
+    custom = {"Name": "C", "Type": "Channel", "StartChannel": 1, "ChannelCount": 9,
+              "ChannelCountPerNode": 3, "Orientation": "custom", "StartCorner": "TL",
+              "StringCount": 1, "StrandsPerString": 1, "data": layers}
+    setup(fppd, [custom])
+    fppd.start()
+    assert "C" in [m["Name"] for m in fppd.get("/overlays/models")], "the capped model was not loaded"
+    size = len(raw_data("C"))
+    assert size <= 600 * 600 * 3, f"the model took the layers past the cap: {size} bytes of pixels"
+
+
+def test_a_model_with_a_pixel_size_of_zero_loads(fppd):
+    """A framebuffer model saved with PixelSize 0 (and no such device) does
+    not take fppd down at start: its pixel size is ignored, not divided by.
+
+    Regression: 9dd99ba4b. Width / PixelSize was a division by zero (SIGFPE
+    at start) for a model saved with no pixel size."""
+    display = {"Name": "D", "Type": "FB", "Width": 20, "Height": 10, "PixelSize": 0, "Device": "fb9"}
+    setup(fppd, [display, matrix()])
+    fppd.start()
+    assert "M" in [m["Name"] for m in fppd.get("/overlays/models")]
+
+
+@pytest.mark.parametrize("x, y", [(500, 0), (0, 500), (-1, 0), (0, -1), (2147483647, 2147483647)])
+def test_a_pixel_outside_the_model_is_ignored(fppd, x, y):
+    """Setting a pixel at a position outside the model changes nothing and
+    leaves fppd running.
+
+    Regression: 89b96100e. The position was turned into a channel index
+    unchecked, and written to."""
+    setup(fppd, [matrix(width=4, height=2)])
+    fppd.start()
+    before = raw_data()
+    try:
+        put(fppd, "model/M/pixel", {"X": x, "Y": y, "RGB": [1, 2, 3]})
+    except urllib.error.HTTPError:
+        pass
+    assert raw_data() == before, "a pixel outside the model changed it"
+    put(fppd, "model/M/pixel", {"X": 0, "Y": 0, "RGB": [9, 8, 7]})
+    assert raw_data()[:3] == bytes([9, 8, 7]), "fppd stopped taking pixels"

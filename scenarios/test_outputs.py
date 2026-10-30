@@ -575,6 +575,9 @@ def test_failing_sends_keep_one_ping_in_flight_per_controller(fppd):
     failed = [line for line in fppd.log().splitlines() if "failed for UDP output" in line]
     assert failed, "the sends to the controller never failed: sendfail.so did not engage"
     assert sent <= 40, f"{sent} pings to one controller in 10 s"
+    # c70531ab8: the log names the controller by its address, not by the
+    # hex key the sockets are filed under.
+    assert all("(IP: 127.0.0.2 " in line for line in failed), failed[:2]
 
 
 def test_reload_waits_for_a_running_ping_callback(fppd):

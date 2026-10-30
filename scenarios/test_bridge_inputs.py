@@ -796,3 +796,40 @@ def test_bridge_priority_changed_while_a_sequence_plays(fppd):
             fppd.settings(bridgeDataPriority="Prioritize Bridge")
             wait_output(fppd, out, lambda f: region(f, E131_START, E131_SIZE) == data,
                         "the bridged data over the sequence after the change", timeout=10)
+
+
+def test_a_null_input_timeout_does_not_expire_the_data_at_once(fppd):
+    """An input whose "timeout" is saved as null (what the page writes when
+    DDP input is enabled with the field blank) keeps the default timeout, so
+    bridged data stays up after the sender stops instead of going dark at
+    once.
+
+    Regression: 58acc9c09. null was read as 0 ms, so every packet's data
+    had expired before the next frame."""
+    setup(fppd)
+    cfg = inputs()
+    cfg["channelInputs"][0]["timeout"] = None
+    fppd.write("config/ci-universes.json", cfg)
+    data = bytes([0x7F]) * E131_SIZE
+    with Listener(OUT_PORT) as out:
+        fppd.start()
+        with Sender(lambda n: [(e131(10, data, seq=n), E131_PORT)]):
+            wait_output(fppd, out, lambda f: region(f, E131_START, E131_SIZE) == data, "the E1.31 data")
+        time.sleep(0.4)
+        assert region(last(out), E131_START, E131_SIZE) == data, "the data expired as soon as the sender stopped"
+
+
+def test_clearing_the_input_stats_clears_the_ignored_universes_too(fppd):
+    """DELETE /fppd/e131stats zeroes the "Ignored" line (packets for a
+    universe nobody configured) along with the configured universes.
+
+    Regression: e98db44b4 (#2142). The reset left the ignored counts, so the
+    Input Stats page kept a line that would not clear."""
+    setup(fppd)
+    fppd.start()
+    data = bytes([0x44]) * 20
+    with Sender(lambda n: [(e131(300, data, seq=n), E131_PORT)]):
+        fppd.wait_for(lambda: "Ignored" in stats(fppd), what="the ignored universe's stats line")
+    fppd.request("DELETE", "/fppd/e131stats")
+    time.sleep(0.5)
+    assert "Ignored" not in stats(fppd), stats(fppd).get("Ignored")
