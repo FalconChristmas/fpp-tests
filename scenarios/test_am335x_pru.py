@@ -10,6 +10,7 @@ Skipped elsewhere.
 """
 
 import os
+import struct
 import time
 
 import pytest
@@ -343,6 +344,9 @@ def test_a_long_line_in_the_dimming_file_is_read_safely(fppd):
     Regression: 844bcb0b3. The file was read with getline() handed a stack
     array as its buffer; a line of 100 characters or more made getline()
     realloc() the stack, and glibc aborted fppd.
+
+    Also covers e3a1f2558 (its BBBMatrix half): an exit(1) left after the
+    firmware build ended fppd before the panel PRU was started.
     """
     needs_bbb()
     pru = FakePruss(fppd)
@@ -704,3 +708,60 @@ def test_short_strings_and_unused_lanes_send_zeros(fppd):
     found = [off for off in range(0, half, 4096) if ddr[off:off + len(expect)] == expect]
     assert found, [ddr[o:o + 16].hex() for o in range(0, half, 4096)][:8]
     fppd.command("Test Stop")
+
+
+def test_direct_row_select_builds_the_ab_addressing_firmware(fppd):
+    """A matrix saved with Panel Addressing Type "Direct Row Select" (2,
+    the value the page saves on a Pi and a Beagle alike) builds its
+    firmware with ADDRESSING_AB, each row on its own select line; a
+    Standard matrix does not.
+
+    Regression: 285231911 (the BBBMatrix half; the BBShiftPanel half is in
+    test_am62x_panels.py). BBBMatrix read the old panelAddressing key and
+    took 1 for direct row select, so the page's setting never reached the
+    firmware.
+    """
+    needs_bbb()
+    pru = FakePruss(fppd)
+    fppd.settings(LogLevel_ChannelOut="debug")
+    octoscroller(singlePRU=True)
+    cfg = matrix_config(panelRowAddressType=2)
+    fppd.write("config/channeloutputs.json", cfg)
+    pru.start()
+    builds = matrix_builds(fppd)
+    assert builds and "-DADDRESSING_AB=1" in builds[-1], builds
+    # the control: Standard addressing builds without it
+    cfg["channelOutputs"][0]["panelRowAddressType"] = 0
+    n = len(builds)
+    save(fppd, "config/channeloutputs.json", cfg)
+    fppd.wait_for(lambda: len(matrix_builds(fppd)) > n, timeout=60, what="the rebuild")
+    assert "-DADDRESSING_AB=1" not in matrix_builds(fppd)[-1], matrix_builds(fppd)
+
+
+def test_the_matrix_hands_the_pru_each_of_its_frames_in_turn(fppd):
+    """Through a test pattern the PRU is handed (address_dma) each of the
+    output's four DDR frames in turn, not two of them over and over.
+
+    Regression: 3e6bea428 (its frame ring half). After frame 0 the next
+    frame was always 1, so only frames 0 and 1 were used and the one being
+    shown could be the one being written: tearing.
+    """
+    needs_bbb()
+    pru = FakePruss(fppd)
+    fppd.settings(LogLevel_ChannelOut="info")
+    octoscroller(singlePRU=True)
+    fppd.write("config/channeloutputs.json", matrix_config())
+    pru.start()
+    fppd.wait_for(lambda: pru.starts(0), timeout=30, what="the panel output to start")
+    region = ddr_region(fppd, "BBBMatrix")
+    assert region, fppd.tail()
+    fppd.command("Test Start", "1000", "RGB Chase", "*", "FF0000-00FF00-0000FF")
+    seen = set()
+    try:
+        deadline = time.monotonic() + 6
+        while time.monotonic() < deadline:
+            seen.add(struct.unpack("<I", pru.data_ram(0, 0, 4))[0])
+            time.sleep(0.005)
+    finally:
+        fppd.command("Test Stop")
+    assert len(seen) == 4, f"frames handed to the PRU: {sorted(hex(a) for a in seen)}"

@@ -114,3 +114,65 @@ def test_panels_on_more_outputs_than_the_pinout_has_are_refused(fppd):
     assert "The regular-pi1 pinout supports 1 output, but panels are assigned to 2" \
         in fppd.log(), fppd.tail()
     fppd.get("/fppd/status")
+
+
+def refused_before_the_library(fppd, cfg, preload=(), env=None):
+    """Start fppd with `cfg` (an RGBMatrix output on an unknown pinout, so
+    that a config getting past the check under test is refused at the
+    pinout check, still before the library drives a GPIO) and return the
+    RGBMatrix lines of its log once the output has been refused."""
+    fppd.write("config/channeloutputs.json", cfg)
+    with without_module("snd_bcm2835"):
+        fppd.start(preload=list(preload), extra_env=env)
+        fppd.wait_for(lambda: "exceeds maximum" in fppd.log() or "Raspberry Pi 5" in fppd.log()
+                      or "Unknown LED panel wiring pinout" in fppd.log(), timeout=20,
+                      what="the RGBMatrix output to be refused")
+    return fppd.log()
+
+
+def warnings50(fppd):
+    return [w.get("message", "") for w in fppd.get("/fppd/status").get("warningInfo", []) if w.get("id") == 50]
+
+
+@pytest.mark.skipif(on_pi("5") or on_pi("Compute Module 5"),
+                    reason="RGBMatrix refuses a Raspberry Pi 5 before any of this")
+def test_an_rgbmatrix_output_with_more_channels_than_fppd_has_is_refused(fppd):
+    """An RGBMatrix output saved with a channel count past fppd's channel
+    buffer (8M channels) is refused at once, with an error naming the count
+    and warning 50, and fppd carries on.
+
+    Regression: 254444b72 (the check; 60bc70ea8 made it compile, as it read
+    a `channelCount` that isn't in scope there). Before it the count went
+    unchecked into the output. The pinout here is one the library doesn't
+    know, so without the check the output is refused at the pinout instead
+    and no GPIO is driven either way.
+    """
+    have_plugin(fppd, "matrix-RGBMatrix")
+    cfg = rgbmatrix("fpp-tests-no-such-pinout", [(0, 0)])
+    cfg["channelOutputs"][0]["channelCount"] = 8192 * 1024 + 3
+    log = refused_before_the_library(fppd, cfg)
+    assert "channelCount 8388611 exceeds maximum of 8388608" in log, fppd.tail()
+    assert any("channel count exceeds" in w for w in warnings50(fppd)), warnings50(fppd)
+
+
+def test_an_rgbmatrix_output_on_a_compute_module_5_is_refused(fppd):
+    """On a board whose device tree says "Raspberry Pi Compute Module 5"
+    (served to fppd by fakesys.so), the RGBMatrix output is refused as on a
+    Pi 5 -- the library can't drive the RP1's GPIO -- with warning 50.
+
+    Regression: ace9b3ec5. Only "Raspberry Pi 5" was recognised, so on a CM5
+    the output went on to the library. The pinout here is one the library
+    doesn't know, so without the check the output is refused at the pinout
+    instead and no GPIO is driven either way.
+    """
+    have_plugin(fppd, "matrix-RGBMatrix")
+    dt = os.path.join(fppd.media, "tmp", "device-tree")
+    os.makedirs(dt)
+    with open(os.path.join(dt, "model"), "wb") as f:
+        f.write(b"Raspberry Pi Compute Module 5 Rev 1.0\0")
+    import shims
+    log = refused_before_the_library(fppd, rgbmatrix("fpp-tests-no-such-pinout", [(0, 0)]),
+                                     preload=[shims.build("fakesys.c")],
+                                     env={"FAKESYS": f"/proc/device-tree={dt}"})
+    assert "RGBMatrix does work on Raspberry Pi 5" in log, fppd.tail()
+    assert any("Raspberry Pi 5 / CM5" in w for w in warnings50(fppd)), warnings50(fppd)

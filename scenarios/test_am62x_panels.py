@@ -438,3 +438,122 @@ def test_a_shift_register_row_addressing_mode_reaches_the_firmware(real_pru, fpp
     assert frames > 50, f"{frames} frames in 2 s"
     assert not panel_warnings(fppd), panel_warnings(fppd)
     fppd.command("Test Stop")
+
+
+# ---- the stride table PRU1 runs the rows from ------------------------------------
+
+STRIDE_TABLE = 0x08  # BBShiftPanelData.brightness: {on time, blank flag | row << 24} per stride
+
+
+def strides_per_row(fppd):
+    """The strides (bit planes and their split pieces) a row is shown in,
+    from fppd's schedule log line."""
+    lines = [l for l in fppd.log().splitlines() if "strides/row" in l]
+    assert lines, fppd.tail()
+    return int(lines[-1].split("BBShiftPanel: ")[1].split(" strides/row")[0])
+
+
+def stride_table(p, entries):
+    """The first `entries` (on time, flags word) pairs of PRU1's stride table."""
+    return [(p.dram(1, STRIDE_TABLE + 8 * e), p.dram(1, STRIDE_TABLE + 8 * e + 4)) for e in range(entries)]
+
+
+def test_blank_between_rows_blanks_once_before_each_row(real_pru, fppd):
+    """A 64x32 1/16 panel output by row with Blank Between Rows: PRU1's
+    stride table runs row by row (each entry's address byte is its row),
+    and the blank flag (bit 31, which makes the firmware shift out a
+    black row first) is set on the first stride of each row and on no
+    other.
+
+    Regression: 70431457f. The flag was put on the last bit plane of each
+    row (d == colorDepth - 1), so the blank came after the brightest
+    stride rather than between rows. Coverage for c7c9023c7, which made
+    output by row and blank between rows work on the shift panels at all
+    (since rewritten; no revert of it applies).
+    """
+    fppd.settings(LogLevel_ChannelOut="info")
+    fppd.write("config/channeloutputs.json", panels_config(matrix(
+        1, (0,), panelOutputOrder=True, panelOutputBlankRow=True)))
+    fppd.start(timeout=60)
+    needs_panel_config(fppd)
+    run_a_test_pattern(fppd, seconds=1)
+    n = strides_per_row(fppd)
+    with pru.Pruss() as p:
+        table = stride_table(p, 16 * n)
+    fppd.command("Test Stop")
+    rows = [(flags >> 24) & 0x7F for _, flags in table]
+    assert rows == [r for r in range(16) for _ in range(n)], f"not row by row: {rows}"
+    blanked = [e for e, (_, flags) in enumerate(table) if flags & 0x80000000]
+    assert blanked == [r * n for r in range(16)], f"blank flags on entries {blanked} ({n} strides/row)"
+
+
+def test_a_panel_timing_file_sets_the_longest_on_time(real_pru, fppd):
+    """config/panel_timing.txt (a hex PRU cycle count) replaces the maximum
+    on time the stride schedule is built from: at full brightness the on
+    times of a row's strides add up to that value halved bit plane by bit
+    plane, not to the default for the chain length.
+
+    Regression: 9078ac1f5 added the override (its stepped defaults are
+    since a smooth ramp, 6b277b1bc); without it the file is ignored and
+    the table carries the default 0x8800.
+    """
+    fppd.settings(LogLevel_ChannelOut="info")
+    fppd.write("config/panel_timing.txt", "4000\n")
+    fppd.write("config/channeloutputs.json", panels_config(matrix(1, (0,))))
+    fppd.start(timeout=60)
+    needs_panel_config(fppd)
+    run_a_test_pattern(fppd, seconds=1)
+    n = strides_per_row(fppd)
+    with pru.Pruss() as p:
+        table = stride_table(p, 16 * n)
+    fppd.command("Test Stop")
+    # slot by slot, the 16 rows of each: row 0's strides are every 16th entry
+    row0 = sum(on for on, _ in table[0::16])
+    want = sum(0x4000 >> (7 - b) for b in range(8))
+    default = sum(0x8800 >> (7 - b) for b in range(8))
+    assert row0 == want, f"row 0 on times add up to {row0:#x}, want {want:#x} (default {default:#x})"
+
+
+def test_direct_row_select_drives_one_select_line_low_per_row(real_pru, fppd):
+    """Panel Addressing Type "Direct Row Select" (2, the value the page
+    saves on a Pi and a Beagle alike): PRU1's stride table addresses rows
+    0-3 with one select line low each (0x0E, 0x0D, 0x0B, 0x07), the
+    later rows as plain row numbers.
+
+    Regression: 285231911 (the BBShiftPanel half; the BBBMatrix half is in
+    test_am335x_pru.py). The driver took 1 for Direct Row Select while the
+    page saved 2, so the rows were sent as binary addresses.
+    """
+    fppd.settings(LogLevel_ChannelOut="info")
+    fppd.write("config/channeloutputs.json", panels_config(matrix(1, (0,), panelRowAddressType=2)))
+    fppd.start(timeout=60)
+    needs_panel_config(fppd)
+    run_a_test_pattern(fppd, seconds=1)
+    n = strides_per_row(fppd)
+    with pru.Pruss() as p:
+        table = stride_table(p, 16 * n)
+    fppd.command("Test Stop")
+    rows = [(flags >> 24) & 0x7F for _, flags in table[:16]]
+    assert rows == [0x0E, 0x0D, 0x0B, 0x07] + list(range(4, 16)), [hex(r) for r in rows]
+
+
+def test_a_pwm_panel_at_full_brightness_gets_the_shortest_blanking(real_pru, fppd):
+    """A PWM panel (FM6363C) at brightness 10: the GCLK program on PRU0 is
+    configured with 3 blanking loops between GCLK packets (its brightness
+    knob), the shortest it is given.
+
+    Regression: bc48d41a5 (its brightness half; the thread pool half is a
+    speed-up with nothing else to see). The loops were 11 - brightness, 1
+    at full brightness, too short for the panel to latch -- dimmer, not
+    brighter.
+    """
+    fppd.write("config/channeloutputs.json", panels_config(matrix(1, (0,), panelType=3, brightness=10)))
+    fppd.start(timeout=60)
+    needs_panel_config(fppd)
+    run_a_test_pattern(fppd, seconds=2)
+    with pru.Pruss() as p:
+        # bytes: [0] blanking loops, [1] row select mode, [2]/[3] GCLK pulses
+        loops = p.dram(0, 0) & 0xFF
+        assert not p.halted(0), "the GCLK PRU is not running"
+    fppd.command("Test Stop")
+    assert loops == 3, f"GCLK blanking loops {loops}"

@@ -111,6 +111,7 @@ test('Save clears the config-upgrade banner once it has upgraded the config', as
   // Regression: 2a1b6a51a.  The pre-v3 "Configuration Upgrade Required"
   // banner was only ever added: after Save wrote cfgVersion 3 it stayed up
   // until the page was reloaded.
+  // Also fd79c2713, which made Save write cfgVersion 3 (it wrote 2).
   writeOutputs({ channelOutputs: [preV3Matrix()] });
   await openPanels(page);
   const banner = page.locator('.configUpgradeWarning');
@@ -145,6 +146,8 @@ test('the panel Testing dropdown shows a panel test already running, and Off sto
 test('Save resets the panel Testing dropdown along with the test it stops', async ({ page, request }) => {
   // Regression: 34b8d31a1.  Save stops any running test, but the dropdown
   // kept showing the pattern, and picking "Off" then did nothing.
+  // Also 684c89c8b: the pattern is started on the matrix's own connection
+  // (its outputs read "undefined" when taken from a select that is gone).
   writeOutputs({ channelOutputs: [v3Matrix()] });
   await openPanels(page);
   const sel = page.locator('#PanelTestPatternType');

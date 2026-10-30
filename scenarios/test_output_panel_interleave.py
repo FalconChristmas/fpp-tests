@@ -172,3 +172,21 @@ def test_every_accepted_interleave_maps_inside_the_frame():
             if out:
                 bad.append(f"{t} {w}x{h} 1/{scan}: {len(out)} pixels outside, e.g. {out[0]} -> {m[out[0]]}")
     assert not bad, "; ".join(bad[:8]) + (f" ... ({len(bad)} in all)" if len(bad) > 8 else "")
+
+
+@pytest.mark.parametrize("type_, w, h, scan", [
+    ("32z", 64, 32, 8), ("32z", 64, 64, 16), ("40z", 80, 40, 10),
+], ids=["32z 64x32 1/8", "32z 64x64 1/16", "40z 80x40 1/10"])
+def test_32_and_40_pixel_zig_zag_interleaves_are_built(type_, w, h, scan):
+    """The 32 and 40 pixel Zig/Zag interleaves the LED Panels page offers on
+    a BeagleBone ("32z", "40z") build a handler on a panel that folds its
+    rows, and it maps the panel one to one.
+
+    Regression: da338f477 added them. Before it neither driver knew the
+    names: the matrix fell back to no interleave, which on a folding panel
+    is now refused outright (53585566e) -- the output does not start.
+    """
+    m = handler_map(type_, w, h, scan)
+    assert m is not None, f"{type_} refused on a {w}x{h} 1/{scan} panel"
+    assert len(set(m.values())) == len(m) == w * h // 2, \
+        f"{len(m)} pixels, {len(m) - len(set(m.values()))} share a place"
