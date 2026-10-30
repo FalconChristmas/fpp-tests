@@ -94,3 +94,26 @@ def test_output_that_cannot_be_created(src, tmp_path, where):  # noqa: F811
     assert rc > 0, f"exit {rc}\n{(stdout + err)[-2000:]}"
     assert "Failed to create FSEQ file" in stdout, stdout + err
     assert not out.exists()
+
+
+def test_large_frames_with_few_of_them_get_more_than_one_zstd_block(tmp_path):
+    """Converting a sequence of 1M channels and 40 frames to zstd gives
+    it more blocks than a ten-frame floor allows (a block holds at
+    least two frames), so a player can start reading it without
+    decompressing most of it.
+
+    Regression: 068768fd5. A block was never fewer than ten frames, so a
+    sequence of big frames and few of them came out in one or two blocks."""
+    channels, count = 1024 * 1024, 40
+    frames = [os.urandom(channels) for _ in range(count)]
+    path = str(tmp_path / "wide.fseq")
+    write_fseq_reference(path, frames, step_ms=50)
+    out = str(tmp_path / "wide-zstd.fseq")
+    r = run_tool(["-c", "zstd", "-o", out, path], timeout=300)
+    assert r.returncode == 0 and "Sanitizer" not in r.stderr, (r.stdout + r.stderr)[-2000:]
+    with open(out, "rb") as f:
+        head = f.read(32)
+    blocks = ((head[20] >> 4) << 8) | head[21]
+    assert blocks >= 10, f"{blocks} blocks for {count} frames of {channels} channels"
+    hdr, got = read_fseq(out)
+    assert hdr["compression"] == 1 and got == frames

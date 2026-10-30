@@ -148,3 +148,22 @@ def test_a_sync_to_a_time_picks_the_entry_whose_timecode_is_just_before_it(fppd)
     assert synced_to(15000) == "A.fseq"
     assert synced_to(70000) == "B.fseq"
     fppd.command("Stop Now")
+
+
+def test_a_plugin_is_asked_what_is_next_after_each_entry(fppd):
+    """A script plugin hears the playlist callback "query_next" after each
+    entry finishes, before the next one starts: one per entry (the reset in
+    the lead-in and the three entries here make four).
+
+    Regression: 6d2acd62a. A plugin could not step in between entries, so
+    one that wanted to choose what played next had no moment to do it."""
+    from test_plugin_scripts import events, playlist_actions, plugin
+    d = plugin(fppd, types="playlist")
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), step(2), step(3)]))
+    fppd.start()
+    start(fppd, "P")
+    wait_idle(fppd, timeout=20)
+    fppd.wait_for(lambda: "stop" in playlist_actions(d), timeout=20, what="the plugin to hear the stop")
+    acts = playlist_actions(d)
+    # the lead-in's reset and the three entries each finish once
+    assert acts.count("query_next") == 4, acts

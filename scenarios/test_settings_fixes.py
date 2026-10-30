@@ -121,3 +121,4 @@ def test_get_setting_waits_out_a_shared_lock(fppd):
                            env=dict(os.environ, FPPDIR=fppd.tree, CFGFILE=cfg, SETTINGSFILE=cfg))
         fcntl.flock(f, fcntl.LOCK_UN)
     assert r.stdout.strip() == "expected-value", (r.stdout, r.stderr[-2000:])
+

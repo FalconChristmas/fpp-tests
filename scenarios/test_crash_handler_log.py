@@ -45,6 +45,36 @@ def test_crash_log_names_the_signal_and_the_thread(fppd):
 
 
 @not_under_tsan
+def test_crash_log_says_which_sequence_was_playing(fppd):
+    """A crash while a sequence plays logs "while playing <sequence> at <n>
+    ms" after the signal line, and a crash with nothing playing logs no such
+    line.
+
+    Regression: 131bec5db. A crash report said what crashed but not what
+    the show was doing, so a crash in one sequence's effects was just a
+    stack."""
+    from fseq import solid_frames, write_fseq
+    from show import sequence_entry, status
+    from test_playlist_entries import playlist
+    write_fseq(os.path.join(fppd.media, "sequences", "Crashy.fseq"), solid_frames(1200, 30, 5))  # 60 s
+    fppd.write("playlists/Crashy.json", playlist("Crashy", main=[sequence_entry("Crashy.fseq")]))
+    os.makedirs(os.path.join(fppd.media, "crashes"), exist_ok=True)
+    fppd.settings(ShareCrashData="0")
+    fppd.start()
+    fppd.command("Start Playlist", "Crashy", "false", "false")
+    fppd.wait_for(lambda: status(fppd).get("current_sequence") == "Crashy.fseq", what="the sequence to play")
+    fppd.proc.send_signal(signal.SIGABRT)
+    try:
+        rc = fppd.proc.wait(timeout=180)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(f"the crash handler did not finish\n{fppd.tail()}")
+    fppd.exit_expected = True
+    assert rc == 255, describe_rc(rc)
+    assert re.search(r"while playing  Crashy\.fseq  at  \d+ ms", fppd.log()), \
+        "\n".join(l for l in fppd.log().splitlines() if "Crash handler" in l)
+
+
+@not_under_tsan
 def test_a_gdb_slower_than_twenty_seconds_still_gives_the_stack(fppd, tmp_path):
     """A gdb that takes 25 s to print its stack (a stand-in that sleeps, then
     prints, with no child process for the first watchdog to kill) is waited
