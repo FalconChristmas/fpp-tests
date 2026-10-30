@@ -203,8 +203,20 @@ class FppinitSandbox:
     def root_file(self, path, content):
         """A file at an absolute path outside the media and boot directories
         as each later run starts (a script, from its "#!", is executable),
-        or None to remove one the system has."""
+        or None to remove one the system has. Under /opt/fpp, the tree under
+        test, the file is bound over one the tree has: the tree is the real
+        one, shared with every other scenario, so nothing may be written or
+        removed there."""
+        if self._in_tree(path):
+            assert content is not None, f"{path}: the tree's files can't be removed"
+            assert os.path.isfile(self._tree_path(path)), f"{path}: only a file the tree has can be replaced"
         self.root_files[path] = content
+
+    def _in_tree(self, path):
+        return any(path == d or path.startswith(d + "/") for d in ("/opt/fpp", self.tree))
+
+    def _tree_path(self, path):
+        return self.tree + path[len("/opt/fpp"):] if path.startswith("/opt/fpp") else path
 
     def fake_path(self, path, content):
         """Bind something of the scenario's over a path the kernel provides
@@ -276,7 +288,12 @@ class FppinitSandbox:
             with open(src, "w") as f:
                 f.write(content)
             mode = "755" if content.startswith("#!") else "644"
-            root_lines.append(f'mkdir -p "$(dirname {dest})"; cp {shlex.quote(src)} {dest}; chmod {mode} {dest}')
+            os.chmod(src, int(mode, 8))
+            if self._in_tree(path):
+                # bound over, not copied: the tree is mounted through
+                root_lines.append(f"mount --bind {shlex.quote(src)} {dest}")
+            else:
+                root_lines.append(f'mkdir -p "$(dirname {dest})"; cp {shlex.quote(src)} {dest}; chmod {mode} {dest}')
         fake_lines = []
         for i, (path, content) in enumerate(self.fakes.items()):
             src = os.path.join(run_dir, f"fake-{i}")

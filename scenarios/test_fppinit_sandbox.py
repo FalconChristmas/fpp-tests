@@ -37,3 +37,20 @@ def test_mount_is_recorded_and_says_it_did_nothing(fppinit):
     r = fppinit._run(["sh", "-c", bind])
     assert r.stdout == "a\n", r.stdout + r.stderr
     assert fppinit.media_file("tmp/b") == "b\n", "the sandbox's mount reached the media directory itself"
+
+
+def test_a_root_file_in_the_tree_stays_in_the_sandbox(fppinit):
+    """root_file() over a file of the tree under test is seen inside the
+    sandbox and leaves the tree itself alone. The tree is bound in, not
+    overlaid, so a stand-in copied to /opt/fpp/src/fpp replaced the real
+    CLI in the build every scenario (and every shard) shares, and the
+    fpp-CLI scenarios run after it got empty output."""
+    import os
+    real = os.path.join(fppinit.tree, "src", "fpp")
+    with open(real, "rb") as f:
+        before = f.read()
+    fppinit.root_file("/opt/fpp/src/fpp", "#!/bin/sh\necho stand-in\n")
+    r = fppinit._run(["/opt/fpp/src/fpp"])
+    assert r.stdout == "stand-in\n", r.stdout + r.stderr
+    with open(real, "rb") as f:
+        assert f.read() == before, "the stand-in was written into the tree under test"
