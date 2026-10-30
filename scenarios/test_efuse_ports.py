@@ -104,3 +104,60 @@ def test_a_port_turned_off_while_retrying_its_efuse_stays_off(fppd):
         seen.append(high(ENABLE))
         time.sleep(0.02)
     assert not any(seen), f"the enable pin went high {sum(seen)} times in 4 s with outputs off"
+
+
+def port_status(fppd):
+    return [p for p in fppd.get("/fppd/ports") if p.get("name") == "Port 1"]
+
+
+def test_a_tripped_port_reports_a_fault_until_it_is_reset(fppd):
+    """A port with an eFuse pin and no interrupt pin whose fuse trips shows
+    status false in /fppd/ports, and keeps showing it after the eFuse pin
+    reads good again (the port was turned off, which cleared it), until the
+    outputs are turned back on.
+
+    Regression: ef24128d9. The status followed the pin's present value, so a
+    port that had tripped read healthy as soon as it was off."""
+    powered_port(fppd, eFuseRetryCount="0")
+    assert port_status(fppd)[0]["status"] is True
+    trip()
+    fppd.wait_for(lambda: efuse_warnings(fppd), timeout=10, what="the eFuse warning")
+    os.unlink(pin_file(EFUSE))
+    time.sleep(2)
+    assert port_status(fppd)[0]["status"] is False, port_status(fppd)
+
+
+def test_a_port_is_still_monitored_after_the_strings_are_saved_again(fppd):
+    """Saving co-pixelStrings.json again with a different pixel count keeps
+    the port in /fppd/ports, and its eFuse still raises its warning.
+
+    Regression: 1d74ab059 (the port monitors vanished when a new string
+    config was saved) and ce735a5ab (the reload reset the port monitor
+    instead of deleting it under the output monitor)."""
+    powered_port(fppd, eFuseRetryCount="0")
+    loads = fppd.log().count("Calling Init() on PixelCountSim output")
+    time.sleep(1.1)  # a save in a later second, as a person makes it
+    fppd.write("config/co-pixelStrings.json", config(fppd, pixels=60))
+    fppd.wait_for(lambda: fppd.log().count("Calling Init() on PixelCountSim output") > loads, timeout=20,
+                  what="the outputs to reload")
+    fppd.command("Outputs On")
+    fppd.wait_for(lambda: port_status(fppd), timeout=10, what="Port 1 to be monitored again")
+    trip()
+    fppd.wait_for(lambda: efuse_warnings(fppd), timeout=10, what="the eFuse warning after the save")
+
+
+def test_the_retry_count_applies_without_a_restart(fppd):
+    """eFuseRetryCount changed while fppd runs (from 0 to 5, as the settings
+    page does with no restart) takes effect on the next trip: the port is
+    retried instead of raising its warning at once.
+
+    Regression: de7f7c9f3. The count was read once at start, so the page's
+    new value did nothing until fppd restarted (and the setting asked for
+    that restart)."""
+    from test_command_socket import send
+    powered_port(fppd, eFuseRetryCount="0", eFuseRetryInterval="1500", LogLevel_ChannelOut="debug")
+    send("SetSetting,eFuseRetryCount,5,")
+    time.sleep(0.5)
+    trip()
+    fppd.wait_for(lambda: "Attempting reset retry" in fppd.log(), timeout=10, what="a retry after the trip")
+    assert not efuse_warnings(fppd), "the trip raised its warning at once instead of retrying"

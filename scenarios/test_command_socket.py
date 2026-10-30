@@ -344,3 +344,24 @@ def test_fppd_stop_waits_for_a_playing_fppd_to_finish(fppd):
         assert "shutdown-done" in f.read(), "the plugin's shutdown callback didn't finish"
     reports = fppd.sanitizer_reports()
     assert not reports, "sanitizer report:\n" + "\n".join(x[:8000] for x in reports)
+
+
+def test_gpio_commands_take_a_pin_by_name(fppd):
+    """SetupExtGPIO and ExtGPIO name a pin the way the UI lists it (a cape's
+    pin name, here the container's TF-3), not only by GPIO number: the pin is
+    set up as an output, driven high and driven low again, seen as the
+    pin's file in /tmp, and an unknown name is refused.
+
+    Regression: 413ec4070. The commands took a number from atoi(), so a
+    named pin became GPIO 0 and nothing named was ever driven."""
+    pin = "/tmp/GPIO-TF-3"
+    if os.path.exists(pin):
+        os.unlink(pin)
+    fppd.start()
+    r = fields(send("SetupExtGPIO,TF-3,Output"))
+    assert r[1] == "1" and r[3] == "TF-3", r
+    fppd.wait_for(lambda: fields(send("ExtGPIO,TF-3,Output,1"))[1] == "1" and os.path.exists(pin), timeout=5,
+                  what="the pin to be driven high")
+    send("ExtGPIO,TF-3,Output,0")
+    fppd.wait_for(lambda: not os.path.exists(pin), timeout=5, what="the pin to be driven low")
+    assert fields(send("SetupExtGPIO,NO-SUCH-PIN,Output"))[1] != "1"
