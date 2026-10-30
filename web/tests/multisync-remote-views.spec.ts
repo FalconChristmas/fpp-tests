@@ -46,7 +46,7 @@ test('a peer\'s output config is fetched through this player, and a non-address 
     }
   } finally {
     const verdict = peer.stop();
-    expect(verdict.ok, verdict.detail).toBe(true);
+    expect.soft(verdict.ok, verdict.detail).toBe(true);
   }
 });
 
@@ -128,7 +128,7 @@ test('hovering a remote\'s channel-output icon shows its active outputs', async 
     await expect(pop).not.toContainText('fpp-tests-inactive');
   } finally {
     const verdict = peer.stop();
-    expect(verdict.ok, verdict.detail).toBe(true);
+    expect.soft(verdict.ok, verdict.detail).toBe(true);
   }
 });
 
@@ -195,6 +195,6 @@ test('an OS upgrade offers the remote\'s own images, and is sent to that remote'
   } finally {
     gh.stop();
     const verdict = peer.stop();
-    expect(verdict.ok, verdict.detail).toBe(true);
+    expect.soft(verdict.ok, verdict.detail).toBe(true);
   }
 });

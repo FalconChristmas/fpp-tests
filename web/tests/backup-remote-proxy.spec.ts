@@ -25,7 +25,7 @@ function remote() {
 
 function stopRemote(peer: SecondPlayer) {
   const verdict = peer.stop();
-  expect(verdict.ok, verdict.detail).toBe(true);
+  expect.soft(verdict.ok, verdict.detail).toBe(true);
 }
 
 test('a remote\'s backup storage is asked for through this player', async ({ page, baseURL }) => {

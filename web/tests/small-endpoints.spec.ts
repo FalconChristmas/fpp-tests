@@ -260,7 +260,7 @@ test('Restart FPPD on a remote says which mode it set, and the remote takes it',
     throw e;
   }
   const verdict = peer.stop();
-  expect(verdict.ok, verdict.detail).toBe(true);
+  expect.soft(verdict.ok, verdict.detail).toBe(true);
 });
 
 test('a branch change asked for by a script or a remote gets no page script in its output', async ({ request }) => {

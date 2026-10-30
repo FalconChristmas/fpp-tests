@@ -71,6 +71,6 @@ test('a Pi64 image in the uploads is offered for a Raspberry Pi remote and copie
   } finally {
     inPlayer('rm', '-f', `${UPLOAD}/${IMAGE}`);
     const verdict = peer.stop();
-    expect(verdict.ok, verdict.detail).toBe(true);
+    expect.soft(verdict.ok, verdict.detail).toBe(true);
   }
 });

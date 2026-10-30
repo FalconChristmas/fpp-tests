@@ -35,7 +35,7 @@ export class SecondPlayer {
     }
     docker('run', '-d', '--init', '--name', this.name, '--network', playerAddress().network,
       '--ulimit', 'nofile=1048576:1048576', '-v', 'fpp-tests-work:/work', '-v', `${tests}:/tests:ro`,
-      '-e', tree, '-e', 'FPP_TESTS_ARTIFACTS=/tmp/fpp-tests-peer-artifacts',
+      '-e', tree, '-e', 'FPP_TESTS_ARTIFACTS=/tmp/fpp-tests-peer-artifacts', '-e', 'FPP_TESTS_PEER=1',
       '--add-host', 'fppstats.falconchristmas.com:127.0.0.1', '--add-host', 'crashes.falconplayer.com:127.0.0.1',
       '--add-host', 'api.github.com:127.0.0.1', '--add-host', 'github.com:127.0.0.1',
       '--cap-add', 'SYS_PTRACE', '--cap-add', 'SYS_NICE', '--tmpfs', '/tmp:rw,exec,nosuid,size=1g',
@@ -66,14 +66,16 @@ export class SecondPlayer {
     execFileSync('docker', ['exec', '-i', this.name, 'sh', '-c', `mkdir -p "$(dirname '${path}')" && cat > '${path}'`], { input: content });
   }
 
-  // Stops it and returns web_serve.py's verdict on its fppd.
+  // Stops it and returns web_serve.py's verdict on its fppd.  Check it with
+  // expect.soft in a finally: a hard expect there hides the test body's own
+  // failure behind it.
   stop(): { ok: boolean; detail: string } {
     let rc = '';
     let detail = '';
     try {
       docker('stop', '-t', '120', this.name);
       rc = docker('wait', this.name).trim();
-      detail = docker('logs', '--tail', '60', this.name);
+      detail = docker('logs', '--tail', rc === '0' ? '60' : '400', this.name);
     } finally {
       try {
         docker('rm', '-f', this.name);

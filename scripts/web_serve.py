@@ -99,6 +99,12 @@ def main():
         "SubType": "channelgrid", "IsGroup": True, "ChannelCountPerNode": 3, "Width": 2,
         "Height": 1, "Orientation": "horizontal", "StartCorner": "TL", "StringCount": 1,
         "StrandsPerString": 1, "MemberCount": 1, "PixelCount": 2, "Grid": "1,4"}]})
+    peer = bool(os.environ.get("FPP_TESTS_PEER"))
+    if peer:
+        # A second player (web/tests/second-player.ts) loses its media, logs
+        # included, with its container, so what it was asked to do has to be
+        # in the log printed below.
+        f.settings(**{f"LogLevel_{c}": "debug" for c in ("General", "Control", "HTTP", "Command", "Sync", "Settings")})
     f.start(timeout=120)
 
     # The CSP is generated per device from its settings and cape; the pages
@@ -155,7 +161,7 @@ def main():
         print(json.dumps({k: v for k, v in verdict.items() if k != "sanitizer_reports"}), flush=True)
         for r in reports:
             print(r[:4000], flush=True)
-        print(f.tail(), flush=True)
+        print(f.tail(300 if peer else 40), flush=True)
         shutil.copytree(f.media, os.path.join(artifacts, "media"), symlinks=True, dirs_exist_ok=True)
     shutil.copytree("/var/log/apache2", os.path.join(artifacts, "apache2"), dirs_exist_ok=True)
     subprocess.run(["apache2ctl", "stop"])

@@ -127,7 +127,7 @@ test.describe('an Upgrade Source mirror', () => {
       });
     } finally {
       const verdict = mirror.stop();
-      expect(verdict.ok, verdict.detail).toBe(true);
+      expect.soft(verdict.ok, verdict.detail).toBe(true);
     }
   });
 

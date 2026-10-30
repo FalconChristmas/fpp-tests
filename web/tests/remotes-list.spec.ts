@@ -97,7 +97,7 @@ test.describe(() => {
     } finally {
       await request.delete(`/api/playlist/${name}`);
       const verdict = peer.stop();
-      expect(verdict.ok, verdict.detail).toBe(true);
+      expect.soft(verdict.ok, verdict.detail).toBe(true);
     }
   });
 });
