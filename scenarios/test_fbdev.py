@@ -394,3 +394,32 @@ def test_virtual_display_warning_comes_down_when_the_model_is_fixed(fppd):
                   what="the fixed display to start")
     fppd.wait_for(lambda: not warned(fppd, "is not an RGB model"), timeout=15, interval=0.5,
                   what="the warning to come down after the fix")
+
+
+def test_a_virtual_display_takes_its_auto_created_model_with_it(fppd):
+    """The model a Virtual Display on a device creates ("FB - fb1") is
+    removed when the output goes: saving the outputs again creates it afresh
+    without the "empty model name" warning (35) a lingering model caused,
+    and saving them with no Virtual Display left removes it.
+
+    Regression: 4375c60d3. Close() left the model it had created, so the
+    next Init() found it, took it for one that already existed and gave up
+    with the empty-model-name warning; the model was never cleaned up."""
+    fb = FakeFb(fppd, width=W, height=H, bpp=32)
+    fppd.write("config/co-other.json", virtual_display(description="first"))
+    fppd.write("config/virtualdisplaymap", f"{W},{H}\n10,5,0,3,RGB\n")
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fb.start()
+
+    def models():
+        return [m["Name"] for m in fppd.get("/overlays/models")]
+    fppd.wait_for(lambda: "FB - fb1" in models(), timeout=10, what="the auto-created model")
+    for i in range(2):
+        time.sleep(1.1)  # a save in a later second, as a person makes it
+        fppd.write("config/co-other.json", virtual_display(description=f"save {i}"))
+        time.sleep(1.5)
+        assert not warned(fppd, "empty Pixel Overlay Model name"), fppd.get("/fppd/status").get("warnings")
+        assert models().count("FB - fb1") == 1, models()
+    time.sleep(1.1)
+    fppd.write("config/co-other.json", {"channelOutputs": []})
+    fppd.wait_for(lambda: "FB - fb1" not in models(), timeout=10, what="the model to go with its output")
