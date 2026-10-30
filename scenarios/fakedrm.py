@@ -17,10 +17,11 @@ import shims
 CONNECTOR = "HDMI-A-1"
 
 
-def start_env(fppd, crtc_off=False):
+def start_env(fppd, crtc_off=False, mm=None, preferred=None, refuse_planes=False):
     """(preload, extra_env) for fppd.start(): the fake card, and the stand-in
     kmssink committing its frames to it. crtc_off: the CRTC starts off, as
-    with nothing on the display at boot."""
+    with nothing on the display at boot. mm, preferred, refuse_planes: see
+    FAKEDRM_MM, FAKEDRM_PREFERRED and FAKEDRM_REFUSE_PLANES in fakedrm.c."""
     from test_video import fake_kms_env
     flags = subprocess.run(["pkg-config", "--cflags", "libdrm"], capture_output=True, text=True)
     if flags.returncode:
@@ -30,13 +31,19 @@ def start_env(fppd, crtc_off=False):
     sysfs = os.path.join(root, "sys", "class", "drm", f"card0-{CONNECTOR}")
     os.makedirs(sysfs)
     for name, text in (("status", "connected"), ("enabled", "enabled"), ("connector_id", "35"),
-                       ("modes", "1920x1080\n1280x720")):
+                       ("modes", f"{preferred or '1920x1080'}\n1280x720")):
         with open(os.path.join(sysfs, name), "w") as f:
             f.write(text + "\n")
     env = fake_kms_env(fppd, FAKEKMS_SETPLANE=1)
     env.update(FAKEDRM_DIR=root, FAKEDRM_LOG=os.path.join(fppd.media, "tmp", "fakedrm.log"))
     if crtc_off:
         env["FAKEDRM_CRTC_OFF"] = "1"
+    if mm:
+        env["FAKEDRM_MM"] = mm
+    if preferred:
+        env["FAKEDRM_PREFERRED"] = preferred
+    if refuse_planes:
+        env["FAKEDRM_REFUSE_PLANES"] = "1"
     return [so], env
 
 

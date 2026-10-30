@@ -36,6 +36,15 @@
  *   FAKEDRM_FAIL_MODESET  a path: while it exists, every modeset
  *                         (drmModeSetCrtc() with a mode) fails with EBUSY,
  *                         and is logged as refused
+ *   FAKEDRM_MM            "WxH": the screen size the EDID claims, in mm
+ *                         (default 520x290)
+ *   FAKEDRM_PREFERRED     "1280x800": the display prefers 1280x800 (a WXGA
+ *                         projector), with 1280x720 as well
+ *   FAKEDRM_REFUSE_PLANES "1": every plane commit fails with ENOSPC, as the
+ *                         kernel's source-rectangle check refuses real
+ *                         kmssink's non-square-pixel source size (GStreamer
+ *                         #1555, FPP #3135) -- the stand-in sink sources the
+ *                         frame's own size, so it can't trip that by itself
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -157,7 +166,12 @@ static int modes(drmModeModeInfo out[2]) {
         out[0] = mode(800, 480, 30000, 840, 860, 1000, 488, 490, 500, DRM_MODE_TYPE_PREFERRED);
         return 1;
     }
-    out[0] = mode(1920, 1080, 148500, 2008, 2052, 2200, 1084, 1089, 1125, DRM_MODE_TYPE_PREFERRED);
+    const char* preferred = getenv("FAKEDRM_PREFERRED");
+    if (preferred && !strcmp(preferred, "1280x800")) {
+        out[0] = mode(1280, 800, 83500, 1352, 1480, 1680, 803, 809, 831, DRM_MODE_TYPE_PREFERRED);
+    } else {
+        out[0] = mode(1920, 1080, 148500, 2008, 2052, 2200, 1084, 1089, 1125, DRM_MODE_TYPE_PREFERRED);
+    }
     out[1] = mode(1280, 720, 74250, 1390, 1430, 1650, 725, 730, 750, 0);
     return 2;
 }
@@ -506,6 +520,13 @@ int drmModeSetPlane(int fd, uint32_t plane_id, uint32_t crtc_id, uint32_t fb_id,
     Plane next = { p->id, p->type, crtc_id, fb_id, crtc_x, crtc_y, crtc_w, crtc_h, src_x, src_y, src_w, src_h };
     uint64_t hvs;
     char f[5];
+    const char* refuse = getenv("FAKEDRM_REFUSE_PLANES");
+    if (refuse && !strcmp(refuse, "1")) {
+        logf_("refuse %u src %ux%u: ENOSPC (FAKEDRM_REFUSE_PLANES)", plane_id, src_w >> 16, src_h >> 16);
+        pthread_mutex_unlock(&mu);
+        errno = ENOSPC;
+        return -1;
+    }
     if (over_limit_locked(&next, &hvs)) {
         logf_("refuse %u %s %ux%u+%d+%d src %ux%u hvs %llu: ENOSPC", plane_id, fourcc(fb->format, f),
               crtc_w, crtc_h, crtc_x, crtc_y, src_w >> 16, src_h >> 16, (unsigned long long)hvs);
@@ -918,6 +939,10 @@ static drmModeConnectorPtr connector(int fd, uint32_t id) {
     c->connector_type_id = 1;
     c->connection = DRM_MODE_CONNECTED;
     c->mmWidth = 520, c->mmHeight = 290;
+    const char* mm = getenv("FAKEDRM_MM");
+    if (mm) {
+        sscanf(mm, "%ux%u", &c->mmWidth, &c->mmHeight);
+    }
     c->subpixel = DRM_MODE_SUBPIXEL_UNKNOWN;
     c->modes = malloc(2 * sizeof(drmModeModeInfo));
     c->count_modes = modes(c->modes);
@@ -953,6 +978,26 @@ drmModeEncoderPtr drmModeGetEncoder(int fd, uint32_t id) {
     pthread_mutex_unlock(&mu);
     e->possible_crtcs = 1;
     return e;
+}
+
+// The CRTC and the mode it runs, for whoever asks what the display is doing
+// (kmssink does, and fppd's aspect check).
+drmModeCrtcPtr drmModeGetCrtc(int fd, uint32_t id) {
+    if (!is_ours(fd) || id != CRTC_ID) {
+        errno = ENOENT;
+        return NULL;
+    }
+    drmModeCrtcPtr c = calloc(1, sizeof(*c));
+    c->crtc_id = CRTC_ID;
+    pthread_mutex_lock(&mu);
+    if (crtc_active) {
+        c->mode = crtc_mode;
+        c->mode_valid = 1;
+        c->width = crtc_mode.hdisplay;
+        c->height = crtc_mode.vdisplay;
+    }
+    pthread_mutex_unlock(&mu);
+    return c;
 }
 
 drmModePlaneResPtr drmModeGetPlaneResources(int fd) {
