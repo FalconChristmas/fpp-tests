@@ -17,6 +17,11 @@ import { BACKUPS, readFile, setSettingInFile, snapshotSettings } from './setting
 // request that really asks for protection is refused: before 8ef364ce1
 // ("refuse only a request that actually asks to be protected") the presence of
 // protectSensitive:false, or of a stray 'protected' key, was refused too.
+//
+// The form test also backs up the "System Settings" area alone. Regression:
+// e5ccf755a ("Fix 'System Settings' failing & generating HTTP 500", #2163):
+// the email sub-area, which has no file of its own, was dropped only from an
+// "All" backup, so a "settings" backup answered 500.
 
 test.skip(!container, 'needs the player run-web.sh serves (FPP_TESTS_WEB_CONTAINER)');
 

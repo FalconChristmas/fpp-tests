@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gstreamer1.0-plugins-bad gstreamer1.0-alsa \
         edid-decode \
         pipewire pipewire-bin pipewire-pulse wireplumber pulseaudio-utils \
-        python3 python3-pytest python3-zstandard faketime tzdata procps iproute2 gdb patch zip \
+        python3 python3-pytest python3-zstandard faketime tzdata procps iproute2 gdb patch zip rsync \
         mosquitto mosquitto-clients gcovr qrencode \
         xxd device-tree-compiler avahi-daemon avahi-utils \
         fonts-dejavu-core \
