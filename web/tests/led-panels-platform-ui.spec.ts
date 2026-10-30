@@ -293,3 +293,27 @@ test('a Pi matrix keeps an rpi-rgb-led-matrix multiplexing mapper from the later
   await expect.poll(async () => (await saved(request)).channelOutputs[0].brightness, { timeout: 15_000 }).toBe(50);
   expect((await saved(request)).channelOutputs[0].panelInterleave).toBe('18');
 });
+
+test('on a Beagle, a ColorLight matrix\'s brightness is a percentage and the cape\'s a 1-10 level', async ({ page, request }) => {
+  // Regression: 9b83a5cc0.  The Brightness list followed the platform, not
+  // the connection type: off a Pi it was BBBMatrix's 1-10 level for
+  // ColorLight too, whose output reads a percentage (ColorLight-5a-75.cpp).
+  inPlayer('sh', '-c', 'mkdir -p "$(dirname "$2")" && printf "%s" "$1" > "$2"', 'sh',
+    JSON.stringify({ name: 'FppTestsLEDscape', longName: 'fpp-tests LEDscape cape',
+      defaults: { LEDPanelsConnection: 'LEDscapeMatrix' }, controls: {}, outputs: Array.from({ length: 8 }, () => ({})) }), CAPE);
+  writeOutputs([
+    matrix(1, 1, [32, 16, 8], 0, { subType: 'ColorLight5a75', interface: 'eth0', brightness: 60 }),
+    matrix(2, 1537, [32, 16, 8], 0, { subType: 'LEDscapeMatrix', brightness: 6 }),
+  ]);
+  await openPanels(page);
+  const brightness = (id: number) => page.locator(`#panelMatrix${id} .LEDPanelsBrightness`);
+  await expect(brightness(1)).toHaveValue('60');
+  await expect(brightness(1).locator('option').first()).toHaveText('100%');
+  await expect(brightness(2)).toHaveValue('6');
+  await expect(brightness(2).locator('option').first()).toHaveText('10');
+  await expect(brightness(2).locator('option')).toHaveCount(10);
+  await brightness(1).selectOption('80');
+  await panelSave(page).click();
+  await expect.poll(async () => (await saved(request)).channelOutputs.map((m: any) => m.brightness), { timeout: 15_000 }).toEqual([80, 6]);
+  expect(pageErrors).toEqual([]);
+});

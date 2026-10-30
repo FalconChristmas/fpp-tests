@@ -258,28 +258,43 @@ test('a matrix saved without its output and chain counts gets the defaults, and 
   await expect.poll(() => panelModels(request), { timeout: 15_000 }).toEqual(['LED Panels=64x32']);
 });
 
-test('a ColorLight matrix shows its brightness', async ({ page }) => {
+test('a ColorLight matrix shows its brightness, as a percentage', async ({ page }) => {
   // Regression: 2eb7dc208.  The new page hid the Brightness control for
   // ColorLight as well as X11 (the old page showed it for ColorLight, whose
   // receiver card takes a brightness), so it could not be seen or set.
-  writeOutputs({ channelOutputs: [colorLight(2, 1, [32, 16, 8], { brightness: 6 })] });
+  // Regression: 9b83a5cc0.  Off a Pi the control offered the 1-10 level
+  // BBShiftPanel and BBBMatrix take, but ColorLight-5a-75.cpp reads a
+  // percentage, so the brightest choice, 10, drove the card at 10%.
+  writeOutputs({ channelOutputs: [colorLight(2, 1, [32, 16, 8], { brightness: 60 })] });
   await openPanels(page);
-  await expect(page.locator('#panelMatrix1 .LEDPanelsBrightness')).toBeVisible();
-  await expect(page.locator('#panelMatrix1 .LEDPanelsBrightness')).toHaveValue('6');
+  const brightness = page.locator('#panelMatrix1 .LEDPanelsBrightness');
+  await expect(brightness).toBeVisible();
+  await expect(brightness).toHaveValue('60');
+  await expect(brightness.locator('option').first()).toHaveText('100%');
+  await expect(brightness.locator('option').last()).toHaveText('5%');
 });
 
-test.fail('Save keeps a ColorLight matrix\'s brightness on a player that is neither a Pi nor a Beagle', async ({ page, request }) => {
-  // Bug on master: GetLEDPanelConfigFromUI writes config.brightness only
-  // when the platform is "Raspberry Pi" or a BeagleBone, though the control
-  // is shown for ColorLight everywhere and the ColorLight output reads
-  // "brightness" (ColorLight-5a-75.cpp, 0 or missing = full).  On any other
-  // player (an x86 Debian install, this container) Save drops it, and the
-  // receiver card goes to full brightness.
-  writeOutputs({ channelOutputs: [colorLight(2, 1, [32, 16, 8], { brightness: 6 })] });
+test('a ColorLight matrix saved with no brightness shows the full brightness fppd gives it', async ({ page }) => {
+  // Regression: 9b83a5cc0.  fppd drives the card at full brightness when
+  // none is saved (every save off a Pi or Beagle left it out); the page
+  // filled in the 1-10 default of 10.
+  writeOutputs({ channelOutputs: [colorLight(2, 1, [32, 16, 8], { brightness: undefined })] });
   await openPanels(page);
-  await page.locator('#panelMatrix1 .LEDPanelsBrightness').selectOption('4');
+  await expect(page.locator('#panelMatrix1 .LEDPanelsBrightness')).toHaveValue('100');
+});
+
+test('Save keeps a ColorLight matrix\'s brightness on a player that is neither a Pi nor a Beagle', async ({ page, request }) => {
+  // Regression: 9b83a5cc0.  GetLEDPanelConfigFromUI wrote
+  // config.brightness only when the platform was "Raspberry Pi" or a
+  // BeagleBone, though the control is shown for ColorLight everywhere and the
+  // ColorLight output reads "brightness" (ColorLight-5a-75.cpp, 0 or missing
+  // = full).  On any other player (an x86 Debian install, this container)
+  // Save dropped it, and the receiver card went to full brightness.
+  writeOutputs({ channelOutputs: [colorLight(2, 1, [32, 16, 8], { brightness: 60 })] });
+  await openPanels(page);
+  await page.locator('#panelMatrix1 .LEDPanelsBrightness').selectOption('40');
   const [m] = await saveAndWait(page, request, () => true);
-  expect(m.brightness).toBe(4);
+  expect(m.brightness).toBe(40);
 });
 
 test('the config-upgrade banner names each pre-v3 matrix, and a v3 config shows none', async ({ page }) => {
