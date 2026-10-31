@@ -5939,7 +5939,7 @@ c3281d6d2	untestable		none	Docker/dockerBuild packaging: Dockerfile steps, compo
 972a4d2d8	untestable		none	script check: cosmetic or small UI change (layout, wording, label, link, slider, spelling) with nothing to assert	Use history.pushState on tab links so tabs can be hyperlinked directly	5.5	js	Network, Apache & security	web
 adf31929a	todo		none	script check: 5 of 12 added lines are still in master	Optimize files API call when only retrieving list of file names	5.5	api	Web API	web
 467e93f13	untestable		none	auto: changes no runtime file (.github)	add multi arch support to docker for both amd64 and arm64 (#1211)	5.5	.github	Other	none
-fecaa3b21	todo		none	script check: 1 of 1 added lines are still in master	Added robots.txt to protect exposed FPP instances from being listed on the usual search engines. (#1208)	5.5	www	Web UI (shared JS/CSS/pages)	web
+fecaa3b21	new-test	web/tests/playlist-names-and-robots.spec.ts	red-green-revert	script check: red with robots.txt removed	Added robots.txt to protect exposed FPP instances from being listed on the usual search engines. (#1208)	5.5	www	Web UI (shared JS/CSS/pages)	web
 8a757552d	untestable		none	script check: cosmetic or small UI change (layout, wording, label, link, slider, spelling) with nothing to assert	Fix range/volume sliders not displaying correctly in Firefox/Edge	5.5	css	Web UI (shared JS/CSS/pages)	web
 a08a138ea	superseded		none	script check: none of the 7 lines this commit added are in master any more	Dont initialize tooltips on FPP mode dropdown for touch devices	5.5	common	Web UI (shared JS/CSS/pages)	web
 1371d56ff	untestable		none	script check: cosmetic or small UI change (layout, wording, label, link, slider, spelling) with nothing to assert	Fix second-midnight not working in scheduler UI in 12-hour mode	5.5	js	Web UI (shared JS/CSS/pages)	web
@@ -5968,7 +5968,7 @@ fd83052ed	todo		none	script check: 3 of 3 added lines are still in master	Allow 
 e01f40d4f	untestable		none	script check: cosmetic or small UI change (layout, wording, label, link, slider, spelling) with nothing to assert	Fix a PHP error message when setting hasn't been set yet	5.5	www	Web UI (shared JS/CSS/pages)	web
 917efe713	untestable		none	script check + read: cosmetic: spelling, comment, include order or label text; read from the diff, no behavior to test	One more Script Editor tweak to get rid of some whitespace.	5.5	css	Web UI (shared JS/CSS/pages)	web
 3293cb034	superseded		none	script check: none of the 24 lines this commit added are in master any more	Fix Script Editor Save/Cancel buttons	5.5	css	Web UI (shared JS/CSS/pages)	web
-de74a1810	todo		none	script check: 7 of 7 added lines are still in master	Allow deleting old playlists containing a plus sign in their names.	5.5	api	Playlists, schedule & sequences	web
+de74a1810	named	web/tests/playlist-names-and-robots.spec.ts	unreviewed	script check: green-only; a playlist with a plus sign in its name is saved, read, extended and deleted	Allow deleting old playlists containing a plus sign in their names.	5.5	api	Playlists, schedule & sequences	web
 c44e59d79	todo		none	script check: 11 of 27 added lines are still in master	Allow deleting a Playlist from the Playlist list UI	5.5	css	Playlists, schedule & sequences	web
 ddf742e91	untestable		none	script check: cosmetic or small UI change (layout, wording, label, link, slider, spelling) with nothing to assert	Fix javascript error when no panel output exists	5.5	www	LED panels	web
 25cdae0f7	untestable		none	script check: cosmetic or small UI change (layout, wording, label, link, slider, spelling) with nothing to assert	Swap the +3/-3 buttons on the Channel Testing page.	5.5	www	Web UI (shared JS/CSS/pages)	web
@@ -6026,7 +6026,7 @@ f119c50e1	untestable		none	script check: needs the hardware (PRU, pin mapping, R
 d18394b56	untestable		none	auto: changes no runtime file (docs)	Updated Configuration_File doc to be more current	5.4	docs	Other	none
 d05a824e2	untestable		none	auto: changes no runtime file (.github)	Skip docs folder on action	5.4	.github	Other	none
 18e2a3757	untestable		none	auto: changes no runtime file (docs)	started Plugin Development doc	5.4	docs	Plugins	none
-3378ce7e8	todo		none	script check: 2 of 7 added lines are still in master	Make sure playlist names are urldecoded to decode spaces and such	5.4	api	Playlists, schedule & sequences	web
+3378ce7e8	named	web/tests/playlist-names-and-robots.spec.ts	unreviewed	script check: green-only; removing the rawurldecode calls did not turn it red (limonade now decodes the segment itself)	Make sure playlist names are urldecoded to decode spaces and such	5.4	api	Playlists, schedule & sequences	web
 a51936e82	untestable		none	script check: cosmetic or small UI change (layout, wording, label, link, slider, spelling) with nothing to assert	Fix volume Slider in remote mode. Fixes #1132	5.4	www	Web UI (shared JS/CSS/pages)	web
 a9e2df492	todo		none	script check: 3 of 6 added lines are still in master	remoteOffset was not doing anything for sequences, make sure the timestamp is used if provided in sync packet. Note:  this allows sequences on remotes to now have a different framerate than the main player	5.4	src	MultiSync & remotes	docker
 f18c5f827	untestable		none	auto: changes no runtime file (.github)	Fix so that docker is updated for tags and branches (#1131)	5.4	.github	Other	none
