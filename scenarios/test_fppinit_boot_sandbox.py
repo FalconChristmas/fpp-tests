@@ -238,3 +238,13 @@ def test_unpartitioned_space_is_reported_in_whole_gigabytes(fppinit):
     assert unpartitioned_after_start(fppinit, "Unpartitioned space /dev/mmcblk0: 12 GiB, 12884901888 bytes, 25165824 sectors\n"
                                               "Start      End  Sectors Size\n3481600 25165823 21684224  12G\n") == "12"
     assert unpartitioned_after_start(fppinit, "Start End Sectors Size\n1 2 3  500M\n") == "0"
+
+
+def test_start_with_no_sfdisk_output_leaves_no_unpartitioned_space(fppinit):
+    """fppinit start completes, and records no unpartitioned space, when
+    `sfdisk -F` prints nothing (sfdisk missing or failing).
+
+    Regression: ae892bf (fpp). checkUnpartitionedSpace() took back() of the
+    empty split of the output, which is undefined: a SEGV under ASan that
+    killed fppinit start."""
+    assert unpartitioned_after_start(fppinit, "") == "0"
