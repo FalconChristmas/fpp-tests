@@ -89,3 +89,17 @@ def test_a_compute_module_5_is_listed_as_a_pi_5(fppd):
                           timeout=10, what="the local system to be listed")
     assert s["model"] == "Raspberry Pi Compute Module 5 Rev 1.0", s
     assert s["type"] == "Raspberry Pi 5", s
+
+
+def test_genius_pro_and_generic_genius_ping_ids_are_named(fppd):
+    """Pings with type ids 0xa3, 0xa4 and 0xaf are listed as the Genius PRO
+    16, the Genius PRO 32 and a Genius Controller.
+
+    Feature: ba86815ce. Before it the three ids were "Unknown System Type".
+    """
+    fppd.start()
+    got = {tid: listed_type(fppd, f"10.20.33.{tid & 0xff}", tid, f"genius-pro-{tid:x}")
+           for tid in (0xa3, 0xa4, 0xaf)}
+    assert got == {0xa3: (0xa3, "Genius PRO 16"),
+                   0xa4: (0xa4, "Genius PRO 32"),
+                   0xaf: (0xaf, "Genius Controller")}, got

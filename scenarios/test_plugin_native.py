@@ -6,6 +6,7 @@ The plugin is tools/throwplugin.cpp, built against the tree under test
 (throw_plugin.py).
 """
 
+import os
 import time
 import urllib.error
 
@@ -41,3 +42,35 @@ def test_a_plugin_route_that_throws_answers_500(fppd, route):
         assert e.value.code == 500, f"{route} answered {e.value.code}"
     assert fppd.get("/throw/ok") == "ok"
 
+
+
+def test_a_plugin_is_told_when_a_playlist_is_inserted(fppd):
+    """playlistInserted() is called with the playlist, the start and end
+    positions and whether it was inserted at once, for Insert Playlist After
+    Current and Insert Playlist Immediate, also when nothing is playing.
+
+    Feature: 32244ca9a. Plugins had no way to prepare for an inserted
+    playlist.
+    """
+    from native_plugin import install
+    install(fppd, features=["NATIVE_PLAYLIST_INSERTED"])
+    log = os.path.join(fppd.media, "tmp", "inserted.log")
+    for name in ("Ins", "Ins2"):
+        fppd.write(f"playlists/{name}.json", {"name": name, "version": 3, "repeat": 0, "loopCount": 0, "empty": False,
+                                              "desc": "", "mainPlaylist": [
+                                                  {"type": "pause", "enabled": 1, "playOnce": 0, "duration": 1},
+                                                  {"type": "pause", "enabled": 1, "playOnce": 0, "duration": 1}],
+                                              "playlistInfo": {}})
+    fppd.start(extra_env={"NATIVE_PLAYLIST_LOG": log})
+    fppd.command("Insert Playlist After Current", "Ins", "0", "1")
+    fppd.command("Insert Playlist Immediate", "Ins2", "1", "2")
+
+    def lines():
+        try:
+            with open(log) as f:
+                return f.read().split("\n")[:-1]
+        except FileNotFoundError:
+            return []
+    fppd.wait_for(lambda: len(lines()) >= 2, timeout=10, what="both insertions to be reported")
+    # the command takes 1-based positions (0: none); the plugin gets them 0-based, -1 for none
+    assert lines()[:2] == ["Ins -1 0 0", "Ins2 0 1 1"], lines()

@@ -93,3 +93,43 @@ def test_a_plugin_registering_hooks_while_the_show_plays(fppd):
     # The output thread walked the hooks while the plugin's thread changed them.
     assert handed > 0, "the hooks the plugin added never saw a sync packet"
     assert len(syncs) > 5, f"only {len(syncs)} sync packets sent while the plugin ran"
+
+
+def test_a_plugin_hears_the_control_packets_a_remote_receives(fppd):
+    """A plugin's MultiSync hooks are handed every kind of control packet a
+    remote receives: sequence and media open/start/stop/sync, blanking,
+    plugin data and FPP commands.
+
+    Feature: 1b96eb87c. The Received* hooks were only called for sequence
+    packets on a master's own sends; a plugin in remote mode heard nothing.
+    """
+    import socket
+    from multisync import control_packet, fpp_command_packet, sync_packet
+    install_plugin(fppd)
+    log = os.path.join(fppd.media, "tmp", "ms-recv.log")
+    fppd.settings(DisableFakeNetworkBridges="1", fppMode="remote")
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    def send(pkt):
+        sock.sendto(pkt, ("127.0.0.1", PORT))
+        time.sleep(0.15)
+
+    fppd.start(extra_env={"MS_RECV_LOG": log})
+    for kind in ("fseq", "media"):
+        for action in ("open", "start", "sync", "stop"):
+            send(sync_packet(action, kind, 7, 0.5, "Show.fseq" if kind == "fseq" else "Song.mp3"))
+    send(control_packet(0x03, b""))
+    send(control_packet(0x05, b"other-plugin\0" + b"DATA"))
+    send(fpp_command_packet("All Lights Off", []))
+
+    def lines():
+        try:
+            with open(log) as f:
+                return [l.rstrip("\n") for l in f]
+        except FileNotFoundError:
+            return []
+    want = ["seqopen Show.fseq", "seqstart Show.fseq", "seqsync Show.fseq 7", "seqstop Show.fseq",
+            "mediaopen Song.mp3", "mediastart Song.mp3", "mediasync Song.mp3", "mediastop Song.mp3",
+            "blanking", "plugindata other-plugin 4 D", "command All Lights Off"]
+    fppd.wait_for(lambda: all(w in lines() for w in want), timeout=10, interval=0.3,
+                  what="the plugin to hear every packet; heard " + str(lines()))
