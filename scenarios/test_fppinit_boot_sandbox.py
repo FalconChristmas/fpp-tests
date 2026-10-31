@@ -174,3 +174,34 @@ def test_tether_checks_do_nothing_while_setup_network_is_running(fppinit):
     os.unlink(os.path.join(fppinit.media, "tmp", "networkSetup"))
     run(fppinit, "checkForTether", "wlan0", net=True)
     assert "interface=wlan0" in (fppinit.written(HOSTAPD_CONF) or ""), fppinit.calls()
+
+
+def unpartitioned_after_start(sb, sfdisk_out):
+    """Run fppinit start on a Pi-like SD card whose `sfdisk -F` prints
+    sfdisk_out, and return the UnpartitionedSpace setting it left."""
+    sb.root_file("/dev/mmcblk0", "")
+    sb.root_file("/usr/bin/findmnt", "#!/bin/sh\necho /dev/mmcblk0p2\n")
+    sb.root_file("/usr/sbin/sfdisk", "#!/bin/sh\n" + "".join(f"echo '{l}'\n" for l in sfdisk_out.splitlines()))
+    sb.settings(storageDevice="mmcblk0p2")
+    start(sb)
+    for line in sb.media_file("settings").splitlines():
+        if line.startswith("UnpartitionedSpace"):
+            return line.split("=", 1)[1].strip().strip('"')
+    return None
+
+
+def test_start_with_no_sfdisk_output_leaves_no_unpartitioned_space(fppinit):
+    """fppinit start completes, and records no unpartitioned space, when
+    `sfdisk -F` prints nothing (sfdisk missing or failing).
+
+    Regression: ae892bf (fpp). checkUnpartitionedSpace() took back() of the
+    empty split of the output, which is undefined: a SEGV under ASan that
+    killed fppinit start."""
+    assert unpartitioned_after_start(fppinit, "") == "0"
+
+
+def test_start_records_the_unpartitioned_space_sfdisk_reports(fppinit):
+    """The other side of the empty-output case: a last sfdisk -F line ending
+    in a size in G is recorded, so "0" above is the fallback and not a
+    constant."""
+    assert unpartitioned_after_start(fppinit, "Unpartitioned space /dev/mmcblk0: 3.5 GiB, 3758096384 bytes\n14G") == "14"
