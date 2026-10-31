@@ -112,3 +112,22 @@ def test_warnings_json_follows_the_warnings(fppd):
         except (OSError, ValueError):
             return False
     fppd.wait_for(listed, timeout=15, what="the empty-playlist warning in warnings.json")
+
+
+def test_a_random_playlist_does_not_start_with_the_entry_it_ended_on(fppd):
+    """A randomised main section never opens with the last entry of the
+    saved order (the one a previous run would have ended on).
+
+    Regression: c6c5d170c. Over 40 starts of a three-entry playlist the old
+    shuffle opened with the last entry about a third of the time (chance of
+    missing it in all 40 is under one in a million)."""
+    from test_playlist_entries import run, step
+    fppd.write("playlists/R.json", playlist("R", main=[step(1), step(2), step(3)], random=1))
+    fppd.start()
+    firsts = []
+    for _ in range(40):
+        t = run(fppd, "R")
+        assert sorted(t) == ["1", "2", "3"], t
+        firsts.append(t[0])
+    assert "3" not in firsts, firsts
+    assert len(set(firsts)) > 1, firsts  # and it is random, not just reordered once
