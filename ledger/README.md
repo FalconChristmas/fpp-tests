@@ -46,3 +46,15 @@ outcome, test, proof and note. A `named` row needs only the check: run the
 test on the commit's parent, and if it fails there, record the proof. A commit
 that can't be tested gets `untestable` and the reason, e.g. a Debian 13
 packaging change that only an image build exercises.
+
+## Clearing what master has replaced
+
+    python3 scripts/ledger-supersede.py --rows-from ledger/fpp-since-7.0.tsv ledger/fpp-since-5.0.tsv
+
+looks at each `todo` row of the old range that is not in the named ledger and
+marks it `superseded` when every file it changed is gone from master, none of
+the (five or more) lines it added is still there, or ten percent or fewer of
+at least eight are. A row left `todo` gets a note saying how many of its added
+lines master still has, so the rest can be read starting with the ones that
+survive. The notes start with "script check:": a person who reads a row and
+disagrees should change the outcome and rewrite the note.
