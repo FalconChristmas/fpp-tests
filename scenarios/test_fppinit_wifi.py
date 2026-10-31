@@ -65,7 +65,11 @@ def test_a_wpa3_backup_network_uses_its_own_password(fppinit):
 
     Regression: 19e5bc3e0. The backup block's sae_password was built from the
     primary network's PSK, so a WPA3 backup SSID with a password of its own
-    always failed SAE (its psk= line was right, which hid it on WPA2)."""
+    always failed SAE (its psk= line was right, which hid it on WPA2).
+
+    Also 4d42b6aa7 (the backup network block itself), ea6daf05d (WPA3:
+    SAE key management and sae_password) and b6316ae66 (the SSID and PSK
+    quoted, which wpa_supplicant needs for a plain-text name)."""
     _, blocks, text = wpa_config(fppinit, WPA3="1", BACKUPWPA3="1", **PRIMARY, **BACKUP)
     assert len(blocks) == 2, text
     primary, backup = blocks

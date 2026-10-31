@@ -69,7 +69,11 @@ def test_one_ssh_host_key_pair_left_by_an_interrupted_keygen_is_regenerated(fppi
     and leaves two or more alone.
 
     Regression: e6f0327b6. One ssh_host file was enough to skip generating,
-    and a reboot in the middle of ssh-keygen left a lone key and no sshd."""
+    and a reboot in the middle of ssh-keygen left a lone key and no sshd.
+
+    Regression: 777ea1ac4. One "ssh-keygen -A" made all the keys, the
+    4096-bit RSA one first (over a minute on a BeagleBone), so sshd had
+    no key until it was done; each type is now generated on its own."""
     fake_keygen(fppinit)
     ssh_dir(fppinit, "ssh_host_ed25519_key", "ssh_host_ed25519_key.pub")
     assert_clean(fppinit.run("start"))
@@ -80,6 +84,26 @@ def test_one_ssh_host_key_pair_left_by_an_interrupted_keygen_is_regenerated(fppi
     os.unlink(os.path.join(fppinit.media, "tmp", "ssh-keygen.log"))
     assert_clean(fppinit.run("start"))
     assert keygen_calls(fppinit) == [], fppinit.calls()
+
+
+def test_ssh_host_keys_are_generated_without_holding_up_boot(fppinit):
+    """Boot starts generating the SSH host keys and goes on: with an
+    ssh-keygen that takes 15 s a key, start doesn't wait for it, and all
+    three keys were still asked for.
+
+    Regression: c485f2301 (the background half; the /dev/hwrng seeding is
+    device-only). ssh-keygen ran in the foreground, and on a board short of
+    entropy it held fppinit until systemd timed the unit out."""
+    import time
+    ssh_dir(fppinit)
+    fppinit.root_file("/usr/bin/ssh-keygen",
+                      f"#!/bin/sh\necho \"$*\" >> {MEDIA}/tmp/ssh-keygen.log\nsleep 15\n")
+    began = time.monotonic()
+    assert_clean(fppinit.run("start"))
+    took = time.monotonic() - began
+    assert keygen_calls(fppinit) == ["/etc/ssh/ssh_host_ecdsa_key", "/etc/ssh/ssh_host_ed25519_key",
+                                     "/etc/ssh/ssh_host_rsa_key"], fppinit.calls()
+    assert took < 30, f"start took {took:.0f} s, waiting on ssh-keygen"
 
 
 def test_haveged_is_started_only_to_seed_ssh_key_generation(fppinit):
@@ -111,7 +135,11 @@ def test_the_boot_directory_is_where_the_boot_config_is(fppinit):
 
     Regression: 700ab6675. A BeagleBone Black has a /boot/firmware (ID.txt,
     START.HTM) and its uEnv.txt in /boot, and everything that edited the
-    boot config edited a file the boot loader never read."""
+    boot config edited a file the boot loader never read.
+
+    Regression: 67bbdf9b6. The boot directory was always /boot, so on a
+    Bookworm Pi (config.txt in /boot/firmware) the scripts edited the
+    wrong config.txt."""
     fppinit.root_file("/boot/uEnv.txt", "uname_r=6.1\n")
     assert common_boot_dir(fppinit) == "/boot"
 
@@ -126,12 +154,17 @@ def test_a_podman_container_is_a_container_without_dockerenv(fppinit):
     "Docker ID: ...") instead of managing the hostname itself.
 
     Regression: 3ac96bc11. Only /.dockerenv counted, which podman doesn't
-    create, and boot ran the hardware setup of a real device in it."""
+    create, and boot ran the hardware setup of a real device in it.
+
+    Regression: 18da77b49 (the host name half). The container's name was
+    read by running "hotname", which isn't there, so HostName was blank."""
     fppinit.root_file("/.dockerenv", None)
     fppinit.root_file("/etc/fpp/container", "")
+    fppinit.stub_output("hostname", "", "fpp-container\n")
     assert_clean(fppinit.run("checkHostName"))
     settings = fppinit.media_file("settings") if fppinit.media_exists("settings") else ""
     assert "HostDescription = \"Docker ID:" in settings, f"settings: {settings!r}"
+    assert 'HostName = "fpp-container"' in settings, f"settings: {settings!r}"
 
     fppinit.root_file("/etc/fpp/container", None)
     os.unlink(os.path.join(fppinit.media, "settings"))

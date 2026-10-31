@@ -131,7 +131,8 @@ def test_every_upgrade_step_is_executable():
     Regression: 8c8a1b6ed. Upgrade 147 was committed 644: "Permission
     denied", and upgrade_config stopped at 146 on every box.
     Also 2b48c3c6b and f5928c01f, which set the bit on 93 and 94 after
-    they were committed without it.
+    they were committed without it. And 8e47a4948 (81) and 66745d8c4 (87),
+    the same for those steps.
     """
     up = os.path.join(TREE, "upgrade")
     steps = [d for d in os.listdir(up) if d.isdigit() and os.path.exists(os.path.join(up, d, "upgrade.sh"))]

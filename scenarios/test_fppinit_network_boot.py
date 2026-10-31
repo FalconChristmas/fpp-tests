@@ -323,7 +323,10 @@ def test_a_skipped_boot_delay_ends_at_once(fppinit):
     it removes along with the countdown.
 
     Regression: 12f1affaa. The delay slept in 30 s chunks and looked for
-    the skip only between them, so Skip in the UI took up to 30 s."""
+    the skip only between them, so Skip in the UI took up to 30 s.
+
+    Regression: 5a47c9d99. The "Sleeping for" message printed the delay
+    with %s, and fppinit crashed on any fixed boot delay."""
     import threading
     fppinit.settings(bootDelay="30")
     delay = os.path.join(fppinit.media, "tmp", "boot_delay")

@@ -108,3 +108,19 @@ def test_an_sd_boot_with_root_on_the_third_partition_gets_the_sd_card_actions(tm
     for root in ("mmcblk0p2", "mmcblk0p3"):
         (tmp_path / root).mkdir()
         assert run_php(tmp_path / root, code, root, {}, space) == "offered", root
+
+
+def test_a_boot_from_nvme_or_usb_gets_the_new_partition_action(tmp_path):
+    """Root on the NVMe drive's or the USB disk's second partition
+    (nvme0n1p2, sda2, as flashing to them lays them out) with unpartitioned
+    space left: the Storage tab offers New Partition, as for an SD boot.
+
+    Regression: f821717f9. Only an SD card root (mmcblk0p1/p2) counted, so a
+    Pi booted from NVMe or USB was offered nothing for the space left over.
+    """
+    code = block("settings-storage.php", "$addnewfsbutton = false;", "\n// Every disk")
+    code += "\necho $addnewfsbutton ? 'offered' : 'none';\n"
+    space = dict(PI, UnpartitionedSpace="1000")
+    for root in ("nvme0n1p2", "sda2"):
+        (tmp_path / root).mkdir()
+        assert run_php(tmp_path / root, code, root, {}, space) == "offered", root

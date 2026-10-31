@@ -115,6 +115,27 @@ def test_boot_installs_the_kiosk_only_when_asked_and_missing(fppinit):
     assert not [c for c in fppinit.calls() if "enable fpp-install-kiosk" in c], fppinit.calls()
 
 
+def test_an_os_upgrade_marker_reinstalls_the_kiosk(fppinit):
+    """After an OS reflash of a kiosk box the /fpp_kiosk marker, not the
+    Kiosk setting, says the kiosk was there: installKiosk runs FPP_Kiosk.sh,
+    consumes the marker and writes the Chromium policy, making the policy's
+    directories, which a fresh image doesn't have.
+
+    Regression: 9a320d35a. The marker only counted where the setting was
+    already on, and the policy was written into directories nothing made,
+    so the kiosk never came back after an OS upgrade."""
+    from fppinit import MEDIA
+    fppinit.root_file("/etc/fpp/kiosk", None)
+    fppinit.root_file("/etc/chromium", None)
+    fppinit.root_file("/fpp_kiosk", "")
+    fppinit.root_file("/opt/fpp/SD/FPP_Kiosk.sh", f"#!/bin/sh\ntouch {MEDIA}/tmp/kiosk-installed\n")
+    assert_clean(fppinit.run("installKiosk"))
+    assert fppinit.media_exists("tmp/kiosk-installed"), "FPP_Kiosk.sh was not run for the marker"
+    assert fppinit.written("/fpp_kiosk") is None, "the marker was left"
+    policy = fppinit.written("/etc/chromium/policies/managed/policy.json") or ""
+    assert '"RestoreOnStartupURLs": ["http://localhost/"]' in policy, policy
+
+
 def audio_env_after_setup(sb, backend):
     """setupAudio on a USB card with the given MediaBackend; the audio
     environment file it left in /run/fppd (a tmpfs of the sandbox's, so the

@@ -84,6 +84,9 @@ def test_kiosk_blanking_follows_kiosk_timeout_and_chromium_starts_clean(fppinit)
     Regression: 4a09bd2cb. The script directory cleanup (ccc866144)
     deleted start_kiosk.sh while FPP_Kiosk.sh's session still ran it, so a
     kiosk started no browser at all; this restored it.
+
+    Regression: 74d579002, which added KioskTimeout: blanking was always
+    off before it.
     """
     fppinit.write("settings", "")
     r, calls = run_kiosk(fppinit)

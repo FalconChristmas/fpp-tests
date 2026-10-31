@@ -249,7 +249,10 @@ def test_an_hdmi_selection_with_no_display_is_kept_through_a_fallback_boot(fppin
     Regression: 41a7f0e24 (setupAudio's half). The fallback card was saved
     into AudioOutput, so a show controller whose TV was off at one boot
     stayed on the headphone jack on every boot after, display or not. Not
-    covered: fppd's and the PHP apply's reading of the effective card."""
+    covered: fppd's and the PHP apply's reading of the effective card.
+
+    Regression: c8d423366, which added the fallback: an HDMI card with no
+    display was played to as it was."""
     import json
     from test_fppinit_audio_cards import set_setting
     maps = fake_boards(fppinit, cards=HDMI_AND_JACK)
@@ -297,6 +300,16 @@ def test_an_hdmi_card_that_is_not_alsa_card_0_is_judged_dead_by_its_own_port(fpp
     set_setting(fppinit, AudioOutput="vc4hdmi0", MediaBackend="pipewire-simple")
     out, _ = setup_audio(fppinit, maps)
     assert "has no HDMI connected" in out, f"the HDMI card wasn't taken as dead:\n{out[-3000:]}"
+
+    # With a display on the first HDMI port, the card named vc4hdmi0 is
+    # alive, whatever number ALSA gave it: the index read it as port 2.
+    for port, status in (("1", "connected\n"), ("2", "disconnected\n")):
+        d = os.path.join(fppinit.state, "drm", f"card0-HDMI-A-{port}")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "status"), "w") as f:
+            f.write(status)
+    out, _ = setup_audio(fppinit, maps + ":/sys/class/drm=/fppinit-state/drm")
+    assert "has no HDMI connected" not in out, f"the HDMI card with a display was taken as dead:\n{out[-3000:]}"
 
 
 JACK = " 0 [Headphones     ]: bcm2835_headpho - bcm2835 Headphones\n                      bcm2835 Headphones\n"

@@ -174,6 +174,9 @@ def test_tether_credentials_are_not_run_as_shell(fppinit, field):
     assert_clean(r)
     assert not fppinit.media_exists("pwned"), f"{field} was run by the shell"
     assert fppinit.media_exists("tmp/wifi-L.ascii"), "no QR code was written"
+    # 3be665b7a: the high error correction code beside it, whose command
+    # was built and never run.
+    assert fppinit.media_exists("tmp/wifi-H.ascii"), "no high error correction QR code was written"
 
 
 def test_a_wifi_client_for_a_missing_adapter_does_not_hold_setup(fppinit):
@@ -184,7 +187,8 @@ def test_a_wifi_client_for_a_missing_adapter_does_not_hold_setup(fppinit):
     Regression: ed2b830fd. "systemctl reload-or-restart wpa_supplicant@<if> &"
     ran through popen, whose pipe the backgrounded child kept open, so
     fppinit -- and systemd-networkd, ordered after it -- waited out the start
-    job (the device's 90 s timeout on a box)."""
+    job (the device's 90 s timeout on a box). The "&" itself is b6316ae66:
+    without it the supplicant's enable and restart ran in the foreground."""
     fppinit.write("config/interface.wlan1",
                   'INTERFACE="wlan1"\nPROTO="dhcp"\nSSID="TestNet"\nPSK="testpass123"\n')
     fppinit.start_delay("wpa_supplicant@wlan1", 60)
@@ -415,7 +419,10 @@ def test_wifi_pmf_is_a_global_option_not_per_network(fppinit):
     Regression: f89e89604 (#2953). Every network block carried
     "ieee80211w=1", which wpa_supplicant honours whatever the driver says:
     on a Pi Zero W or 3B (no MFP in the firmware) it negotiated PMF with any
-    PMF-capable router and dropped the association in a loop."""
+    PMF-capable router and dropped the association in a loop.
+
+    Regression: 69c026498 (the ssid half). The interface file's values kept
+    their quotes, and the network's name in the config carried them too."""
     g, blocks, conf = wifi_client_config(fppinit, SSID="Main", PSK="mainpass1",
                                          BACKUPSSID="Spare", BACKUPPSK="sparepass1")
     assert [b.get("ssid") for b in blocks] == ['"Main"', '"Spare"'], conf

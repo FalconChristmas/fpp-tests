@@ -145,7 +145,10 @@ def test_a_kiosk_url_cleared_in_the_ui_falls_back_to_the_local_page(fppinit):
     """The kiosk's Chromium policy opens KioskUrl, and http://localhost/
     when the UI has cleared it (it stores a pair of quotes, not nothing).
 
-    Regression: 314f22d12 (#2165). The policy opened a page named \"\"."""
+    Regression: 314f22d12 (#2165). The policy opened a page named \"\".
+    Also 1e0b29306, which made the page KioskUrl (it was always
+    localhost), and 9a320d35a, which made the policy's directories (a
+    fresh image has none, and the policy was never written)."""
     fppinit.settings(Kiosk="1", KioskUrl='""')
     fppinit.root_file("/opt/fpp/SD/FPP_Kiosk.sh", "#!/bin/sh\nexit 0\n")
     assert_clean(fppinit.run("installKiosk"))
@@ -191,7 +194,10 @@ def test_a_routable_interface_does_not_end_tethering_that_is_set_to_enabled(fppi
     unless tethering is set to Enabled (EnableTethering=1).
 
     Regression: 520acccec. A tether the user had asked to keep on was shut
-    down as soon as an Ethernet cable was plugged in."""
+    down as soon as an Ethernet cable was plugged in.
+
+    Regression: 3be665b7a, which added maybeRemoveTether: before it nothing
+    stopped the tether when another interface came up."""
     assert_clean(tether_removal(fppinit, 0))
     assert "systemctl stop hostapd.service" in fppinit.calls(), fppinit.calls()
     assert_clean(tether_removal(fppinit, 1))
