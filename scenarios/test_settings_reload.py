@@ -33,6 +33,31 @@ def test_settings_file_edited_under_fppd_takes_effect(fppd):
                   what="the edited TimeFormat to reach fppd's status")
 
 
+def test_settings_file_replaced_under_fppd_is_still_followed(fppd):
+    """A settings file replaced by a rename (sed -i, an editor that saves to
+    a temp file, a restore) is read back, and so is every edit after it:
+    fppd keeps following the file at that name, not the inode it started on.
+
+    Regression: 3f8a01bc2. The settings watch was on the file alone (modificationsOnly), with no
+    watch on its directory: a rename over it dropped the kernel's watch and
+    nothing re-armed it, so the running fppd saw no settings change at all
+    until it was restarted."""
+    fppd.settings(TimeFormat="Before %Y")
+    fppd.start()
+    assert status(fppd)["timeStr"] == time.strftime("Before %Y")
+    path = os.path.join(fppd.media, "settings")
+    with open(path) as f:
+        text = f.read()
+    with open(path + ".new", "w") as f:
+        f.write(text + 'TimeFormat = "Renamed %Y"\n')
+    os.rename(path + ".new", path)
+    fppd.wait_for(lambda: status(fppd)["timeStr"] == time.strftime("Renamed %Y"), timeout=10,
+                  what="the renamed-in settings file to reach fppd's status")
+    append_settings(fppd, TimeFormat="After %Y")
+    fppd.wait_for(lambda: status(fppd)["timeStr"] == time.strftime("After %Y"), timeout=10,
+                  what="an edit after the rename to reach fppd's status")
+
+
 def test_a_listened_setting_change_is_logged_with_both_values(fppd):
     """A settings-file edit that changes a setting a part of fppd listens for
     (blankBetweenSequences, which the sequence player re-reads) is logged at

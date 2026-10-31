@@ -22,6 +22,9 @@ test.skip(!container, 'needs the player run-web.sh serves (FPP_TESTS_WEB_CONTAIN
 test('Copy Images copies the images directory to the remote', async ({ request }) => {
   // Feature: e7dc19f9f.  The Copy Files settings had no Images choice, so a
   // show's images (overlay and image-effect files) never reached a remote.
+  // Regression: dc56c44b6.  rsync had no connect timeout, so a remote that
+  // drops packets (this one) held the job for the TCP connect timeout per
+  // directory, past this test's 30 s.
   const before = Object.fromEntries(COPY.map((k) => [k, settingInFile(k)]));
   try {
     for (const k of COPY) {
