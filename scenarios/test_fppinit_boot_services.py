@@ -12,7 +12,7 @@ import os
 import pytest
 
 from fppinit import MEDIA, fppinit  # noqa: F401 -- the fixture
-from test_fppinit import assert_clean
+from test_fppinit import APT_CACHE, assert_clean
 from test_fppinit_network_boot import run
 
 SWAPS_HEADER = "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n"
@@ -224,6 +224,9 @@ def test_user_packages_are_retried_next_boot_when_apt_fails(fppinit):
     fppinit.settings(bootDelay="0")
     fppinit.write("config/userpackages.json", ["htop"])
     fppinit.root_file("/fppos_upgraded", "")
+    # htop known to apt whatever the machine's own package lists say (a
+    # container image built without them would have the install skipped).
+    fppinit.root_file("/usr/bin/apt-cache", APT_CACHE)
     apt_get(fppinit, 1)
     assert_clean(run(fppinit, "postNetwork", net=True))
     assert "install" not in fppinit.media_file("tmp/apt-get.log"), "installed after apt-get update failed"

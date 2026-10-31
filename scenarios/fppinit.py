@@ -227,6 +227,10 @@ class FppinitSandbox:
         In a directory, a Link() content is a symlink; the files are
         writable, and faked() reads one back after a run."""
         assert path.startswith(("/proc/", "/sys/")), path
+        if not os.path.exists(path):
+            # Nothing to bind over, and /sys is read-only in the sandbox: a
+            # Docker Desktop VM has no /sys/class/thermal, for one.
+            pytest.skip(f"no {path} on this machine to fake")
         self.fakes[path] = content
 
     def device(self, name):
@@ -324,6 +328,17 @@ class FppinitSandbox:
         home = ""
         if media_home:
             home = f'mkdir -p "$R/home/fpp/media"; mount --bind {shlex.quote(self.media)} "$R/home/fpp/media"'
+            # PHP (www/config.php) takes the tree's www/media_root.txt over
+            # /home/fpp/media. Under run.sh that file is a mount of the run's
+            # own, which the tree's plain --bind above leaves behind: what is
+            # seen here is the empty file Docker made to mount it on, so the
+            # media directory would be "" and the settings "/settings".
+            # Point it at /home/fpp/media, where the media is for this run.
+            root_txt = os.path.join(run_dir, "media_root.txt")
+            with open(root_txt, "w") as f:
+                f.write("/home/fpp/media\n")
+            home += (f'\nif [ -e "$R/opt/fpp/www/media_root.txt" ]; then'
+                     f' mount --bind {shlex.quote(root_txt)} "$R/opt/fpp/www/media_root.txt"; fi')
         script = f"""
 set -e
 R={shlex.quote(root)}

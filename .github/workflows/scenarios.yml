@@ -50,7 +50,37 @@ permissions:
   contents: read
 
 jobs:
+  # The fpp commit every job builds, resolved once. FPP_REF is usually a
+  # branch (master); each job resolving it for itself lets a push mid-run
+  # split the jobs over two commits -- a device job queued behind another
+  # builds the newer one -- and the coverage merge then reads counts for
+  # files its checkout does not have and writes no report.
+  ref:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - name: Resolve the fpp ref
+        id: resolve
+        env:
+          REF: ${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}
+        run: |
+          if printf %s "$REF" | grep -Eq '^[0-9a-f]{40}$'; then
+            sha=$REF
+          else
+            # an annotated tag's commit is the peeled TAG^{}, asked for by name
+            sha=$(git ls-remote https://github.com/FalconChristmas/fpp.git "$REF" "refs/tags/$REF^{}" | awk 'NR==1 {first=$1} index($2, "^{}") {peeled=$1} END {print peeled ? peeled : first}')
+            if [ -z "$sha" ]; then
+              # an abbreviated sha, or anything else ls-remote cannot name
+              git init -q fpp && git -C fpp fetch -q --filter=blob:none https://github.com/FalconChristmas/fpp.git '+refs/heads/*:refs/remotes/origin/*'
+              sha=$(git -C fpp rev-parse --verify -q "$REF^{commit}") || { echo "::error::cannot resolve fpp ref $REF"; exit 1; }
+            fi
+          fi
+          echo "fpp $REF is $sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
   scenarios:
+    needs: ref
     if: github.event.inputs.suites != 'web'
     runs-on: ubuntu-latest
     # TSan runs fppd several times slower than ASan, and the coverage build
@@ -70,7 +100,7 @@ jobs:
         # whole, in one job.
         shard: ${{ fromJSON(github.event.inputs.pytest_args != '' && github.event.inputs.pytest_args != null && '[1]' || '[1,2,3,4]') }}
     env:
-      FPP_REF: ${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}
+      FPP_REF: ${{ needs.ref.outputs.sha }}
       FLAVOR: ${{ matrix.flavor }}
       SHARD: ${{ matrix.shard }}
       SHARDS: ${{ (github.event.inputs.pytest_args != '' && github.event.inputs.pytest_args != null) && '1' || '4' }}
@@ -178,6 +208,7 @@ jobs:
   # request: only the nightly and a run by hand that asks for it. Each
   # runner carries its device's label.
   device:
+    needs: ref
     if: github.event_name == 'schedule' || github.event.inputs.device == 'true'
     strategy:
       fail-fast: false
@@ -201,7 +232,7 @@ jobs:
       contents: read
       actions: read
     env:
-      FPP_REF: ${{ github.event.inputs.fpp_ref || 'master' }}
+      FPP_REF: ${{ needs.ref.outputs.sha }}
     steps:
       # run-local.sh runs as root; anything of root's left in the workspace
       # (a crashed run's files) would stop the checkout from cleaning it.
@@ -348,6 +379,7 @@ jobs:
   # .env). A coverage build, as the device job's, through nocc.
   # Self-hosted, as the device job.
   am335x:
+    needs: ref
     if: github.event_name == 'schedule' || github.event.inputs.device == 'true'
     strategy:
       fail-fast: false
@@ -361,7 +393,7 @@ jobs:
       group: device-am335x-${{ matrix.board }}
       cancel-in-progress: false
     env:
-      FPP_REF: ${{ github.event.inputs.fpp_ref || 'master' }}
+      FPP_REF: ${{ needs.ref.outputs.sha }}
     steps:
       - name: Checkout fpp-tests
         uses: actions/checkout@v6
@@ -511,6 +543,7 @@ jobs:
   # hosted runner, so it runs as four Playwright shards side by side and
   # web-results puts them back together.
   web:
+    needs: ref
     if: github.event.inputs.suites != 'scenarios'
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -521,7 +554,7 @@ jobs:
         # runs whole, in one job.
         shard: ${{ fromJSON(github.event.inputs.playwright_args != '' && github.event.inputs.playwright_args != null && '[1]' || '[1,2,3,4]') }}
     env:
-      FPP_REF: ${{ github.event.inputs.fpp_ref || github.event.client_payload.ref || 'master' }}
+      FPP_REF: ${{ needs.ref.outputs.sha }}
       FLAVOR: ${{ github.event.inputs.flavor != '' && github.event.inputs.flavor != 'coverage' && github.event.inputs.flavor || 'asan' }}
       SHARD: ${{ matrix.shard }}
       SHARDS: ${{ (github.event.inputs.playwright_args != '' && github.event.inputs.playwright_args != null) && '1' || '4' }}
