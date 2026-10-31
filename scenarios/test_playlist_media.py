@@ -382,3 +382,29 @@ def test_a_fragmented_mp4s_length_comes_from_the_duration_cache(fppd, audio):
     assert st.get("current_song") == "Frag.m4a", st
     elapsed, remaining = int(st["seconds_elapsed"]), int(st["seconds_remaining"])
     assert elapsed + remaining in (7, 8), (elapsed, remaining, st.get("time_remaining"))
+
+
+def test_status_names_a_sequence_started_directly_by_its_whole_file_name(fppd):
+    """Starting "Song.fseq" as if it were a playlist reports the playlist as
+    "Song.fseq", extension and all; a real playlist is reported without its
+    .json.
+
+    Regression: 3f445219f. The extension was cut off every name that was not
+    an fseq, so a media file started the same way (and a name with another
+    dot in it) was reported shortened."""
+    song(fppd, 4)
+    fppd.write("playlists/Show.v2.json", playlist("Show.v2", [both("Song.fseq", "Song.wav")]))
+    fppd.start()
+    fppd.command("Start Playlist", "Song.fseq", "false", "false")
+    fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("playlist") == "Song.fseq",
+                  timeout=15, what="the status to name Song.fseq")
+    fppd.command("Stop Now")
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", what="idle")
+    fppd.command("Start Playlist", "Song.wav", "false", "false")
+    fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("playlist") == "Song.wav",
+                  timeout=15, what="the status to name Song.wav")
+    fppd.command("Stop Now")
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", what="idle")
+    fppd.command("Start Playlist", "Show.v2", "false", "false")
+    fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("playlist") == "Show.v2",
+                  timeout=15, what="the status to name Show.v2")
