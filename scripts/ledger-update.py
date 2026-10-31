@@ -1,6 +1,6 @@
 """Bring a coverage ledger (ledger/*.tsv) up to date with fpp's history.
 
-    python3 scripts/ledger-update.py [--fpp ../fpp] [--since 7.0] [--to origin/master]
+    python3 scripts/ledger-update.py [--fpp ../fpp] [--since 5.0] [--to origin/master]
         [--merge OLD.tsv ...] LEDGER.tsv
 
 Every non-merge fpp commit in since..to gets a row. A row someone has filled
@@ -324,7 +324,7 @@ def main():
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--fpp", default=os.path.join(here, "..", "fpp"))
-    ap.add_argument("--since", default="7.0")
+    ap.add_argument("--since", default="5.0")
     ap.add_argument("--to", default="origin/master")
     ap.add_argument("--merge", action="append", default=[])
     ap.add_argument("ledger")
