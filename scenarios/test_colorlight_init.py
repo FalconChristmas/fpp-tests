@@ -159,7 +159,8 @@ def test_link_check_set_on_the_panel(fppd, link_check):
     way; with the panel's "Check Ethernet Link" ticked (linkCheck true) the
     output stops there and nothing goes out, unticked it sends anyway.
 
-    Regression: 5b9201737. The panel's linkCheck was never read: only the
+    Feature: 240ecc941 (the link check). Regression: 5b9201737. The
+    panel's linkCheck was never read: only the
     global ColorlightLinkDownDisable setting counted, and with that setting
     gone (as 5b9201737 left settings.json) the check never stopped an output.
     """
@@ -208,7 +209,9 @@ def test_frequent_output_warnings_carry_their_help_ids(fppd, case, wid, text):
     (8), and one where no receiver card answers (9).
 
     Regression: 139a8fbca. They were raised without an id (0), so the
-    banner had no help to open for them.
+    banner had no help to open for them. Feature: 240ecc941 (the link
+    check) and 71f76237f (the 1000Mbps check); without them neither
+    warning comes up at all.
     """
     preload, env = (), None
     if case == "udp to myself":

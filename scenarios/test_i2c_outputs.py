@@ -184,6 +184,7 @@ def test_a_pcf8574_with_more_channels_than_pins_drives_only_its_8(fppd):
     """A PCF8574 configured for 16 channels drives its 8 pins from the first
     8 (pin 7 is channel 1 in the default pin order).
 
+    Feature: 0b240b0c8 (the PCF8574 output added).
     Regression: 2c55c695d. SendData indexed the 8-entry port array by
     channel: 16 channels read past it on every frame and could write a
     byte past the object. The pins came out right all the same, so it is

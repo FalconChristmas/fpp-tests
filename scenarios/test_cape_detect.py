@@ -8,7 +8,8 @@ retire settings, copy files out of the media directory, or have its archive
 write anywhere but its own scratch directory. These are the rules CapeUtils
 enforces; each scenario shows one holding.
 
-Runs on a device (fppcapedetect isn't built in a container).
+Runs wherever the tree under test has fppcapedetect (a container build
+has it too); the config.txt cases only on a Pi.
 """
 
 import json
@@ -259,7 +260,9 @@ def test_a_corrupt_image_publishes_nothing(fppinit, name):
     nothing it names is written outside the extraction directory. No
     overflow, no endless parse.
 
-    Regression: ec0bcbcf3."""
+    Regression: ec0bcbcf3; and 9387ce0c1, which first caught what the
+    parse throws on a corrupt image -- before it fppcapedetect died with
+    an uncaught exception ("terminate called")."""
     fppinit.write_bytes(EEPROM, _corrupt(name))
     out = detect(fppinit)
     assert "Corrupt EEPROM" in out, out

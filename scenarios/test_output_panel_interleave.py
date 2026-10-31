@@ -90,6 +90,27 @@ def test_40f_is_40_with_its_scan_blocks_swapped():
     assert not diff, f"{len(diff)} pixels differ, first {diff[0]}: {flip[diff[0]]} != {swapped[diff[0]]}"
 
 
+def test_80f_is_80_with_its_scan_blocks_swapped():
+    """"80f", the 80 Pixels Flip Rows interleave of an 80x40 1/10 outdoor
+    panel, is built on that panel and is the "80" interleave with each pair
+    of scan blocks swapped, every pixel in its own place.
+
+    Feature: d3ca83d9c (the interleave added). Before it the matrix did
+    not know the name; today an unknown name on a panel that folds its
+    rows is refused, so the output does not start.
+    """
+    w, h, scan = 80, 40, 10
+    plain = handler_map("80", w, h, scan)
+    flip = handler_map("80f", w, h, scan)
+    assert plain is not None, "80 refused on an 80x40 1/10 panel"
+    assert flip is not None, "80f refused on an 80x40 1/10 panel"
+    assert len(set(flip.values())) == len(flip) == w * h // 2, \
+        f"{len(flip)} pixels, {len(flip) - len(set(flip.values()))} share a place"
+    swapped = {(x, y): plain[(x, (y // scan ^ 1) * scan + y % scan)] for (x, y) in plain}
+    diff = [k for k in flip if flip[k] != swapped[k]]
+    assert not diff, f"{len(diff)} pixels differ, first {diff[0]}: {flip[diff[0]]} != {swapped[diff[0]]}"
+
+
 @pytest.mark.parametrize("type_, w, h, scan", [
     ("8", 32, 16, 0), ("8f", 32, 16, 0),
 ], ids=["scan 0", "scan 0 with flipped rows"])

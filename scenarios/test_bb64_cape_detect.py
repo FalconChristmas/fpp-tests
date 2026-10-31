@@ -8,8 +8,8 @@ The sandbox's /boot/firmware is a scratch directory and its /sys/bus/i2c
 a fake one where a scenario needs an EEPROM chip, so no real overlay,
 pad or EEPROM is touched. The PB2 cases run with run-local.sh on a
 PocketBeagle2 (fppcapedetect is built for the board it runs on, and the
-overlay handling is PLATFORM_BB64's); the rest on any device. Skipped
-elsewhere.
+overlay handling is PLATFORM_BB64's), skipped elsewhere; the rest
+wherever the tree under test has fppcapedetect, a container included.
 """
 
 import json
@@ -240,3 +240,35 @@ def test_only_the_used_part_of_an_eeprom_chip_is_copied(fppinit):
     with open(os.path.join(fppinit.media, "tmp/eeprom.bin"), "rb") as f:
         got = f.read()
     assert got == used, f"copied {len(got)} bytes of the 32768 byte chip, the cape uses {len(used)}\n{out}"
+
+
+def test_a_chip_is_read_from_a_copy_and_let_go(fppinit):
+    """A cape EEPROM found as a chip on i2c is copied to media/tmp/eeprom.bin
+    and detected from the copy: where the chip was is recorded in
+    tmp/eeprom_location.txt and in cape-info.json's eepromLocation, and the
+    chip's device is deleted again, so nothing is left that could write
+    over the EEPROM. Off a Beagle too: the chip is on whichever bus the
+    platform looks at first (0, 1 on a Pi, 2 on a Beagle), so each has one.
+
+    Regression: 68d0086cc. The chip stayed instantiated and was read (and
+    reported) in place: the eeprom sysfs file stayed writable for the
+    whole uptime."""
+    img = ee.image(ee.cape_info())
+    data = img + b"\xff" * (32768 - len(img))  # an erased 24c256 past the image
+    devs = {}
+    for b in (0, 1, 2):
+        devs.update({f"i2c-{b}/new_device": "", f"i2c-{b}/delete_device": "", f"{b}-0050/eeprom": data})
+    fppinit.fake_path("/sys/bus/i2c/devices", devs)
+    out = detect_with_chip(fppinit)
+    assert fppinit.media_exists("tmp/eeprom_location.txt"), f"where the chip was is not recorded\n{out}"
+    where = fppinit.media_file("tmp/eeprom_location.txt").strip()
+    assert where.startswith("/sys/bus/i2c/devices/") and where.endswith("-0050/eeprom"), where
+    bus = where.split("/")[-2].split("-")[0]
+    info = cape_info(fppinit)
+    assert info["id"] == "TestCape", out
+    assert info.get("eepromLocation") == where, f"{info.get('eepromLocation')} != {where}"
+    with open(os.path.join(fppinit.media, "tmp/eeprom.bin"), "rb") as f:
+        got = f.read()
+    assert got[:len(img)] == img, f"tmp/eeprom.bin is not the chip's ({len(got)} bytes)"
+    assert fppinit.faked("/sys/bus/i2c/devices", f"i2c-{bus}/delete_device").startswith("0x50"), \
+        f"the chip on bus {bus} was left instantiated\n{out}"

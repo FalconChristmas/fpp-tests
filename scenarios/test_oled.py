@@ -206,6 +206,30 @@ def test_fppoled_clear_removes_the_cape_detection_marker_and_exits(fppinit):
     assert not fppinit.media_exists("tmp/cape_detect_done"), "the marker was left"
 
 
+def test_fppinit_start_puts_back_a_marker_removed_while_it_ran(fppinit):
+    """`fppinit start` writes media/tmp/cape_detect_done, the marker
+    fppoled waits for before it configures the cape's buttons, once more
+    when it has finished: fppoled.service starts alongside fppinit.service
+    and its ExecStartPre removes the marker, so one written only at cape
+    detection can be gone again by the time fppoled looks. A boot
+    UserCallbackHook.sh, which fppinit runs after cape detection, removes
+    it here as fppoled's ExecStartPre would. Needs only fppinit, so it runs
+    in a container too.
+
+    Regression: 1ae59d607. The marker was written once, at cape detection;
+    on a slow Pi 3 fppoled's start removed it after that and the display
+    waited out its timeout for a marker that never came back."""
+    from test_fppinit import assert_clean
+    hook = "scripts/UserCallbackHook.sh"
+    fppinit.write(hook, '#!/bin/sh\n[ "$1" = boot ] && rm -f "$FPP_MEDIA_DIR/tmp/cape_detect_done"\n'
+                        'echo "$1" >> "$0.ran"\n')
+    os.chmod(os.path.join(fppinit.media, hook), 0o755)
+    assert_clean(fppinit.run("start"))
+    assert "boot" in (fppinit.media_file(hook + ".ran") if fppinit.media_exists(hook + ".ran") else ""), \
+        "the boot hook never ran, so nothing removed the marker"
+    assert fppinit.media_exists("tmp/cape_detect_done"), "fppinit start left no marker"
+
+
 def test_cape_detection_keeps_the_cached_logo_in_step(fppinit):
     """A detect run whose EEPROM carries no image removes the /var/tmp copy
     of the logo; one that has an image refreshes it; a -ro run leaves it.

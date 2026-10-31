@@ -10,6 +10,8 @@ import sys
 import tempfile
 import time
 
+import pytest
+
 from ddp import DdpReceiver
 from fake_devices import DEV_IF, NETNS, _ip, device_network
 from show import ddp_output
@@ -152,21 +154,38 @@ def test_an_unreachable_twinkly_deleted_by_a_reload_leaves_no_timer(fppd):
         fppd.get("/fppd/status")
 
 
-# Lights whose login "succeeds" with a page that is not JSON (a captive
-# portal, a half-booted controller): the output must carry on.
-BAD_LOGIN = """\
-import http.server, sys
-ADDR = sys.argv[1]
+# Lights that answer the first PATH call (login or verify) with BODY, a
+# reply no Twinkly sends (a captive portal's page, a half-booted
+# controller's JSON), and every call after it as a Twinkly does. Every POST
+# is logged to LOG as a JSON line (path, body).
+BAD_REPLY = """\
+import http.server, json, sys, threading
+ADDR, LOG, PATH, BODY = sys.argv[1:5]
+lock = threading.Lock()
+bad = {"left": 1}
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
-    def do_POST(self):
-        self.rfile.read(int(self.headers.get("Content-Length") or 0))
-        body = b"<html><body>please wait</body></html>"
+    def reply(self, body):
+        body = body.encode()
         self.send_response(200)
-        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers.get("Content-Length") or 0)).decode(errors="replace")
+        with lock:
+            with open(LOG, "a") as f:
+                f.write(json.dumps({"path": self.path, "body": body}) + "\\n")
+            first = self.path == "/xled/v1/" + PATH and bad["left"] > 0
+            if first:
+                bad["left"] -= 1
+        if first:
+            self.reply(BODY)
+        elif self.path == "/xled/v1/login":
+            self.reply(json.dumps({"authentication_token": "AAECAwQFBgc=", "code": 1000}))
+        else:
+            self.reply(json.dumps({"code": 1000}))
     do_GET = do_POST
     def log_message(self, *a):
         pass
@@ -177,22 +196,42 @@ srv.serve_forever()
 """
 
 
-def test_a_login_answered_with_something_that_is_not_json_does_not_take_fppd_down(fppd):
-    """Lights that answer the login with an HTML page leave the output
-    waiting to log in again, say so in the log, and fppd goes on running
-    and answering while they do.
+@pytest.mark.parametrize("path, body", [
+    ("login", "<html><body>please wait</body></html>"),
+    ("login", '["please wait"]'),
+    ("login", '{"authentication_token": {"pending": true}, "code": 1000}'),
+    ("verify", '["please wait"]'),
+], ids=["login html", "login array", "login token object", "verify array"])
+def test_a_reply_no_twinkly_sends_is_retried(fppd, path, body):
+    """Lights whose first login or verify reply is not a Twinkly's -- an
+    HTML page, a JSON array, a token that is not a string -- leave fppd
+    running and answering, and the output logs in again and gets the
+    lights into realtime mode once they answer properly.
 
-    Regression: 458214811, 7638be7a7 and e8dd769bc. The reply was parsed
-    without a guard, and the JSON exception it threw ended fppd on the
-    first light that was not quite a Twinkly."""
+    Regression: 7638be7a7 (the login reply) and 458214811 (the verify
+    reply). jsoncpp throws when a non-object is asked for a member or an
+    object for a string; unguarded, that ended fppd on the first light that
+    was not quite a Twinkly. CurlManager now contains a throw from any
+    reply handler (c8ccf32a0), so without the guards fppd stays up but the
+    login chain dies half way: it never clears its in-flight mark, and the
+    output never logs in again."""
     setup(fppd, 300)
-    with device_network([ADDR]) as run:
-        srv = run(sys.executable, "-I", "-c", BAD_LOGIN, ADDR)
-        assert srv.stdout.readline().strip() == "ready"
-        fppd.start()
-        show_color(fppd, 300)
-        fppd.wait_for(lambda: "login failed" in fppd.log() or "Twinkly" in fppd.log(), timeout=20,
-                      what="the Twinkly output to try the login")
-        time.sleep(3)
-        fppd.get("/fppd/status")
-        fppd.check_alive()
+    log = tempfile.mktemp(prefix="twinkly-bad-", suffix=".jsonl")
+    try:
+        with device_network([ADDR]) as run:
+            srv = run(sys.executable, "-I", "-c", BAD_REPLY, ADDR, log, path, body)
+            assert srv.stdout.readline().strip() == "ready"
+            fppd.start()
+            show_color(fppd, 300)
+            fppd.wait_for(lambda: any(p["path"] == "/xled/v1/" + path for p in posts(log)),
+                          timeout=20, what=f"the Twinkly output to call {path}")
+            fppd.get("/fppd/status")
+            fppd.check_alive()
+            fppd.wait_for(lambda: any(p["path"] == "/xled/v1/led/mode" and '"rt"' in p["body"]
+                                      for p in posts(log)),
+                          timeout=30, interval=0.5,
+                          what=f"realtime mode after the bad {path} reply")
+            fppd.check_alive()
+    finally:
+        if os.path.exists(log):
+            os.unlink(log)

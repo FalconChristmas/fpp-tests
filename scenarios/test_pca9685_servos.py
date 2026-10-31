@@ -51,12 +51,38 @@ def test_servo_position_moves_the_port_to_its_percentage(fppd):
                       what=f"port 1 at {percent}% ({want}; it is at {servo_value(bus, PCA, 0)})")
 
 
+def test_a_high_frequency_port_gets_the_pulse_its_microseconds_give(fppd):
+    """A co-other PCA9685 at 300 Hz with a 500-2500 us servo range: Servo
+    Position 100% and 0% give the OFF counts 2500 us and 500 us are at the
+    frequency the prescaler really runs at (305 Hz, 3125 and 625 steps).
+
+    Regression: 8eafa61b8. The microsecond range was turned into steps in
+    an int as us * frequency * 4095: 2500 * 300 * 4095 overflows it, so
+    the top of the range came out negative; and the nominal frequency
+    (not the prescaled one) with 4095 steps put every pulse a step or two
+    short.
+    """
+    bus = Bus(fppd, [PCA])
+    o = pca9685(ports=1)
+    o["frequency"] = 300
+    o["ports"][0].update({"min": 500, "center": 1500, "max": 2500})
+    fppd.write("config/co-other.json", other_output(o))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    bus.start(fppd)
+    for percent, us in ((100, 2500), (0, 500)):
+        want = rnd(ticks(us, 300))
+        fppd.command("Servo Position", "1", str(percent))
+        fppd.wait_for(lambda: servo_value(bus, PCA, 0) == want, timeout=5,
+                      what=f"port 1 at {percent}% ({want}; it is at {servo_value(bus, PCA, 0)})")
+
+
 def test_a_2x_absolute_servo_port_takes_two_steps_a_microsecond(fppd):
     """A Servos-tab (co-pwm.json) port in the "2x Absolute" data type, 8
     bit, reads its channel as two steps a microsecond past the port's
     minimum: channel value 200 is the minimum pulse plus 100 us. A plain
     "Absolute" port beside it reads one step as 2 us (40 is min + 80 us).
 
+    Feature: 4ebd41683 (the Servos/PWM tab's co-pwm.json output).
     Regression: b1a2c81b4. readValue() meant to turn 2x Absolute into
     Absolute once it had halved the value, but wrote `dt == ABSOLUTE`
     (a comparison) for `dt = ABSOLUTE`: the port matched no data type, so
