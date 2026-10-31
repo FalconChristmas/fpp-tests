@@ -33,6 +33,10 @@ def test_alphapix_boards_are_listed_whatever_their_page_names(fppd):
     whose version could not be read was not an AlphaPix at all, and the
     session stub matched nothing -- the last two boards vanished from
     discovery.
+
+    Also 13456ff06: the patterns were searched with no match results to
+    fill, and the model was then read from those empty results (SIGSEGV in
+    sub_match::str on the first AlphaPix page).
     """
     devices = {
         "10.88.0.2": alphapix(f"<h1>AlphaPix 16 Controller</h1><p>{VERSION}</p>"),

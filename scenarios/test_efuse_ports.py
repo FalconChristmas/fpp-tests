@@ -136,8 +136,10 @@ def test_a_port_is_still_monitored_after_the_strings_are_saved_again(fppd):
     the port in /fppd/ports, and its eFuse still raises its warning.
 
     Regression: 1d74ab059 (the port monitors vanished when a new string
-    config was saved) and ce735a5ab (the reload reset the port monitor
-    instead of deleting it under the output monitor)."""
+    config was saved: the port reset in place kept its emptied name).
+    Coverage only for ce735a5ab (the reload resets the port monitor instead
+    of deleting it under the output monitor): with the delete put back it
+    still passes, since the race it closed is not reached here."""
     powered_port(fppd, eFuseRetryCount="0")
     loads = fppd.log().count("Calling Init() on PixelCountSim output")
     time.sleep(1.1)  # a save in a later second, as a person makes it
@@ -150,10 +152,50 @@ def test_a_port_is_still_monitored_after_the_strings_are_saved_again(fppd):
     fppd.wait_for(lambda: efuse_warnings(fppd), timeout=10, what="the eFuse warning after the save")
 
 
+def test_a_string_reload_sends_a_multisync_ping(fppd):
+    """Saving co-pixelStrings.json again (the outputs reload and fppd works
+    out its channel ranges afresh) sends a MultiSync ping straight away,
+    so other systems need not wait for the next hourly ping to learn what
+    changed.
+
+    Regression: ce735a5ab (the ping after the output ranges change). The
+    other half of it, resetting a port's monitor in place on a reload
+    instead of deleting it under its GPIO callbacks, is a race this does
+    not reach."""
+    import contextlib
+    from capture import UdpCapture
+    from multisync import PORT
+    from test_multisync_systems import interface
+
+    def pings(caps):
+        return sum(1 for c in caps for _, _, _, p in c.snapshot() if p[4:5] == b"\x04")
+
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(interface("10.77.0.1"))
+        throw_plugin.install(fppd, source="pixelcountsim.cpp", name="PixelCountSim")
+        fppd.write("config/co-pixelStrings.json", config(fppd))
+        fppd.start()
+        # The ping goes out from the dummy interface; where the kernel puts
+        # each copy (out of it, or back over loopback) is its business, so
+        # both are watched.
+        caps = [stack.enter_context(UdpCapture(PORT, iface=i)) for i in ("fpptest0", "lo")]
+        loads = fppd.log().count("Calling Init() on PixelCountSim output")
+        time.sleep(1.5)  # a save in a later second, as a person makes it
+        before = pings(caps)
+        fppd.write("config/co-pixelStrings.json", config(fppd, pixels=60))
+        fppd.wait_for(lambda: fppd.log().count("Calling Init() on PixelCountSim output") > loads, timeout=20,
+                      what="the outputs to reload")
+        fppd.wait_for(lambda: pings(caps) > before, timeout=5, interval=0.1,
+                      what=f"a ping after the reload ({before} before it)")
+
+
 def test_the_retry_count_applies_without_a_restart(fppd):
     """eFuseRetryCount changed while fppd runs (from 0 to 5, as the settings
     page does with no restart) takes effect on the next trip: the port is
     retried instead of raising its warning at once.
+
+    Also b07d2a609, which added the retries (a trip raised its warning at
+    once, whatever the setting).
 
     Regression: de7f7c9f3. The count was read once at start, so the page's
     new value did nothing until fppd restarted (and the setting asked for
@@ -193,9 +235,10 @@ def test_a_port_moved_to_another_enable_pin_drives_the_new_one(fppd):
                   what=f"the moved enable pin {moved} to go high (old pin high: {high(ENABLE)})")
 
 
-def start_with_pins(fppd, sim_pin):
+def start_with_pins(fppd, sim_pin, **settings):
     throw_plugin.install(fppd, source="pixelcountsim.cpp", name="PixelCountSim")
     fppd.write("config/co-pixelStrings.json", config(fppd, sim_pin=sim_pin))
+    fppd.settings(**settings)
     for pin in (ENABLE, EFUSE):
         if high(pin):
             os.unlink(pin_file(pin))
@@ -206,15 +249,23 @@ def test_a_port_whose_enable_pin_does_not_exist_is_refused_and_fppd_goes_on(fppd
     """A port configured with an enable pin the machine does not have raises
     the could-not-find-pin warning for it and is left unmonitored for
     power, and Outputs On and Off, the ports list and the status all carry
-    on without a crash.
+    on without a crash -- also when its eFuse trips with auto-retry on,
+    which has no enable pin to pulse.
 
     Regression: c9399e47c and 972377af9. The missing pin was used as if it
-    were there (a null pin dereferenced on the first Outputs Off), and the
-    pin lists were popped for a pin that was never pushed."""
-    start_with_pins(fppd, {"enablePin": "NOSUCHPIN", "eFusePin": EFUSE})
+    were there (an eFuse retry pulsed the null pin), and the pin lists were
+    popped for a pin that was never pushed. Both are now also guarded
+    elsewhere: e8bce1a7b drops a retry for a port with no enable pin, and
+    71da49119 pushes a pin only once it is found, leaving nothing to pop."""
+    start_with_pins(fppd, {"enablePin": "NOSUCHPIN", "eFusePin": EFUSE},
+                    eFuseRetryCount="3", eFuseRetryInterval="100")
     fppd.wait_for(lambda: any("Could not find pin NOSUCHPIN" in w for w in fppd.get("/fppd/warnings")),
                   timeout=10, what="the could-not-find-pin warning")
     fppd.command("Outputs On")
+    trip()
+    time.sleep(1.5)
+    fppd.check_alive()
+    os.unlink(pin_file(EFUSE))
     fppd.command("Outputs Off")
     fppd.get("/fppd/ports")
     fppd.get("/fppd/status")

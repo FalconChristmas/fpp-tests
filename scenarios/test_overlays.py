@@ -398,7 +398,10 @@ def test_custom_model_nodes_past_its_channels_are_disabled(fppd):
 
     Regression: 4ef8481e0. channelMap took the node numbers as given while
     the model's channel data is exactly its channel count, so drawing wrote
-    megabytes past it."""
+    megabytes past it.
+
+    Also 1746fddbb: custom layout node numbers are 1-based, and node n was
+    mapped to node n+1's channels, so every node drew one place along."""
     custom = {"Name": "C", "Type": "Channel", "StartChannel": 1, "ChannelCount": 9,
               "ChannelCountPerNode": 3, "Orientation": "custom", "StartCorner": "TL",
               "StringCount": 1, "StrandsPerString": 1, "data": "1,2;3,2800000"}
@@ -453,6 +456,41 @@ def test_unknown_effect_and_font_lookups_add_nothing(fppd):
     assert "No Such Effect" not in fppd.get("/overlays/effects")
     assert len(fppd.get("/overlays/effects?full=true")) == len(effects)
     assert "No-Such-Font" not in fppd.get("/overlays/fonts")
+
+
+def font_files():
+    """The names (file name less its extension) of the font files fppd
+    searches for: TrueType and Type 1 under the system font folders."""
+    names = set()
+    for root in ("/usr/share/fonts/truetype", "/usr/share/fonts/X11/Type1", "/usr/local/share/fonts"):
+        for _, _, files in os.walk(root):
+            names |= {f[:-4] for f in files if f.endswith((".ttf", ".pfb"))}
+    return names
+
+
+def test_a_text_effect_naming_a_font_that_is_not_installed_is_refused(fppd):
+    """A Text effect whose Font is not one installed here is refused, with a
+    warning naming the font, and the model still fills afterwards. Every
+    font the font list offers is one with a font file behind it.
+
+    Regression: 4713c35a2. An unknown name was handed on to GraphicsMagick
+    as if it were a font file, and the font list also carried every name
+    GraphicsMagick's type list knew whether or not its file was installed,
+    so the picker offered fonts that could only fail like that."""
+    setup(fppd, [matrix()])
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        try:
+            effect(fppd, "M", "Text", Font="No-Such-Font", Text="hi", Duration="1")
+            refused = False
+        except urllib.error.HTTPError:
+            refused = True
+        warned = [w for w in fppd.get("/fppd/warnings") if "Could not find font 'No-Such-Font'" in w]
+        assert refused and warned, f"refused: {refused}, warnings: {fppd.get('/fppd/warnings')}"
+        unbacked = sorted(set(fppd.get("/overlays/fonts")) - font_files())
+        assert not unbacked, f"{len(unbacked)} listed fonts have no font file: {unbacked[:8]}"
+        fill(fppd, "M", [0, 0, 66])
+        wait_output(fppd, rx, lambda f: f[2] == 66, "the model to fill afterwards")
 
 
 def test_fonts_in_subdirectories_are_listed(fppd):
@@ -669,6 +707,33 @@ def test_submodel_of_a_reloaded_auto_model(fppd):
         time.sleep(0.5)
         fill(fppd, "Corner", [0, 0, 12])
         wait_output(fppd, rx, lambda f: f[2] == 12, "the submodel to fill again")
+        keeps_sending(rx)
+
+
+def test_a_submodel_left_enabled_across_an_output_reload(fppd):
+    """A submodel of an output's own model, left enabled and drawing while
+    the outputs are saved (re-creating its parent), stops drawing through
+    the old parent, and filled again draws into the new one.
+
+    Regression: 3914f4b77. Recreating the output freed the parent model
+    with the submodel still enabled in it, and the channel output thread
+    went on drawing the submodel through its pointer to the freed parent."""
+    fppd.write("config/channeloutputs.json", colorlight_panel())
+    fppd.write("config/co-universes.json", ddp_output(PANEL_CHANNELS))
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": [
+        submodel("Corner", "Panel", 0, 0, 4, 2)]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with DdpReceiver(PANEL_CHANNELS) as rx:
+        fppd.start()
+        fppd.wait_for(lambda: "Panel" in [m.get("Name") for m in fppd.get("/models") or []],
+                      what="the panel's own model")
+        fill(fppd, "Corner", [0, 0, 11])
+        wait_output(fppd, rx, lambda f: f[2] == 11, "the submodel to fill")
+        for n in range(3):
+            resave_outputs(fppd)
+            time.sleep(0.5)  # frames through the old parent, if it is still used
+            fill(fppd, "Corner", [0, 0, 20 + n])
+            wait_output(fppd, rx, lambda f: f[2] == 20 + n, "the submodel to fill the new parent")
         keeps_sending(rx)
 
 

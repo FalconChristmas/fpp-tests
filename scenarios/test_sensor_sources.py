@@ -98,6 +98,10 @@ def test_bad_multiplexer_sources_are_dropped(fppd):
     Regression: a31b12730. An unknown pin name was looked up as the null
     pin and configured through its null pointer at startup (SIGSEGV), and
     channels or a mux count of 0 divided by zero on every read.
+
+    Also 9d6ca9e42: a multiplexer whose source could not be made was kept
+    and used, and Init() called through its null source (SIGSEGV at
+    startup).
     """
     env, _ = fake_iio(fppd, channels=4)
     mux = {"type": "mux", "source": "iio", "channels": 2, "muxCount": 2, "muxPins": []}
