@@ -314,3 +314,20 @@ def test_a_blank_or_star_channel_range_tests_every_channel(fppd, channels):
         assert frame[:3] == b"\xff\x80\x01"
         assert frame[-3:] == b"\xff\x80\x01"
         fppd.command("Test Stop")
+
+
+def test_the_channel_range_argument_lists_the_output_ranges_as_choices(fppd):
+    """The description of a test pattern's Channel Range argument offers the
+    outputs' ranges in its "contents" (what the Test Start command editor
+    shows as choices), alongside the models list.
+
+    Regression: 6a8fd40a1 (#1316). The ranges were published as the
+    argument's "default", so the editor started on one and offered no
+    choices."""
+    setup(fppd)
+    fppd.start()
+    got = fppd.get("/fppd/testing/tests/RGB%20Chase", timeout=10)
+    arg = [a for a in got["args"] if a["name"] == "ChannelRange"][0]
+    assert arg["contentListUrl"] == "api/models?simple=true", arg
+    assert arg.get("contents") and "1-" in arg["contents"][0], arg
+    assert "default" not in arg, arg
