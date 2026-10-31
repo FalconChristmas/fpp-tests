@@ -16,6 +16,7 @@
 #include <string>
 #include <type_traits>
 #include <unistd.h>
+#include <list>
 #include <vector>
 
 #include <json/json.h>
@@ -25,6 +26,7 @@
 #include "channeloutput/PixelString.h"
 #include "channeloutput/stringtesters/PixelStringTester.h"
 #include "log.h"
+#include "overlays/PixelOverlay.h"
 
 namespace {
 
@@ -59,9 +61,20 @@ public:
                 return 0;
             }
         }
+        // as the string drivers do, so the overlay models they auto-create
+        // can be checked
+        std::vector<PixelString*> all;
+        for (auto& p : ports) {
+            all.push_back(p.ps);
+        }
+        PixelString::AutoCreateOverlayModels(all, autoModels);
         return ChannelOutput::Init(config);
     }
     virtual int Close() override {
+        for (auto& n : autoModels) {
+            PixelOverlayManager::INSTANCE.removeAutoOverlayModel(n);
+        }
+        autoModels.clear();
         closePorts();
         return ChannelOutput::Close();
     }
@@ -121,6 +134,7 @@ private:
     }
 
     std::vector<DumpPort> ports;
+    std::list<std::string> autoModels;
     int testCycle = -1;
     int testType_ = 0;
     float testPercent = 0;

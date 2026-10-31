@@ -260,3 +260,26 @@ def test_each_controller_gets_its_own_pacing_rate(fppd):
     got = pacing_by_destination(log)
     want = {"10.66.0.2": 11250000, "10.66.0.3": 3750000, "10.66.0.4": None}
     assert got == want, f"pacing rate by controller: {got}, want {want}"
+
+
+def test_a_blocking_output_gives_its_sockets_a_send_timeout(fppd):
+    """An output set to the blocking styles (threaded 0 or 1) gives its
+    sockets a 1 ms send timeout, so a controller that stops accepting data
+    cannot hold the send forever; the non-blocking style sets none.
+
+    Regression: 02d593592. A blocking send to a full socket buffer waited
+    for as long as the controller took to drain it."""
+    log = os.path.join(fppd.media, "tmp", "sndtimeo.log")
+    cfg = {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 510,
+        "threaded": 1,
+        "universes": [{"active": 1, "description": "c", "id": 1, "startChannel": 1,
+                       "channelCount": 510, "type": 1, "address": "127.0.0.1", "priority": 0,
+                       "monitor": 0, "deDuplicate": 0}]}]}
+    fppd.write("config/co-universes.json", cfg)
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start(preload=[shims.build("pacinglog.c")], extra_env={"PACING_LOG": log})
+    fppd.request("PUT", "/overlays/range/1-510", {"Value": 42})
+    fppd.wait_for(lambda: os.path.exists(log) and "sndtimeo" in open(log).read(), timeout=10,
+                  what="the send timeout to be set")
+    assert any(l.split()[:1] == ["sndtimeo"] and l.split()[2] == "1000" for l in open(log)), open(log).read()

@@ -6,6 +6,7 @@
  *   "dest <fd> <a.b.c.d>"  the first sendmmsg()/sendmsg() on fd after a
  *                          rate was set or the fd was first seen, and the
  *                          address its first message goes to
+ *   "sndtimeo <fd> <usec>" setsockopt(SO_SNDTIMEO) on fd
  *   "close <fd>"           close() of an fd seen above
  * fds are reused, so a reader pairs each "dest" with the "rate" lines on that
  * fd since its last "close".
@@ -20,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #ifndef SO_MAX_PACING_RATE
@@ -76,6 +78,10 @@ int setsockopt(int fd, int level, int name, const void* val, socklen_t len) {
         if (fd >= 0 && fd < MAXFD) {
             seen[fd] = 1;
         }
+    }
+    if (level == SOL_SOCKET && name == SO_SNDTIMEO && val && len >= sizeof(struct timeval)) {
+        const struct timeval* tv = (const struct timeval*)val;
+        logline("sndtimeo %d %ld\n", fd, (long)(tv->tv_sec * 1000000L + tv->tv_usec));
     }
     return r;
 }

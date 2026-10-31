@@ -86,3 +86,69 @@ def test_a_tm1814_port_leads_with_its_constant_current_words(fppd):
                   what=f"the channels on the wire (last {wire(fppd)!r})")
     data = wire(fppd)
     assert data == bytes([0xC0] * 4 + [0x3F] * 4 + [0xBF] * 12), data.hex(" ")
+
+
+def test_the_port_number_test_cycles_red_green_blue(fppd):
+    """The port number test lights the pixels beyond the port's number in
+    turn red, green and blue, in that order, and the port's own pixels
+    white.
+
+    Regression: 9e17aab9f. The cycle ran green, red, blue, against the
+    convention of every other test."""
+    start(fppd, port_config(fppd, 4))
+    fppd.command("Test Start", "1000", "Output Specific", "--ALL--", "1")
+    seen = []
+
+    def colours():
+        data = wire(fppd)
+        if data and len(data) >= 12 and data[0:3] == bytes((255, 255, 255)) and any(data[3:6]):
+            px = data[3:6]
+            if not seen or seen[-1] != px:
+                seen.append(px)
+        return len(seen) >= 4 or None
+    fppd.wait_for(colours, timeout=20, interval=0.1, what="the colours to cycle")
+    fppd.command("Test Stop")
+    assert seen[:3] == [bytes((255, 0, 0)), bytes((0, 255, 0)), bytes((0, 0, 255))], [s.hex() for s in seen]
+
+
+def models(fppd):
+    return {m["Name"]: m for m in fppd.get("/overlays/models")}
+
+
+def test_an_auto_created_model_counts_the_pixels_a_group_count_shows(fppd):
+    """A string of 30 pixels with a group count of 3 gets an overlay model
+    of 30 channels worth of pixels (10 pixels, shown 3 times each), not 90.
+
+    Regression: 0a2e7bb8c. The model's size ignored the group count."""
+    throw_plugin.install(fppd, source="pixelstringdump.cpp", name="PixelStringDump")
+    p = port_config(fppd, 30)
+    p["virtualStrings"][0]["groupCount"] = 3
+    p["virtualStrings"][0]["description"] = "Grouped"
+    fppd.write(fppd.strings_config, outputs(p))
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": []})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    m = fppd.wait_for(lambda: models(fppd).get("Grouped"), what="the auto-created model")
+    assert m["ChannelCount"] == 30, m
+
+
+def test_unnamed_virtual_strings_get_lettered_model_names(fppd):
+    """A port of three unnamed virtual strings gets overlay models named
+    String-1A-1, String-1A-2, String-1A-3.
+
+    Regression: d19d3c7d4. The names were String-1-1.. with no letter, so
+    the strings of different receivers on a port could not be told apart."""
+    throw_plugin.install(fppd, source="pixelstringdump.cpp", name="PixelStringDump")
+    p = port_config(fppd, 10)
+    vs = p["virtualStrings"][0]
+    vs["description"] = ""
+    p["virtualStrings"] = [dict(vs, startChannel=i * 30) for i in range(3)]
+    fppd.write(fppd.strings_config, {"channelOutputs": [{
+        "type": "PixelStringDump", "enabled": 1, "startChannel": 1, "channelCount": 90,
+        "outputCount": 1, "outputs": [p]}]})
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": []})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: len(models(fppd)) >= 3, what="the auto-created models")
+    names = sorted(n for n in models(fppd) if n.startswith("String-1"))
+    assert names == ["String-1A-1", "String-1A-2", "String-1A-3"], names

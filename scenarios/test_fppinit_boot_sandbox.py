@@ -174,3 +174,67 @@ def test_tether_checks_do_nothing_while_setup_network_is_running(fppinit):
     os.unlink(os.path.join(fppinit.media, "tmp", "networkSetup"))
     run(fppinit, "checkForTether", "wlan0", net=True)
     assert "interface=wlan0" in (fppinit.written(HOSTAPD_CONF) or ""), fppinit.calls()
+
+
+def sandbox_sh(sb, script):
+    """Run a shell script in the sandbox with the media directory at
+    /home/fpp/media, as upgrade steps see it; its stdout."""
+    if not sb.media_exists("settings"):
+        sb.write("settings", "")
+    r = sb._run(["sh", "-c", script], timeout=120, media_home=True)
+    return r.stdout
+
+
+def test_upgrade_87_leaves_one_safe_directory_entry_for_the_fpp_tree(fppinit):
+    """Upgrade 87 replaces however many safe.directory entries for /opt/fpp
+    a user's git config has gathered with one.
+
+    Regression: 4e68f73aa. Each update added another copy of the entry, and
+    --add alone never removed the old ones."""
+    out = sandbox_sh(fppinit, "export HOME=/tmp/h; mkdir -p $HOME; "
+                              "for i in 1 2 3; do git config --global --add safe.directory /opt/fpp; done; "
+                              "git config --global --add safe.directory /somewhere/else; "
+                              "/opt/fpp/upgrade/87/upgrade.sh >/dev/null 2>&1; "
+                              "git config --global --get-all safe.directory")
+    assert out.split() == ["/somewhere/else", "/opt/fpp"], out
+
+
+def test_upgrade_81_keeps_the_45_newest_backups(fppinit):
+    """Upgrade 81 purges config/backups down to the 45 most recent files.
+
+    Regression: d13dcc15c. Thousands of backups piled up and the backup
+    script's own cleanup ran out of memory deleting them."""
+    out = sandbox_sh(fppinit, "mkdir -p /home/fpp/media/config/backups && cd /home/fpp/media/config/backups && "
+                              "for i in $(seq 100 149); do touch -d \"2020-01-01 00:00:$((i-100))\" b$i.json; done; "
+                              "/opt/fpp/upgrade/81/upgrade.sh >/dev/null 2>&1; ls | sort | tr '\\n' ' '")
+    left = out.split()
+    assert len(left) == 45, left
+    assert "b149.json" in left and "b104.json" not in left and "b105.json" in left, left
+
+
+def unpartitioned_after_start(sb, sfdisk_output):
+    """The UnpartitionedSpace setting `fppinit start` leaves when sfdisk -F
+    ends with the given text."""
+    sb.root_file("/dev/mmcblk0", "")
+    sb.root_file("/etc/fpp/desktop", None)
+    sb.stub_output("sfdisk", "-F", sfdisk_output)
+    # fppinit runs /usr/sbin/sfdisk, where the image has none to stub
+    sb.root_file("/usr/sbin/sfdisk", "#!/bin/sh\ncat /fppinit-state/sfdisk.-F.out\n")
+    start(sb)
+    for line in sb.media_file("settings").splitlines():
+        if line.startswith("UnpartitionedSpace"):
+            return line.split("=", 1)[1].strip().strip('"')
+    return None
+
+
+def test_unpartitioned_space_is_reported_in_whole_gigabytes(fppinit):
+    """Boot records the free space after the last partition in the
+    UnpartitionedSpace setting: the gigabytes sfdisk -F ends its listing
+    with, and 0 for anything smaller or no space at all.
+
+    Regression: 0d6a88404. The check moved from a shell script to fppinit
+    and the setting the UI reads (to offer expanding the SD card) went
+    stale."""
+    assert unpartitioned_after_start(fppinit, "Unpartitioned space /dev/mmcblk0: 12 GiB, 12884901888 bytes, 25165824 sectors\n"
+                                              "Start      End  Sectors Size\n3481600 25165823 21684224  12G\n") == "12"
+    assert unpartitioned_after_start(fppinit, "Start End Sectors Size\n1 2 3  500M\n") == "0"
