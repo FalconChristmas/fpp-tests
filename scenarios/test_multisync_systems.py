@@ -459,3 +459,44 @@ def test_twinkly_replies_are_probed_a_few_at_a_time(fppd):
                       what="every light to be probed")
     most = max([int(line.split()[1]) for line in lines if line.startswith("open ")], default=0)
     assert most <= 4, f"{most} probes of the lights open at once"
+
+
+@contextlib.contextmanager
+def second_address(address):
+    """An extra address on loopback, to send pings from a source fppd doesn't
+    take for loopback. Needs NET_ADMIN."""
+    r = subprocess.run(["ip", "addr", "add", address + "/32", "dev", "lo"], capture_output=True, text=True)
+    if r.returncode:
+        pytest.skip(f"cannot add an address: {r.stderr.strip()}")
+    try:
+        yield
+    finally:
+        subprocess.run(["ip", "addr", "del", address + "/32", "dev", "lo"], capture_output=True)
+
+
+def test_a_ping_with_no_ip_field_is_listed_under_its_source_address(fppd):
+    """A controller that leaves the IP field of its (non-discover) ping at
+    0.0.0.0 is still listed, under the address the packet came from.
+
+    Regression: b9e699e4c. Such a ping was taken for a discovery probe and
+    the controller never appeared."""
+    fppd.start()
+    with second_address("10.99.1.7"):
+        send(ping_packet("0.0.0.0", "no-ip-peer", version=3), src="10.99.1.7")
+        s = wait_listed(fppd, "10.99.1.7")
+    assert s["hostname"] == "no-ip-peer", s
+
+
+def test_multisync_works_with_no_co_universes_file(fppd):
+    """With no config/co-universes.json at all, MultiSync starts, lists a
+    pinging peer and logs no error about the missing file.
+
+    Regression: f05a1c711 (the file's loads are guarded; on its parent they
+    were not -- this build's loader tolerates a missing file too, so the
+    scenario holds the behaviour rather than failing without the guard)."""
+    assert not os.path.exists(os.path.join(fppd.media, "config", "co-universes.json"))
+    fppd.start()
+    send(ping_packet("10.20.30.60", "peer-nofile", version=3))
+    wait_listed(fppd, "10.20.30.60")
+    log = fppd.log() if callable(getattr(fppd, "log", None)) else ""
+    assert "co-universes" not in log.lower() or "error" not in log.lower(), log[-1500:]

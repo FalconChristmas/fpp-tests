@@ -555,3 +555,17 @@ def test_twinkly_discovery_replies_are_bounded(fppd):
     assert early, "no reply got a probe: the discovery replies never reached fppd"
     assert len(early) <= 128, f"{len(early)} of {len(first)} replying hosts were probed"
     assert not late, f"{len(late)} hosts that replied 8 s after the broadcast were probed"
+
+
+def test_a_falcon_reporting_type_130_is_an_f16v5(fppd):
+    """A Falcon whose status.xml says <p>130</p> is listed as an F16v5, not
+    by its port count as a v4.
+
+    Regression: 16c8e8818. HTTP discovery had no v5 type, so a v5 with 16
+    ports was listed as an F16v4."""
+    v5 = dict(FALCON)
+    v5["/status.xml"] = page("<status><p>130</p><np>16</np><fv>2.0 4</fv><n>fake-v5</n></status>",
+                             ctype="text/xml")
+    with fake_devices({"10.88.0.3": v5}):
+        got = discover(fppd, {"10.88.0.3": v5})
+    assert "v5" in got["10.88.0.3"]["type"].lower(), got["10.88.0.3"]

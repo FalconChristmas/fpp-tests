@@ -618,3 +618,18 @@ def test_a_bridged_frame_is_latched_after_its_rows_have_left(fppd):
     gaps.sort()
     assert gaps[len(gaps) // 10] >= 400, \
         f"display packets followed the last row by {gaps[:10]}... us (median {gaps[len(gaps) // 2]} us)"
+
+
+def test_a_panel_on_output_20_is_sent_to_the_receiver(fppd):
+    """The matrix takes up to 24 outputs, so a panel on output 20 is not
+    refused and its pixels reach the receiver.
+
+    Regression: ca36ccd7c. A leftover limit of 16 refused any panel on
+    outputs 16-23 of a 24 output Colorlight receiver."""
+    w, h = 32, 16
+    frame = unique_frame(w, h)
+    with captured() as cap:
+        play(fppd, frame, panels_output([panel(20, 0, 0, 0)], channels=w * h * 3))
+        fppd.wait_for(lambda: any(any(r[2::3].count(0x5A) for r in rows.values())
+                                  for _, rows in cap.frames()),
+                      timeout=15, interval=0.2, what="the frame's pixels on the wire")

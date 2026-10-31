@@ -371,6 +371,26 @@ def test_effect_with_too_few_arguments_is_refused(fppd):
         wait_output(fppd, rx, lambda f: f[2] == 66, "the model to fill afterwards")
 
 
+def test_a_wled_effect_with_more_arguments_than_it_has_is_run_on_the_ones_it_has(fppd):
+    """A WLED effect started with extra trailing arguments uses the ones it
+    has slots for and ignores the rest, and the model still works.
+
+    Regression: ec480f0cb. The argument loop ran to the end of the
+    caller's list and indexed the effect's argument map past its end."""
+    setup(fppd, [matrix()])
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        desc = fppd.get("/overlays/effects/" + urllib.parse.quote("WLED - Colorloop"))
+        args = [a.get("default", "") for a in desc["args"]] + ["junk"] * 40
+        fppd.command("Overlay Model Effect", "M", "Enabled", "WLED - Colorloop", *args)
+        time.sleep(1)
+        fppd.check_alive()
+        stop_effects(fppd, "M")
+        effect_done(fppd, "M")
+        fill(fppd, "M", [0, 0, 77])
+        wait_output(fppd, rx, lambda f: f[2] == 77, "the model to fill afterwards")
+
+
 def test_custom_model_nodes_past_its_channels_are_disabled(fppd):
     """A custom model whose layout names a node beyond the model's channel
     count draws its real nodes and leaves that one out, saying so in the

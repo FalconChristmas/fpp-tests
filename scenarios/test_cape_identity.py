@@ -226,3 +226,33 @@ def test_a_container_keeps_its_identity_in_the_media_directory(fppinit):
     # Each run starts from a fresh overlay: /etc/fpp/fpp_uuid is gone again.
     assert get_uuid(fppinit, container=True) == first
     assert get_uuid(fppinit, "--source", container=True) == "container"
+
+
+# --- upgradeCapeFirmware on a signed EEPROM --------------------------------
+
+def test_a_signed_eeprom_keeps_its_signature_when_the_backup_copy_fails(fppinit):
+    """Upgrading a signed cape with an unsigned image of the same cape carries
+    the signature section across even when the backup copy of the old
+    EEPROM cannot be made, and says so.
+
+    Regression: a6bbb5842 (and 3397da27b). The signature was read back
+    from the backup file, so a failed copy() quietly left the cape
+    unlicensed.
+    """
+    sig = (b"KEY123"[:6].decode(), b"S" * 64)
+    old = ee.image(ee.cape_info(), signature=sig)
+    new = ee.image(ee.cape_info(), extras={"cs": "0123456789abcdef"})
+    fppinit.write_bytes("config/fpp-tests-eeprom.bin", old + b"\xff" * (32768 - len(old)))
+    fppinit.write("tmp/eeprom_location.txt", "/home/fpp/media/config/fpp-tests-eeprom.bin")
+    fppinit.write_bytes("config/fpp-tests-image.bin", new)
+    # a file where the backups directory should be: the backup copy fails
+    shutil.rmtree(os.path.join(fppinit.media, "upload"), ignore_errors=True)
+    fppinit.write("upload", "not a directory")
+    r = fppinit._run(["/opt/fpp/scripts/upgradeCapeFirmware", "/home/fpp/media/config/fpp-tests-image.bin"],
+                     timeout=180, media_home=True)
+    out = r.stdout + r.stderr
+    with open(os.path.join(fppinit.media, "config", "fpp-tests-eeprom.bin"), "rb") as f:
+        result = f.read()
+    assert "Found Cape" in out, out[-3000:]
+    assert b"S" * 64 in result and b"KEY123" in result, f"the signature section was lost:\n{out[-2500:]}"
+    assert "Preserved signature section from previous EEPROM" in out, out[-2500:]
