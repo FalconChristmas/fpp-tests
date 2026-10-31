@@ -2,6 +2,7 @@
 topics published with mosquitto_pub."""
 
 import contextlib
+import json
 import shutil
 import subprocess
 import time
@@ -505,3 +506,33 @@ def test_a_refusing_broker_is_logged_once_and_retried_with_backoff(fppd):
                       what="fppd to reconnect once the broker accepts")
     finally:
         broker.close()
+
+
+def test_port_status_is_published_on_its_topic(fppd):
+    """With MQTTPortStatusFrequency set (and MQTTStatusFrequency not), the
+    port monitor's JSON arrives on <prefix>/port_status.
+
+    A guard, not a regression: it passes on every tree checked, so there is
+    no fix commit for verify-fix.sh to compare against. It was written for a
+    report that port_status "never publishes" because the debug log has no
+    "Publishing message ... on topic '.../port_status'" line. There is none
+    to find: the payload is pretty-printed, multi-line JSON, so the log
+    line is split ("Publishing message '[" ... "' on topic '.../port_status'")
+    and a one-line match never hits. Subscribe, don't grep the log.
+
+    The port is PixelCountSim's, with an enable pin and an eFuse pin as a
+    cape's port would have, so the monitor has a "Port 1" to report.
+    """
+    if not shutil.which("mosquitto_sub"):
+        pytest.skip("mosquitto_sub is not installed")
+    from test_efuse_ports import powered_port
+    with broker():
+        powered_port(fppd, MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST,
+                     MQTTPortStatusFrequency="1", LogLevel_Control="debug")
+        topic = f"falcon/player/{HOST}/port_status"
+        sub = subprocess.run(["mosquitto_sub", "-h", "127.0.0.1", "-p", PORT, "-C", "1",
+                              "-W", "20", "-t", topic],
+                             capture_output=True, text=True, timeout=30)
+    assert sub.stdout.strip(), f"nothing on {topic}\n{fppd.log()[-3000:]}"
+    ports = json.loads(sub.stdout)
+    assert any(p.get("name") == "Port 1" for p in ports), sub.stdout
