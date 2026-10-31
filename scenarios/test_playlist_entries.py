@@ -934,3 +934,16 @@ def test_playing_a_sequence_that_does_not_exist_raises_a_warning(fppd):
     fppd.wait_for(lambda: any("Nope.fseq" in str(w) and "does not exist" in str(w)
                               for w in fppd.get("/fppd/warnings", timeout=5)),
                   timeout=15, what="the missing sequence warning")
+
+
+def test_starting_an_empty_playlist_raises_a_warning(fppd):
+    """A playlist with nothing in it raises a warning that says so.
+
+    Regression: 48f60f2a1 (the UI otherwise showed nothing at all)."""
+    fppd.write("playlists/Empty.json", {"name": "Empty", "repeat": 0, "loopCount": 0,
+                                        "leadIn": [], "mainPlaylist": [], "leadOut": []})
+    fppd.start()
+    fppd.command("Start Playlist", "Empty", "false", "false")
+    fppd.wait_for(lambda: any("Empty" in str(w) and "empty" in str(w)
+                              for w in fppd.get("/fppd/warnings", timeout=5)),
+                  timeout=15, what="the empty playlist warning")
