@@ -29,3 +29,25 @@ def test_playing_sequence_reports_milliseconds_elapsed(fppd):
     assert entry.get("millisecondsElapsed", 0) >= 1000, entry
     assert entry["millisecondsElapsed"] < 5000, entry
     fppd.command("Stop Now")
+
+
+def test_mqtt_start_topic_payload_is_the_start_position(fppd):
+    """Publishing a number to set/playlist/<name>/start starts the playlist
+    at that item, and the playlist stays what the file says it is (no repeat).
+
+    Regression: 59fbbef0d. The payload went into the repeat argument, so
+    "2" was read as repeat-on and the playlist began at its first item."""
+    from test_mqtt_control import HOST, PORT, broker, publish
+    from test_playlist_entries import pause
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    fppd.write("playlists/P.json", playlist("P", main=[pause(30), pause(31), pause(32)]))
+    with broker():
+        fppd.start()
+
+        def started():
+            publish("set/playlist/P/start", "2")
+            return status(fppd).get("status_name") == "playing"
+        fppd.wait_for(started, timeout=30, interval=1, what="fppd to start the playlist from MQTT")
+        cur = status(fppd).get("current_playlist", {})
+    # the lead-in's variable reset is entry 1; payload 2 is the second main item
+    assert cur.get("index") == "3", cur
