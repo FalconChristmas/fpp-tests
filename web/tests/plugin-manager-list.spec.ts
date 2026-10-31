@@ -312,3 +312,22 @@ test('a search updates the category counts to what it matches', async ({ page, r
   await expect(page.locator('#pluginCategoryPills .nav-link', { hasText: 'Video' }).locator('xpath=..')).toHaveClass(/d-none/);
   await expect(page.locator('#topCountAvailable')).toHaveText('1');
 });
+
+test('a plugin with a compatible version beside an untested one installs without "anyway"', async ({ page, request, baseURL }) => {
+  // Regression: 9ace67e94.  A plugin listing a version made for an older
+  // FPP with no upper bound (untested here) and one made for this FPP was
+  // judged by the untested one, and offered "Install anyway".
+  const NAME = 'fpp-tests-two-versions';
+  const m = parseInt(await major(request), 10);
+  await setUiLevel(request, '1');
+  await routePluginsPage(page, baseURL!, [
+    listed(NAME, [
+      { minFPPVersion: `${m - 1}.0`, maxFPPVersion: '0', branch: 'old', sha: '' },
+      { minFPPVersion: `${m}.0`, maxFPPVersion: '0', branch: 'master', sha: '' },
+    ]),
+  ]);
+  await openPage(page, [NAME]);
+  const install = card(page, NAME).locator('[data-plugin-action="install"]');
+  await expect(install).toBeVisible();
+  await expect(install).not.toContainText('anyway');
+});

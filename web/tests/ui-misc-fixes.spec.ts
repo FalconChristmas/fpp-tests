@@ -79,3 +79,9 @@ test('the playlist editor marks unsaved changes on the Save button', async ({ pa
     await request.delete(`/api/playlist/${NAME}`);
   }
 });
+
+// 9a8ea1169: the Wi-Fi regulatory domain is among the network settings.
+test('the network configuration page offers the Wi-Fi regulatory domain', async ({ page }) => {
+  await page.goto('/networkconfig.php');
+  await expect(page.locator('#WifiRegulatoryDomain')).toBeAttached();
+});

@@ -116,3 +116,23 @@ test('a Pi\'s tabs offer dtc, vclog and pinctrl, and RPI Info leaves no file beh
   const left = inPlayer('sh', '-c', 'find / -xdev -name raspinfo.txt 2>/dev/null || true').trim();
   expect(left, 'raspinfo.txt left on the filesystem').toBe('');
 });
+
+test('the Wi-Fi scan command lists the access points and leaves the scanner\'s noise out', async ({ page }) => {
+  // Features: 8accc17b4 and 8a8103d25.  The Networking tab runs wifi_scan.sh
+  // for an access point scan, with its error output dropped (2>/dev/null).
+  // The script is stood in for, for the length of the test.
+  const script = '/opt/fpp/scripts/wifi_scan.sh';
+  const original = inPlayer('cat', script);
+  putFile(script, '#!/bin/bash\necho "scan trouble: fpp-tests noise" >&2\necho "SSID: fpp-tests-ap-1"\necho "SSID: fpp-tests-ap-2"\n');
+  inPlayer('chmod', '755', script);
+  try {
+    await openTab(page, 'Networking');
+    await expect(hotlink(page, 'Networking', 'AvailableAPs')).toBeVisible();
+    const out = await output(page, 'Networking', 'AvailableAPs', 'fpp-tests-ap-2');
+    expect(out).toContain('SSID: fpp-tests-ap-1');
+    expect(out).not.toContain('scan trouble');
+  } finally {
+    putFile(script, original);
+    inPlayer('chmod', '755', script);
+  }
+});
