@@ -16,7 +16,10 @@ def test_one_file_on_three_slots_is_stopped_by_stop_all_media(fppd, audio):
     each start of the same file replaced the one before it in the list of
     running media: Stop All Media (and the deferred cleanup) no longer knew
     the earlier ones, which kept playing where no command could reach them
-    (and the cleanup of one could drop or free another's entry)."""
+    (and the cleanup of one could drop or free another's entry).
+
+    Also guards dca097622, which registered Stop Media and Stop All Media
+    again (they had been commented out: "No command found")."""
     write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 20)
     fppd.start()
     for slot in (1, 2, 3):

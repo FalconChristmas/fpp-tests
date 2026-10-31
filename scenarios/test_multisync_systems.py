@@ -491,12 +491,13 @@ def test_multisync_works_with_no_co_universes_file(fppd):
     """With no config/co-universes.json at all, MultiSync starts, lists a
     pinging peer and logs no error about the missing file.
 
-    Regression: f05a1c711 (the file's loads are guarded; on its parent they
-    were not -- this build's loader tolerates a missing file too, so the
-    scenario holds the behaviour rather than failing without the guard)."""
+    Regression: f05a1c711. The HTTP discovery at startup loaded the file
+    without checking it was there, and the loader logged "JSON File
+    .../co-universes.json does not exist" as an error on every player with
+    no channel outputs configured."""
     assert not os.path.exists(os.path.join(fppd.media, "config", "co-universes.json"))
     fppd.start()
     send(ping_packet("10.20.30.60", "peer-nofile", version=3))
     wait_listed(fppd, "10.20.30.60")
-    log = fppd.log() if callable(getattr(fppd, "log", None)) else ""
-    assert "co-universes" not in log.lower() or "error" not in log.lower(), log[-1500:]
+    missing = [l for l in fppd.log().splitlines() if "co-universes.json does not exist" in l]
+    assert not missing, missing

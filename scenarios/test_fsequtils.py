@@ -335,7 +335,9 @@ def test_dump_prints_each_frame_of_the_range(src):
     """-d -r prints a titled hex dump of the range for every frame.
 
     Regression: c0400c58d. The dump never freed its 8 MB channel buffer,
-    which LeakSanitizer reported on every dump."""
+    which LeakSanitizer reported on every dump.
+
+    Feature: 5339462bf (-d)."""
     path, frames = src
     rc, out, err = fsequtils("-d", "-r", "1-16", path)
     assert rc == 0, out + err

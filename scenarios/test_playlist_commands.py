@@ -434,3 +434,27 @@ def test_stop_during_an_insert_start_stops_the_inserted_playlist(fppd):
     wait_idle(fppd, timeout=20)
     time.sleep(1)
     assert "7" not in (trace(fppd) or ""), f"Q played on after Stop Now: trace {trace(fppd)!r}"
+
+
+
+def test_insert_one_item_status_shows_only_that_item(fppd):
+    """While an insert of one item (start and end item the same) plays, the
+    status lists the inserted playlist as that one entry, playing as item 1
+    of 1 -- the status page shows the item being played.
+
+    Regression: 70a203335 (#1748). The whole inserted playlist was loaded
+    and played from the start item: the status said item 2 of 3, as if the
+    rest of the playlist were still to come."""
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(4), step(2)]))
+    fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                    "mainPlaylist": [step(7), pause(3), step(9)], "leadOut": []})
+    fppd.start()
+    start(fppd, "P")
+    wait_in_pause(fppd, "1")
+    fppd.command("Insert Playlist Immediate", "Q", "2", "2", "false")
+    fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("playlist") == "Q",
+                  timeout=5, interval=0.05, what="the inserted playlist to play")
+    cur = status(fppd)["current_playlist"]
+    assert (cur["type"], cur["count"], cur["index"]) == ("pause", "1", "1"), cur
+    wait_idle(fppd)
+    assert trace(fppd) == "12", trace(fppd)

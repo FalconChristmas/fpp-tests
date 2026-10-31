@@ -196,7 +196,13 @@ def entries(fppd):
     return fppd.get("/fppd/schedule")["schedule"]["entries"]
 
 
-YEARS = [YEAR + n for n in range(5)]
+# The next five years, and the next year of each shape 557a9d4fd broke: a
+# month that starts on its holiday's weekday (November 1 a Thursday for
+# Thanksgiving, September 1 a Monday for Labor Day). Picked from the date,
+# not written in, so the five-year window moving on never drops them.
+FIRST_DAY_YEARS = [next(y for y in range(YEAR, YEAR + 15) if datetime.date(y, month, 1).weekday() == wday)
+                   for month, wday in ((11, 3), (9, 0))]
+YEARS = sorted({YEAR + n for n in range(5)} | set(FIRST_DAY_YEARS))
 
 # Not a check of fppd: in at least one of the years, each case has to run on
 # a different day than its holiday does (New Year's Day + 366 is January 1
@@ -216,7 +222,12 @@ def test_holiday_with_an_offset_runs_on_the_shifted_day(fppd, year):
     land a day apart from other years. A literal YYYY-MM-DD date ignores
     its offset, and the offsets are echoed back in the schedule's entries.
 
-    Feature: 3db2b02d6."""
+    Feature: 3db2b02d6.
+
+    Regression: 557a9d4fd. A first-/second-... weekday holiday in a month
+    that starts on that weekday was put a week late (Thanksgiving in a year
+    whose November 1 is a Thursday, Labor Day in one whose September 1 is a
+    Monday; FIRST_DAY_YEARS keeps one of each among the years)."""
     show(fppd)
     fppd.settings(Locale="USA", ScheduleDistance="365")
     schedule = [on_day(name, offset) for name, _, offset in CASES]

@@ -20,6 +20,18 @@ def banner(fppd):
         ({"excessive"} if any("A Log Level is set to Excessive" in x for x in w) else set())
 
 
+def banner_ids(fppd):
+    """The warning ids the log level warnings are up with, from
+    /fppd/warnings_full: {"debug": id, "excessive": id} for those up."""
+    ids = {}
+    for w in fppd.get("/fppd/warnings_full"):
+        if "A Log Level is set to Debug" in w.get("message", ""):
+            ids["debug"] = w.get("id")
+        if "A Log Level is set to Excessive" in w.get("message", ""):
+            ids["excessive"] = w.get("id")
+    return ids
+
+
 def levels(fppd):
     """Every logger's level, from GET /fppd/log."""
     return fppd.get("/fppd/log").get("log", {})
@@ -32,14 +44,22 @@ def test_api_log_level_raises_and_lowers_the_banner(fppd):
 
     Regression: 21c0bfefc. Only the command socket's LogLevel and startup
     recomputed the banner, so a level set through the REST API left it
-    showing the old level (or none) until fppd restarted."""
+    showing the old level (or none) until fppd restarted.
+
+    The two warnings carry their ids, 3 (Debug) and 2 (Excessive), which is
+    what gives them a help link in the UI's warning list.
+
+    Regression: 6edeecb95. They were raised with no id (0), so the banner
+    listed them without the help link."""
     fppd.start()
     assert banner(fppd) == set(), warnings(fppd)
     fppd.post("/fppd/log/level/debug")
     fppd.wait_for(lambda: banner(fppd) == {"debug"}, timeout=5, what="the Debug log warning")
+    assert banner_ids(fppd) == {"debug": 3}, fppd.get("/fppd/warnings_full")
     fppd.post("/fppd/log/level/excess")
     fppd.wait_for(lambda: banner(fppd) == {"excessive"}, timeout=5,
                   what="the Excessive log warning in place of the Debug one")
+    assert banner_ids(fppd) == {"excessive": 2}, fppd.get("/fppd/warnings_full")
     fppd.post("/fppd/log/level/info")
     fppd.wait_for(lambda: banner(fppd) == set(), timeout=5, what="the log level warnings to go")
 

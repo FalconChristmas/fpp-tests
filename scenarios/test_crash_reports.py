@@ -213,6 +213,10 @@ def test_crash_on_the_warnings_thread_exits_through_the_handler(fppd):
     aborted, and the SIGABRT ran the whole handler again (its re-entry guard
     had already been reset), which joined itself again. fppd ended by
     abort, or by the handler's two-minute watchdog, never through _exit(-1).
+
+    Also guards e3a7cf772: the warnings thread is named "FPP-Warnings" (in
+    /proc, and so in crash reports); without the name there is no such
+    thread to find.
     """
     fppd.settings(ShareCrashData="0")
     fppd.start()

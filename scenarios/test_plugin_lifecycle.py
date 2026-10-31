@@ -89,7 +89,11 @@ def test_a_plugins_commands_are_withdrawn_when_it_unloads(fppd):
     Regression: 48d30e226. Nothing tracked the commands a C++ plugin added,
     so after an unload the command stayed listed and runnable, dispatching
     into a destroyed plugin in a library that was no longer mapped (here
-    the listing alone crashed fppd)."""
+    the listing alone crashed fppd).
+
+    Also guards 7b882c6b8, CommandManager::removeCommand(name), which the
+    unload uses to withdraw them: with it doing nothing, the listing after
+    the unload crashes fppd the same way."""
     plugin_build.build_and_install(fppd, "lifecycleplugin.cpp", "fpp-leaky", defines=["LC_LEAK_COMMANDS"],
                                    extra=["-fno-gnu-unique"])
     fppd.start()

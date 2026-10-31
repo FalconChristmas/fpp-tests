@@ -163,7 +163,10 @@ def play_solid_sequence(fppd, value):
 def test_a_playing_sequence_wins_by_default(fppd):
     """By default (bridgeDataPriority "Warn If Sequence Running") bridged
     input does not reach the output while a sequence plays, and fppd raises
-    a warning that it is arriving."""
+    a warning that it is arriving.
+
+    Regression: 2843f288e. The default was "Prioritize Bridge": bridged data
+    overwrote the sequence, with no warning."""
     setup(fppd)
     seq = play_solid_sequence(fppd, 0x03)
     data = bytes([0xE0]) * E131_SIZE
@@ -368,7 +371,10 @@ def test_dmx_serial_input_lands_on_its_channels(fppd):
     """DMX arriving on a serial input (ci-dmx.json) is bridged to its start
     address: a frame is a 0 start code and up to 512 slots, told apart by
     the break before it (here a gap of over 3 ms between writes). Only the
-    configured channel count is used, and the stats count the frames."""
+    configured channel count is used, and the stats count the frames.
+
+    Feature: 7f472b1a8 (serial DMX input); with its ci-dmx.json loader taken
+    out the slots never reach the channels."""
     import os
     import threading
     from serial import PtyReader

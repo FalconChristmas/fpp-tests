@@ -227,7 +227,13 @@ def test_switch_between_player_and_remote_mode(fppd):
     Regression: 1eded48e4 (run with --flavor tsan). The mode switch writes
     the settings file, and fppd's reload of it (SettingsConfig::setSettingLocked)
     wrote settings.fppMode under settingsMutex while RunChannelOutputThread
-    read it through getFPPmode() with no lock, a data race on every switch."""
+    read it through getFPPmode() with no lock, a data race on every switch.
+
+    Feature: 9248b19db (the two commands).
+
+    Regression: 609c3ef29. The commands ran /opt/fpp/scripts/common, so
+    from a tree anywhere else the mode was never saved and fppd came back
+    in player mode."""
     fppd.start()
     pid = fppd.proc.pid
     assert mode(fppd) == "player"

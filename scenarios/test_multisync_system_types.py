@@ -8,6 +8,8 @@ model comes from a device tree served by fakesys.c.
 
 import os
 
+import pytest
+
 import shims
 from multisync import ping_packet
 from test_multisync_systems import interface, remotes, send, wait_listed
@@ -72,22 +74,28 @@ def test_a_later_0_0_range_does_not_wipe_the_advertised_one(fppd):
                   == "512-1023", timeout=5, interval=0.1, what="a real new range to replace the old one")
 
 
-def test_a_compute_module_5_is_listed_as_a_pi_5(fppd):
-    """On a Raspberry Pi Compute Module 5 (device-tree model "Raspberry Pi
-    Compute Module 5 Rev 1.0") the local system is a Raspberry Pi 5 -- the
-    type it then announces in its pings -- not FPP on unknown hardware.
+@pytest.mark.parametrize("model", ["Raspberry Pi 5 Model B Rev 1.0", "Raspberry Pi Compute Module 5 Rev 1.0"],
+                         ids=["pi5", "cm5"])
+def test_a_compute_module_5_is_listed_as_a_pi_5(fppd, model):
+    """On a Raspberry Pi 5, and on a Compute Module 5 (device-tree model
+    "Raspberry Pi Compute Module 5 Rev 1.0"), the local system is a
+    Raspberry Pi 5 -- the type it then announces in its pings -- not FPP on
+    unknown hardware.
 
-    Regression: 76225b7be. Only "Raspberry Pi 5" models were matched.
+    Regression: 7d4021a0b (pi5). There was no Pi 5 type: a Pi 5 was listed
+    as unknown hardware.
+
+    Regression: 76225b7be (cm5). Only "Raspberry Pi 5" models were matched.
     """
     tree = os.path.join(fppd.media, "fakesys", "devicetree")
-    fppd.write("fakesys/devicetree/model", "Raspberry Pi Compute Module 5 Rev 1.0\0")
+    fppd.write("fakesys/devicetree/model", model + "\0")
     with interface("10.77.0.1"):
         fppd.start(preload=[shims.build("fakesys.c")],
                    extra_env={"FAKESYS": f"/sys/firmware/devicetree/base={tree}"})
         s = fppd.wait_for(lambda: next((s for s in fppd.get("/fppd/multiSyncSystems")["systems"]
                                         if s.get("local") and s["address"] == "10.77.0.1"), None),
                           timeout=10, what="the local system to be listed")
-    assert s["model"] == "Raspberry Pi Compute Module 5 Rev 1.0", s
+    assert s["model"] == model, s
     assert s["type"] == "Raspberry Pi 5", s
 
 
