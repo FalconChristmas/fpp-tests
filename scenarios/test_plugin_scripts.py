@@ -638,3 +638,28 @@ def test_shutdown_while_mqtts_thread_finishes_a_playlist_callback_inside_the_wai
     assert "stop callback done" in after, after
     assert rc == 0, f"fppd exited {rc} when stopped mid-callback\n{fppd.tail()}"
     assert not fppd.sanitizer_reports(), fppd.sanitizer_reports()[0][:4000]
+
+
+def test_only_a_native_plugin_that_fails_to_load_raises_a_warning(fppd):
+    """A C++ plugin whose library cannot be loaded is reported as "Could not
+    load plugin <name>" in fppd's warnings; a script-only plugin, which has
+    no library, never is.
+
+    Feature: e9007dfc7. Every plugin without a library was warned about as
+    though its missing .so were a failure.
+    """
+    bad = plugin(fppd, name="fpp-badnative", types="c++")
+    with open(os.path.join(bad, "libfpp-badnative.so"), "wb") as f:
+        f.write(b"this is not a shared library\n")
+    # one with a script and nothing else, and one with no script at all (a
+    # plugin that is only web pages): neither has a library
+    plugin(fppd, name="fpp-scriptonly", types="playlist,lifecycle")
+    os.makedirs(os.path.join(fppd.media, "plugins", "fpp-pageonly"), exist_ok=True)
+    with open(os.path.join(fppd.media, "plugins", "fpp-pageonly", "pluginInfo.json"), "w") as f:
+        f.write("{}")
+    fppd.start()
+    fppd.wait_for(lambda: any("Could not load plugin fpp-badnative" in w
+                              for w in fppd.get("/fppd/status").get("warnings", [])),
+                  timeout=15, what="the native plugin's load warning")
+    warnings = fppd.get("/fppd/status").get("warnings", [])
+    assert not [w for w in warnings if "fpp-scriptonly" in w or "fpp-pageonly" in w], warnings

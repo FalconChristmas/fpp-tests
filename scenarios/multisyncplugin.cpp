@@ -46,6 +46,45 @@ public:
 };
 static ChurnSyncPlugin* churnPlugins[8];
 
+// Logs what MultiSync hands a plugin when it receives control packets (a
+// remote), one line each, to $MS_RECV_LOG: test_multisync_plugins.py.
+class RecvLogPlugin : public MultiSyncPlugin {
+public:
+    void log(const std::string& line) {
+        const char* path = std::getenv("MS_RECV_LOG");
+        if (!path) {
+            return;
+        }
+        FILE* f = fopen(path, "a");
+        if (f) {
+            fprintf(f, "%s\n", line.c_str());
+            fclose(f);
+        }
+    }
+    void ReceivedSeqOpenPacket(const std::string& n) override { log("seqopen " + n); }
+    void ReceivedSeqSyncStartPacket(const std::string& n) override { log("seqstart " + n); }
+    void ReceivedSeqSyncStopPacket(const std::string& n) override { log("seqstop " + n); }
+    void ReceivedSeqSyncPacket(const std::string& n, int frames, float seconds) override {
+        log("seqsync " + n + " " + std::to_string(frames));
+    }
+    void ReceivedMediaOpenPacket(const std::string& n) override { log("mediaopen " + n); }
+    void ReceivedMediaSyncStartPacket(const std::string& n) override { log("mediastart " + n); }
+    void ReceivedMediaSyncStopPacket(const std::string& n) override { log("mediastop " + n); }
+    void ReceivedMediaSyncPacket(const std::string& n, float seconds) override { log("mediasync " + n); }
+    void ReceivedBlankingDataPacket(void) override { log("blanking"); }
+    void ReceivedPluginData(const std::string& name, const uint8_t* data, int len) override {
+        log("plugindata " + name + " " + std::to_string(len) + " " + std::string((const char*)data, len > 0 ? 1 : 0));
+    }
+    void ReceivedFPPCommandPacket(const std::string& cmd, const std::vector<std::string>& args) override {
+        std::string l = "command " + cmd;
+        for (auto& a : args) {
+            l += " " + a;
+        }
+        log(l);
+    }
+};
+static RecvLogPlugin* recvPlugin = nullptr;
+
 class MultiSyncTestPlugin : public FPPPlugins::Plugin {
 public:
     MultiSyncTestPlugin() :
@@ -88,11 +127,14 @@ public:
                 p = new ChurnSyncPlugin();
             }
         }
+        recvPlugin = new RecvLogPlugin();
+        MultiSync::INSTANCE.addMultiSyncPlugin(recvPlugin);
         CommandManager::INSTANCE.addCommand(&data);
         CommandManager::INSTANCE.addCommand(&churn);
         CommandManager::INSTANCE.addCommand(&done);
     }
     virtual ~MultiSyncTestPlugin() {
+        MultiSync::INSTANCE.removeMultiSyncPlugin(recvPlugin);
         if (churner.joinable()) {
             churner.join();
         }

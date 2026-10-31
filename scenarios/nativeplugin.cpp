@@ -26,6 +26,8 @@
 //                          the pin as an output in <mode> (gpio, gpio_od),
 //                          sets it if a value is given and answers
 //                          "acquired <0|1> value <getValue()>"
+//   NATIVE_PLAYLIST_INSERTED  playlistInserted() appends "<playlist> <position>
+//                          <endPosition> <immediate>" to $NATIVE_PLAYLIST_LOG
 //   NATIVE_I2C             "Native Test I2C Raw <bus> <addr> <reg> <count>"
 //                          writes <count> bytes (0x5A) to <reg> with
 //                          I2CUtils::writeRawI2CBlockData() and answers what
@@ -90,7 +92,11 @@ public:
     std::function<std::string(const std::vector<std::string>&)> fn;
 };
 
-class NativeTestPlugin : public FPPPlugins::Plugin {
+class NativeTestPlugin : public FPPPlugins::Plugin
+#if defined(NATIVE_PLAYLIST_INSERTED)
+    , public FPPPlugins::PlaylistEventPlugin
+#endif
+{
 public:
     NativeTestPlugin() :
         FPPPlugins::Plugin(PLUGIN_NAME) {
@@ -241,6 +247,17 @@ public:
         }
     }
 
+#if defined(NATIVE_PLAYLIST_INSERTED)
+    virtual void playlistInserted(const std::string& playlist, const int position, int endPosition, bool immediate) override {
+        const char* path = std::getenv("NATIVE_PLAYLIST_LOG");
+        if (path) {
+            if (FILE* f = fopen(path, "a")) {
+                fprintf(f, "%s %d %d %d\n", playlist.c_str(), position, endPosition, immediate ? 1 : 0);
+                fclose(f);
+            }
+        }
+    }
+#endif
 #if defined(NATIVE_THROW_MULTISYNC)
     virtual void multiSyncData(const uint8_t* data, int len) override {
         throw std::runtime_error("native test plugin: multiSyncData throws");
