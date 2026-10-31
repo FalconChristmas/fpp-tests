@@ -421,7 +421,11 @@ def test_the_time_is_set_once_the_network_has_an_address(fppinit):
 
     Regression: 5a38493b3. The time sync ran before the wait for the
     network, found no interface that could reach a server, and gave up, so
-    a box with no RTC started its show with the wrong time."""
+    a box with no RTC started its show with the wrong time.
+
+    Regression: 38f0e5a55. The automatic delay measured the wait from the
+    settings file's creation time, not the current time, so a box whose
+    clock was behind skipped the quick SNTP set."""
     import glob
     lib = glob.glob("/usr/lib/*/faketime/libfaketime.so.1")
     if not lib:

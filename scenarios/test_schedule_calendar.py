@@ -112,7 +112,11 @@ def test_commands_after_the_clock_steps_back(fppd):
     Regression: aa8dc0b15. Items already passed at the wrong, later time
     stayed marked as ran and the command check window stayed ahead of the
     clock, so a scheduled command at 20:30 never ran after a step from
-    22:00 back to 20:29."""
+    22:00 back to 20:29.
+
+    Regression: 0c2626a55 (its Scheduler half). The time delta was taken
+    after the last-processed time had been overwritten, so a step back was
+    never seen as one."""
     day = datetime.date(YEAR, 6, 1)
     command = entry(EVERY_DAY, "20:30:00", "20:30:00", playlist="", command="Set Variable",
                     args=["Ran", "Value", "yes", "1", "0", "100", ""],
