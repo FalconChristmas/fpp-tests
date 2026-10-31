@@ -244,7 +244,7 @@ def test_start_with_no_sfdisk_output_leaves_no_unpartitioned_space(fppinit):
     """fppinit start completes, and records no unpartitioned space, when
     `sfdisk -F` prints nothing (sfdisk missing or failing).
 
-    Regression: ae892bf (fpp). checkUnpartitionedSpace() took back() of the
+    Regression: 382a16359. checkUnpartitionedSpace() took back() of the
     empty split of the output, which is undefined: a SEGV under ASan that
     killed fppinit start."""
     assert unpartitioned_after_start(fppinit, "") == "0"
