@@ -91,3 +91,24 @@ def test_cannot_ping_warning_names_the_output(fppd):
                                  if "Cannot Ping" in str(w)], timeout=120, interval=2,
                         what="the cannot-ping warning")
     assert "192.0.2.77" in str(got) and "Roof Tree" in str(got), got
+
+
+def test_warnings_json_follows_the_warnings(fppd):
+    """www/warnings.json, which the pages read without asking fppd, holds the
+    current warnings and is rewritten when they change.
+
+    Regression: f1dce5446. The file was created for the quick warnings
+    fetch; it must follow a warning coming and going."""
+    import json
+    path = os.path.join(fppd.tree, "www", "warnings.json")
+    fppd.write("playlists/Empty.json", {"name": "Empty", "repeat": 0, "loopCount": 0,
+                                        "leadIn": [], "mainPlaylist": [], "leadOut": []})
+    fppd.start()
+    fppd.command("Start Playlist", "Empty", "false", "false")
+
+    def listed():
+        try:
+            return any("Empty" in w for w in json.load(open(path)))
+        except (OSError, ValueError):
+            return False
+    fppd.wait_for(listed, timeout=15, what="the empty-playlist warning in warnings.json")
