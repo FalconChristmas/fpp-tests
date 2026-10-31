@@ -6,7 +6,7 @@ git that note what they were asked.
 from fppinit import MEDIA, fppinit  # noqa: F401 -- the fixture
 
 
-def populate(sb, branch=None, tag=None, **settings):
+def populate(sb, branch=None, tag=None, env="", **settings):
     """Source scripts/functions and run populateCCACHE on a BeagleBone 64
     with 4K pages; returns the URLs curl was asked for."""
     sb.root_file("/etc/fpp/platform", "BeagleBone 64\n")
@@ -19,7 +19,7 @@ def populate(sb, branch=None, tag=None, **settings):
     sb.write("tmp/curl.log", "")
     if settings:
         sb.settings(**settings)
-    r = sb._run(["bash", "-c", ". /opt/fpp/scripts/common; . /opt/fpp/scripts/functions; populateCCACHE"],
+    r = sb._run(["bash", "-c", f"{env} . /opt/fpp/scripts/common; . /opt/fpp/scripts/functions; populateCCACHE"],
                 timeout=120, media_home=True)
     assert r.returncode == 0, r.stdout + r.stderr
     return [l for l in sb.media_file("tmp/curl.log").split() if l.startswith("http")]
@@ -40,3 +40,15 @@ def test_ccache_download_follows_the_branch_and_the_update_source(fppinit):
 
     urls = populate(fppinit, branch="release-10.2", tag="10.2", UpgradeSource="mirror.example.org")
     assert urls == [], urls
+
+
+def test_no_ccache_is_downloaded_for_a_build_that_uses_nocc_helpers(fppinit):
+    """With nocc helpers in the environment (NOCC_SERVERS, or mDNS
+    discovery), the update builds through them and downloads no ccache.
+
+    Feature: ef37520ce. The download ran first and fetched a cache the
+    nocc build would never use."""
+    for env in ("export NOCC_SERVERS=10.0.0.9:43210;", "export NOCC_DISCOVER_MDNS=1;"):
+        urls = populate(fppinit, branch="master", tag="10.2", env=env)
+        assert urls == [], (env, urls)
+    assert populate(fppinit, branch="master", tag="10.2"), "without nocc the cache is downloaded: the control"

@@ -505,3 +505,46 @@ def test_a_refusing_broker_is_logged_once_and_retried_with_backoff(fppd):
                       what="fppd to reconnect once the broker accepts")
     finally:
         broker.close()
+
+
+def test_resuming_a_paused_playlist_publishes_its_status_again(fppd):
+    """Pause Playlist then Resume Playlist: the resume publishes the status
+    ("playing") and the section topics again.
+
+    Regression: d3a9b9c0a. Resume put the playlist back to playing without
+    telling MQTT, so a subscriber stayed on "paused".
+    """
+    from test_playlist_entries import pause, playlist, step, trace
+    if not shutil.which("mosquitto_sub"):
+        pytest.skip("mosquitto_sub is not installed")
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(60), step(2)]))
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    import threading
+    got = []
+    with broker():
+        fppd.start()
+        probe = f"falcon/player/{HOST}/set/probe"
+        fppd.wait_for(lambda: (_publish_many([probe]) or probe in fppd.get("/fppd/mqtt/cache")),
+                      timeout=30, interval=1, what="fppd to connect")
+        fppd.command("Start Playlist", "P", "false", "false")
+        fppd.wait_for(lambda: trace(fppd) == "1", what="P to start")
+        sub = subprocess.Popen(["mosquitto_sub", "-h", "127.0.0.1", "-p", PORT, "-v", "-t", f"falcon/player/{HOST}/status",
+                                "-t", f"falcon/player/{HOST}/playlist/section/status"],
+                               stdout=subprocess.PIPE, text=True)
+        reader = threading.Thread(target=lambda: got.extend(l.strip() for l in sub.stdout), daemon=True)
+        reader.start()
+        try:
+            fppd.wait_for(lambda: any(l.endswith("/status playing") for l in got), what="the retained playing status")
+            fppd.command("Pause Playlist")
+            time.sleep(1)
+            before = len(got)
+            fppd.command("Resume Playlist")
+            fppd.wait_for(lambda: any(l.endswith("/status playing") for l in got[before:]), timeout=5,
+                          what="playing to be published again after the resume; got " + str(got[before:]))
+            assert any("/playlist/section/status" in l for l in got[before:]), got[before:]
+        finally:
+            sub.terminate()
+            sub.wait(timeout=5)
+            reader.join(5)
+        fppd.command("Stop Now")
+

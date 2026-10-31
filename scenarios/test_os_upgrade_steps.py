@@ -194,3 +194,25 @@ def test_the_running_systems_home_is_given_back_to_fpp(tmp_path):
                        cwd=tmp_path, capture_output=True, text=True, timeout=60)
     assert os.stat(f).st_uid == fpp.pw_uid, \
         f"the upgraded system's {f.relative_to(tmp_path)} is still uid {os.stat(f).st_uid}: {m.group(1)}\n{r.stderr}"
+
+
+def test_the_kiosk_state_survives_the_upgrade_only_when_it_was_on(tmp_path):
+    """part2 notes that the kiosk was installed (Kiosk=1) and, on the
+    other side of the copy, marks the new root for the kiosk to be
+    installed on first boot; with the kiosk off it marks nothing.
+
+    Feature: 6d19e9868. An FPPOS upgrade lost the kiosk: the new image
+    had none and nothing said to install it again.
+    """
+    save = between("#if kiosk was installed", "#copy everything other than fstab")
+    mark = between("#create a file in root to mark it as requiring kiosk mode", "# make sure the stuff in fpp's home")
+    for setting, expect_marked in (("1", True), ("0", False)):
+        root = tmp_path / f"k{setting}"
+        (root / "mnt").mkdir(parents=True)
+        (root / "tmp").mkdir()
+        # the script's /tmp is the running system's; stand-in: the root's own
+        script = (f"getSetting() {{ echo {setting}; }}\n"
+                  + save.replace("/tmp/kiosk", f"{root}/tmp/kiosk") + "\n"
+                  + mark)
+        bash(script, cwd=str(root))
+        assert (root / "mnt" / "fpp_kiosk").exists() is expect_marked, f"Kiosk={setting}"
