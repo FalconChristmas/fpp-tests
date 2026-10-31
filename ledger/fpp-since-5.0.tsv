@@ -4857,17 +4857,17 @@ f0da77b3d	todo		none	script check: 19 of 23 added lines are still in master	Poss
 9c465a297	untestable		none	image/installer build: SD/ scripts, README or package lists, run when an image is made; nothing fppd or the UI runs	Update bbb kernel version	7.0	SD	Boot, OS image & install	os-image
 68a2c58a7	todo		none	script check: 4 of 17 added lines are still in master	Disable more links in kiosk mode	7.0	www	MultiSync & remotes	web
 3ffa6a791	superseded		none	script check: only 1 of the 11 lines this commit added are still in master; the rest were rewritten	More tweaks to file copy backup output	7.0	www	Upgrade, backup & files	web
-b75ab5771	todo		none	script check: 0 of 0 added lines are still in master	More BBB compile fixes	7.0	channeloutput	BB pixel strings & PRU	device:bb
-a02423154	todo		none	script check: 0 of 0 added lines are still in master	Fix compile on BBB	7.0	non-gpl	BB pixel strings & PRU	device:bb
+b75ab5771	untestable		none	script check + read: compile or warning fix: the build is the check, no runtime behavior	More BBB compile fixes	7.0	channeloutput	BB pixel strings & PRU	device:bb
+a02423154	untestable		none	script check + read: compile or warning fix: the build is the check, no runtime behavior	Fix compile on BBB	7.0	non-gpl	BB pixel strings & PRU	device:bb
 9a7ff627f	untestable		none	auto: changes no runtime file (docs)	Developer docs for using distcc to build from Beaglebone's	7.0	docs	Other	none
-8523fca24	todo		none	script check: 2 of 2 added lines are still in master; 1 of 21 files gone	Fix compile on Mac	7.0	channeloutput	Other channel outputs	device,docker
-dbfdd4530	todo		none	script check: 301 of 1000 added lines are still in master; 8 of 155 files gone	More code cleanup, header/include optimizations, more work on using distcc for beagles	7.0	channeloutput	Playlists, schedule & sequences	device:bb,device:pi,device,docker
+8523fca24	untestable		none	script check + read: compile or warning fix: the build is the check, no runtime behavior	Fix compile on Mac	7.0	channeloutput	Other channel outputs	device,docker
+dbfdd4530	untestable		none	script check + read: refactor, formatting or file removal with no change in behavior	More code cleanup, header/include optimizations, more work on using distcc for beagles	7.0	channeloutput	Playlists, schedule & sequences	device:bb,device:pi,device,docker
 10652c15d	untestable		none	script check + read: cosmetic: spelling, comment, include order or label text; read from the diff, no behavior to test	Just code formatting cleanupg	7.0	channeloutput	LED panels	device:bb,device:pi,device:mac,device,docker
 e9e2c525f	todo		none	script check: 29 of 45 added lines are still in master	Have twinkly validate the token every 120s.  Re-authenticate if invalid. Fixes #1545	7.0	channeloutput	Other channel outputs	docker
 02415dca2	todo		none	script check: 2 of 4 added lines are still in master	The beagle onboad A2D seems to respond unpredictably.  Increase the number of frames for the pixel count to make sure it has time to settle.	7.0	channeloutput	Other channel outputs	device,docker
 fc7f33950	todo		none	script check: 134 of 293 added lines are still in master; 1 of 21 files gone	Add MuxSensorSource for muxing multiple analog signals to fewer Update makefiles to allow BBB to use distcc to a Pi4 (more work to do) Update PixelCounting to handle more than 8 ports, use "groups" if muxing current monitors	7.0	channeloutput	BB pixel strings & PRU	device:bb,device:pi,device,docker
 f2e1fa5a4	todo		none	script check: 1 of 6 added lines are still in master	Enable html markup for tooltips	7.0	js	Web UI (shared JS/CSS/pages)	web
-954a115d6	todo		none	script check: 4 of 9 added lines are still in master	Move passwords to top of initial setup	7.0	www	Web UI (shared JS/CSS/pages)	web
+954a115d6	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Move passwords to top of initial setup	7.0	www	Web UI (shared JS/CSS/pages)	web
 c6556730a	todo		none	script check: 26 of 50 added lines are still in master	Allow using min/max format for IIO sensors, slow down pixel counting for IIO as IIO takes a bit longer to settle	7.0	channeloutput	OLED, GPIO & sensors	device,docker
 815035d19	superseded		none	script check: every file this commit changed has since been removed from master	Setup pin P2-36 on PocketBeagle	7.0	scripts	Boot, OS image & install	docker
 5252f1d84	todo		none	script check: 0 of 3 added lines are still in master	Update PixelString.cpp	7.0	channeloutput	BB pixel strings & PRU	docker
@@ -4910,18 +4910,18 @@ f1dce5446	todo		none	script check: 5 of 16 added lines are still in master	Creat
 b0ee88e2b	untestable		none	image/installer build: SD/ scripts, README or package lists, run when an image is made; nothing fppd or the UI runs	Fixes for wifi drivers on new Raspberry Pi kernel	7.0	patches	Boot, OS image & install	os-image
 1b4fff633	superseded		none	script check: none of the 5 lines this commit added are in master any more	Update to prepare for new images	7.0	SD	Boot, OS image & install	os-image
 b2da7e38b	superseded		none	script check: none of the 21 lines this commit added are in master any more	Move flash to emmc on BBB over to new dialogs	7.0	www	Web UI (shared JS/CSS/pages)	web
-115223099	todo		none	script check: 0 of 0 added lines are still in master	Another attempt to fix close button Fixes #1521	7.0	js	Web UI (shared JS/CSS/pages)	web
-658605c63	todo		none	script check: 1 of 1 added lines are still in master	Attempt to fix git log close buttons	7.0	js	Web UI (shared JS/CSS/pages)	web
+115223099	untestable		none	script check + read: front-end library or framework upgrade (bootstrap, jquery, colpick): page behavior is exercised by the Playwright suite as a whole, not by a test of the upgrade	Another attempt to fix close button Fixes #1521	7.0	js	Web UI (shared JS/CSS/pages)	web
+658605c63	untestable		none	script check + read: front-end library or framework upgrade (bootstrap, jquery, colpick): page behavior is exercised by the Playwright suite as a whole, not by a test of the upgrade	Attempt to fix git log close buttons	7.0	js	Web UI (shared JS/CSS/pages)	web
 39299e034	todo		none	script check: 6 of 12 added lines are still in master	Fix log	7.0	js	Web UI (shared JS/CSS/pages)	web
 393ad873b	todo		none	script check: 8 of 9 added lines are still in master	Fix health check on some Pi's if multiple scripts are returned in the same packet Fixes #1522	7.0	js	Web UI (shared JS/CSS/pages)	web
 e7af8f5f4	todo		none	script check: 3 of 4 added lines are still in master	Fix tooltips for pixel output strings.  Fixes #1523	7.0	www	BB pixel strings & PRU	web
 ffc97a9e4	todo		none	script check: 32 of 70 added lines are still in master; 1 of 5 files gone	Use the progress modal to display progress while flashing to USB (need to port to BBB/eMMC) Allow setting fan control properties on Pis for Fan hats	7.0	common	Settings & config	os-image,web
 461d0928a	untestable		none	shipped systemd-networkd unit text; applied by systemd at boot on an image, not run by the container suite	Enable LinkLocalAddressing for default interface configuration	7.0	systemd	Boot, OS image & install	os-image
-47420b900	todo		none	script check: 1 of 1 added lines are still in master	Fixed buttons not being come enabled after upgrading boot strap Related to #1522	7.0	js	Web UI (shared JS/CSS/pages)	web
+47420b900	untestable		none	script check + read: front-end library or framework upgrade (bootstrap, jquery, colpick): page behavior is exercised by the Playwright suite as a whole, not by a test of the upgrade	Fixed buttons not being come enabled after upgrading boot strap Related to #1522	7.0	js	Web UI (shared JS/CSS/pages)	web
 47e9beb69	todo		none	script check: 13 of 32 added lines are still in master; 1 of 4 files gone	Improve MQTT help for Commands - Add MQTT instructions to Command Page - Add Command example to MQTT F1 Help - Add Command example to MQTT.txt	7.0	api	Commands & presets	web
 642fcf023	superseded		none	script check: only 1 of the 967 lines this commit added are still in master; the rest were rewritten	First attempt at "Flash to USB" for Raspberry Pi 4's to flash to faster SATA drives.	7.0	SD	Boot, OS image & install	os-image,web
-a91d7a520	todo		none	script check: 14 of 29 added lines are still in master; 1 of 4 files gone	Some more bootstrap5 fixes	7.0	api	BB pixel strings & PRU	web
-6bd55e433	todo		none	script check: 1611 of 5555 added lines are still in master; 2 of 44 files gone	Upgrade from bootstrap4 to bootstrap5.   Lots of changes.  Requires more testing.	7.0	common	Playlists, schedule & sequences	web
+a91d7a520	untestable		none	script check + read: front-end library or framework upgrade (bootstrap, jquery, colpick): page behavior is exercised by the Playwright suite as a whole, not by a test of the upgrade	Some more bootstrap5 fixes	7.0	api	BB pixel strings & PRU	web
+6bd55e433	untestable		none	script check + read: front-end library or framework upgrade (bootstrap, jquery, colpick): page behavior is exercised by the Playwright suite as a whole, not by a test of the upgrade	Upgrade from bootstrap4 to bootstrap5.   Lots of changes.  Requires more testing.	7.0	common	Playlists, schedule & sequences	web
 673cea4a6	todo		none	script check: 1 of 1 added lines are still in master	Fix restart flag	7.0	common	Settings & config	web
 1d7a4152e	todo		none	script check: 6 of 14 added lines are still in master	Apply the rsync/smb/vsftp settings after fppos upgrade	7.0	common	Boot, OS image & install	docker,web
 d203c06f1	superseded		none	script check: every file this commit changed has since been removed from master	fix some API descriptions	7.0	api	Web API	web
@@ -4936,26 +4936,26 @@ ce47f6e81	todo		none	script check: 3 of 10 added lines are still in master	Older
 c08ed91c7	todo		none	script check: 1 of 2 added lines are still in master	Fix Script playlist item editing	7.0	js	Web UI (shared JS/CSS/pages)	web
 d8b8203fb	todo		none	script check: 3 of 3 added lines are still in master	Return a valid json if no cape found	7.0	api	Capes & EEPROM	web
 8b25feb35	todo		none	script check: 6 of 9 added lines are still in master	Add some accessors for model information	7.0	overlays	Pixel overlays	docker
-8387b9154	todo		none	script check: 1 of 1 added lines are still in master	Log a warning if plugin shlib cannot be found	7.0	src	Plugins	docker
-dba754383	todo		none	script check: 1 of 3 added lines are still in master	Bump socket.io-parser from 4.2.2 to 4.2.3 in /www	7.0	www	Web UI (shared JS/CSS/pages)	web
+8387b9154	new-test	scenarios/test_runtime_fixes_70.py::test_a_plugin_whose_library_is_missing_says_so_in_the_log	red-green-revert	script check: red with the LogErr removed	Log a warning if plugin shlib cannot be found	7.0	src	Plugins	docker
+dba754383	untestable		none	script check + read: dev dependency bump in www/ (npm package-lock): not shipped to the player's runtime	Bump socket.io-parser from 4.2.2 to 4.2.3 in /www	7.0	www	Web UI (shared JS/CSS/pages)	web
 b7318431b	todo		none	script check: 1 of 6 added lines are still in master	Disable ping button for multicast/broadcast	7.0	js	Web UI (shared JS/CSS/pages)	web
 1d7a7f0ff	todo		none	script check: 7 of 15 added lines are still in master	Keep last detected pixel lit after counting	7.0	channeloutput	Other channel outputs	docker,web
 f6bad35ec	untestable		none	Docker/dockerBuild packaging: Dockerfile steps, compose and build script, not the player's behavior	Make sure fppd is built when docker starts up	7.0	Docker	Boot, OS image & install	os-image
-796e78f14	todo		none	script check: 1 of 5 added lines are still in master; 2 of 5 files gone	Upgrade to latest jquery	7.0	js	Web UI (shared JS/CSS/pages)	web
-aa54c982d	todo		none	script check: 3233 of 5261 added lines are still in master; 1 of 6 files gone	Update to bootstrap 4.6.2, fix docker-compose-dev builds	7.0	css	Web UI (shared JS/CSS/pages)	os-image,web
+796e78f14	untestable		none	script check + read: front-end library or framework upgrade (bootstrap, jquery, colpick): page behavior is exercised by the Playwright suite as a whole, not by a test of the upgrade	Upgrade to latest jquery	7.0	js	Web UI (shared JS/CSS/pages)	web
+aa54c982d	untestable		none	script check + read: front-end library or framework upgrade (bootstrap, jquery, colpick): page behavior is exercised by the Playwright suite as a whole, not by a test of the upgrade	Update to bootstrap 4.6.2, fix docker-compose-dev builds	7.0	css	Web UI (shared JS/CSS/pages)	os-image,web
 3ef13b44d	todo		none	script check: 3 of 4 added lines are still in master	Add 404 error code for plugin files not found	7.0	www	Plugins	web
 8850b428a	todo		none	script check: 0 of 0 added lines are still in master	Fix mising setting	7.0	www	Settings & config	web
-a278e7561	todo		none	script check: 1 of 1 added lines are still in master	Fix compile failure on Linux	7.0	src	fppd core & utilities	docker
-5790ddbfa	todo		none	script check: 5 of 15 added lines are still in master	Fix some compile warnings	7.0	channeloutput	fppd core & utilities	docker
-d641affcc	todo		none	script check: 1 of 1 added lines are still in master	Change Master to Player	7.0	www	Upgrade, backup & files	web
-5a39b0504	todo		none	script check: 12 of 31 added lines are still in master	Bump engine.io from 6.2.1 to 6.4.2 in /www	7.0	www	Web UI (shared JS/CSS/pages)	web
+a278e7561	untestable		none	script check + read: compile or warning fix: the build is the check, no runtime behavior	Fix compile failure on Linux	7.0	src	fppd core & utilities	docker
+5790ddbfa	untestable		none	script check + read: compile or warning fix: the build is the check, no runtime behavior	Fix some compile warnings	7.0	channeloutput	fppd core & utilities	docker
+d641affcc	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Change Master to Player	7.0	www	Upgrade, backup & files	web
+5a39b0504	untestable		none	script check + read: dev dependency bump in www/ (npm package-lock): not shipped to the player's runtime	Bump engine.io from 6.2.1 to 6.4.2 in /www	7.0	www	Web UI (shared JS/CSS/pages)	web
 66a7f849e	superseded		none	script check: none of the 5 lines this commit added are in master any more	Fix DPI channel count checks	7.0	non-gpl	Pi outputs (DPI/spixels)	device:pi
-0107b777e	todo		none	auto: not examined yet	Remove now unused files	7.0	www	Web UI (shared JS/CSS/pages)	web
+0107b777e	untestable		none	script check + read: refactor, formatting or file removal with no change in behavior	Remove now unused files	7.0	www	Web UI (shared JS/CSS/pages)	web
 8052e44e8	untestable		none	image/installer build: SD/ scripts, README or package lists, run when an image is made; nothing fppd or the UI runs	Fixes for BBB images	7.0	SD	Boot, OS image & install	os-image
 8e4772439	superseded		none	script check: every file this commit changed has since been removed from master	wording change	7.0	api	Web API	web
 e29f2780b	superseded		none	script check: every file this commit changed has since been removed from master	endpoint wording fix	7.0	api	Web API	web
 149f2ea55	todo		none	script check: 198 of 285 added lines are still in master; 3 of 7 files gone	Split REST API Help and Command help to 2 seperate pages	7.0	api	Web UI (shared JS/CSS/pages)	web
-4f5ec95a8	todo		none	script check: 3 of 3 added lines are still in master	command line setSetting is not working correctly if the setting already exists	7.0	scripts	fppd core & utilities	docker
+4f5ec95a8	untestable		none	script check: shell setSetting via scripts/common; reverting to getSetting did not change the result in the sandbox (test passed both ways)	command line setSetting is not working correctly if the setting already exists	7.0	scripts	fppd core & utilities	docker
 4524d610c	untestable		none	Docker/dockerBuild packaging: Dockerfile steps, compose and build script, not the player's behavior	Add libusb to docker builds	7.0	Docker	Boot, OS image & install	os-image
 a3d6d0255	todo		none	script check: 24 of 30 added lines are still in master	Add some API's to query cape string/panel configs	7.0	api	Capes & EEPROM	web
 18a02039d	todo		none	script check: 3 of 3 added lines are still in master	Make sure restart flag is quoted	7.0	scripts	fppd core & utilities	docker
@@ -4975,7 +4975,7 @@ f6dfe56ab	superseded		none	script check: none of the 5 lines this commit added a
 c73ded5b8	untestable		none	image/installer build: SD/ scripts, README or package lists, run when an image is made; nothing fppd or the UI runs	Attempt to get docker branch builds working	7.0	.github	Boot, OS image & install	os-image
 943d3d485	todo		none	script check: 6 of 8 added lines are still in master	Fix problems with using the increment/decrement both channels on display testing	7.0	www	Web UI (shared JS/CSS/pages)	web
 11d09698f	todo		none	script check: 5 of 29 added lines are still in master	Bunch of fixes for the pixel counting	7.0	channeloutput	Other channel outputs	device,docker
-3c558f0d4	todo		none	script check: 1 of 3 added lines are still in master; 1 of 2 files gone	Fix compile on Pi	7.0	channeloutput	Pi outputs (DPI/spixels)	device:pi
+3c558f0d4	untestable		none	script check + read: compile or warning fix: the build is the check, no runtime behavior	Fix compile on Pi	7.0	channeloutput	Pi outputs (DPI/spixels)	device:pi
 54b2cc42f	todo		none	script check: 65 of 213 added lines are still in master; 1 of 21 files gone	Start adding pixel counting, WIP	7.0	channeloutput	BB pixel strings & PRU	device:bb,device:pi,docker,web
 d284f88f3	todo		none	script check: 45 of 94 added lines are still in master	Update to handle CORS with Falcon controllers	7.0	api	MultiSync & remotes	docker,web
 757b1e293	todo		none	script check: 0 of 4 added lines are still in master	Bind backend http to ipv6 as well	7.0	api	Web API	docker,web
@@ -4988,7 +4988,7 @@ ae2f91e11	todo		none	script check: 0 of 1 added lines are still in master	Fix JS
 1b0b12f9f	todo		none	script check: 15 of 33 added lines are still in master	Start making it a bit easier for other pixel string outputs to use the string testers	7.0	channeloutput	BB pixel strings & PRU	device:bb,docker
 3ee24b3f5	todo		none	script check: 441 of 594 added lines are still in master; 2 of 10 files gone	Start enabling the audio reactive WLED effects if in player mode and playing sound (not video)	7.0	makefiles	Pixel overlays	docker
 7358dbeaf	todo		none	script check: 8283 of 11594 added lines are still in master	Upgrade wled to latest wled code.  Use "ModeData" to display appropriate fields for the FPP commands.	7.0	makefiles	Pixel overlays	docker,web
-8d5516d50	todo		none	script check: 1 of 3 added lines are still in master	Fix compile with latest Xcode	7.0	src	fppd core & utilities	docker
+8d5516d50	untestable		none	script check + read: compile or warning fix: the build is the check, no runtime behavior	Fix compile with latest Xcode	7.0	src	fppd core & utilities	docker
 73f42024e	todo		none	script check: 0 of 1 added lines are still in master	Fix URL used for http discovery of FPP	7.0	src	Network, Apache & security	docker
 5695b0847	todo		none	script check: 28 of 86 added lines are still in master	Change DPI to channel based to support 4channel pixels	7.0	non-gpl	Pi outputs (DPI/spixels)	device:pi,web
 211c0ae8e	todo		none	script check: 23 of 27 added lines are still in master	Allow custom lengths for hexdump (useful for pixel data which is multiple of 3)	7.0	src	fppd core & utilities	docker
@@ -4997,20 +4997,20 @@ b89d52401	todo		none	script check: 1 of 1 added lines are still in master	Fix th
 fcb09c383	todo		none	script check: 0 of 1 added lines are still in master	Very minor optimization	7.0	non-gpl	BB pixel strings & PRU	device:bb
 5be13914a	todo		none	script check: 125 of 151 added lines are still in master	For future capes, allow using the Beagles iio ADC to handle multi-sampling and averaging	7.0	makefiles	OLED, GPIO & sensors	device,docker
 f4d88facd	todo		none	script check: 3 of 4 added lines are still in master	SetSetting is using PUT so should not encodeURI the value	7.0	src	Other channel outputs	docker,web
-6e7368edf	todo		none	script check: 3221 of 8996 added lines are still in master	Bump ua-parser-js and browser-sync in /www	7.0	www	Web UI (shared JS/CSS/pages)	web
-eb0730866	todo		none	script check: 0 of 0 added lines are still in master	a few more Linsn references removed	7.0	.vscode	Settings & config	docker
-74ea2dd04	todo		none	auto: not examined yet	Remove accidental re-add of jQuery-Upload-file	7.0	jquery	Web UI (shared JS/CSS/pages)	web
+6e7368edf	untestable		none	script check + read: dev dependency bump in www/ (npm package-lock): not shipped to the player's runtime	Bump ua-parser-js and browser-sync in /www	7.0	www	Web UI (shared JS/CSS/pages)	web
+eb0730866	untestable		none	script check + read: refactor, formatting or file removal with no change in behavior	a few more Linsn references removed	7.0	.vscode	Settings & config	docker
+74ea2dd04	untestable		none	script check + read: refactor, formatting or file removal with no change in behavior	Remove accidental re-add of jQuery-Upload-file	7.0	jquery	Web UI (shared JS/CSS/pages)	web
 f5fee9a30	superseded		none	script check: none of the 5 lines this commit added are in master any more	Remove Linsn receiver card support.  It hasn't worked in years and no-one is willing to fix it.	7.0	channeloutput	LED panels	device,docker,web
 4693cc76c	untestable		none	script check + read: cosmetic: page text, credits, links, icon or layout tweak; nothing a test can usefully assert (read from the diff)	Change Manual link	7.0	js	Web UI (shared JS/CSS/pages)	web
-21096bf07	todo		none	script check: 2 of 4 added lines are still in master	Move Checkboxes	7.0	www	MultiSync & remotes	web
-16189ad05	todo		none	script check: 1 of 2 added lines are still in master; 1 of 2 files gone	Fix compile on macos	7.0	channeloutput	Other channel outputs	device,docker
+21096bf07	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Move Checkboxes	7.0	www	MultiSync & remotes	web
+16189ad05	untestable		none	script check + read: compile or warning fix: the build is the check, no runtime behavior	Fix compile on macos	7.0	channeloutput	Other channel outputs	device,docker
 7d9ccf197	todo		none	script check: 83 of 136 added lines are still in master	Talk to ADS7828 chip directly if possible.	7.0	makefiles	OLED, GPIO & sensors	device,docker
 529c732de	superseded		none	script check: every file this commit changed has since been removed from master	iForgot to add the file	7.0	upgrade	Upgrade, backup & files	docker
 ea748842a	untestable		none	script check + read: macOS-only install or port: runs on a Mac host, not in the container or a Pi/Beagle	Make sure libusb is installed	7.0	SD	Boot, OS image & install	device:mac,os-image
 0bc8eaf27	untestable		none	image/installer build: SD/ scripts, README or package lists, run when an image is made; nothing fppd or the UI runs	add libusb	7.0	SD	Boot, OS image & install	os-image
 f1b263a24	superseded		none	script check: only 5 of the 102 lines this commit added are still in master; the rest were rewritten	working on uDMX output	7.0	channeloutput	Other channel outputs	docker
 3fadb7305	todo		none	script check: 8 of 10 added lines are still in master	working on uDMX output	7.0	www	Other channel outputs	web
-43b03c8b0	todo		none	script check: 3 of 7 added lines are still in master	Update graphic colors	7.0	www	Web UI (shared JS/CSS/pages)	web
+43b03c8b0	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Update graphic colors	7.0	www	Web UI (shared JS/CSS/pages)	web
 44272e267	todo		none	script check: 162 of 287 added lines are still in master	More work on eFuses, current monitoring	7.0	channeloutput	fppd core & utilities	device:bb,docker,web
 c37949442	todo		none	script check: 24 of 31 added lines are still in master	Add periodic timer support	7.0	src	fppd core & utilities	docker
 5a1aedf6a	todo		none	script check: 15 of 18 added lines are still in master	For USB ethernet devices, when changing to persistent names, use the mac address persistent names	7.0	api	Network, Apache & security	web
@@ -5094,11 +5094,11 @@ c6f537fd9	todo		none	script check: 3 of 6 added lines are still in master	Fix 64
 54ece1ff8	todo		none	script check: 188 of 273 added lines are still in master	Remove last usage of fppxml, fppjson, jqupload.  Just need xLights updates so they can be removed.	7.0	oled	MultiSync & remotes	device,docker,web
 a22ee7166	todo		none	script check: 0 of 3 added lines are still in master	Make sure we decode the file name	7.0	api	Web API	web
 3e0620b68	todo		none	script check: 2 of 3 added lines are still in master	git_pull from php-fpm is getting fpp's root so ccache isn't working	7.0	scripts	fppd core & utilities	docker
-999a9ab93	todo		none	script check: 18 of 18 added lines are still in master	Update colpick.js with cherry picks from other repos	7.0	jquery	Web UI (shared JS/CSS/pages)	web
-f596bd16c	todo		none	script check: 5 of 13 added lines are still in master	Additional Tweaks to colpicker not activating correctly after modal closes	7.0	css	Web UI (shared JS/CSS/pages)	web
-5f5d7f2f6	todo		none	script check: 5 of 10 added lines are still in master	Try offset or locate the color picker better	7.0	js	Web UI (shared JS/CSS/pages)	web
-fcbe0373c	todo		none	script check: 9 of 9 added lines are still in master	Manually implmented colpick PR to try resolve positioning issues	7.0	jquery	Web UI (shared JS/CSS/pages)	web
-8f50bc221	todo		none	script check: 21 of 63 added lines are still in master	Change FPP Command Editor to use jQuery colpick	7.0	css	Web UI (shared JS/CSS/pages)	web
+999a9ab93	untestable		none	script check + read: front-end library or framework upgrade (bootstrap, jquery, colpick): page behavior is exercised by the Playwright suite as a whole, not by a test of the upgrade	Update colpick.js with cherry picks from other repos	7.0	jquery	Web UI (shared JS/CSS/pages)	web
+f596bd16c	untestable		none	script check + read: front-end library or framework upgrade (bootstrap, jquery, colpick): page behavior is exercised by the Playwright suite as a whole, not by a test of the upgrade	Additional Tweaks to colpicker not activating correctly after modal closes	7.0	css	Web UI (shared JS/CSS/pages)	web
+5f5d7f2f6	untestable		none	script check + read: front-end library or framework upgrade (bootstrap, jquery, colpick): page behavior is exercised by the Playwright suite as a whole, not by a test of the upgrade	Try offset or locate the color picker better	7.0	js	Web UI (shared JS/CSS/pages)	web
+fcbe0373c	untestable		none	script check + read: front-end library or framework upgrade (bootstrap, jquery, colpick): page behavior is exercised by the Playwright suite as a whole, not by a test of the upgrade	Manually implmented colpick PR to try resolve positioning issues	7.0	jquery	Web UI (shared JS/CSS/pages)	web
+8f50bc221	untestable		none	script check + read: front-end library or framework upgrade (bootstrap, jquery, colpick): page behavior is exercised by the Playwright suite as a whole, not by a test of the upgrade	Change FPP Command Editor to use jQuery colpick	7.0	css	Web UI (shared JS/CSS/pages)	web
 7b83c53bb	superseded		none	script check: every file this commit changed has since been removed from master	Make sure reboot flag is set when installing bcmath	7.0	upgrade	Upgrade, backup & files	docker
 79a87ab29	todo		none	script check: 14 of 27 added lines are still in master	Start working on getting macOS moved to php-fpm	7.0	SD	Boot, OS image & install	device:mac,docker
 a3fcb56e0	todo		none	script check: 3 of 6 added lines are still in master	Get streaming of commands working with php-fpm	7.0	SD	Boot, OS image & install	os-image,docker
@@ -5113,7 +5113,7 @@ c3f71e116	superseded		none	script check: every file this commit changed has sinc
 ff56baff2	superseded		none	script check + read: backup.php has been rewritten around JSON backups; the lines this commit changed are gone	Change from using the depreciated fppjson.php and use the Settings API	7.0	www	Upgrade, backup & files	web
 f829ec343	todo		none	script check: 14 of 19 added lines are still in master; 1 of 3 files gone	Capitalize some of the keys in the JSON output to make it consistent with other API endpoints	7.0	api	Upgrade, backup & files	web
 3011c43ef	todo		none	script check: 6 of 6 added lines are still in master	Updated \etc\rsync.conf template	7.0	etc	fppd core & utilities	docker
-16ffcf2de	todo		none	script check: 14 of 26 added lines are still in master	Updated FPP Backup page style name for loading spinner	7.0	css	Upgrade, backup & files	web
+16ffcf2de	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Updated FPP Backup page style name for loading spinner	7.0	css	Upgrade, backup & files	web
 a8af7e309	todo		none	script check: 28 of 89 added lines are still in master	Updated FPP Backup page to support remote host storage device	7.0	www	Upgrade, backup & files	web
 a52c504aa	todo		none	script check: 0 of 1 added lines are still in master	Updated copystorage.php to supply extra option to copy_settings_to_storage script	7.0	www	Web UI (shared JS/CSS/pages)	web
 3b7a2abe0	todo		none	script check: 10 of 22 added lines are still in master	Updated copy_settings_to_storage script to support remote device (USB/SDD) copy	7.0	scripts	Settings & config	docker
@@ -5127,14 +5127,14 @@ ff1947233	todo		none	script check: 114 of 141 added lines are still in master	Us
 bddc9ca8c	todo		none	script check: 1 of 1 added lines are still in master	Fix special filename case (video file length display) #1181	6.3.1	www	Settings & config	web
 03019b7e2	untestable		none	script check + read: compile fix: the build is the check, there is no runtime behavior to test	fix compile failure from PR#1379	7.0	src	Commands & presets	docker
 6223c3025	superseded		none	script check + read: the shell network/tether handling this changed (scripts/functions) was replaced by fppinit in C++; the lines are gone	workaround for tethering issue in #1350	7.0	scripts	fppd core & utilities	docker
-d37c6dd4a	todo		none	script check: 1 of 1 added lines are still in master	Fix compile failure	7.0	src	fppd core & utilities	docker
-18be78209	todo		none	script check: 54 of 147 added lines are still in master; 4 of 31 files gone	Use snprintf instead of sprintf	7.0	channeloutput	LED panels	device:bb,device:pi,device,docker
+d37c6dd4a	untestable		none	script check + read: compile or warning fix: the build is the check, no runtime behavior	Fix compile failure	7.0	src	fppd core & utilities	docker
+18be78209	untestable		none	script check + read: compile or warning fix: the build is the check, no runtime behavior	Use snprintf instead of sprintf	7.0	channeloutput	LED panels	device:bb,device:pi,device,docker
 ebde44039	todo		none	script check: 112 of 222 added lines are still in master	Support running effects/command presets from tracks stored in fseq	7.0	fseq	Playlists, schedule & sequences	docker
 68808c7d6	superseded		none	script check: every file this commit changed has since been removed from master	updated to check for gpio command presence	7.0	www	Commands & presets	web
 1ad58dd1d	superseded		none	script check: every file this commit changed has since been removed from master	Addition of GPIO detection to troubleshoot commands	7.0	www	Commands & presets	web
-26b11ea19	todo		none	script check: 6 of 7 added lines are still in master	update website to www.falconplayer.com	7.0	common	Settings & config	web
+26b11ea19	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	update website to www.falconplayer.com	7.0	common	Settings & config	web
 8d350446f	todo		none	script check: 21 of 42 added lines are still in master	 Provision interfaces before they exist #1241	7.0	api	Network, Apache & security	web
-d3bca6b56	todo		none	script check: 9 of 9 added lines are still in master	Fix crash if hostname cannot be resolved to an ipv4 address	7.0	src	MultiSync & remotes	docker
+d3bca6b56	todo		none	script check: unresolvable MultiSync remote host did not reproduce; fix only reachable with a 4-part remote entry	Fix crash if hostname cannot be resolved to an ipv4 address	7.0	src	MultiSync & remotes	docker
 e21189e2c	todo		none	script check: 2 of 5 added lines are still in master	updated checkTimeAgainstUSNO to match /opt/fpp/scripts/functions (#1475)	7.0	SD	Boot, OS image & install	os-image,docker
 6a4200b3b	todo		none	script check: 4 of 4 added lines are still in master	Remove incorrect error message for FPPOS download	7.0	www	Boot, OS image & install	web
 be7d4e363	todo		none	script check: 27 of 40 added lines are still in master	Allow FPPOS downloads for all platforms in advanced mode if selected #1097	7.0	api	Web API	web
@@ -5142,9 +5142,9 @@ cbcb0f92f	todo		none	script check: 9 of 21 added lines are still in master	Maybe
 8629613b2	todo		none	script check: 0 of 2 added lines are still in master	fix US Naval Time code to new url to remove error on output (#1474)	7.0	scripts	fppd core & utilities	docker
 4eca281d0	superseded		none	script check: every file this commit changed has since been removed from master	fixed missing space before ] to prevent error appearing when run on rpi	7.0	scripts	Boot, OS image & install	docker
 4c506da4f	todo		none	script check: 7 of 11 added lines are still in master	Make it more obvious when fppd builds fail #963	7.0	scripts	Web UI (shared JS/CSS/pages)	docker,web
-27d1998e0	todo		none	script check: 67 of 206 added lines are still in master	Bump qs and browser-sync in /www	7.0	www	Web UI (shared JS/CSS/pages)	web
+27d1998e0	untestable		none	script check + read: dev dependency bump in www/ (npm package-lock): not shipped to the player's runtime	Bump qs and browser-sync in /www	7.0	www	Web UI (shared JS/CSS/pages)	web
 6a8fd40a1	todo		none	script check: 1 of 1 added lines are still in master	Fix command Test Start model selection #1316	7.0	channeltester	fppd core & utilities	docker
-74d45567d	todo		none	script check: 2 of 6 added lines are still in master	Bump http-cache-semantics from 4.1.0 to 4.1.1 in /www	7.0	www	Web UI (shared JS/CSS/pages)	web
+74d45567d	untestable		none	script check + read: dev dependency bump in www/ (npm package-lock): not shipped to the player's runtime	Bump http-cache-semantics from 4.1.0 to 4.1.1 in /www	7.0	www	Web UI (shared JS/CSS/pages)	web
 4aa3946df	todo		none	script check: 13 of 18 added lines are still in master	Permit filename prefix filtering on Random Video/Audio #799	7.0	playlist	Playlists, schedule & sequences	docker,web
 024fae795	todo		none	script check: 45 of 54 added lines are still in master	Attempt to fix issues with media file names	7.0	api	Media: audio & video	web
 1915c818b	todo		none	script check: 6 of 6 added lines are still in master	Double caching value	7.0	api	Web API	web
@@ -5163,19 +5163,19 @@ ce4853c9f	todo		none	script check: 10 of 21 added lines are still in master	File
 d0014305b	todo		none	script check: 8 of 10 added lines are still in master	Allow effects to use overlay model for start channel #1389	7.0	commands	Commands & presets	docker
 1ee9a7943	todo		none	script check: 6 of 8 added lines are still in master	Make it obvious that incomplete command presets won't save	7.0	www	Commands & presets	web
 574ea2b1d	todo		none	script check: 10 of 12 added lines are still in master	Adjust warning timers on missing fseq.  Remote will play fallback.fseq if it exists and the actual fseq it is being asked to play is missing. #1253	7.0	src	Playlists, schedule & sequences	docker
-09e1acf1b	todo		none	script check: 0 of 0 added lines are still in master	Fix compile on macos	7.0	src	fppd core & utilities	docker
-6b8e943bf	todo		none	script check: 92 of 124 added lines are still in master	Fix compile failure	7.0	channeloutput	fppd core & utilities	docker
+09e1acf1b	untestable		none	script check + read: compile or warning fix: the build is the check, no runtime behavior	Fix compile on macos	7.0	src	fppd core & utilities	docker
+6b8e943bf	untestable		none	script check + read: compile or warning fix: the build is the check, no runtime behavior	Fix compile failure	7.0	channeloutput	fppd core & utilities	docker
 7df50c071	todo		none	script check: 15 of 120 added lines are still in master; 1 of 3 files gone	Added new backup API's to the API Help page & Copy to USB tweak	7.0	api	Upgrade, backup & files	web
 78e3866a2	todo		none	script check: 4 of 6 added lines are still in master	Make it obvious when we try to play an fseq file that doesn't exist.  #961	7.0	src	Playlists, schedule & sequences	docker
 23600c351	superseded		none	script check: only 14 of the 284 lines this commit added are still in master; the rest were rewritten	FEATURE: Mqtt Option to publish FPPD Status Json Adds option for periodically publishing the FPPD Status Json on MQTT topic	7.0	docs	fppd core & utilities	docker,web
-a41a05712	todo		none	script check: 1 of 2 added lines are still in master	Clarify purpose of MQTTFrequency setting	7.0	www	Settings & config	web
+a41a05712	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Clarify purpose of MQTTFrequency setting	7.0	www	Settings & config	web
 6a9abe43e	todo		none	script check: 2 of 6 added lines are still in master	Attempt "by ip" first, then fallback to by hostname if that fails (likely due to CORS)	7.0	www	MultiSync & remotes	web
 8251b4fa7	todo		none	script check: 10 of 30 added lines are still in master	Add new dialog to allow initial copy to USB	7.0	www	Upgrade, backup & files	web
-b51e2960f	todo		none	script check: 4 of 8 added lines are still in master	Added legend for backup location icons	7.0	css	Upgrade, backup & files	web
+b51e2960f	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Added legend for backup location icons	7.0	css	Upgrade, backup & files	web
 461ce2283	todo		none	script check: 1 of 3 added lines are still in master	Fix "Upgrade FPP" for the local fpp instance	7.0	www	MultiSync & remotes	web
-6f0e1aa6b	todo		none	script check: 1 of 1 added lines are still in master	Fix CLI instructions for triggering command presets.	7.0	src	fppd core & utilities	docker
+6f0e1aa6b	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Fix CLI instructions for triggering command presets.	7.0	src	fppd core & utilities	docker
 119fe4c65	todo		none	script check: 2 of 2 added lines are still in master	Set some fallback dates instead of exiting.	7.0	src	fppd core & utilities	docker
-65dff915d	todo		none	script check: 1 of 1 added lines are still in master	Wrap settings to make them consistent	7.0	www	MultiSync & remotes	web
+65dff915d	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Wrap settings to make them consistent	7.0	www	MultiSync & remotes	web
 f863d73e4	todo		none	script check: 5 of 6 added lines are still in master	Allow ShowCommandEditor() callers to limit commands shown	7.0	www	Commands & presets	web
 8a73e49c0	todo		none	script check: 2 of 8 added lines are still in master	If going to the multisync page by hostname (and not ip), then use the hostname of remotes for upgrade action to deal with CORS	7.0	www	MultiSync & remotes	web
 048d5bed0	todo		none	script check: 1 of 3 added lines are still in master	Accidentally removed setting interfaceUp to true while trying to reproduce curl stuff	7.0	channeloutput	Other channel outputs	docker
@@ -5189,17 +5189,17 @@ c500e69c1	todo		none	script check: 42 of 106 added lines are still in master	Add
 16ba48687	todo		none	script check: 456 of 645 added lines are still in master; 1 of 18 files gone	Enhancement - Automatic JSON Settings Backup	7.0	api	Network, Apache & security	docker,web
 b7b0d605d	todo		none	script check: 117 of 169 added lines are still in master; 2 of 32 files gone	Add R/G/B/W fades for string testing	7.0	channeloutput	LED panels	device:bb,device,docker,web
 690d75bfc	todo		none	script check: 99 of 155 added lines are still in master	Add infrastructure for new PixelString based testing from the String outputs page	7.0	channeloutput	BB pixel strings & PRU	device:bb,docker,web
-14ddae683	todo		none	script check: 0 of 0 added lines are still in master	Remove extra console log	7.0	www	BB pixel strings & PRU	web
+14ddae683	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Remove extra console log	7.0	www	BB pixel strings & PRU	web
 52ff794d3	todo		none	script check: 3 of 3 added lines are still in master	Suspend status timer during restart and reload status after complete.	7.0	js	Web UI (shared JS/CSS/pages)	web
 881dd2863	todo		none	script check: 67 of 80 added lines are still in master	Better algorithms for determining overlaps and other pixel string warnings	7.0	www	BB pixel strings & PRU	web
-ec9c624b2	todo		none	script check: 36 of 76 added lines are still in master	Code format refactoring, no code changes	7.0	api	Upgrade, backup & files	web
+ec9c624b2	untestable		none	script check + read: refactor, formatting or file removal with no change in behavior	Code format refactoring, no code changes	7.0	api	Upgrade, backup & files	web
 856b1fc3e	todo		none	script check: 2 of 3 added lines are still in master	Fix port numbers when changing from Smart to Standard Receiver #1454	7.0	www	BB pixel strings & PRU	web
 4fa76164c	todo		none	script check: 0 of 0 added lines are still in master	Remove remaining traces of the old NTP config setting.	7.0	common	Boot, OS image & install	docker,web
 a5b1a6ae7	todo		none	script check: 32 of 37 added lines are still in master	Check size of fppos file before upgrading and remove partial downloads #1400	7.0	api	Boot, OS image & install	os-image,web
 a78ba2d59	todo		none	script check: 1 of 1 added lines are still in master	add fppos file size to releases api	7.0	api	Web API	web
 030003bad	todo		none	script check: 0 of 0 added lines are still in master	Fix power cycle needed after fppos upgrade #1449	7.0	scripts	Boot, OS image & install	docker
 0743ac19a	superseded		none	script check: only 1 of the 18 lines this commit added are still in master; the rest were rewritten	Make it more obvious when there is a restart message Closes #1453	7.0	js	Web UI (shared JS/CSS/pages)	web
-70130e768	todo		none	script check: 3 of 3 added lines are still in master	Show top button on small screens	7.0	css	Web UI (shared JS/CSS/pages)	web
+70130e768	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Show top button on small screens	7.0	css	Web UI (shared JS/CSS/pages)	web
 d1dba8b1c	superseded		none	script check: every file this commit changed has since been removed from master	spelling	7.0	api	Web API	web
 a42868898	untestable		none	script check + read: cosmetic: spelling, comment, include order or label text; read from the diff, no behavior to test	fix spelling	7.0	playlist	Playlists, schedule & sequences	docker
 3b6edcf6d	todo		none	script check: 16 of 20 added lines are still in master	Expand to allow all media types to be played from status page	7.0	playlist	fppd core & utilities	docker
@@ -5213,11 +5213,11 @@ f39078876	todo		none	script check: 7 of 15 added lines are still in master	worki
 013d37322	todo		none	script check: 7 of 12 added lines are still in master	 CTRL/Shirt Click on OutputProcessor.php Page #1305	7.0	www	Other channel outputs	web
 30d2b8a55	todo		none	script check: 15 of 23 added lines are still in master	Prevent invalid times/dates from being scheduled #1343	7.0	www	Playlists, schedule & sequences	web
 a320c9358	todo		none	script check: 1 of 3 added lines are still in master	Disable Sequence tab in Display testing when in remote mode #1402	7.0	www	Web UI (shared JS/CSS/pages)	web
-8a48f06fc	todo		none	script check: 1 of 2 added lines are still in master	Fix formattign on multisync	7.0	www	MultiSync & remotes	web
-1f0b35f6d	todo		none	script check: 1 of 3 added lines are still in master	Make " Send MultiSync Packets" more prominent (#1450)	7.0	www	MultiSync & remotes	web
+8a48f06fc	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Fix formattign on multisync	7.0	www	MultiSync & remotes	web
+1f0b35f6d	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Make " Send MultiSync Packets" more prominent (#1450)	7.0	www	MultiSync & remotes	web
 2f5e4e3ed	todo		none	script check: 7 of 9 added lines are still in master	Permit sending UDP output to self when "Disable Network Bridge Monitoring (E1.31/DDP/ArtNet)" is set	7.0	channeloutput	Other channel outputs	docker
 7141ee3e3	todo		none	script check: 3 of 10 added lines are still in master	Clear playlist name when creaitng new playlist NOTE: only line 75 was changed, rest is auto formatting Closes #1391	7.0	www	Playlists, schedule & sequences	web
-5182f32ea	todo		none	script check: 607 of 740 added lines are still in master	Increase max-width of dialog box.	7.0	css	Web UI (shared JS/CSS/pages)	web
+5182f32ea	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Increase max-width of dialog box.	7.0	css	Web UI (shared JS/CSS/pages)	web
 cb701328b	todo		none	script check: 2 of 7 added lines are still in master	Add support for Genius filtering on Mulisync Closes #1446	7.0	www	MultiSync & remotes	web
 1403ed180	todo		none	script check: 0 of 1 added lines are still in master	detect SanDevices 5.050 beta firmware	7.0	src	Network, Apache & security	docker
 c7abb3774	superseded		none	script check: none of the 5 lines this commit added are in master any more	More attempts to find a valid uuid on intels	6.3	scripts	fppd core & utilities	docker
@@ -5226,7 +5226,7 @@ c7abb3774	superseded		none	script check: none of the 5 lines this commit added a
 6d7bfa2dd	superseded		none	script check: every file this commit changed has since been removed from master	Add some UI warnings and error checking for DRM based framebuffers	6.3	src	fppd core & utilities	docker
 4ee0ebea3	todo		none	script check: 7 of 10 added lines are still in master	Flip mac to php 8.1 to start testing more with  8.1	6.3	SD	Other channel outputs	device:mac,docker,web
 8378421c3	todo		none	script check: 53 of 62 added lines are still in master	Add reset menu to oled	6.3	oled	OLED, GPIO & sensors	device,docker
-b98a003c3	todo		none	script check: 2 of 6 added lines are still in master	Bump decode-uri-component from 0.2.0 to 0.2.2 in /www	6.3	www	Web UI (shared JS/CSS/pages)	web
+b98a003c3	untestable		none	script check + read: dev dependency bump in www/ (npm package-lock): not shipped to the player's runtime	Bump decode-uri-component from 0.2.0 to 0.2.2 in /www	6.3	www	Web UI (shared JS/CSS/pages)	web
 57eaa62cb	todo		none	script check: 0 of 0 added lines are still in master	Need to find a better solution, this breaks on php7.4	6.3	api	Network, Apache & security	web
 a23c744a0	todo		none	script check: 3 of 12 added lines are still in master	Update some armbian notes	6.3	api	Boot, OS image & install	os-image,web
 2509fb85d	todo		none	script check: 0 of 2 added lines are still in master	Fix another php8 issue	6.3	api	Network, Apache & security	web
@@ -5251,15 +5251,15 @@ bae1c5f3d	superseded		none	script check: only 1 of the 18 lines this commit adde
 14b8ff7f5	todo		none	script check: 0 of 2 added lines are still in master	Increase buffer size slightly, reduces crackling with streaming audio	6.3	etc	Media: audio & video	docker
 42d8e063f	untestable		none	image/installer build: SD/ scripts, README or package lists, run when an image is made; nothing fppd or the UI runs	Limit CPU parallism with low memory	6.3	SD	Boot, OS image & install	os-image
 48f60f2a1	todo		none	script check: 4 of 6 added lines are still in master	Add 30 second warnings to UI for various Playlist loading issues.  Fixes #1419	6.3	playlist	Playlists, schedule & sequences	docker
-76a1eefc7	todo		none	script check: 7 of 7 added lines are still in master	Fix crash  when inserting a playlist that doesn't exist	6.3	playlist	Playlists, schedule & sequences	docker
-154cbdf3b	todo		none	script check: 29 of 75 added lines are still in master	Bump engine.io from 6.1.2 to 6.2.1 in /www	6.3	www	Web UI (shared JS/CSS/pages)	web
+76a1eefc7	todo		none	script check: fix is the PL_CLEANUPS sort/unique in Playlist::Process; needs a test inserting a missing playlist while one plays	Fix crash  when inserting a playlist that doesn't exist	6.3	playlist	Playlists, schedule & sequences	docker
+154cbdf3b	untestable		none	script check + read: dev dependency bump in www/ (npm package-lock): not shipped to the player's runtime	Bump engine.io from 6.1.2 to 6.2.1 in /www	6.3	www	Web UI (shared JS/CSS/pages)	web
 2abfca838	todo		none	script check: 4 of 8 added lines are still in master	Hopefully fix 0 dislpay in panel test	6.3	channeloutput	LED panels	docker
 ba9d6a40d	superseded		none	script check: every file this commit changed has since been removed from master	Cleanup chromium files on boot.  Fixes #1409	6.3	scripts	Boot, OS image & install	docker
 02b0dd5bd	todo		none	script check: 30 of 41 added lines are still in master	Fix branch playlist entry type visibility of items. Fixes #1413	6.3	css	Web UI (shared JS/CSS/pages)	web
-e5a17ef11	todo		none	script check: 1 of 2 added lines are still in master	Add favicon color support	6.3	common	Web UI (shared JS/CSS/pages)	web
+e5a17ef11	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Add favicon color support	6.3	common	Web UI (shared JS/CSS/pages)	web
 f34d04ecc	untestable		none	script check + read: macOS-only install or port: runs on a Mac host, not in the container or a Pi/Beagle	Support proxy configs on macOS	6.3	proxy	Boot, OS image & install	device:mac,os-image,docker,web
 9f322f7cd	superseded		none	script check: only 1 of the 37 lines this commit added are still in master; the rest were rewritten	Add README for Debian, add fpp user to group based on devices found	6.3	SD	Boot, OS image & install	os-image
-f5341c084	todo		none	script check: 5 of 7 added lines are still in master	Display OrangePi logo with Debian install on OrangePI	6.3	www	Settings & config	web
+f5341c084	untestable		none	script check + read: cosmetic: text, colour, layout, icon or help wording; read from the diff, nothing a test can usefully assert	Display OrangePi logo with Debian install on OrangePI	6.3	www	Settings & config	web
 cc3f748d0	superseded		none	script check: none of the 6 lines this commit added are in master any more	Bump minimatch from 3.0.4 to 3.0.8 in /www	6.3	www	Web UI (shared JS/CSS/pages)	web
 5528d8afe	superseded		none	script check: only 2 of the 20 lines this commit added are still in master; the rest were rewritten	Bump socket.io-parser from 3.3.2 to 3.3.3 in /www	6.3	www	Web UI (shared JS/CSS/pages)	web
 a468479a4	untestable		none	script check + read: cosmetic: spelling, comment, include order or label text; read from the diff, no behavior to test	Fix typo	6.3	commands	Commands & presets	docker
