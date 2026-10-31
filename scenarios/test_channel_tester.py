@@ -298,3 +298,19 @@ def test_rgbw_patterns_step_by_whole_four_channel_nodes(fppd, pattern):
         assert seen <= want, f"frames that are not whole RGBW nodes: {[s.hex(' ') for s in seen - want][:4]}"
         assert seen == want, f"the {pattern} did not step through all four: {[s.hex(' ') for s in seen]}"
         assert all(not any(f[16:]) for f in frames), "the pattern spilled past channel 16"
+
+
+@pytest.mark.parametrize("channels", ["", "*"])
+def test_a_blank_or_star_channel_range_tests_every_channel(fppd, channels):
+    """Test Start with a blank channel range, or "*", lights every channel
+    rather than none.
+
+    Regression: 1ba16bb45."""
+    setup(fppd)
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        start_test(fppd, 1000, "RGB Single Color", channels, "#FF8001")
+        frame = wait_output(fppd, rx, lambda f: any(f), "the test colour")
+        assert frame[:3] == b"\xff\x80\x01"
+        assert frame[-3:] == b"\xff\x80\x01"
+        fppd.command("Test Stop")

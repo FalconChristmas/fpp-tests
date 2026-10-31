@@ -901,3 +901,22 @@ def test_repeating_instant_playlist_runs_a_pass_a_second(fppd):
                   what="P to stop")
     n = int(float((fppd.get("/variables") or {}).get("passes", {}).get("value") or 0))
     assert 2 <= n <= 10, f"{n} passes in 5 s"
+
+
+def test_branch_to_another_playlist_runs_it_then_continues(fppd):
+    """A branch entry whose true side is "Playlist" runs that playlist, and
+    the branching playlist carries on after it.
+
+    Regression: c48c724a8. The branch inserted the playlist while it was
+    still starting, before the playlist had its position; it now decides in
+    Process.
+    """
+    fppd.write("playlists/Other.json", {"name": "Other", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                        "mainPlaylist": [step(5)], "leadOut": []})
+    fppd.write("playlists/P.json", playlist("P", main=[
+        step(1),
+        branch("Loop", true_type="Playlist", trueBranchPlaylist="Other",
+               iterationStart=1, iterationCount=1),
+        step(2)]))
+    fppd.start()
+    assert run(fppd, "P") == "152"
