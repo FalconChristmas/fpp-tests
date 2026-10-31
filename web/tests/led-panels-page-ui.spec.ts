@@ -165,6 +165,8 @@ test('a ColorLight matrix on an interface slower than 1000 Mbps is warned about'
   // the dropdown text but threw the number away (NicSpeed stayed 1000, since
   // 7930d9ca2), so the "does not support 1000+ Mbps" warning never showed.
   // ethtool stands in for a 100 Mbps NIC (the container has none).
+  // Also f2a4350cc (the warning added to the page) and 132658102 (the speed
+  // written into each interface's option text, which the warning reads).
   inPlayer('sh', '-c', `printf '#!/bin/sh\\necho "Supported link modes:   10baseT/Full 100baseT/Full"\\necho "Speed: 100Mb/s"\\n' > /usr/local/bin/ethtool && chmod +x /usr/local/bin/ethtool`);
   try {
     writeOutputs({ channelOutputs: [colorlight()] });
@@ -547,6 +549,7 @@ test('a ColorLight matrix offers all 24 receiver outputs for its panels, whateve
   // nothing reads, so the panels' Output dropdowns offered the saved
   // ledPanelsOutputs: 2 for a config an earlier Save wrote with the column
   // count there (e2caa46ec).
+  // Also 577a800c2: a ColorLight connection has 24 outputs (it had 16).
   writeOutputs({ channelOutputs: [{ ...asSaved(colorlight()), ledPanelsOutputs: 2 }] });
   await openPanels(page);
   await expect(page.locator('#panelMatrix1 .LEDPanelOutputNumber_0_0 option')).toHaveCount(24);

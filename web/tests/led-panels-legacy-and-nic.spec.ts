@@ -25,8 +25,8 @@ test.afterEach(() => {
   inPlayer('rm', '-f', '/usr/local/bin/ethtool');
 });
 
-function colorlight(extra: object = {}) {
-  const [w, h, s, cols, rows] = [32, 16, 8, 2, 2];
+function colorlight(extra: object = {}, cols = 2, rows = 2) {
+  const [w, h, s] = [32, 16, 8];
   const panels = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -62,6 +62,25 @@ test('a matrix saved with no number is given one, and saved with it', async ({ p
     const c = await (await request.get('/api/configfile/channeloutputs.json')).json();
     return Number(c.channelOutputs.find((o: any) => o.type === 'LEDPanelMatrix')?.panelMatrixID);
   }, { timeout: 15_000 }).toBe(1);
+});
+
+test('a matrix with no number keeps its layout and settings through a Save', async ({ page, request }) => {
+  // Also 37ee80188: the number the page gives a matrix is also what the
+  // saved config is filed under in the page's lookup of matrices.  A matrix
+  // left without one has no entry there, and the page filled its tab in
+  // from the defaults (a 2x2 layout) rather than from what was saved.
+  const legacy: any = colorlight({ brightness: 25 }, 3, 1);
+  delete legacy.panelMatrixID;
+  writeOutputs({ channelOutputs: [legacy] });
+  await openPanels(page);
+  await expect(page.locator('#panelMatrix1 .LEDPanelsLayoutCols')).toHaveValue('3');
+  await expect(page.locator('#panelMatrix1 .LEDPanelsLayoutRows')).toHaveValue('1');
+  await page.locator('#tab-LEDPanels input[type=button][value="Save"]:not(.Zebra_Pin_Clone *)').click();
+  await expect.poll(async () => {
+    const c = await (await request.get('/api/configfile/channeloutputs.json')).json();
+    const m = c.channelOutputs.find((o: any) => o.type === 'LEDPanelMatrix');
+    return [m?.ledPanelsLayout, m?.panels?.length, Number(m?.brightness)];
+  }, { timeout: 15_000 }).toEqual(['3x1', 3, 25]);
 });
 
 test('the slow-NIC warning shows only for a matrix that is switched on', async ({ page }) => {

@@ -26,6 +26,7 @@ test('an installed plugin\'s card uninstalls it, and the open tab survives a rel
   // Regression: 4eaa6aa3d.  An installed plugin's card had Update at most,
   // and no Uninstall; and the top tab was forgotten on every load, so the
   // reload after an upgrade from the Updates tab landed back on Available.
+  // Also 731eacbba: Uninstall asks for confirmation, naming the plugin.
   test.setTimeout(240_000);
   saveState();
   const repo = new PluginRepo(NAME);
@@ -50,6 +51,9 @@ test('an installed plugin\'s card uninstalls it, and the open tab survives a rel
     // The plugin is named by its name, not its repository.
     await expect(dialog).toContainText(`uninstall the ${listed.name} plugin`);
     await dialog.getByRole('button', { name: 'Uninstall' }).click();
+    // Also 77d78f89d: the uninstall streams its progress into a dialog, which
+    // ends with the stream's own "Done" (the JSON reply has none).
+    await expect(page.locator('#pluginsProgressPopupText')).toHaveValue(/Done/, { timeout: 60_000 });
     // The receiving end: it is gone from the player.
     await expect.poll(() => exists(`${PLUGINS}/${NAME}`), { timeout: 120_000 }).toBe(false);
   } finally {

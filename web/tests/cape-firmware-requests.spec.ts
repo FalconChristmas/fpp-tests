@@ -5,6 +5,8 @@ import { container, inPlayer } from './container';
 // EEPROM location from media/tmp/eeprom_location.txt -- a file anyone who can
 // reach the UI can write.  What either names ends up in a root shell command
 // or flashed onto the cape, so each is held to what it is meant to be.
+// (Also d6df76774: a parse error in controllers/cape.php takes down every API
+// route, not only the cape's, so none of these can be asked.)
 
 test.skip(!container, 'seeds and checks files inside the run-web.sh container');
 

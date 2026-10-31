@@ -45,6 +45,7 @@ test('the Items and Size badges count the rows the table shows', async ({ page, 
   // Regression: e551c1d18.  UpdateFileCount() put the jQuery row set itself
   // in the Items badge and then used a variable it never set, so it threw
   // before the count or size was written.
+  // Also 2220817b5: the Items badge over each table counts its rows.
   // Feature: ee5291ba7 (the Size badge, the visible files' sizes summed).
   const files = (await (await request.get('/api/files/music')).json()).files as any[];
   const total = files.reduce((n, f) => n + (parseInt(f.sizeBytes) || 0), 0);

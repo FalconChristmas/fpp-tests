@@ -21,6 +21,11 @@ test('a link to a sibling of a served directory is refused', async ({ request })
     inPlayer('sh', '-c', `echo ok > ${media}/music/fpp-tests-inside.txt`);
     expect(await (await request.get('/api/file/music/fpp-tests-inside.txt')).text()).toContain('ok');
 
+    // Also 7cd20d508: a file in a subdirectory of the directory is served too
+    // (the route takes the rest of the path, not one segment).
+    inPlayer('sh', '-c', `mkdir -p ${media}/music/fpp-tests-sub && echo deep > ${media}/music/fpp-tests-sub/b.txt`);
+    expect(await (await request.get('/api/file/music/fpp-tests-sub/b.txt')).text()).toContain('deep');
+
     const cfg = await request.get('/api/configfile/sib/secret.json');
     expect(await cfg.text()).not.toContain('secret');
     expect(cfg.status()).toBe(403);
@@ -33,6 +38,6 @@ test('a link to a sibling of a served directory is refused', async ({ request })
     expect(inPlayer('sh', '-c', `test -e ${media}/music-old/a.txt && echo kept || echo deleted`).trim()).toBe('kept');
   } finally {
     inPlayer('rm', '-rf', `${media}/config/sib`, `${media}/music/sib`, `${media}/config-old`, `${media}/music-old`,
-      `${media}/music/fpp-tests-inside.txt`);
+      `${media}/music/fpp-tests-inside.txt`, `${media}/music/fpp-tests-sub`);
   }
 });

@@ -63,6 +63,8 @@ async function open(page: Page) {
 }
 
 test('each category of Other output has its own tab, and an output added in one is saved and loaded', async ({ page, request }) => {
+  // Also 03fbc510b: co-other.php asks for the saved outputs when the page is
+  // ready (its own page-load hooks are never called on this tab).
   // Feature: 24b46caa3 (#1467).  The single "Other" tab became one tab per
   // category, each with its own table, Add and Save.
   await put(request, [udp('127.0.0.1', 1), vmatrix, control]);

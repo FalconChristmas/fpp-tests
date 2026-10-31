@@ -401,7 +401,11 @@ def test_custom_model_nodes_past_its_channels_are_disabled(fppd):
     megabytes past it.
 
     Also 1746fddbb: custom layout node numbers are 1-based, and node n was
-    mapped to node n+1's channels, so every node drew one place along."""
+    mapped to node n+1's channels, so every node drew one place along.
+
+    Also 59b6f7aa0: a node's three channels were at y*3+x, not at
+    (y*width + x)*3, so on a model of more than one row they overlapped
+    their neighbours' and the nodes never all filled."""
     custom = {"Name": "C", "Type": "Channel", "StartChannel": 1, "ChannelCount": 9,
               "ChannelCountPerNode": 3, "Orientation": "custom", "StartCorner": "TL",
               "StringCount": 1, "StrandsPerString": 1, "data": "1,2;3,2800000"}

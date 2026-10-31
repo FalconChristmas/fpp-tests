@@ -53,6 +53,9 @@ for (const [tab, table, dir, ext] of [
     // heading is found through '#div' + the table's name: filtering threw a
     // TypeError there and the heading kept saying "Items".
     //
+    // Also 93268ac0e: the heading and the badge's colour follow the filter
+    // ("Filtered items" over a success-coloured count).
+    //
     // Regression: 8737b7746.  Broken again by 6274b3d72 (Bootstrap Table in
     // place of tablesorter): a filter drops the rows it hides from the DOM,
     // so UpdateFileCount() counted as many rows as were left and never took
@@ -80,6 +83,9 @@ for (const [tab, table, dir, ext] of [
 test('turning the filter off shows every row again', async ({ page }) => {
   // Regression: d7afdf9db.  Unticking Filter hid the filter boxes but left
   // their filter applied, with nothing on screen to clear it.
+  //
+  // Also 5c09dd959: the Filter setting is what shows and hides the filter
+  // boxes (FileManagerFilterToggled()).
   //
   // Regression: fb5eb22d7.  Broken again by 6274b3d72:
   // FileManagerFilterToggled() only called Bootstrap Table's

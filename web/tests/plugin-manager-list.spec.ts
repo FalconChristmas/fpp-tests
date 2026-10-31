@@ -317,6 +317,8 @@ test('a plugin with a compatible version beside an untested one installs without
   // Regression: 9ace67e94.  A plugin listing a version made for an older
   // FPP with no upper bound (untested here) and one made for this FPP was
   // judged by the untested one, and offered "Install anyway".
+  // Also 82c2ec8bf: several versions with a maxFPPVersion of 0 (no upper
+  // bound) are each judged on their own minimum.
   const NAME = 'fpp-tests-two-versions';
   const m = parseInt(await major(request), 10);
   await setUiLevel(request, '1');

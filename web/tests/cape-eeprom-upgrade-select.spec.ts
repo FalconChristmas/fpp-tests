@@ -66,6 +66,8 @@ test('the EEPROM upgrade selects the installed cape, locked at the Basic UI leve
   // Feature: 773d6ea0f (#2564).  The vendor and cape lists default to the
   // installed cape; at the Basic level they are locked to it, so only the
   // version can be chosen.
+  // Also dd72a0ac5: each version's option holds the version's URL (the
+  // option value was "undefined").
   installCape('fpp-tests Vendor');
   await setLevel(request, '0');
   await openUpgrade(page);

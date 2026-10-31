@@ -58,7 +58,7 @@ test.afterAll(() => inPlayer('rm', '-rf', DRIVER, DIR, COPY));
 test('a Compute Module 5 is a Pi 5, with the Pi 5 logo', async ({ request }) => {
   // Regression: 5cd25ca4f.  Only "Pi 5" in the model was matched, and a CM5's
   // model is "Raspberry Pi Compute Module 5 ...", so it got no variant and
-  // no logo.
+  // no logo.  Also 6d091224f: a Pi 5 is given its own variant and logo.
   const pi5 = board({ platform: 'Raspberry Pi\n', model: 'Raspberry Pi 5 Model B Rev 1.0\0' });
   expect(pi5.Variant, 'the control: a Pi 5 is recognised').toBe('Pi 5');
   const cm5 = board({ platform: 'Raspberry Pi\n', model: 'Raspberry Pi Compute Module 5 Rev 1.0\0' });

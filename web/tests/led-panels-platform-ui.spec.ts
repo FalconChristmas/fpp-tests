@@ -246,6 +246,8 @@ test('a cape whose default connection is LEDscape runs the panel test pattern on
   // the matrix's Connection Type <select> with .text(), which replaced its
   // options instead of choosing one, so the select had no value and the
   // Testing dropdown asked fppd for a pattern on output "".
+  // Also 050f33a9a: the test pattern's output type for a LEDscapeMatrix
+  // matrix is "BBB Panels" (it was left as the connection's own name).
   inPlayer('sh', '-c', 'mkdir -p "$(dirname "$2")" && printf "%s" "$1" > "$2"', 'sh',
     JSON.stringify({ name: 'FppTestsLEDscape', longName: 'fpp-tests LEDscape cape',
       defaults: { LEDPanelsConnection: 'LEDscapeMatrix' }, controls: {}, outputs: Array.from({ length: 8 }, () => ({})) }), CAPE);

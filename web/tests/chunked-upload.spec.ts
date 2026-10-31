@@ -83,6 +83,16 @@ function clean(name: string) {
   inPlayer('sh', '-c', `cd ${UPLOAD} && rm -f -- "${name}" "${name}".*`);
 }
 
+test('each upload start is given its own transfer id', async ({ request }) => {
+  // Regression: e09bf47e7.  The POST that starts an upload answered "OK"
+  // for everyone; FilePond uses the answer as the transfer's id, and macOS
+  // uploads of several files at once ran into each other's chunks.
+  const a = await start(request);
+  const b = await start(request);
+  expect(a).not.toBe('OK');
+  expect(a).not.toBe(b);
+});
+
 test('a retried middle chunk is not counted twice', async ({ request }) => {
   const name = 'fpp-tests-dup.bin';
   const data = payload(3);
@@ -122,6 +132,8 @@ test('a chunk cut off part way is thrown away and its retry completes the upload
 });
 
 test('a name with [ and ] in it completes', async ({ request }) => {
+  // Also d8795d89b: the patches of a name with square brackets were looked up
+  // with a pattern the brackets broke, so the upload never finished.
   const name = 'fpp-tests [remix].bin';
   const data = payload(2);
   clean(name);

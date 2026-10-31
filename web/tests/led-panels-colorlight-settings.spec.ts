@@ -137,3 +137,27 @@ test('the firmware version and link check are saved on the panel, and fppd acts 
   await expect(fw).toHaveValue('13');
   await expect(link).toBeChecked();
 });
+
+test('an interface shows the fastest speed it advertises, not the one it is linked at', async ({ page }) => {
+  // Regression: bbf4ad8b7.  The list showed the speed the link had negotiated,
+  // so a gigabit NIC on a 100 Mbps link read "(100Mbps)" and the ColorLight
+  // warning fired for an interface that can run the receiver.  The speed is
+  // now the highest NNNbaseT ethtool lists as supported.
+  inPlayer('sh', '-c', `cat > ${ETHTOOL} <<'EOF2'
+#!/bin/sh
+cat <<OUT
+Settings for $1:
+	Supported link modes:   10baseT/Half 10baseT/Full
+	                        100baseT/Half 100baseT/Full
+	                        1000baseT/Full
+	Speed: 100Mb/s
+	Duplex: Full
+	Link detected: yes
+OUT
+EOF2
+chmod +x ${ETHTOOL}`);
+  writeOutputs({ channelOutputs: [matrix()] });
+  await openPanels(page);
+  await expect(page.locator('#panelMatrix1 .LEDPanelsInterface option[value="eth0"]')).toHaveText('eth0 (1000Mbps)');
+  await expect(page.locator('#panelMatrix1 .divLEDPanelWarnings')).not.toContainText('does not support 1000+ Mbps');
+});

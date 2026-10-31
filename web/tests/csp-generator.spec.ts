@@ -344,6 +344,8 @@ test('Cape Info signs through the browser under the player\'s own policy when th
   // in the policy the check is refused, the signing form stays hidden and
   // nothing can be signed.  The player's own requests and the signing API are
   // answered here; the policy is the one Apache serves.
+  // Also 26a5736be: the post goes to https://<signing host>/api/fpp/eeprom/sign,
+  // the host the page was given.
   //
   // The cape: an unsigned virtual EEPROM on a licensed output driver, which is
   // when the signing form is drawn.  The player is made offline for the API by

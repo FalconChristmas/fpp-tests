@@ -62,6 +62,8 @@ test('an upload shows up in its table without a reload', async ({ page }) => {
   // Regression: 31916f7c7.  The listing an upload's completion asks for
   // rewrote the tbody while Bootstrap Table managed it, and the destroy
   // before re-init put back the rows from before the upload.
+  // Also 4f55f2ec4: the listing is asked for once the upload has been moved
+  // into place, not before.
   const old = 'fpp-tests-before-upload.mp3';
   const name = 'fpp-tests-uploaded.mp3';
   sh(`echo x > ${MEDIA}/music/${old}`);

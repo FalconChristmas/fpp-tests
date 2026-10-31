@@ -115,6 +115,8 @@ async function saveAndWait(page: Page, request: APIRequestContext, done: (c: any
 const reverseOf = (c: any, port: number) => c.channelOutputs[0].outputs[port].virtualStrings[0].reverse;
 
 test('a string set to Reverse is saved Reverse, and reads Reverse after a reload', async ({ page, request }) => {
+  // Also 13ad61eca: the save read its strings from the table #PixelString;
+  // looked for under the old selector it found none, and saved nothing.
   // Regression: 182255979.  The Direction select was drawn with class
   // "fvsReverse" while every reader and writer looks for ".vsReverse", so
   // Save wrote parseInt(undefined) -- NaN, which JSON.stringify writes as

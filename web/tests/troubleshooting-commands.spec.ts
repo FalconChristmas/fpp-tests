@@ -116,6 +116,8 @@ test('a Beagle gets the GPIO tab, and a BeagleBone 64 its pinctrl', async ({ pag
   // Feature: 4cc8195cd.  The GPIO group (gpiodetect, gpioinfo) was for the
   // Pi only; the Beagles got it, with descriptions, and the 64-bit Beagles
   // TI's pinctrl -q.
+  // Also a60e125b5: each group and command names the platforms it is for,
+  // and the page shows only those that apply to this one.
   standIn(`${BIN}/gpiodetect`, 'echo "gpiochip0 [600000.gpio] (92 lines)"\n');
   standIn(`${BIN}/gpioinfo`, 'echo "gpiochip0 - 92 lines:"\necho "\tline   0:      unnamed       unused   input  active-high"\n');
   standIn(`${BIN}/pinctrl`, '[ "$1" = "-q" ] || { echo "pinctrl: unexpected arguments: $*" >&2; exit 1; }\necho "P8_03 : gpio1_6 : mode 7"\n');
@@ -200,6 +202,7 @@ test('a Pi\'s RPI Info stops before raspinfo\'s kernel log', async ({ page }) =>
   // included, which Boot now has.  The stand-in prints raspinfo's section
   // headers in a Pi 5's order: its "dmesg log" section, then the firmware
   // configuration and EEPROM.
+  // Also 5f7364495: the RPIINFO command (raspinfo) is offered on a Pi.
   putFile('/usr/bin/raspinfo', `#!/bin/sh
 # fpp-tests stand-in
 printf '%s\\n' "System Information" "------------------" "Raspberry Pi 5 Model B Rev 1.0" "" "dmesg log" "---------" "[    0.000000] Booting Linux on physical CPU 0x0000000000" "" "Firmware Configuration" "----------------------" "EEPROM" "BOOTLOADER: up to date"

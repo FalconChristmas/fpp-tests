@@ -42,6 +42,8 @@ test('Check for Updates on an offline player does not say the plugins are up to 
   // with HTTP 200, which the page counted as "no update", so with every fetch
   // failing it said "All plugins are up to date".  The browser-side check was
   // later replaced by the server's (1b2705a93); this holds for both.
+  // Also 064b5d7ec: the Check for Updates button (#checkAllUpdatesBtn, first
+  // "Check All for Updates") runs the check and reports its outcome.
   test.setTimeout(120_000);
   await openPluginsPage(page);
   await page.locator('#pluginTopTabs .nav-link[data-top-tab="installed"]').click();

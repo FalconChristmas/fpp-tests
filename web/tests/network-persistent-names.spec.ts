@@ -28,10 +28,12 @@ test.afterEach(() => {
   netAdmin(`ip link del ${ENX} 2>/dev/null || true`);
   inPlayer('sh', '-c', `rm -f ${CONFIG}/interface.${ENX} ${CONFIG}/interface.eth1 ${CONFIG}/interface.eth2 ` +
     `${NETDIR}/10-${ENX}.network ${NETDIR}/10-eth1.network ${NETDIR}/10-eth2.network ` +
-    `${NETDIR}/99-default.link ${NETDIR}/73-usb-net-by-mac.link`);
+    `${NETDIR}/99-default.link ${NETDIR}/73-usb-net-by-mac.link ${NETDIR}/5*-fpp-*.link`);
 });
 
 test('clearing persistent names gives a USB adapter\'s settings back to an ethN name', async ({ request }) => {
+  // Also 63454ffd6, 01efb5054: the route is /persistentNames (spelled right),
+  // and the handler it names exists.
   // Regression: 45defae1c ("support for renaming USB ethernet adapter
   // interfaces with persistent names").  Creating persistent names renames a
   // USB adapter's config to interface.enx<mac>; clearing them brought the
@@ -60,4 +62,18 @@ test('the adapter takes the first ethN without settings of its own', async ({ re
   expect(await (await request.delete('/api/network/persistentNames')).json()).toEqual({ status: 'OK' });
   expect(cat(`${CONFIG}/interface.eth1`)).toBe('INTERFACE="eth1"\nPROTO="dhcp"\n');
   expect(cat(`${CONFIG}/interface.eth2`)).toContain('INTERFACE="eth2"\nPROTO="static"\nADDRESS="192.0.2.20"');
+});
+
+test('creating persistent names pins each interface to its MAC address', async ({ request }) => {
+  // Regression: 63454ffd6, 01efb5054.  The route was renamed to
+  // /persistentNames and its POST handler was named for the old spelling,
+  // which no longer existed: the Network page's "Create Persistent Names"
+  // got a fatal error.  The receiving end is the .link file systemd reads.
+  const r = await request.post('/api/network/persistentNames');
+  const body = await r.json();
+  expect(body.status).toBe('OK');
+  expect(body.interfaceCnt).toBeGreaterThan(0);
+  const links = inPlayer('sh', '-c', `cat ${NETDIR}/5*-fpp-*.link 2>/dev/null || true`);
+  expect(links).toMatch(/\[Match\]\nMACAddress=([0-9a-f]{2}:){5}[0-9a-f]{2}\n/);
+  expect(links).toContain('[Link]\nNamePolicy=\nName=');
 });

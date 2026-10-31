@@ -42,3 +42,20 @@ test('a file listing gives sizes as numbers', async ({ request }) => {
     inPlayer('rm', '-f', path);
   }
 });
+
+test('a file listing is in name order', async ({ request }) => {
+  // Regression: 3af8a0a92.  The listing came in the order find walked the
+  // directory, which is neither the name order the older listing gave nor
+  // the same twice.  (Its sizes-as-numbers half is the one above.)
+  test.skip(!container, 'seeds sequences inside the run-web.sh container');
+  const dir = '/home/fpp/media/sequences';
+  const names = ['fpp-tests-sort-c.fseq', 'fpp-tests-sort-a.fseq', 'fpp-tests-sort-b.fseq', 'fpp-tests-sort-aa.fseq'];
+  inPlayer('sh', '-c', names.map((n) => `echo x > ${dir}/${n}`).join(' && '));
+  try {
+    const r = await request.get('/api/files/Sequences');
+    const got = ((await r.json()).files as { name: string }[]).map((f) => f.name).filter((n) => n.startsWith('fpp-tests-sort-'));
+    expect(got).toEqual(['fpp-tests-sort-a.fseq', 'fpp-tests-sort-aa.fseq', 'fpp-tests-sort-b.fseq', 'fpp-tests-sort-c.fseq']);
+  } finally {
+    inPlayer('rm', '-f', ...names.map((n) => `${dir}/${n}`));
+  }
+});

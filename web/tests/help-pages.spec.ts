@@ -82,6 +82,8 @@ test('Get Help fits a phone\'s width, and hides its outside links when external 
 
   // Asked to hide external URLs (config.php's hideExternalURLs, set by a
   // Hide-External-Links header or a local kiosk), it hides them, and only them.
+  // Also 03e3588df: the header is what config.php reads (without it the links
+  // stay).
   await page.setExtraHTTPHeaders({ 'Hide-External-Links': 'true' });
   await page.goto('/help.php?hidden');
   for (const text of [/Issue\s+Tracker/, /FPP\s+Forums/, /Facebook\s+group/, /Zoom\s+room/]) {

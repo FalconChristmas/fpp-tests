@@ -37,6 +37,8 @@ test('a group that does not apply here leaves the groups after it intact', async
   // after section that doesn't apply", #2577).  A group for another platform
   // still had its command list and three closing </div>s written out, which
   // closed the tab container early: every tab after it lost its place.
+  // Also a60e125b5 (groups for another platform are left out) and b9d756e11
+  // (the groups, tabs and commands are read from troubleshoot-commands.json).
   const all = await groups(request);
   const p = await platform(request);
   const shown = Object.keys(all).filter((g) => applies(all[g].platforms, p) && (all[g].level ?? 0) === 0);
