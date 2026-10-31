@@ -156,3 +156,17 @@ test('an ArtNet universe 0 loads, saves and goes out as universe 0', async ({ pa
     await request.put('/api/settings/DisableFakeNetworkBridges', { data: bridges || '0' });
   }
 });
+
+test('rows opened from a saved config already hide the fields their type does not use', async ({ page, request }) => {
+  // Regression: 1f6a4970a.  The fields were hidden when the type was
+  // changed, not when a saved row was drawn, so a saved DDP or multicast row
+  // came up showing every field.
+  await put(request, config([universe(1, { type: 4 }), universe(2, { type: 0, address: '' })]));
+  await openUniverses(page, 2);
+  const field = (i: number, cls: string) => row(page, i).locator(`input.${cls}`);
+  await expect(field(0, 'txtUniverse')).toBeHidden();
+  await expect(field(0, 'txtPriority')).toBeHidden();
+  await expect(field(0, 'txtIP')).toBeVisible();
+  await expect(field(1, 'txtIP')).toBeHidden();
+  await expect(field(1, 'txtMonitor')).toBeHidden();
+});

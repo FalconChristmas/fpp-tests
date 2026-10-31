@@ -306,3 +306,20 @@ test('select mode removes, duplicates and copies exactly the ticked entries', as
   }
 });
 
+
+test('Save As New in the Edit Entry dialog adds the edited entry and leaves the original alone', async ({ page, request }) => {
+  // Feature: 78d7b8d0d.  Editing an entry could only change it; "Save As New"
+  // makes a copy with the edits.
+  await storePlaylist(request, [{ type: 'command', enabled: 1, playOnce: 0, command: 'All Lights Off', args: [], note: 'original' }]);
+  await openEditor(page);
+  await page.locator('.playlistRowEditButton').first().click();
+  const modal = page.locator('.modal.show');
+  await expect(modal.locator('.modal-title')).toHaveText('Edit Entry');
+  await modal.locator('input.arg_note').fill('the copy');
+  await modal.getByRole('button', { name: 'Save As New', exact: true }).click();
+  await expect(modal).toBeHidden();
+  await expect(page.locator('#tblPlaylistMainPlaylist tr.playlistRow')).toHaveCount(2);
+  await savePlaylist(page);
+  const entries = (await storedPlaylist(request)).mainPlaylist;
+  expect(entries.map((e: { note?: string }) => e.note).sort()).toEqual(['original', 'the copy']);
+});

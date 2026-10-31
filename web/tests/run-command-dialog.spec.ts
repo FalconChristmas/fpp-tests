@@ -86,3 +86,18 @@ test('picking a preset and then none puts back the command the dialog opened wit
   await expect.poll(async () => ((await (await request.get('/api/variables')).json()) ?? {})[VAR]?.value,
     { timeout: 10_000 }).toBe('opened');
 });
+
+test('the command editor shows the picked command\'s description, and nothing for one without', async ({ page, request }) => {
+  // Feature: 0b6c5e2ce.  A command's description (when fppd gives one) is
+  // shown under the command picker.
+  const cmds = (await (await request.get('/api/commands')).json()) as Array<{ name: string; description?: string }>;
+  const dialog = await openDialog(page);
+  const offered = await dialog.locator('#editorCommand option').evaluateAll((os: HTMLOptionElement[]) => os.map((o) => o.value));
+  const withText = cmds.find((c) => c.description && offered.includes(c.name));
+  const without = cmds.find((c) => !c.description && offered.includes(c.name));
+  test.skip(!withText || !without, 'fppd offers no command with a description and one without');
+  await dialog.locator('#editorCommand').selectOption(withText!.name);
+  await expect(dialog.locator('[id$="_description_row"]')).toContainText(withText!.description!.slice(0, 30));
+  await dialog.locator('#editorCommand').selectOption(without!.name);
+  await expect(dialog.locator('[id$="_description_row"]')).toHaveCount(0);
+});
