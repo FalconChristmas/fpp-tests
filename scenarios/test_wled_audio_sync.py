@@ -179,6 +179,31 @@ def test_audio_sync_packets_drive_a_sound_reactive_effect(fppd):
         stop_effects(fppd, "M")
 
 
+def test_a_sound_reactive_effect_hears_the_playing_media(fppd, audio):
+    """With no audio-sync packets, a sound-reactive effect draws from the
+    media fppd is playing: silent media holds GEQ black, frame after frame.
+    The control: before the media starts, the simulated sound lights it.
+
+    Regression: 64d358a8f. The sound-reactive effects drew WLED's simulated
+    sound whatever was playing; the media's samples never reached them."""
+    import os
+    from audio import write_tone_wav
+    write_tone_wav(os.path.join(fppd.media, "music", "Silence.wav"), 30, bursts=[])
+    setup(fppd, [matrix("M", width=W, height=H)], channels=CHANNELS)
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        start_geq(fppd)
+        fppd.wait_for(lambda: any(rx.last() or b""), timeout=10, interval=0.05,
+                      what="the simulated sound to light the effect")
+        fppd.command("Play Media", "Silence.wav", "1", "0", "1")
+        wait_frame(fppd, rx, bars(SILENT), "the silent media to hold the effect black")
+        since = time.monotonic()
+        assert rx.wait_frames(40, since=since), "output stopped"
+        lit = [f for f in frames_since(rx, since) if any(f)]
+        assert not lit, f"{len(lit)} lit frames while silent media played:\n{show(lit[0])}"
+        stop_effects(fppd, "M")
+
+
 def test_an_unknown_buffer_mapping_draws_as_horizontal(fppd):
     """A BufferMapping that names no mapping (empty, or the wrong case) draws
     a 2D effect as Horizontal does: GEQ's stairs come out as 16 bars on the

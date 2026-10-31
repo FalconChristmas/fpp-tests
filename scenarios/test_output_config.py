@@ -43,6 +43,29 @@ def test_wrong_typed_output_config_is_skipped(fppd):
                       timeout=10, what="the good output to send")
 
 
+def test_an_output_that_throws_while_it_is_set_up_is_a_warning(fppd):
+    """An output whose own setup throws (a GenericSerial output with a speed
+    that is not a number: jsoncpp's asInt() throws in its Init()) is dropped
+    with a warning naming its type and the error, and the rest of the
+    outputs run. (A network output with a bad value no longer reaches this:
+    UDPOutput catches it itself.)
+
+    Regression: 2a6fc4d62. Nothing caught an exception from an output's
+    creation or Init(), so it ended fppd at startup."""
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "GenericSerial", "enabled": 1, "startChannel": 1, "channelCount": 10,
+        "device": "ttyUSB99", "speed": "fast", "header": "", "footer": ""}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        range_on(fppd, 10, 42)
+        fppd.wait_for(lambda: rx.last() is not None and rx.last()[:10] == bytes([42] * 10),
+                      timeout=10, what="the good output to send")
+    w = [x for x in warnings(fppd) if "Could not initialize output type GenericSerial. (" in x]
+    assert w, warnings(fppd)
+
+
 def test_fixed_output_config_takes_its_warning_down(fppd):
     """A UDP output aimed at fppd itself raises a warning; once the config is
     fixed and saved, the warning comes down.
@@ -907,6 +930,9 @@ def test_fixing_a_dmx_output_wider_than_a_universe_takes_its_warning_down(fppd):
     constructor with a plain AddWarning(), and the loader collected an
     output's config warnings only around Init(), so it stayed up until fppd
     restarted.
+
+    Feature: 286f28d33 (before it there was no cut and no warning: the
+    output took all 600 channels, past the end of its 512-channel buffer).
     """
     def dmx(count):
         return {"channelOutputs": [{

@@ -177,7 +177,10 @@ def test_the_ported_fx_effects_are_offered_and_draw(fppd, name):
     """Shimmer, Color Clouds, PacMan and Slow Transition, ported from
     newer WLED, are offered with the other WLED effects and light a model.
 
-    Feature: f976e090f (before it, none of the four existed)."""
+    Feature: f976e090f (before it, none of the four existed).
+
+    Regression: 810852c41. Every mode past 127 was named "WLED♪ - ", as if
+    sound reactive; these four are past 127, and none of them is."""
     w, h = 32, 16
     channels = w * h * 3
     setup(fppd, [matrix("M", width=w, height=h)], channels=channels)

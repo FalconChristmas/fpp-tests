@@ -28,7 +28,10 @@ def test_a_reloaded_plugin_keeps_hearing_its_settings_changes(fppd):
     the old one was deleted, and the old one's destructor then removed it
     by name: the reloaded plugin never heard a settings change again until
     fppd restarted. Until that delete the old instance, already detached,
-    also kept getting settingChanged()."""
+    also kept getting settingChanged().
+
+    Feature: 00aca118d (the settings watch itself: without it the first
+    change is never heard)."""
     settings = os.path.join(fppd.media, "config", "plugin.fpp-settings")
 
     def write(value):

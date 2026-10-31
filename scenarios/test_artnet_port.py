@@ -24,6 +24,10 @@ def test_taken_artnet_port_warns_once_and_keeps_the_log_quiet(fppd):
     logged an error: 20-40 lines a second for as long as the port stayed
     taken -- on an SD card, all show long. The warning it raised said only
     "Socket bind failed for ArtNet" and never cleared.
+
+    Also 564a6b9bb (before it a failed bind was exit(1): fppd ended at
+    startup) and 7daafdc6d (type 9, ArtNet sent from a port of its own, which
+    is what keeps going here).
     """
     frames = unique_frames(1200, 200)  # 60 s
     write_fseq(os.path.join(fppd.media, "sequences", "Show.fseq"), frames, step_ms=50)
@@ -219,7 +223,10 @@ def test_a_plugin_keeps_hearing_artnet_when_the_bridge_drops_its_own(fppd):
     Regression: 6df3c4502. The bridge's reload took the shared ArtNet
     socket out of the epoll set and put it back only for an ArtNet input
     of its own, so the plugin went deaf until something registered it
-    again."""
+    again.
+
+    Feature: 732ac0b61 (before it, ci-universes.json was read only at
+    startup: the save was not taken until fppd restarted)."""
     import native_plugin
     native_plugin.install(fppd, "fpp-artnet", source="artnetplugin.cpp")
     fppd.write("config/ci-universes.json", artnet_input(True))
@@ -233,3 +240,64 @@ def test_a_plugin_keeps_hearing_artnet_when_the_bridge_drops_its_own(fppd):
     fppd.wait_for(lambda: "Universe Count = 1" in fppd.log(), timeout=10,
                   what="the inputs to reload without ArtNet")
     assert plugin_heard(fppd, 2), "after the reload, the plugin was never handed an ArtTrigger"
+
+
+def artnet_loop_outputs(description):
+    """co-universes.json: ArtNet universe 5 sent from 6454 (type 3) to
+    127.0.0.2 -- not one of fppd's own addresses, so not refused as
+    "myself", but on loopback, so it comes back to fppd's ArtNet socket."""
+    return {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 100,
+        "interface": "lo", "universes": [
+            {"active": 1, "description": description, "id": 5, "startChannel": 1,
+             "channelCount": 100, "type": 3, "address": "127.0.0.2", "priority": 0,
+             "monitor": 0, "deDuplicate": 0}]}]}
+
+
+def artnet_input_packets(fppd):
+    for u in fppd.get("/fppd/e131stats")["universes"]:
+        if str(u["id"]) == "5":
+            return int(u["packetsReceived"])
+    return 0
+
+
+def artnet_input_counting(fppd, what):
+    """ArtNet input universe 5 is still counting packets: more of them two
+    seconds on."""
+    def grows():
+        before = artnet_input_packets(fppd)
+        time.sleep(2)
+        return artnet_input_packets(fppd) > before + 10
+    fppd.wait_for(grows, timeout=12, interval=0.1, what=what)
+
+
+def test_artnet_input_and_output_keep_their_shared_socket_across_reloads(fppd):
+    """ArtNet output and ArtNet input share the one socket on 6454; saving
+    the outputs, and then the inputs, leaves both working. fppd's own
+    ArtNet output comes back to its ArtNet input here, so the input's
+    packet count growing shows both ends at once.
+
+    Regression: 39bd42410. Both reloads closed the shared socket: the
+    outputs' reload closed it under the input, which then heard nothing
+    more, and the inputs' reload closed it under the output."""
+    frames = unique_frames(1200, 100)  # 60 s
+    write_fseq(os.path.join(fppd.media, "sequences", "Show.fseq"), frames, step_ms=50)
+    fppd.write("playlists/Show.json", playlist("Show", [sequence_entry("Show.fseq")]))
+    fppd.write("config/co-universes.json", artnet_loop_outputs("loop"))
+    fppd.write("config/ci-universes.json", artnet_input(True))
+    fppd.settings(DisableFakeNetworkBridges="1", LogLevel_E131Bridge="info")
+    fppd.start()
+    fppd.command("Start Playlist", "Show", "false", "false")
+    # The control: the output's packets reach the input at all.
+    artnet_input_counting(fppd, "the ArtNet output to reach the ArtNet input")
+
+    time.sleep(1.1)  # a save in a later second, as a person makes it
+    fppd.write("config/co-universes.json", artnet_loop_outputs("loop, saved again"))
+    time.sleep(2)
+    artnet_input_counting(fppd, "ArtNet in and out to keep going after the outputs were saved")
+
+    reloads = fppd.log().count("Universe Count = ")
+    fppd.write("config/ci-universes.json", artnet_input(True))
+    fppd.wait_for(lambda: fppd.log().count("Universe Count = ") > reloads, timeout=10,
+                  what="the inputs to reload")
+    artnet_input_counting(fppd, "ArtNet in and out to keep going after the inputs were saved")

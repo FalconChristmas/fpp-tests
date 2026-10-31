@@ -155,7 +155,11 @@ def test_processor_output(fppd, what):
 
     Regression: 476c9df96 (Fold by channel). The Fold copied three bytes a
     node whatever its node size, so a By Channel fold read past the end of
-    its scratch copy: an ASan heap-buffer-overflow on the first frame."""
+    its scratch copy: an ASan heap-buffer-overflow on the first frame.
+
+    Features: 039e08db3 (Fold), 202ee2bb2 (Scale Value), 764094326 (Clamp
+    Value). Without one, its type is unknown and the frame goes out as it
+    came in."""
     processors, expect = CASES[what]
     with DdpReceiver(CHANNELS) as rx:
         frames = run(fppd, processors)
