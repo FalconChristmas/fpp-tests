@@ -9,6 +9,9 @@ const volume = async (request: any) => Number((await (await request.get('/api/fp
 test('the volume buttons have names, and the named ones set the volume', async ({ page, request }) => {
   // Regression: 6739aafe7 (the player view's pair) and 6136f3a3a (the
   // remote view's).  The buttons had no accessible name at all.
+  // Also 8ea08153b: SetVolume()'s answer handler threw on string(value)
+  // before clearing its in-progress flags, so the number shown stopped
+  // following fppd's volume after the first click.
   const was = await volume(request);
   try {
     await request.post('/api/system/volume', { data: { volume: 50 } });

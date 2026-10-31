@@ -43,6 +43,8 @@ test('ports with only an enable line show no current, no fuse status and no Coun
 test('ports with a current sensor and no eFuse show their current and totals, and no fuse status', async ({ page }) => {
   // The shape fppd gives a port with a current sensor and no fuse (what the
   // scenario's simulated ports report).
+  // Also 3cf77f0b8: the per-bank totals row.  Also 67c0d6248: with fewer
+  // than 8 ports the bank is 1-<count>, not 1-8.
   await showPorts(page, [port(1, { ma: 120 }), port(2, { ma: 30 })]);
   const grid = page.locator('#fppPorts');
   await expect(grid).toContainText('120 ma');

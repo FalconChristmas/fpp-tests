@@ -47,7 +47,9 @@ function reportGroup(report: string, grp: string): string {
 test('the Dev Tools tab shows only at the Developer UI level, and a Diagnostic Report still runs it', async ({ page, request }) => {
   // Feature: c943a15d2 (Dev Tools is "level": 3) on 32f8e273e (the page
   // leaves out a group above the UI level).  Without either, the tab showed
-  // at every level.
+  // at every level.  Also 73a4d889c: troubleshootingText.php, which the
+  // report runs, prints the commands from troubleshoot-commands.json by
+  // group; it read the troubleshootingCommands.php that 23fede467 removed.
   for (const level of [0, 1, 2]) {
     await setLevel(request, level);
     await openTroubleshooting(page);

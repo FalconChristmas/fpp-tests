@@ -160,6 +160,21 @@ test('a flash request is run only for a disk the Storage tab offers', async ({ r
   expect(out).toMatch(/Command: sudo TERM=vt100 (stdbuf --output=L --error=L )?\/opt\/fpp\/SD\/flash_storage\.sh -y --clone 'nvme9n1'/);
 });
 
+test('a flash request whose device carries a shell command runs nothing', async ({ request }) => {
+  // Regression: d463b03c7 (#1863).  flash-pi-usb.php put ?dev= into its root
+  // shell command as it came, so ?dev=sda;<command> ran the command as
+  // root.  That endpoint is gone (3a284394d); its successor takes only a
+  // disk it offers and still quotes the one it passes on.
+  standInDisks();
+  const outs: Record<string, string> = {};
+  for (const dev of [`sdz;touch ${PWNED}`, `$(touch ${PWNED})`, `sdz\`touch ${PWNED}\``]) {
+    outs[dev] = await (await request.get(`/flash-storage.php?dev=${encodeURIComponent(dev)}&mode=create`, { timeout: 60_000 })).text();
+  }
+  expect(inPlayer('sh', '-c', `test -e ${PWNED} && echo y || echo n`).trim(), 'the command in ?dev= ran').toBe('n');
+  for (const [dev, out] of Object.entries(outs)) expect(out, dev).toContain('is not a valid target device.');
+  expect(calls(), 'a refused flash still ran the script').toEqual([]);
+});
+
 test('the drive holding the media directory is not offered to flash, and a flash of it is refused', async ({ request }) => {
   // Regression: a0da0768b.  On a Pi booted from its SD card with the media
   // directory moved to a USB or NVMe drive, the Storage tab still offered to

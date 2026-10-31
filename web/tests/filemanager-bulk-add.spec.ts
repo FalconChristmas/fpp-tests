@@ -150,6 +150,8 @@ test("Don't automatch is Advanced-level: hidden at Basic, where a saved value is
 test('adding to a playlist made empty marks it not empty', async ({ page, request }) => {
   // Regression: caf3b03e4.  Bulk Add kept the playlist's "empty": true while
   // putting entries in it.
+  // Also bcace96ba: the File Manager's Add To Playlist itself (before it,
+  // files went into a playlist only from the playlist editor).
   await setLevel(request, '1');
   expect(savedPlaylist().empty, 'the control: the playlist starts out empty').toBe(true);
   const dialog = await openBulkAdd(page, [`${PAIR}.mp3`]);

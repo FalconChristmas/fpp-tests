@@ -26,6 +26,8 @@ test.describe('crash reports', () => {
   test.skip(!container, 'needs the player run-web.sh serves (FPP_TESTS_WEB_CONTAINER)');
 
   test('the crash-report warning links to the File Manager with a Fix button', async ({ page }) => {
+    // Also 13e75564b: the File Manager is filemanager.php (it was
+    // uploadfile.php), and the pages that link to it say so.
     const report = '/home/fpp/media/crashes/fpp-tests-crash.zip';
     inPlayer('sh', '-c', `mkdir -p /home/fpp/media/crashes && echo x > ${report}`);
     try {

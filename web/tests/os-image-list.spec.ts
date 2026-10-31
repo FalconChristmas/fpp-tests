@@ -56,6 +56,9 @@ test('a 64-bit Pi is offered the 64-bit Pi images, marked or not, and no 32-bit 
   // Regression: 0f610d496.  Images were matched on the "<OSImagePrefix>-"
   // name prefix alone, so a Pi64 player was offered a Pi64- image marked
   // 32-bit and never a Pi- image marked 64-bit.
+  // Also 76c5d7cc9: about.php's PHP tags inside its script, split as "< ?"
+  // by a formatter, leaked PHP into the script as a syntax error, and the
+  // list stayed empty.
   gh.routes({
     [RELEASES]: {
       json: [release('10.5', ['Pi64-10.5.fppos', 'Pi-10.5-arm64.fppos', 'Pi64-10.5-armhf.fppos', 'Pi-10.5.fppos', 'BBB-10.5.fppos', 'BB64-10.5.fppos'])],

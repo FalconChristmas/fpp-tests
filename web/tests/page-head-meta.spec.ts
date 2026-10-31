@@ -16,6 +16,7 @@ const PAGES = [
 ];
 
 test('every page carries the shared viewport and charset tags once', async ({ page }) => {
+  // Also fd22ccf55: "< meta name=viewport" (a stray space) was text, not a tag.
   test.setTimeout(120_000);
   await answerUpdateCheck(page);
   const missing: string[] = [];

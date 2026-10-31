@@ -242,6 +242,8 @@ async function expectHeaderLogo(page: Page, asked: string[], url: string) {
   await expect.poll(() => asked, { message: 'the header logo was not fetched from the vendor', timeout: 15_000 })
     .toContain(new URL(url).href);
   await expect(page.locator('#capeVendorLink img.logo')).toHaveCount(1);
+  // Feature: 0272a81d8.  The logo is named for a screen reader.
+  await expect(page.locator('#capeVendorLink img.logo')).toHaveAttribute('alt', 'Cape Logo');
 }
 
 // The fields whose script ran on this page.
@@ -420,6 +422,8 @@ test.describe('cape vendor URLs from a crafted EEPROM', () => {
 
     // The baseline for the other three, and the one case where the old code
     // already did the right thing, so it passes before 9d00d30ad as well.
+    // Also 1fe9c75ef: the header shows the EEPROM's header_cape_image, its
+    // own logo for the header, rather than the vendor's image.
     test('logos allowed, serial denied: plain URLs', async ({ page, request }) => {
       writeCapeInfo(info);
       await privacy(request, 1, 0);

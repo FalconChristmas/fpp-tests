@@ -83,7 +83,9 @@ test('a Bootstrap popover is drawn as a popover', async ({ page }) => {
 test('markdown renders with zero-md loading nothing from off the player', async ({ page, baseURL }) => {
   // Regression: 95818ecd8.  zero-md's presets fetched marked, its plugins,
   // highlight.js and the GitHub stylesheets from cdn.jsdelivr.net: a player
-  // with no internet (or the CSP) got no markdown help at all.
+  // with no internet (or the CSP) got no markdown help at all.  Also
+  // ba3e8ddbd (zero-md shipped), 91b35657e (<zero-md> defined on every page)
+  // and 17653774e (its stylesheets shipped with fpp).
   const problems = watch(page, new URL(baseURL!).origin);
   await page.goto('/index.php');
   await page.waitForFunction(() => !!customElements.get('zero-md'));
