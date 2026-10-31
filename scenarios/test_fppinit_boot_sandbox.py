@@ -153,3 +153,24 @@ def test_wifi_is_unblocked_just_before_hostapd_is_started(fppinit):
     assert "rfkill unblock wifi" in calls[:i], calls
     j = max(n for n, c in enumerate(calls[:i]) if "reload-or-restart systemd-networkd" in c)
     assert "rfkill unblock wifi" in calls[j:i], calls
+
+
+def test_tether_checks_do_nothing_while_setup_network_is_running(fppinit):
+    """While tmp/networkSetup exists (fppinit setupNetwork is running),
+    checkForTether leaves the tether alone; once it is gone, the same
+    call sets the access point up.
+
+    Regression: ce0603072. The link changes setupNetwork itself causes
+    ran the tether checks, which fought it over hostapd."""
+    from test_fppinit_network_boot import network_ports, run, with_config_dirs
+    from test_fppinit_tethering_boot import HOSTAPD_CONF
+    with_config_dirs(fppinit)
+    fppinit.settings(bootDelay="0", EnableTethering="1", TetherInterface="wlan0")
+    network_ports(fppinit, wlan0="wifi")
+    fppinit.service("fpp_postnetwork", enabled=True, active=True)
+    fppinit.write("tmp/networkSetup", "1")
+    run(fppinit, "checkForTether", "wlan0", net=True)
+    assert not fppinit.written(HOSTAPD_CONF), "the tether was set up while setupNetwork ran"
+    os.unlink(os.path.join(fppinit.media, "tmp", "networkSetup"))
+    run(fppinit, "checkForTether", "wlan0", net=True)
+    assert "interface=wlan0" in (fppinit.written(HOSTAPD_CONF) or ""), fppinit.calls()
