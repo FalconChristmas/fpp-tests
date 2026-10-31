@@ -920,3 +920,17 @@ def test_branch_to_another_playlist_runs_it_then_continues(fppd):
         step(2)]))
     fppd.start()
     assert run(fppd, "P") == "152"
+
+
+def test_playing_a_sequence_that_does_not_exist_raises_a_warning(fppd):
+    """A playlist's sequence entry naming a file that is not there leaves a
+    warning that says so, not just a line in the log.
+
+    Regression: 78e3866a2."""
+    fppd.write("playlists/P.json", playlist("P", main=[
+        {"type": "sequence", "enabled": 1, "playOnce": 0, "sequenceName": "Nope.fseq"}]))
+    fppd.start()
+    fppd.command("Start Playlist", "P", "false", "false")
+    fppd.wait_for(lambda: any("Nope.fseq" in str(w) and "does not exist" in str(w)
+                              for w in fppd.get("/fppd/warnings", timeout=5)),
+                  timeout=15, what="the missing sequence warning")
