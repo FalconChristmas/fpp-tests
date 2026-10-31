@@ -64,9 +64,9 @@ TARGET="$FLAVOR"
 # The image's /etc/fpp/container makes FPP's makefiles leave out the cape
 # tools, which fppinit's cape detection (and its scenarios) need; build them
 # as on a device. Nothing in them needs a cape to build.
-TARGET="$TARGET BUILD_FPPCAPEDETECT=1"
+TARGET="$TARGET BUILD_FPPCAPEDETECT=1 BUILD_FPPRTC=1"
 if [ "$FLAVOR" = coverage ]; then
-    TARGET="debug BUILD_FPPCAPEDETECT=1 OPTIMIZE_FLAGS=-g\ -O0\ -Wno-psabi\ --coverage"
+    TARGET="debug BUILD_FPPCAPEDETECT=1 BUILD_FPPRTC=1 OPTIMIZE_FLAGS=-g\ -O0\ -Wno-psabi\ --coverage"
     export LDFLAGS=--coverage
     gcc -shared -fPIC -O2 -o "$TREE/gcov-exit.so" /tests/scripts/gcov-exit.c
 fi

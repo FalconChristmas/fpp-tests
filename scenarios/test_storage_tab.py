@@ -28,7 +28,7 @@ def block(page, start, end):
     return src[i:j]
 
 
-def run_php(tmp_path, code, root, disks, settings):
+def run_php(tmp_path, code, root, disks, settings, extra_tools=None):
     """Run PHP code as if booted from /dev/<root>, with disks
     ({name: bytes}) present; returns its output."""
     php = shutil.which("php")
@@ -47,11 +47,13 @@ def run_php(tmp_path, code, root, disks, settings):
         # the disk is the last argument, /dev/<name>
         "lsblk": f'#!/bin/sh\nfor a in "$@"; do d="$a"; done\ncase "${{d##*/}}" in\n{sizes}esac\n',
     }
+    tools.update(extra_tools or {})
     for name, text in tools.items():
         (bindir / name).write_text(text)
         (bindir / name).chmod(0o755)
     # Only file_exists() looks at the disk node itself; lsblk is the stand-in.
     code = code.replace('file_exists("/dev/" . $target)', f'file_exists("{dev}/" . $target)')
+    code = code.replace('scandir("/dev/")', f'scandir("{dev}")')
     script = tmp_path / "page.php"
     script.write_text("<?php\n$settings = " + php_array(settings) + ";\n" + code)
     r = subprocess.run([php, str(script)], capture_output=True, text=True, timeout=30,
@@ -124,3 +126,24 @@ def test_a_boot_from_nvme_or_usb_gets_the_new_partition_action(tmp_path):
     for root in ("nvme0n1p2", "sda2"):
         (tmp_path / root).mkdir()
         assert run_php(tmp_path / root, code, root, {}, space) == "offered", root
+
+
+def test_the_storage_device_select_lists_nvme_partitions(tmp_path):
+    """The Storage Device setting offers the partitions of an SD card
+    (mmcblk0p1), a USB disk (sda1) and an NVMe drive (nvme0n1p1), each with
+    its size; a bare disk or a loop device is not offered.
+
+    Regression: d63701ab0 (initial NVMe support). The partition list
+    matched only sd and mmcblk names, so media on an NVMe drive could not be
+    chosen as the storage device.
+    """
+    code = block("settings-storage.php", "function PrintStorageDeviceSelect", "\n}\n") + "\n}\n"
+    code = ("function GetDirSetting($d) { return '/boot'; }\n"
+            "function GetSettingValue($s) { return '/home/fpp/media'; }\n"
+            "function PrintSettingSelect($t, $s, $r, $b, $d, $values, $p, $c) "
+            "{ echo implode(\"\\n\", array_keys($values)); }\n"
+            "$SUDO = '';\n" + code + "\nPrintStorageDeviceSelect('Raspberry Pi');\n")
+    disks = {name: 0 for name in ("mmcblk0", "mmcblk0p1", "sda", "sda1", "nvme0n1", "nvme0n1p1", "loop0")}
+    out = run_php(tmp_path, code, "mmcblk0p2", disks, PI,
+                  {"sfdisk": "#!/bin/sh\necho 67108864\n", "df": "#!/bin/sh\n"})
+    assert sorted(l.split()[0] for l in out.splitlines()) == ["mmcblk0p1", "nvme0n1p1", "sda1"], out

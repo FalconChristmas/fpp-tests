@@ -221,6 +221,10 @@ def test_the_pwm_channel_fppd_drives_is_the_one_on_the_pad(pads, pwm_chip, real_
     RP1 alt3 is PWM0_CHAN2, so the duty reached no pin; P1-32's alt3 is
     no PWM function at all (its PWM is alt0), and P1-33 wasn't offered as
     PWM. Found while testing 96ea7df35 and adba066ac.
+
+    Also ce2e621f3, which first gave a Pi 5's PWM pins their alt function
+    and the sysfs channel export/duty path: without the mux the pad stays
+    "none", without the export there is no channel to write the duty to.
     """
     start_pwm_output(fppd, pin, gpio, function)
     channel = int(function.rsplit("CHAN", 1)[1])

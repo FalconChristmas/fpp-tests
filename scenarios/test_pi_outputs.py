@@ -155,21 +155,28 @@ def test_an_rgbmatrix_output_with_more_channels_than_fppd_has_is_refused(fppd):
     assert any("channel count exceeds" in w for w in warnings50(fppd)), warnings50(fppd)
 
 
-def test_an_rgbmatrix_output_on_a_compute_module_5_is_refused(fppd):
-    """On a board whose device tree says "Raspberry Pi Compute Module 5"
-    (served to fppd by fakesys.so), the RGBMatrix output is refused as on a
-    Pi 5 -- the library can't drive the RP1's GPIO -- with warning 50.
+@pytest.mark.parametrize("model", ["Raspberry Pi Compute Module 5 Rev 1.0",
+                                   "Raspberry Pi 5 Model B Rev 1.0"], ids=["cm5", "pi5"])
+def test_an_rgbmatrix_output_on_a_compute_module_5_is_refused(fppd, model):
+    """On a board whose device tree says "Raspberry Pi Compute Module 5" or
+    "Raspberry Pi 5 Model B" (served to fppd by fakesys.so), the RGBMatrix
+    output is refused -- the library can't drive the RP1's GPIO -- with
+    warning 50.
 
     Regression: ace9b3ec5. Only "Raspberry Pi 5" was recognised, so on a CM5
     the output went on to the library. The pinout here is one the library
     doesn't know, so without the check the output is refused at the pinout
     instead and no GPIO is driven either way.
+
+    Also 1e7eb1dfd, which added the Pi 5 check (the pi5 case): the library
+    hung there. Its other half, the Null guards in the destructor and
+    pointer initialisers, is not tested separately.
     """
     have_plugin(fppd, "matrix-RGBMatrix")
     dt = os.path.join(fppd.media, "tmp", "device-tree")
     os.makedirs(dt)
     with open(os.path.join(dt, "model"), "wb") as f:
-        f.write(b"Raspberry Pi Compute Module 5 Rev 1.0\0")
+        f.write(model.encode() + b"\0")
     import shims
     log = refused_before_the_library(fppd, rgbmatrix("fpp-tests-no-such-pinout", [(0, 0)]),
                                      preload=[shims.build("fakesys.c")],

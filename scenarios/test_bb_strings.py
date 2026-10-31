@@ -172,7 +172,9 @@ def test_the_receiver_enable_pin_is_muxed_for_v2_receivers(fppd):
 
     Regression: 826802ab8. The V4/V5 receiver split narrowed the condition
     to "has a V5 receiver", so any other receiver config left the pin
-    unmuxed and every differential port went dark.
+    unmuxed and every differential port went dark. Also 43388269a, which
+    first muxed the pin for any cape that supports V5 listeners, not only
+    for a config with V5 receivers.
     """
     fake_pru(fppd)
     outs = shift_outputs()

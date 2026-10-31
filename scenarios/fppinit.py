@@ -187,6 +187,14 @@ class FppinitSandbox:
         assert command in STUBS and command != "systemctl", command
         self.unstubbed.add(command)
 
+    def stub_if_missing(self, *paths):
+        """Stub the commands at these absolute paths where the system lacks
+        them (the container has no modprobe or hwclock, and fpprtc runs them
+        by full path), recording calls like the rest of the stubs."""
+        for path in paths:
+            if not os.path.exists(path):
+                self.root_file(path, _stub("/fppinit-calls.log"))
+
     def start_delay(self, name, seconds):
         """Make the stubbed systemctl take `seconds` to start or restart this
         unit, as a start job waiting on a device that isn't there does."""

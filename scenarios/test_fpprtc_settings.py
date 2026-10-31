@@ -13,6 +13,7 @@ def test_an_unquoted_rtc_setting_is_read(fppinit):
     """With the settings file holding piRTC unquoted ("piRTC = 2", the form
     it is written in now), fpprtc sets up the DS1307 that 2 selects.
 
+    Also 64c065d5c: fpprtc reads piRTC itself since the piRTC script went away.
     Regression: 31e60fbb7. fpprtc's own settings parser assumed a quoted
     value and read a byte past the digit, so the unquoted form gave a
     garbage choice: "None Selected", with no hwclock -s at boot and no

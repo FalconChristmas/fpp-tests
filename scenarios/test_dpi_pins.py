@@ -29,6 +29,8 @@ def test_dpi_data_pins_get_the_dpi_function_of_the_soc(fppd, model, alt):
 
     Regression: 58118066b. Every Pi got alt1, which on a Pi 4 is the
     secondary memory interface, so the strings there never saw the DPI.
+    Also ce2e621f3, which first muxed a Pi 5's pins to alt1 for the DPI
+    (the pi5 case): without it no pinctrl call reaches the pad.
 
     The board is told apart by /proc/device-tree/model; fakesys.so serves
     fppd the one this case names (so a Pi 5 can run the Pi 4 case).

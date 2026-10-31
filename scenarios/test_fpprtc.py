@@ -19,7 +19,8 @@ def test_a_configured_rtc_that_never_appears_does_not_hang_boot(fppinit):
     counted them, so fpprtc slept forever. The sandbox has no /dev/rtc* and
     a read-only /sys, which is exactly that case.
 
-    Regression: 4517ed7fc."""
+    Regression: 4517ed7fc. Also 64c065d5c: the piRTC script became fpprtc, and
+    this is its selected-RTC path (a wrong piRTC key reads "None Selected")."""
     if not os.path.exists(os.path.join(fppinit.tree, "src", "fpprtc")):
         pytest.skip("no fpprtc in the tree under test")
     fppinit.settings(piRTC="2")

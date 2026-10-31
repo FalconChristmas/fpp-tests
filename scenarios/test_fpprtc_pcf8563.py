@@ -4,8 +4,9 @@ PocketBeagle2 sets up, in the fppinit sandbox (fppinit.py): its
 and clocks are never touched, and modprobe and hwclock are stubs that
 record their calls.
 
-fpprtc is not built in a container: this runs with run-local.sh on a Pi or
-a Beagle. Skipped elsewhere.
+fpprtc is built in the container with BUILD_FPPRTC=1 (scripts/build-fpp.sh);
+the container has no modprobe or hwclock, so the scenario stubs them.
+The PocketBeagle2 test runs only on one.
 """
 
 import os
@@ -49,7 +50,9 @@ def test_a_pcf8563_is_set_up_at_0x51(fppinit):
     bus (i2c-1 on a Pi, i2c-2 on a BeagleBone).
 
     Feature: c590b0be7 (the fpprtc half; options.php's "pcf8563" entry
-    is its other)."""
+    is its other). Also 64c065d5c: the chip-setup cases moved from piRTC into
+    fpprtc (a wrong module or device name there fails this)."""
+    fppinit.stub_if_missing("/usr/sbin/modprobe", "/usr/sbin/hwclock")
     fppinit.settings(piRTC="6")
     fppinit.fake_path("/sys/bus/i2c/devices", dict(I2C))
     out = fpprtc(fppinit)
