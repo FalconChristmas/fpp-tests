@@ -270,6 +270,35 @@ def test_an_hdmi_selection_with_no_display_is_kept_through_a_fallback_boot(fppin
     assert json.loads(eff) == {"selected": "vc4hdmi0", "effective": "Headphones", "fallback": True}, eff
 
 
+def test_an_hdmi_card_that_is_not_alsa_card_0_is_judged_dead_by_its_own_port(fppinit):
+    """The same Pi with its sound cards the other way round (the headphone
+    jack is card 0, the HDMI port card 1) and no display: the HDMI card is
+    still taken as dead and the boot falls back to the jack.
+
+    Regression: 1ee560a64. The port was found from the card's index, so
+    the card the kernel numbered 1 was checked as the display on the
+    second HDMI port, which a Pi 4's first port is not."""
+    cards = (" 0 [Headphones     ]: bcm2835_headpho - bcm2835 Headphones\n"
+             "                      bcm2835 Headphones\n"
+             " 1 [vc4hdmi0      ]: vc4-hdmi - vc4-hdmi-0\n                      vc4-hdmi-0\n")
+    aplay = ("**** List of PLAYBACK Hardware Devices ****\n"
+             "card 0: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]\n"
+             "  Subdevices: 8/8\n  Subdevice #0: subdevice #0\n"
+             "card 1: vc4hdmi0 [vc4-hdmi-0], device 0: MAI PCM i2s-hifi-0 [MAI PCM i2s-hifi-0]\n"
+             "  Subdevices: 1/1\n  Subdevice #0: subdevice #0\n")
+    from test_fppinit_audio_cards import set_setting
+    maps = fake_boards(fppinit, cards=cards)
+    os.makedirs(os.path.join(fppinit.state, "run-fppd"), exist_ok=True)
+    maps += ":/run/fppd=/fppinit-state/run-fppd"
+    fppinit.root_file("/.dockerenv", None)
+    fppinit.stub_output("aplay", "-l", aplay)
+    fppinit.stub_output("amixer", "scontrols", "Simple mixer control 'PCM',0\n")
+    fppinit.stub_output("pactl", "list", "1\tfpp_alsa_headphones\tPipeWire\ts16le 2ch 44100Hz\tSUSPENDED\n")
+    set_setting(fppinit, AudioOutput="vc4hdmi0", MediaBackend="pipewire-simple")
+    out, _ = setup_audio(fppinit, maps)
+    assert "has no HDMI connected" in out, f"the HDMI card wasn't taken as dead:\n{out[-3000:]}"
+
+
 JACK = " 0 [Headphones     ]: bcm2835_headpho - bcm2835 Headphones\n                      bcm2835 Headphones\n"
 
 # aplay as gettext translates it: French when the locale it runs under
