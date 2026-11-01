@@ -31,12 +31,10 @@ test('a random Media entry offers a file name prefix, and saves it', async ({ pa
   // by file name; the prefix is an advanced field, shown for the random
   // modes only.  fppd honouring it is scenarios/test_playlist_direct_media.py.
   //
-  // Not working on master: the prefix row starts collapsed (inline
-  // visibility:collapse, as a child of a parent value that isn't the default)
-  // and UpdateChildVisibility() only show()s it, which never clears
-  // visibility, so the field is unreachable in the editor.  Expected to fail
-  // until that is fixed; UpdateGenericArgChildVisibility() already clears it.
-  test.fail();
+  // Also guards the editor fix: the prefix row starts collapsed (inline
+  // visibility:collapse, as a child of a parent value that isn't the
+  // default), and UpdateChildVisibility() once only show()n it, which never
+  // clears visibility, leaving the field unreachable.
   await storePlaylist(request, []);
   uiLevelBefore = String((await (await request.get('/api/settings/uiLevel')).json()).value ?? '0');
   expect((await request.put('/api/settings/uiLevel', { data: '1' })).ok()).toBe(true);

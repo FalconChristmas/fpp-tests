@@ -141,7 +141,9 @@ static void gst_fake_hw_dec_class_init(GstFakeHwDecClass* klass) {
     GstElementClass* ec = GST_ELEMENT_CLASS(klass);
     gst_element_class_add_static_pad_template(ec, &sink_template);
     gst_element_class_add_static_pad_template(ec, &src_template);
-    gst_element_class_set_static_metadata(ec, "Fake device-memory VP8 decoder", "Codec/Decoder/Video",
+    /* FAKEHWDEC_HARDWARE=1 files it as a hardware decoder, as the V4L2 ones are */
+    gst_element_class_set_static_metadata(ec, "Fake device-memory VP8 decoder",
+                                          getenv("FAKEHWDEC_HARDWARE") ? "Codec/Decoder/Video/Hardware" : "Codec/Decoder/Video",
                                           "vp8dec, its frames moved into padded dmabufs", "fpp-tests");
 }
 
