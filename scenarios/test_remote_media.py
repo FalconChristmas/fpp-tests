@@ -228,6 +228,101 @@ def test_a_remote_moves_to_the_masters_next_file_on_a_sync_packet(fppd, audio):
         sock.close()
 
 
+# AdjustFeedSpeed()'s seek line parsed: error, local, master, target.
+RESYNC_SEEK_AT = re.compile(r"GStreamer feed sync: ([+-]?\d+) ms from the master "
+                            r"\(([\d.]+) vs ([\d.]+)\), seeking to ([\d.]+)")
+# Its LogDebug once a seek has landed: what the next seek will aim ahead.
+RESYNC_AIM = re.compile(r"GStreamer feed sync: resync landed [+-][\d.]+ ms from the master; "
+                        r"seeks now aim (\d+) ms ahead")
+
+
+def test_a_bad_seek_landing_doesnt_leave_a_remote_seeking(fppd, audio):
+    """Seeks that landed late on one song don't leave a remote seeking every
+    two seconds through the next: after A.wav has taught the remote to aim
+    its seeks as far ahead as it will, B.wav, joined 3 s late, takes at most
+    three resync seeks in 40 s.
+
+    Issue #3156, fixed by fpp 87da41c21. On a video remote an accurate seek decodes from the
+    previous keyframe, so with keyframes seconds apart it can take 1-3 s to
+    resume; AdjustFeedSpeed() reads that as a landing behind and aims the
+    next seek further ahead. The aim (s_feedResyncLeadS) is static, so it
+    carries into every later song, and a landing a second or more off is
+    never learnt from, so once the aim is ~1.5 s each seek lands ~1.5 s
+    ahead and seeks again, every 2-2.5 s until fppd restarts (8,110 seeks
+    in four nights in the reporter's diagnostic report, three quarters of
+    them over a second ahead with the aim at 1.6-2.0 s).
+
+    Here the slow seeks are stood in for on audio, so it runs in Docker
+    against the null sink: while each of A.wav's seeks settles, this master
+    jumps ahead by that seek's aim plus 0.6 s, so each lands ~0.6 s behind
+    and the aim grows by ~0.5 s, until it is over 1.2 s or stops growing
+    (a cap) at 0.9 s or more. B.wav then plays on a steady master, the
+    remote starting 3 s behind it."""
+    from audio import write_tone_wav
+    for name in ("A.wav", "B.wav"):
+        write_tone_wav(os.path.join(fppd.media, "music", name), 90)
+    # The aim is only logged at debug.
+    fppd.settings(fppMode="remote", LogLevel_MediaOut="debug")
+    fppd.start()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    send = lambda *a: sock.sendto(sync_packet(*a), ("127.0.0.1", PORT))
+
+    def play(name, secs, offset=0.0, on_tick=None):
+        """Master `name` for `secs`, positions `offset` ahead of the clock
+        plus whatever on_tick(now) returns (None ends it early)."""
+        send("open", "media", 0, 0.0, name)
+        send("start", "media", 0, 0.0, name)
+        t0 = time.monotonic()
+        nxt = t0 + 0.5
+        while time.monotonic() < t0 + secs:
+            now = time.monotonic()
+            if now >= nxt:
+                extra = on_tick(now) if on_tick else 0.0
+                if extra is None:
+                    break
+                send("sync", "media", 0, now - t0 + offset + extra, name)
+                nxt += 0.5
+                fppd.check_alive()
+            time.sleep(0.01)
+        send("stop", "media", 0, 0.0, name)
+        time.sleep(2)
+
+    jump = {"shift": 0.0, "seen": 0, "at": None, "by": 0.0}
+
+    def slow_seeks(now):
+        log = fppd.log()
+        aims = [int(a) for a in RESYNC_AIM.findall(log)]
+        if aims and (aims[-1] >= 1200 or (len(aims) >= 2 and aims[-1] == aims[-2] >= 900)):
+            return None  # taught as far as it goes (a capped aim stops growing): on to B.wav
+        seeks = RESYNC_SEEK_AT.findall(log)
+        if len(seeks) > jump["seen"]:
+            jump["seen"] = len(seeks)
+            _, _, master, target = seeks[-1]
+            # Inside the seek's 2 s settle, so its landing reads behind.
+            jump["at"], jump["by"] = now + 0.5, float(target) - float(master) + 0.6
+        if jump["at"] and now >= jump["at"]:
+            jump["shift"] += jump["by"]
+            jump["at"] = None
+        return jump["shift"]
+
+    try:
+        time.sleep(2)
+        play("A.wav", 60, offset=1.0, on_tick=slow_seeks)  # a first seek to build on
+        aims = [int(a) for a in RESYNC_AIM.findall(fppd.log())]
+        print(f"\nA.wav: seeks aimed {aims} ms ahead")
+        assert aims and aims[-1] >= 900, \
+            f"A.wav never taught the remote an aim near a second ({aims}): the test, not fppd, needs a look"
+        before = len(RESYNC_SEEK.findall(fppd.log()))
+        play("B.wav", 40, offset=3.0)
+        seeks = RESYNC_SEEK_AT.findall(fppd.log())[before:]
+        print(f"B.wav: {len(seeks)} resync seeks, errors ms {[int(s[0]) for s in seeks]}")
+        assert len(seeks) <= 3, \
+            f"B.wav took {len(seeks)} resync seeks in 40 s (each a dropout): the aim A.wav left kept them landing off"
+    finally:
+        sock.close()
+
+
+
 def write_six_channel_wav(path, tone_s, seconds, rate=48000):
     """A 6-channel WAV, a 440 Hz tone on its front pair for the first
     tone_s seconds and silence after: more channels than the slot's
