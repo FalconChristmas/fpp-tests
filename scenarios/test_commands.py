@@ -246,7 +246,9 @@ def test_commands_called_with_no_arguments_are_refused(fppd):
 
     Regression: 8eb7d4198. Eight commands read args[0] without a check:
     Play Media, Insert Playlist Immediate and others faulted in the field
-    on exactly this call."""
+    on exactly this call.
+
+    Also a88ecdce0 (#1109): Start Playlist with no argument was signal 11."""
     fppd.start()
     refused = []
     for c in fppd.get("/commands"):

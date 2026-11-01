@@ -152,3 +152,28 @@ def test_unnamed_virtual_strings_get_lettered_model_names(fppd):
     fppd.wait_for(lambda: len(models(fppd)) >= 3, what="the auto-created models")
     names = sorted(n for n in models(fppd) if n.startswith("String-1"))
     assert names == ["String-1A-1", "String-1A-2", "String-1A-3"], names
+
+
+def test_an_auto_created_model_with_a_string_missing_is_still_made(fppd):
+    """Virtual strings named "Arch-str-1" and "Arch-str-3", with no string 2,
+    give one overlay model, Arch, across both: fppd starts, and the model is
+    three strings wide less the one that isn't there.
+
+    Regression: 91f81637d. The model's strings are collected by their -str-N
+    index, which leaves a null in the list for the missing one; reading its
+    start channel faulted while fppd created the auto models.
+    """
+    throw_plugin.install(fppd, source="pixelstringdump.cpp", name="PixelStringDump")
+    p = port_config(fppd, 10)
+    vs = p["virtualStrings"][0]
+    p["virtualStrings"] = [dict(vs, description="Arch-str-1", startChannel=0),
+                           dict(vs, description="Arch-str-3", startChannel=60)]
+    fppd.write(fppd.strings_config, {"channelOutputs": [{
+        "type": "PixelStringDump", "enabled": 1, "startChannel": 1, "channelCount": 90,
+        "outputCount": 1, "outputs": [p]}]})
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": []})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    m = fppd.wait_for(lambda: models(fppd).get("Arch"), what="the auto-created model")
+    assert (m["StartChannel"], m["ChannelCount"]) == (1, 90), m
+    assert m["StringCount"] == 2, m
