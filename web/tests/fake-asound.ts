@@ -46,7 +46,7 @@ class FppTestsAsound {
     private $h;
     private $d;
     static function map($p) {
-        return strpos($p, '/proc/asound') === 0 ? $GLOBALS['fppTestsRoot'] . $p : $p;
+        return (strpos($p, '/proc/asound') === 0 || strpos($p, '/sys/class/drm') === 0) ? $GLOBALS['fppTestsRoot'] . $p : $p;
     }
     static function real($f) {
         stream_wrapper_restore('file');
@@ -98,6 +98,12 @@ stream_wrapper_restore('file');
 echo "\n@@fpp-tests@@" . (getenv('FPP_TESTS_ENCODE') ? json_encode($out) : $out);
 `;
 
+// A display card's connectors for the PHP that lists them: /sys/class/drm
+// is read from the fake root too (the container has no display card).
+export function fakeDrm(connectors: string[]) {
+  for (const c of connectors) writeFile(`${ROOT}/sys/class/drm/${c}/status`, 'connected\n');
+}
+
 // Write /proc/asound/cards and /proc/asound/pcm for `cards` under the fake root.
 export function fakeCards(cards: Card[] = CARDS) {
   const lines = cards.map((c) => `${String(c.num).padStart(2)} [${c.id.padEnd(15)}]: ${c.driver} - ${c.name}\n` +
@@ -139,9 +145,15 @@ export function callPhp(fn: string, ...args: unknown[]): any {
   return run(fn, args, true);
 }
 
-function run(fn: string, args: unknown[], encode: boolean): any {
+// The same, with `env` ("NAME=value" strings) in PHP's environment: for an
+// LD_PRELOAD shim that stands in for something the container lacks.
+export function callPhpWithEnv(env: string[], fn: string, ...args: unknown[]): any {
+  return run(fn, args, true, env);
+}
+
+function run(fn: string, args: unknown[], encode: boolean, env: string[] = []): any {
   writeFile(HARNESS, PHP);
-  const out = inPlayer('env', `FPP_TESTS_ENCODE=${encode ? 1 : ''}`, 'php', HARNESS, ROOT, fn, JSON.stringify(args));
+  const out = inPlayer('env', `FPP_TESTS_ENCODE=${encode ? 1 : ''}`, ...env, 'php', HARNESS, ROOT, fn, JSON.stringify(args));
   const i = out.lastIndexOf('@@fpp-tests@@');
   if (i < 0) throw new Error(`${fn} did not return:\n${out}`);
   return JSON.parse(out.slice(i + '@@fpp-tests@@'.length));

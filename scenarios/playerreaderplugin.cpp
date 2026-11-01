@@ -8,6 +8,8 @@
 // $PR_READ picks what each pass reads:
 //   status  Player::GetStatus() and IsPlaying() (the playlist's status flag)
 //   name    Player::GetPlaylistName()
+//   pos     Playlist::GetCurrentPosInMS(pos, posms), as a timecode plugin
+//           (ArtNet, SMPTE) does each frame
 //
 // "<PLUGIN_NAME> Reads" answers how many passes the thread has made.
 
@@ -20,6 +22,7 @@
 
 #include "Player.h"
 #include "Plugin.h"
+#include "playlist/Playlist.h"
 #include "commands/Commands.h"
 
 class ReadsCommand : public Command {
@@ -45,6 +48,10 @@ public:
             while (!stop) {
                 if (what == "name") {
                     sink += Player::INSTANCE.GetPlaylistName().size();
+                } else if (what == "pos") {
+                    int pos = 0;
+                    uint64_t posms = 0;
+                    sink += Player::INSTANCE.PlaylistSnapshot()->GetCurrentPosInMS(pos, posms) + pos + posms;
                 } else {
                     sink += (int)Player::INSTANCE.GetStatus() + Player::INSTANCE.IsPlaying();
                 }

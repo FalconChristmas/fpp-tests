@@ -80,3 +80,26 @@ def test_a_plugin_thread_reads_the_current_playlist_while_inserts_finish(fppd):
     assert reads(fppd) > before, "the plugin's reader thread stopped"
     fppd.command("Stop Now")
     wait_idle(fppd)
+
+
+def test_a_plugin_thread_reads_the_position_while_playlists_are_stopped(fppd):
+    """A playlist of several entries started and stopped by hand over and over,
+    while a plugin thread asks it where it is (GetCurrentPosInMS, as an
+    ArtNet or SMPTE timecode plugin does every frame): every start plays,
+    every stop ends it, and the reads go on throughout.
+
+    Regression: 20e39e4a9. GetCurrentPosInMS() walked the playlist's current
+    section and its entries without the playlist lock, so a Stop Now taking
+    them apart under it crashed fppd while a timecode plugin was running."""
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(30), step(2)]))
+    reader(fppd, "pos")
+
+    def stop_and_start():
+        start(fppd, "P")
+        wait_trace(fppd, "1")
+        fppd.command("Stop Now")
+        wait_idle(fppd)
+    hammer(fppd, 15, stop_and_start)
+    before = reads(fppd)
+    time.sleep(0.3)
+    assert reads(fppd) > before, "the plugin's reader thread stopped"

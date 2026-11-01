@@ -105,6 +105,9 @@ test('a clock date or time with shell in it runs nothing', async ({ request }) =
 // one per [...].  "amixer -c <card> set <control> -- <n>%" is the real
 // amixer's syntax for a control named in one argument.
 test('a mixer device with shell in it is passed to amixer as one name', async ({ request }) => {
+  // Also 6924aff8a: the name went into setVolume()'s amixer command bare, so
+  // a control with a space in its name reached amixer as several arguments.
+  // (fppd's own amixer call: scenarios/test_alsa_mixer_name.py.)
   const control = `PCM'; touch ${MARKER}; echo '`;
   const log = '/tmp/fpp-tests-amixer-args.log';
   putFile('/usr/local/bin/amixer', `#!/bin/sh\nfor a in "$@"; do printf '[%s]' "$a"; done >> ${log}\necho >> ${log}\n`);

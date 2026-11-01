@@ -19,7 +19,10 @@ def test_one_file_on_three_slots_is_stopped_by_stop_all_media(fppd, audio):
     (and the cleanup of one could drop or free another's entry).
 
     Also guards dca097622, which registered Stop Media and Stop All Media
-    again (they had been commented out: "No command found")."""
+    again (they had been commented out: "No command found").
+
+    Also 253dfc5b4: the Stop All Media command itself, which silences the
+    media Play Media started."""
     write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 20)
     fppd.start()
     for slot in (1, 2, 3):

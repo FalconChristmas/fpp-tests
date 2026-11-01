@@ -580,6 +580,9 @@ def test_starting_and_stopping_an_output_keeps_the_sleep_firmware(fppd):
     Regression: fb0f51dde. The program was copied to am335x-pru1-fw, a
     symlink to the .sleep file, so the copy overwrote the sleep firmware
     itself and every later boot ran the last output program.
+
+    Also c3fb85c7f: the program is installed by CopyFileContents() (sendfile),
+    and the core boots the bytes it copied; when the copy fails no core starts.
     """
     pru = FakePruss(fppd)
     cfg = two_port_strings(fppd)

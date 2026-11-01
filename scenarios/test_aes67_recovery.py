@@ -128,7 +128,13 @@ def test_cleanup_cancels_a_pending_rebuild(fppd, audio):
     Regression: 01247b497. Cleanup() never cancelled a pending rebuild, and
     the rebuild thread, past its half-second wait, ran ApplyConfig() and
     started the pipelines Cleanup had just stopped. Not covered: the races
-    with Shutdown(), and Opus RTP's half of the commit."""
+    with Shutdown(), and Opus RTP's half of the commit.
+
+    Also b2969924a (the pipeline watchdog): the sender's stall is found by
+    the watchdog's byte-count check (udpsink's bytes-served unchanged over
+    two passes) and scheduled for a rebuild; with that check off the
+    scenario waits out its 120 s for "rebuild needed". Not covered: the
+    watchdog's set-to-PLAYING recovery of a pipeline that left that state."""
     import shims
     from test_aes67_wire import start_sender
     start_sender(fppd, audio, preload=[shims.build("rtpdrop.c")], env={"RTPDROP_EVERY": "1"},
