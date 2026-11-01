@@ -56,8 +56,8 @@ def test_an_iio_source_without_vscale_is_scaled_to_its_adcs_reference(fppd):
 
 def test_the_real_adcs_reading_is_scaled_the_same_way(fppd):
     """The board's own ADC, no vScale: a channel that measures something
-    reads its raw count times in_voltage_scale / 0.439453125, within 5%
-    (the input moves between the two reads)."""
+    reads its raw count times in_voltage_scale / 0.439453125, within 5% of
+    the range the two reads span (the input moves between the two reads)."""
     scale = real_scale()
     if scale is None:
         pytest.skip("no IIO ADC at iio:device0 here")
@@ -77,5 +77,9 @@ def test_the_real_adcs_reading_is_scaled_the_same_way(fppd):
     got = reported(fppd)["A"]
     with open(f"{REAL}/in_voltage{ch}_raw") as f:
         after = int(f.read())
-    want = (raws[ch] + after) / 2 * scale / REF_1V8
-    assert got == pytest.approx(want, rel=0.05), (got, raws[ch], after, scale)
+    # An input on an open pin moves by 10% or more between reads, and fppd
+    # read it somewhere between them: it must fall in the range the two reads
+    # span (5% either side). The unscaled readings this guards were 1.8x off.
+    lo = min(raws[ch], after) * scale / REF_1V8 * 0.95
+    hi = max(raws[ch], after) * scale / REF_1V8 * 1.05
+    assert lo <= got <= hi, (got, raws[ch], after, scale)

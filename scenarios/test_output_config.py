@@ -1006,6 +1006,10 @@ def test_a_save_in_place_reloads_the_outputs_once(fppd):
         save_in_place(path, udp(9000 + i))
         fppd.wait_for(lambda: reloads() >= base + i, timeout=10,
                       what=f"the reload for save {i}")
+        # fppd logs the reload before it reads the file and nothing once it
+        # has: the next save's truncate must not land on that read, which a
+        # slow (sanitizer) run lets it do and fppd then reads the empty file.
+        time.sleep(1)
     time.sleep(2)  # room for any late, extra reload to show
     assert reloads() - base == saves, f"{reloads() - base} reloads for {saves} saves"
     parse_errors = [line for line in fppd.log().splitlines()

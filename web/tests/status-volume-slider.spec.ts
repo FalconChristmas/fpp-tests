@@ -77,8 +77,12 @@ test('a status update does not move the slider back while its volume is being se
   await page.routeWebSocket('**/fppdws', () => {});
   const posts: number[] = [];
   const slider = await open(page, posts);
+  // Held until the two status answers are in, not for a set time: a slow
+  // run polls less often, and a timed hold ran out before the second answer.
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
   await page.route('**/api/system/volume', async (route) => {
-    await new Promise((r) => setTimeout(r, 3000));
+    await held;
     await route.continue();
   });
   const status = () => page.waitForResponse((r) => /\/api\/(system|fppd)\/status/.test(r.url()));
@@ -93,6 +97,7 @@ test('a status update does not move the slider back while its volume is being se
   await page.waitForTimeout(300);
   expect(await page.locator('#volume').textContent()).toBe('80');
   expect(await slider.inputValue()).toBe('80');
+  release();
   await expect.poll(() => volume(request), { timeout: 10_000 }).toBe(80);
 });
 
