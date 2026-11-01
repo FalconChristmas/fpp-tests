@@ -380,13 +380,18 @@ def test_saving_the_strings_config_rebuilds_a_ui_saved_panel_output(fppd):
 
     Regression: 749468b33. The reload matched only subtype "BBBMatrix",
     which the UI never saves, so the panel PRU program was left as it was.
+
+    Also d09eed5ed: the reload itself. fppd reloaded only the file that
+    changed, so a strings save left the panel PRU program (assembled when
+    the panel config loads) as it was, whatever the strings now used. Runs
+    on a PocketBeagle too, with its own scroller pinout and free pins.
     """
-    needs_bbb()
     pru = FakePruss(fppd)
     fppd.settings(LogLevel_ChannelOut="debug")
     octoscroller(singlePRU=True)
     fppd.write("config/channeloutputs.json", matrix_config())
-    write_string_cape("TestFree", {"outputs": [{"pin": "P8-17"}, {"pin": "P8-19"}]})
+    free = ["P2-18", "P2-20"] if pocketbeagle() else ["P8-17", "P8-19"]
+    write_string_cape("TestFree", {"outputs": [{"pin": p} for p in free]})
     cfg = strings_config("BBB48String", "TestFree", [pixel_output(0, 10, 0)])
     cfg["channelOutputs"][0]["enabled"] = 0
     fppd.write("config/co-bbbStrings.json", cfg)
