@@ -1,4 +1,5 @@
 import { container, docker, inPlayer, playerAddress } from './container';
+import type { Page } from '@playwright/test';
 import { writeFile } from './pw-helpers';
 
 // What the proxy specs put around the player: a controller, a host of its own
@@ -132,4 +133,19 @@ export function realSystemctl() {
 // No proxies configured, and Apache running without them.
 export function clearProxies() {
   inPlayer('sh', '-c', `rm -f ${PROXY_CONF} ${MEDIA}/config/proxies ${MEDIA}/config/proxies-safetodelete && apache2ctl graceful`);
+}
+
+// Open the Proxies page with its scripts loaded. Chrome here runs beside the
+// controller container, whose network coming up or going can make it drop
+// requests in flight (net::ERR_NETWORK_CHANGED): the page then "loads" without
+// fpp.js, and its buttons do nothing. Load it again until the page has them.
+export async function openProxies(page: Page) {
+  for (let attempt = 0; ; attempt++) {
+    await page.goto('/proxies.php');
+    const ready = await page.evaluate(
+      () => typeof (window as any).SetProxies === 'function' && typeof (window as any).SetupSelectableTableRow === 'function',
+    );
+    if (ready) return;
+    if (attempt >= 3) throw new Error('the Proxies page loaded without its scripts four times');
+  }
 }

@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
 import {
-  PROXY_CONF, apacheSystemctl, clearProxies, noLeases, offerLeases, realSystemctl, startController, stopController,
+  PROXY_CONF, apacheSystemctl, clearProxies, noLeases, offerLeases, openProxies, realSystemctl, startController, stopController,
 } from './proxy-controller';
 
 // The Proxies page (www/proxies.php): the hosts saved by hand, the DHCP
@@ -37,7 +37,7 @@ test('a DHCP client is listed in a table of its own, named by what it answers', 
   // client's /api/system/info through /proxy and shows the FPP's host name.
   expect((await request.post('/api/proxies', { data: [{ host: MANUAL, description: 'fpp-tests manual' }] })).ok()).toBe(true);
   offerLeases([ctl]);
-  await page.goto('/proxies.php');
+  await openProxies(page);
   const dhcpRows = page.locator('#DHCPproxyTable tbody tr');
   await expect(dhcpRows).toHaveCount(1, { timeout: 15_000 });
   await expect(dhcpRows.locator(`a[href="proxy/${ctl}/"]`)).toHaveCount(1);
@@ -54,7 +54,7 @@ test('Save shows it has changes to save until they are saved, and saving none de
   // save needed alert").  Nothing showed that a row added or removed was not
   // saved yet; and removing the last row and saving GOT the list and changed
   // nothing (no DELETE existed), so the last proxy could never be removed.
-  await page.goto('/proxies.php');
+  await openProxies(page);
   await expect(page.locator('#btnSave')).toBeVisible();
   const alert = page.locator('#btnSave .save-alert-icon');
   await expect(alert).toHaveCount(0);
@@ -84,4 +84,15 @@ test('Save shows it has changes to save until they are saved, and saving none de
   await expect(page.locator('#btnSave')).toBeVisible();
   await expect.poll(async () => (await page.request.get('/api/proxies')).json()).toEqual([]);
   await expect(page.locator('#proxyTable tbody tr')).toHaveCount(0);
+});
+
+test('a page that lost its scripts loading is loaded again before it is used', async ({ page }) => {
+  // The nightly saw the Proxies page "load" with fpp.js dropped
+  // (net::ERR_NETWORK_CHANGED), after which Save did nothing. openProxies()
+  // loads it again until the page has its scripts.
+  let dropped = 0;
+  await page.route('**/js/fpp.js*', (route) => (dropped++ === 0 ? route.abort('internetdisconnected') : route.continue()));
+  await openProxies(page);
+  expect(dropped).toBeGreaterThan(1);
+  expect(await page.evaluate(() => typeof (window as any).SetProxies)).toBe('function');
 });

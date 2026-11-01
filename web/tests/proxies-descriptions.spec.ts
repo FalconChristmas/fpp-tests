@@ -1,6 +1,8 @@
 import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
-import { PROXY_CONF, apacheSystemctl, clearProxies, noLeases, realSystemctl } from './proxy-controller';
+import {
+  PROXY_CONF, apacheSystemctl, clearProxies, noLeases, openProxies, realSystemctl,
+} from './proxy-controller';
 
 // A proxy's description: saved with its host through the proxies API, kept
 // in the proxy file as a "# D:" line above the host's rewrite rules, listed
@@ -32,7 +34,7 @@ test('a proxy keeps its description in the API, the proxy file and the page', as
   const list = await (await request.get('/api/proxies')).json();
   expect(list).toMatchObject([{ host: HOST, description: DESC }]);
 
-  await page.goto('/proxies.php');
+  await openProxies(page);
   await expect(page.locator('#proxyTable .proxyRow .ipaddress')).toHaveValue(HOST, { timeout: 15_000 });
   await expect(page.locator('#proxyTable .proxyRow .description')).toHaveValue(DESC);
 });
