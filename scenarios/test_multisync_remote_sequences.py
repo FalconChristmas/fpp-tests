@@ -269,3 +269,56 @@ def test_opened_but_never_started_fires_no_stop(fppd):
     m.send("stop")
     assert presets(fppd) == (0, 0)
     m.close()
+
+
+def test_a_sync_after_the_stop_does_not_reopen_the_sequence(fppd):
+    """The master stops a sequence while a sync packet for it is still in
+    flight; the packet reaches the remote after the stop.  The remote stays
+    stopped: one start, one stop.
+
+    Regression: ade6545ee. A sync after the stop of a sequence, the same bug as 863b4ac0d for media.
+    Only a sequence that played to its end was remembered, so a
+    sync after an explicit stop looked like a join mid-stream and reopened
+    the sequence the remote had just closed."""
+    frames = unique_frames(400, CHANNELS)
+    write_fseq(f"{fppd.media}/sequences/Show.fseq", frames, step_ms=STEP_MS, compression="zstd")
+    remote(fppd)
+    m = Master()
+    fppd.start()
+    m.play(3)
+    frame = m.frame()
+    m.send("stop", frame)
+    m.send("sync", frame + 2)
+    started, stopped = presets(fppd)
+    m.close()
+    assert (started, stopped) == (1, 1), f"SEQUENCE_STARTED x{started}, SEQUENCE_STOPPED x{stopped}"
+
+
+def test_a_sync_for_the_last_sequence_does_not_close_the_next(fppd):
+    """After the master stops A and starts B, a sync packet for A that was
+    in flight leaves B playing: A and B each start once, only A stops.
+
+    Regression: ade6545ee.  The record of a finished sequence was
+    forgotten by the next open of any file, so the stale sync reopened A,
+    closing B."""
+    frames = unique_frames(400, CHANNELS)
+    for n in ("A.fseq", "B.fseq"):
+        write_fseq(f"{fppd.media}/sequences/{n}", frames, step_ms=STEP_MS, compression="zstd")
+    remote(fppd)
+    a, b = Master("A.fseq"), Master("B.fseq")
+    fppd.start()
+    a.play(3)
+    frame = a.frame()
+    a.send("stop", frame)
+    b.send("open")
+    time.sleep(0.3)
+    b.send("start")
+    b.began = time.monotonic()
+    a.send("sync", frame + 2)
+    time.sleep(1)
+    b.send("sync", b.frame())
+    started, stopped = presets(fppd)
+    b.send("stop")
+    a.close()
+    b.close()
+    assert (started, stopped) == (2, 1), f"SEQUENCE_STARTED x{started}, SEQUENCE_STOPPED x{stopped}"
