@@ -1,8 +1,7 @@
 """What fpprtc, the boot-time RTC setup, prints from the commands it runs, in
 the fppinit sandbox (fppinit.py).
 
-fpprtc is not built in a container, so this runs with run-local.sh on a Pi
-or Beagle.
+The container has no modprobe, so the test stubs it where it is missing.
 """
 
 import os
@@ -31,6 +30,7 @@ def test_a_commands_output_is_printed_as_text(fppinit):
     """
     if not os.path.exists(os.path.join(fppinit.tree, "src", "fpprtc")):
         pytest.skip("no fpprtc in the tree under test")
+    fppinit.stub_if_missing("/usr/sbin/modprobe", "/usr/sbin/hwclock")
     fppinit.settings(piRTC="2")
     fppinit.stub_output("modprobe", "rtc-ds1307", NOT_A_FORMAT + "\n")
     try:
