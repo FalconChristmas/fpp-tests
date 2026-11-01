@@ -36,7 +36,10 @@ def test_mqtt_start_topic_payload_is_the_start_position(fppd):
     at that item, and the playlist stays what the file says it is (no repeat).
 
     Regression: 59fbbef0d. The payload went into the repeat argument, so
-    "2" was read as repeat-on and the playlist began at its first item."""
+    "2" was read as repeat-on and the playlist began at its first item.
+
+    Also 8faab644e: the set/playlist/# topics are handled by a callback
+    registered through Events; without it the topic is ignored."""
     from test_mqtt_control import HOST, PORT, broker, publish
     from test_playlist_entries import pause
     fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)

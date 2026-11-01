@@ -77,6 +77,10 @@ def test_a_pixel_count_after_a_port_is_reconfigured_uses_the_new_config(fppd):
     run and kept them: the second count still took 50 configured and no
     nulls, searched only to pixel 114, and reported 114 pixels until fppd
     restarted.
+
+    Also 1d7a7f0ff: the count helper ends each count with GET
+    /fppd/ports/stop and waits for test mode to end; the route stops the
+    pixel count (it added "stop" to the ports API).
     """
     throw_plugin.install(fppd, source="pixelcountsim.cpp", name="PixelCountSim")
     fppd.write("config/co-pixelStrings.json", outputs(fppd, 50, 50))
@@ -146,3 +150,29 @@ def test_the_check_pixel_count_command_counts_and_warns_of_a_mismatch(fppd):
                   what="the pixel-count mismatch warning")
     fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "idle", timeout=15,
                   what="the test mode to end")
+
+
+def test_the_last_detected_pixel_stays_lit_after_counting(fppd):
+    """When a count is done the test pattern is left showing the port's last
+    pixel, full white, and nothing else: the port reads one pixel's current
+    above dark (30 + 60 mA) until the test mode is stopped, which is how the
+    Pixel Count page shows where the string ends.
+
+    Regression: 1d7a7f0ff. Counting ended with every pixel dark, so there
+    was nothing to look at on the string to see where the count stopped."""
+    throw_plugin.install(fppd, source="pixelcountsim.cpp", name="PixelCountSim")
+    fppd.write("config/co-pixelStrings.json", outputs(fppd, 50, 50))
+    fppd.settings(LogLevel_ChannelOut="info", E131BridgingInterval="10")
+    fppd.start()
+    fppd.wait_for(lambda: port(fppd), what=f"{PORT} to be monitored")
+    fppd.get("/fppd/ports/pixelCount")
+    fppd.wait_for(lambda: len(counts(fppd)) >= 1, timeout=180, interval=0.5, what="the pixel count to finish")
+    assert counts(fppd)[0].startswith("port 1 has 50 "), counts(fppd)
+
+    def ma():
+        with open(os.path.join(fppd.media, "tmp", "port1-ma")) as f:
+            return int(f.read())
+    fppd.wait_for(lambda: 85 <= ma() <= 95, timeout=10, interval=0.2,
+                  what=f"one lit pixel's current after the count (last {ma()} mA)")
+    fppd.get("/fppd/ports/stop")
+    fppd.wait_for(lambda: ma() == 30, timeout=10, what="the port dark after the test mode stops")

@@ -94,7 +94,10 @@ def test_internal_commands_and_preset_triggers_are_published(fppd):
     command/preset/triggered with its name, and by slot with its slot.
 
     Regression: b4835d150, which added both topics, and 257ffa064, which
-    added "trigger"."""
+    added "trigger".
+
+    Also 8faab644e: the set/command topics are handled by a callback
+    registered through Events; without it the topic is ignored."""
     fppd.write("config/commandPresets.json", {"commands": [
         dict(set_variable("ByName", 1), name="Named", presetSlot=0),
         dict(set_variable("BySlot", 1), name="Slotted", presetSlot=7)]})

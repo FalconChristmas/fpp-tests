@@ -34,7 +34,10 @@ def test_outputs_on_and_off_and_port_status_with_only_a_high_port_configured(fpp
     /fppd/ports, go past them without touching a missing port.
 
     Regression: 635ea4ce6 and faf2eb1a6. The enable-all-ports loops and the
-    smart receiver scan dereferenced the holes and crashed fppd."""
+    smart receiver scan dereferenced the holes and crashed fppd.
+
+    Also aeff3152e: Outputs On and Outputs Off answer OK. They returned an
+    error result, which the command API sends as HTTP 500."""
     import os
     cfg = outputs(fppd, 50, 50)
     cfg["channelOutputs"][0]["outputs"][0]["portNumber"] = 3

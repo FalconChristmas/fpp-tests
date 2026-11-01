@@ -215,7 +215,9 @@ def test_frame_commands_fire_once_per_play(fppd):
     """Presets attached to frames by an 'FC' header fire exactly once per
     play: on the first frame, mid-sequence, and the _END presets including
     one on the last frame, where the sequence closes. (Coverage: before
-    4ae64c3a0 this played the same; the jump below is what it fixed.)"""
+    4ae64c3a0 this played the same; the jump below is what it fixed.)
+
+    Also ebde44039: running presets from 'FC' tracks stored in the fseq."""
     n = 60
     frames = unique_frames(n, CHANNELS)
     names = ["A", "B"]
@@ -362,6 +364,8 @@ def test_frame_effect_running_past_the_end_stops_with_the_sequence(fppd):
     Regression: 4ae64c3a0. Effects started by FE triggers loop, and nothing
     stopped one whose end frame the sequence never reached: it ran on after
     the show, until someone stopped it by hand.
+
+    Also ebde44039: effects started from 'FE' tracks stored in the fseq.
     """
     from eseq import solid, write_eseq
     from test_effects import running

@@ -227,7 +227,11 @@ def test_fallback_follows_the_master_and_stops_with_it(fppd):
 
     Regression: 1f945d9fd. Sync packets carry the master's file name, which
     never matched "fallback.fseq": the fallback froze two seconds in, and
-    the stop packet didn't stop it."""
+    the stop packet didn't stop it.
+
+    Also 574ea2b1d: the remote falls back to fallback.fseq at all when the
+    sequence it is asked for is missing (with the lookup removed nothing
+    plays and the output stays dark)."""
     frames = unique_frames(600, CHANNELS)
     lookup = {f: i for i, f in enumerate(frames)}
     write_fseq(f"{fppd.media}/sequences/fallback.fseq", frames, step_ms=STEP_MS)

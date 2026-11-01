@@ -183,6 +183,30 @@ def test_a_playing_sequence_wins_by_default(fppd):
                 time.sleep(0.05)
 
 
+def test_prioritize_sequence_drops_bridged_data_without_a_warning(fppd):
+    """With bridgeDataPriority "Prioritize Sequence", bridged input is
+    ignored while a sequence plays, and unlike the default it raises no
+    warning.
+
+    Regression: 6a52e764f. The option to let the sequence win over bridged
+    input (the default then was the bridge); the warning option came
+    later."""
+    setup(fppd)
+    fppd.settings(bridgeDataPriority="Prioritize Sequence")
+    seq = play_solid_sequence(fppd, 0x03)
+    data = bytes([0xE0]) * E131_SIZE
+    with Listener(OUT_PORT) as out:
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "false", "false")
+        wait_output(fppd, out, lambda f: f == seq[0], "the sequence")
+        with Sender(lambda n: [(e131(10, data, seq=n), E131_PORT)]):
+            for _ in range(30):
+                assert last(out) == seq[0], "bridged data got over the sequence"
+                time.sleep(0.05)
+            warnings = fppd.get("/fppd/status").get("warnings", [])
+            assert not any("bridging data while sequence is running" in w for w in warnings), warnings
+
+
 def test_bridged_data_over_a_playing_sequence(fppd):
     """With bridgeDataPriority "Prioritize Bridge", bridged input overrides
     a playing sequence on its channels only, and the sequence shows there
