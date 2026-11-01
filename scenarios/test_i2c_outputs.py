@@ -99,11 +99,12 @@ def test_a_16_port_pca9685_frame_reaches_all_16_ports(fppd):
     fppd.settings(DisableFakeNetworkBridges="1")
     bus.start(fppd)
     single(fppd, "1-32")
-    fppd.wait_for(lambda: any(r == 0x06 for _, _, r, _ in bus.writes(PCA)), what="a frame sent")
+    # Not just any frame: one sent before the test pattern took hold is all
+    # zeros, and a slow (TSan) run stopped on that.
+    fppd.wait_for(lambda: servo_value(bus, PCA, 15) > 0, what="a frame with port 16's pulse")
     fppd.command("Test Stop")
     sizes = sorted({len(d) for _, _, r, d in bus.writes(PCA) if r == 0x06})
     assert sizes == [64], f"frames from LED0 of {sizes} bytes"
-    assert servo_value(bus, PCA, 15) > 0, "port 16 never got a pulse"
 
 
 def servo_value(bus, addr, port):
