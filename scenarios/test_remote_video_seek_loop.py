@@ -40,7 +40,7 @@ def test_a_video_remote_that_keeps_missing_stops_seeking(fppd, audio):
     if not shutil.which("ffmpeg"):
         pytest.skip("needs ffmpeg (with libx264) to make a sparse-keyframe video")
     path = os.path.join(fppd.media, "videos", "Sparse.mp4")
-    r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30",
+    r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30",
                         "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100", "-t", "40",
                         "-c:v", "libx264", "-preset", "ultrafast", "-g", "240", "-keyint_min", "240",
                         "-sc_threshold", "0", "-pix_fmt", "yuv420p", "-c:a", "aac", "-ac", "2", path],
@@ -51,7 +51,9 @@ def test_a_video_remote_that_keeps_missing_stops_seeking(fppd, audio):
     fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [model()]})
     fppd.settings(DisableFakeNetworkBridges="1", VideoOutput=MODEL, fppMode="remote",
                   LogLevel_MediaOut="debug")
-    fppd.start()
+    # Software decode: a Pi 4's hardware H.264 decoder does not negotiate with
+    # the overlay chain here, and this is about seeking, not the decoder.
+    fppd.start(extra_env={"GST_PLUGIN_FEATURE_RANK": "v4l2h264dec:0,v4l2slh264dec:0"})
     time.sleep(2)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     send = lambda *a: sock.sendto(sync_packet(*a), ("127.0.0.1", PORT))
