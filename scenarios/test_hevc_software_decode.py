@@ -20,7 +20,7 @@ def test_a_1080p_h265_video_is_decoded_in_software(fppd, audio):
     """Play Media of a 1080p30 H.265 video on a Pi, whose stateless V4L2
     decoder is installed, plays it with the software decoder.
 
-    Regression: 7873db978.  GStreamer 1.26.2
+    Regression: e9f6b6be1.  GStreamer 1.26.2
     dereferences a NULL request in v4l2slh265dec when the driver refuses a
     stream's bitstream parameters, which aborted fppd -- on a remote joining
     mid-song, on every restart.  Fixed upstream in 1.26.10; Pi OS ships

@@ -276,7 +276,7 @@ def test_a_sync_after_the_stop_does_not_reopen_the_sequence(fppd):
     flight; the packet reaches the remote after the stop.  The remote stays
     stopped: one start, one stop.
 
-    Regression: ade6545ee. A sync after the stop of a sequence, the same bug as 863b4ac0d for media.
+    Regression: 6c6e58d8e. A sync after the stop of a sequence, the same bug as 863b4ac0d for media.
     Only a sequence that played to its end was remembered, so a
     sync after an explicit stop looked like a join mid-stream and reopened
     the sequence the remote had just closed."""
@@ -298,7 +298,7 @@ def test_a_sync_for_the_last_sequence_does_not_close_the_next(fppd):
     """After the master stops A and starts B, a sync packet for A that was
     in flight leaves B playing: A and B each start once, only A stops.
 
-    Regression: ade6545ee.  The record of a finished sequence was
+    Regression: 6c6e58d8e.  The record of a finished sequence was
     forgotten by the next open of any file, so the stale sync reopened A,
     closing B."""
     frames = unique_frames(400, CHANNELS)

@@ -26,7 +26,7 @@ def test_a_video_remote_that_keeps_missing_stops_seeking(fppd, audio):
     runs ahead of it seeks at most three times in 20 s, then says it is
     steering by speed only and seeks no more.
 
-    Regression: 7b33617d5.  AdjustFeedSpeed() sought
+    Regression: 1e944a35a.  AdjustFeedSpeed() sought
     whenever the remote was more than 50 ms off, however many seeks had
     already missed, so a video whose seeks land scattered by seconds
     (FalconChristmas/fpp#3156) seeked every two seconds for the rest of the
