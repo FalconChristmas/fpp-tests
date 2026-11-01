@@ -45,7 +45,15 @@ def test_mqtt_start_topic_payload_is_the_start_position(fppd):
         fppd.start()
 
         def started():
+            # Publish only while idle. Every message stops the running
+            # playlist and starts it again, so publishing each second and
+            # then checking at once looked at fppd in that restart window
+            # every time, and never saw "playing" (fppd was fine: the log
+            # shows a start after every message).
+            if status(fppd).get("status_name") == "playing":
+                return True
             publish("set/playlist/P/start", "2")
+            time.sleep(0.5)
             return status(fppd).get("status_name") == "playing"
         fppd.wait_for(started, timeout=30, interval=1, what="fppd to start the playlist from MQTT")
         cur = status(fppd).get("current_playlist", {})
