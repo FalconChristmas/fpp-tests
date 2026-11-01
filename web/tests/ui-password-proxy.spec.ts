@@ -82,6 +82,9 @@ test('a kiosk on loopback reaches the player through /proxy/<own IP>/ without th
   try {
     // Before the fix: 401, the proxied hop marked and so not local.
     expect(statusFromLoopback(proxied)).toBe('200');
+    // Also 96f5403d0: the REST API, not only the old xml/json pages, is open
+    // to the player's own loopback while the password is on.
+    expect(statusFromLoopback('/api/fppd/version')).toBe('200');
     // Still the password for everyone else, through /proxy or not.
     expect(await status(proxied)).toBe(401);
     expect(await status('/api/fppd/version')).toBe(401);

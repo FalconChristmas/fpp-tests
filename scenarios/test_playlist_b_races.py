@@ -6,8 +6,8 @@ thread.
 
 These are races. Under ASan a lost one is a use-after-free or an uncaught
 exception that kills fppd; the unsynchronized reads behind them show only
-under TSan (run.sh --flavor tsan). Only the image test is a red check (under
-TSan); the others are coverage, as each docstring says. The red checks
+under TSan (run.sh --flavor tsan). Only the image test and the status poll (33998236e)
+are red checks (under TSan); the others are coverage, as each docstring says. The red checks
 for 03d956965 and 41cc31f30 read the player from a native plugin's thread
 (test_playlist_plugin_reader.py).
 
@@ -59,6 +59,14 @@ def test_status_polled_while_inserted_playlists_finish(fppd):
     three threads while a one-entry playlist is inserted into the running
     one over and over, each insert finishing at once and handing back: fppd
     keeps answering, and the first playlist plays on.
+
+    Also 33998236e: the status collections are gathered under the
+    playlist's lock; without it, run under TSan, the status poll's reads
+    (e.g. a pause entry's elapsed time) race the playlist's own writes.
+
+    Also c712c793a: Playlist::GetInfo takes the playlist's lock; without
+    it, under TSan, the status poll's GetInfo reads race the playlist's
+    writes (a data race reported at teardown; ASan does not see it).
 
     Coverage for 03d956965 and c8099ec3a, not a red check: it passes on
     both parents, under ASan and TSan (40 s of it with twice the threads

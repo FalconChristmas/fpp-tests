@@ -158,7 +158,7 @@ def test_processor_output(fppd, what):
     its scratch copy: an ASan heap-buffer-overflow on the first frame.
 
     Features: 039e08db3 (Fold), 202ee2bb2 (Scale Value), 764094326 (Clamp
-    Value). Without one, its type is unknown and the frame goes out as it
+    Value), a476f4f49 (Override Zero). Without one, its type is unknown and the frame goes out as it
     came in."""
     processors, expect = CASES[what]
     with DdpReceiver(CHANNELS) as rx:

@@ -92,7 +92,9 @@ def test_trigger_multiple_presets_by_name(fppd):
 
     Regression: 909939f0b. Two presets sharing a name (A here) unlocked the
     presets lock once each, and the second unlock threw
-    (std::system_error, "Operation not permitted"): fppd crashed."""
+    (std::system_error, "Operation not permitted"): fppd crashed.
+
+    Also 6e3e91e8f: the command itself, which runs every name given."""
     names = ["A", "B", "C"]
     fppd.write("config/commandPresets.json", {"commands": [
         preset("A", counter("A")), preset("A", counter("A")),

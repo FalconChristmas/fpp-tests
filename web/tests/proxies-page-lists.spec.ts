@@ -35,6 +35,8 @@ test('a DHCP client is listed in a table of its own, named by what it answers', 
   // from dhcp") gave them their own table, out of the saved list.  9db5d8b40
   // ("try to find hostname for fpp dhcp clients in proxy UI") asks each
   // client's /api/system/info through /proxy and shows the FPP's host name.
+  // Also f568aaea0 ("Show dhcp leases on the proxies page"): the leases the
+  // DHCP server has offered are listed, from networkctl.
   expect((await request.post('/api/proxies', { data: [{ host: MANUAL, description: 'fpp-tests manual' }] })).ok()).toBe(true);
   offerLeases([ctl]);
   await openProxies(page);

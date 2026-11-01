@@ -120,6 +120,9 @@ def test_an_input_whose_line_cannot_do_edges_is_polled_with_no_warning(pads, fpp
     libgpiod v2 the re-request is d56462a9d's) and e1dc74a95 (the fallback
     raised a "Could not configure pin ... for events" warning, though the
     input works).
+
+    Also cc618a607 and 4bf0bfeb4: with no edge detection requested the
+    line shows no "edges=" and the press is never seen, not polled either.
     """
     b = Button(fppd)
     gpio_json(fppd, {"pin": b.pin, "rising": [b.run("press")]})

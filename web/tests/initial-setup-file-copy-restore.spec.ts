@@ -18,6 +18,9 @@ import { MEDIA, SETTINGS } from './settings-file';
 // with that player's drives, so a backup on its USB drive could not be
 // picked. A host change now asks the host for its drives.
 //
+// Also 90efa4726: the wizard and the Backup page share js/fpp-backup-filecopy.js
+// for the File Copy lists; the folder list below is filled by that module.
+//
 // The receiving ends: the copy request is one copystorage.php and the copy
 // script take (the script gets past its checks to the copy of the chosen
 // area); the drive lookup is one the player's own /api/backups/devices?ip=

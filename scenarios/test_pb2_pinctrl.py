@@ -95,7 +95,9 @@ def test_p2_31_takes_its_modes_from_both_its_balls_and_reports_the_one_set(pads)
 
     Regression: 7b70a09f9 (the modes came from AA18 only, so "pwm" was
     unknown and gpio went to the wrong ball) and 80ec87693 (with AA18
-    listed first, its reset state was what -l reported)."""
+    listed first, its reset state was what -l reported).
+    Also 6363b1195: the tool's first pin table, whose AA18 entry (0x170)
+    this reads."""
     set_mode(pads, "P2_31", "pwm")
     assert pads.reg("main", 0x1B4) == output(2), hex(pads.reg("main", 0x1B4))
     assert pads.reg("main", 0x170) == RESET, hex(pads.reg("main", 0x170))
@@ -127,7 +129,9 @@ def test_pwm_and_ecap_modes_mux_their_pads(pads, pin, mode, domain, offset, mux)
     """The ePWM and eCAP outputs a cape can use for PWM are pin modes: the
     pad gets that function's mux value, as an output.
 
-    Feature: acb1865b3."""
+    Feature: acb1865b3.
+    Also 56829fe97: P1_06's entry in the pin table (it added most of the
+    header pins; the other ones are unknown to the tool without it)."""
     set_mode(pads, pin, mode)
     assert pads.reg(domain, offset) == output(mux), hex(pads.reg(domain, offset))
 

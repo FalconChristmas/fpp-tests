@@ -79,7 +79,10 @@ def test_api_starts_without_ipv6(fppd, mode):
 def test_api_listens_on_ipv6_loopback(fppd):
     """Where ::1 exists, fppd's API answers there too: Apache may resolve
     "localhost" to ::1 first, and the IPv6-less fallback above must not
-    drop the [::1] listener on a box that has IPv6."""
+    drop the [::1] listener on a box that has IPv6.
+
+    Also 757b1e293: the backend listens on IPv6 as well as IPv4. Shown red
+    with the [::1] listener not added."""
     try:
         with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
             s.bind(("::1", 0))

@@ -51,6 +51,8 @@ test('a mount refused because the drive is mounted elsewhere says why', async ({
   const body = await r.json();
   expect(body.Status).toBe('Error');
   expect(body.Message).toContain('Partition is mounted on: /media/fpp-tests-elsewhere');
+  // Also 9fa7b31e6: the endpoint takes the mount location from the URL.
+  expect(body.MountLocation).toBe('/mnt/fpp-tests-mnt');
 });
 
 test("a File Copy to a remote drive that's mounted elsewhere reports the remote's reason", async ({ request }) => {

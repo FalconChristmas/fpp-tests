@@ -80,15 +80,18 @@ test('reopening the dialog opens one stream, not one more each time', async ({ p
 test('the dialog keeps the newest line in view as the log grows', async ({ page }) => {
   // Regression: 17bf060e3.  With the stream opened before the dialog had
   // finished showing, the view stayed at the top of the log as lines came
-  // in.  Also exercises 3b42a6a48 (the scroll deferred to the next frame,
-  // scroll anchoring off), a fix for macOS browsers that Chromium does not
-  // need.
+  // in.  Also 3b42a6a48 (the scroll deferred to the next frame, scroll
+  // anchoring off), a fix for macOS browsers: Chromium keeps the line in view
+  // either way, so only the anchoring style is asserted.
   await page.setViewportSize({ width: 1600, height: 700 });
   await logsTab(page);
   const dialog = await openTailFollow(page);
   const body = dialog.locator('.modal-body');
   inPlayer('sh', '-c', `seq -f 'fpp-tests line %g' 21 400 >> ${LOG}`);
   await expect(dialog.locator('#tailFollowText')).toContainText('fpp-tests line 400', { timeout: 15_000 });
+  // 3b42a6a48: the log box opts out of scroll anchoring, which macOS browsers
+  // fight with the scroll to the bottom.
+  expect(await dialog.locator('#tailFollowText').evaluate((e) => getComputedStyle(e).overflowAnchor)).toBe('none');
   const dims = await body.evaluate((b) => ({ scroll: b.scrollHeight, client: b.clientHeight }));
   expect(dims.scroll, 'the log is longer than the dialog').toBeGreaterThan(2 * dims.client);
   await expect.poll(() => body.evaluate((b) => b.scrollHeight - b.clientHeight - b.scrollTop), { timeout: 5_000 }).toBeLessThanOrEqual(2);

@@ -77,3 +77,19 @@ test('creating persistent names pins each interface to its MAC address', async (
   expect(links).toMatch(/\[Match\]\nMACAddress=([0-9a-f]{2}:){5}[0-9a-f]{2}\n/);
   expect(links).toContain('[Link]\nNamePolicy=\nName=');
 });
+
+test('persistent names switch off the default naming links, clearing them puts those back', async ({ request }) => {
+  // Regression: 5a1aedf6a.  Pinning an adapter to its MAC-based name needs
+  // systemd's default link files (99-default.link, and the USB-by-MAC
+  // 73-usb-net-by-mac.link) out of the way; clearing the names masks them
+  // again (a symlink to /dev/null) so the names stay what the config says,
+  // creating them removes the mask.  The receiving end is the symlink
+  // systemd-udevd reads; udev itself isn't running in the container.
+  const masked = (f: string) => inPlayer('sh', '-c', `readlink ${NETDIR}/${f} || true`).trim() === '/dev/null';
+  expect(await (await request.delete('/api/network/persistentNames')).json()).toEqual({ status: 'OK' });
+  expect(masked('99-default.link')).toBe(true);
+  expect(masked('73-usb-net-by-mac.link')).toBe(true);
+  expect((await (await request.post('/api/network/persistentNames')).json()).status).toBe('OK');
+  expect(masked('99-default.link')).toBe(false);
+  expect(masked('73-usb-net-by-mac.link')).toBe(false);
+});

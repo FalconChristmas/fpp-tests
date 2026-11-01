@@ -243,7 +243,10 @@ def test_kinet_packets(fppd, version):
 
     Regression: 1ab6a39a2. v2 advanced the sequence number when it prepared a
     packet, so a frame prepared twice at playback start skipped one (1, 3,
-    4, 6, ...), as E1.31, Art-Net and DDP did before 256b0cf8e."""
+    4, 6, ...), as E1.31, Art-Net and DDP did before 256b0cf8e.
+
+    Also 4fff29473: the v2 sequence number is 32 bits at bytes 8-11 of the
+    header (it was kept in one byte further on)."""
     size, base = 170, 4
     frames = unique_frames(80, 3 * size)
     with Listener(KINET_PORT) as rx:

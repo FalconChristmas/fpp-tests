@@ -9,6 +9,10 @@ Regression: fpp fa6944547. fppd's crash handler wrote plain dmesg into
 tmp/boot.log; it became dmesg -T. The handler's report-building moved into
 scripts/generate_crash_report (fec15ca35), which fppd runs on a crash, and
 the -T with it; this runs that script as test_crash_reports.py does.
+
+Also c1b60cd58: fppd's handler added the fppinit, fppoled and
+fpp_postnetwork journal to tmp/boot.log; the script keeps it, and the
+journalctl stand-in's line must be in the log.
 """
 
 import os

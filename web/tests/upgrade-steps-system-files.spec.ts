@@ -169,14 +169,50 @@ test('upgrade 142 refreshes the installed units, and only those', async () => {
 
 // Coverage: 98eb5688b ("Bring existing systems onto libgstrtspserver, not
 // just fresh installs"), upgrade 140. Where the package is already there it
-// says so, exits 0 and touches no source.
+// says so, exits 0 and touches no source. The missing-library path is
+// the next test.
 test('upgrade 140 leaves a player that has the RTSP server library alone', async () => {
   test.skip(!inPlayer('sh', '-c', "dpkg -l libgstrtspserver-1.0-dev 2>/dev/null | grep '^ii' || true").trim(),
     'libgstrtspserver-1.0-dev is not installed here');
   const src = '/opt/fpp/src/mediaoutput/RTSPOutputManager.cpp';
   const before = inPlayer('stat', '-c', '%Y', src).trim();
-  const out = inPlayer('sh', '-c', 'bash /opt/fpp/upgrade/140/upgrade.sh; echo rc=$?');
+  const out = inPlayer('sh', '-c', 'FPPDIR=/opt/fpp bash /opt/fpp/upgrade/140/upgrade.sh; echo rc=$?');
   expect(out).toContain('already installed');
   expect(out).toContain('rc=0');
   expect(inPlayer('stat', '-c', '%Y', src).trim()).toBe(before);
+});
+
+// Feature: 98eb5688b, upgrade 140. Without the library it installs it and
+// touches the sources that compile on it, so make rebuilds them with the RTSP
+// output; with no network the install fails and the step still ends 0.
+// scripts/common puts the system directories first on PATH, so the package
+// tools are replaced in place (dpkg says "not installed"; apt-get answers
+// as the case wants) and put back afterwards. FPPDIR is exported, as
+// upgrade_config does.
+test('upgrade 140 installs the RTSP server library and has make rebuild what uses it', async () => {
+  const src = '/opt/fpp/src/mediaoutput/RTSPOutputManager.cpp';
+  const log = '/tmp/u140-apt.log';
+  const restore = () => inPlayer('sh', '-c',
+    `for t in dpkg apt-get; do [ -e /usr/bin/$t.u140 ] && mv -f /usr/bin/$t.u140 /usr/bin/$t; done; rm -f ${log}; touch ${src}`);
+  try {
+    inPlayer('sh', '-c', 'for t in dpkg apt-get; do mv /usr/bin/$t /usr/bin/$t.u140; done');
+    for (const [apt, wantInstalled] of [[0, true], [100, false]] as const) {
+      inPlayer('sh', '-c', `rm -f ${log}; printf '#!/bin/sh\\nexit 1\\n' > /usr/bin/dpkg; ` +
+        `printf '#!/bin/sh\\necho "$*" >> ${log}\\n[ "$1" = update ] && exit 0\\nexit ${apt}\\n' > /usr/bin/apt-get; ` +
+        `chmod +x /usr/bin/dpkg /usr/bin/apt-get; touch -d '2020-01-01 00:00:00' ${src}`);
+      const out = inPlayer('sh', '-c', 'FPPDIR=/opt/fpp bash /opt/fpp/upgrade/140/upgrade.sh; echo rc=$?');
+      expect(out).toContain('rc=0');
+      expect(inPlayer('cat', log)).toContain('install -y libgstrtspserver-1.0-dev');
+      const year = inPlayer('stat', '-c', '%y', src).trim().slice(0, 4);
+      if (wantInstalled) {
+        expect(out).toContain('fppd will rebuild with the RTSP video output enabled');
+        expect(year, 'the source was not touched, so make would not rebuild it').not.toBe('2020');
+      } else {
+        expect(out).toContain('Could not install libgstrtspserver-1.0-dev');
+        expect(year).toBe('2020');
+      }
+    }
+  } finally {
+    restore();
+  }
 });

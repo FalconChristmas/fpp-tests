@@ -75,6 +75,11 @@ test('the Help menu advertises page help where a page has it', async ({ page }) 
   await expect(toggle.locator('i.fa-question-circle')).toHaveCount(1);
   await toggle.click();
   await expect(page.locator('a.help-for-page')).toBeVisible();
+  // Its entry opens this page's help, as F1 does.
+  await page.locator('a.help-for-page').click();
+  await expect(page.locator('#helpDialog')).toBeVisible();
+  await page.goto('/index.php?fpp-tests=menu');
+  await expect(toggle).toHaveClass(/has-page-help/);
 
   // effects.php has no help/effects.php.
   expect(inPlayer('sh', '-c', 'test -e /opt/fpp/www/help/effects.php && echo yes || echo no').trim()).toBe('no');

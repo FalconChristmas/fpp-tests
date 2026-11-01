@@ -428,7 +428,10 @@ def test_the_time_is_set_once_the_network_has_an_address(fppinit):
 
     Regression: 38f0e5a55. The automatic delay measured the wait from the
     settings file's creation time, not the current time, so a box whose
-    clock was behind skipped the quick SNTP set."""
+    clock was behind skipped the quick SNTP set.
+
+    Also 5fc3d79c2, which replaced the wait for the time with the quick
+    SNTP set this checks."""
     import glob
     lib = glob.glob("/usr/lib/*/faketime/libfaketime.so.1")
     if not lib:

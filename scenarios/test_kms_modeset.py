@@ -18,6 +18,9 @@ def test_a_matrix_smaller_than_the_panel_lights_a_crtc_that_was_off(fppd):
     1920x1080 mode, and the output still turns the CRTC on and shows it on
     its plane.
 
+    Also 936ad3e30: the KMS framebuffer output itself (it split FrameBuffer
+    into the ioctl, KMS and socket classes); with KMS not offered the
+    output never comes up on the fake display.
     Regression: 9cc9195f4 (its modeset half; test_kms_hotplug.py has the
     hotplug half). Legacy SetCrtc scans the primary plane out at
     the full mode size, so a modeset with the model's framebuffer always

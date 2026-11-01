@@ -19,6 +19,13 @@ import { container, inPlayer } from './container';
 // as a glob pattern and the patches were never found; Upload-Offset went into
 // a file name unchecked ("0/../../x" wrote outside upload/); a late retry of
 // the final chunk left a stray patch behind.
+//
+// Also 6de4e1c64 (chunked upload to the File Manager's FilePond): the chunks are
+// put back together in offset order, which the three-chunk tests below check.
+//
+// Also 3413e5bc3 ("Add a new files API for uploading files in chunks"): the
+// POST/PATCH api/file/<dir> routes themselves; without them every request
+// here falls through to the one-file upload and is refused.
 
 test.skip(!container, 'checks the uploaded files inside the run-web.sh container');
 

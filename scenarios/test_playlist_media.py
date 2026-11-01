@@ -408,3 +408,25 @@ def test_status_names_a_sequence_started_directly_by_its_whole_file_name(fppd):
     fppd.command("Start Playlist", "Show.v2", "false", "false")
     fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("playlist") == "Show.v2",
                   timeout=15, what="the status to name Show.v2")
+
+
+def test_a_media_file_started_directly_is_not_watched_for_changes(fppd, audio):
+    """A media file started by name and repeated plays on through the end of
+    its pass: the playlist made for it is not reloaded from the media file
+    as if that were a playlist file.
+
+    Regression: 599941df9. The playlist generated for a bare media name was
+    checked for modification like a playlist file, so at the end of the
+    pass the reload parsed the audio as JSON and gave up with an error.
+    """
+    song(fppd, 3)
+    fppd.start()
+    fppd.command("Start Playlist", "Song.wav", "true", "false")
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", what="the media to play")
+    time.sleep(5)  # past the end of the first pass
+    s = status(fppd)
+    assert s.get("status_name") == "playing", s
+    bad = [l for l in fppd.log().splitlines() if "no usable playlist" in l or "Error reloading" in l]
+    assert not bad, bad[:3]
+    fppd.command("Stop Now")
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", what="idle")

@@ -33,6 +33,10 @@ def test_restart_resumes_the_whole_playlist(fppd):
     playlist missing: here, one entry of seven.
 
     Also covers 0aae67041: the "Restart FPPD" command it restarts with.
+
+    Also dccff8634: the restarted fppd is given the playlist and position and
+    the scheduler starts the window's playlist there (at the start without
+    it: the lead-in runs again and the trace is not empty).
     """
     start, end = window(-60, 600)
     # Lead-in reset, then main: 1, 2, 3 and a long pause to restart in.

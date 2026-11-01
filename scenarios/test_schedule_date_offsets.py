@@ -224,6 +224,10 @@ def test_holiday_with_an_offset_runs_on_the_shifted_day(fppd, year):
 
     Feature: 3db2b02d6.
 
+    Also 8914969c9: ScheduleDistance="365" is what lets the live schedule
+    reach a holiday months ahead (with the weekly loop held to 28 days, the
+    November holidays are missing from it).
+
     Regression: 557a9d4fd. A first-/second-... weekday holiday in a month
     that starts on that weekday was put a week late (Thanksgiving in a year
     whose November 1 is a Thursday, Labor Day in one whose September 1 is a

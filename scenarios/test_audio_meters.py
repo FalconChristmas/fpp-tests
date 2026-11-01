@@ -103,8 +103,9 @@ def test_each_meter_reads_its_own_node(fppd, audio):
     default sink, and every meter read that one signal (all three read 85
     with it put back).
 
-    Coverage for eb1956008: the level is read from the level element's
-    rms array in whichever container this GStreamer uses."""
+    Also eb1956008: the level is read from the level element's rms array in
+    whichever container this GStreamer uses. With the GValueArray branch (the
+    container this GStreamer reports it in) off, every meter reads 0."""
     write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 30, amplitude=0.5)
     quiet_sink(audio)
     fppd.start()

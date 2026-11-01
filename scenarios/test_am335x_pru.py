@@ -703,9 +703,10 @@ def test_short_strings_and_unused_lanes_send_zeros(fppd):
     pixels lit white fill lane 0 for 30 bytes, lane 1 for 60, and nothing
     else.
 
-    Coverage for 8c5bfeef2 (the tiled prepData, which made the tail of a
-    shorter string and the unmapped lanes zeros instead of whatever the
-    buffer held); its old path is gone, so there is no control.
+    Also 8c5bfeef2 (the tiled prepData, which made the tail of a shorter
+    string and the unmapped lanes zeros instead of whatever the buffer
+    held): its old path is gone, so the control fills the tail with 0xFF
+    instead of zeros, and the lanes carry 0xFF past the string.
     """
     pru = FakePruss(fppd)
     fppd.settings(LogLevel_ChannelOut="info")

@@ -3,6 +3,7 @@
 //
 //   "Warning Test Add <id> <message> [plugin]"     WarningHolder::AddWarningTimeout
 //                                                  with no timeout, under that plugin name
+//   "Warning Test Add Timed <seconds> <id> <message>"  the same, coming down by itself after <seconds>
 //   "Warning Test Remove <id> <message> [plugin]"  WarningHolder::RemoveWarning
 
 #include <cstdlib>
@@ -37,6 +38,13 @@ public:
                 return std::string("usage: id message [plugin]");
             }
             WarningHolder::AddWarningTimeout(-1, std::atoi(a[0].c_str()), a[1], {}, a.size() > 2 ? a[2] : "");
+            return std::string("added");
+        });
+        add("Warning Test Add Timed", [](const std::vector<std::string>& a) {
+            if (a.size() < 3) {
+                return std::string("usage: seconds id message");
+            }
+            WarningHolder::AddWarningTimeout(std::atoi(a[0].c_str()), std::atoi(a[1].c_str()), a[2], {}, "");
             return std::string("added");
         });
         add("Warning Test Remove", [](const std::vector<std::string>& a) {

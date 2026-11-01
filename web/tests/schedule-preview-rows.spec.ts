@@ -56,6 +56,8 @@ test.describe('schedule preview rows', () => {
     // Regression: 0eb2b9207.  The start row's printf was handed a stray
     // $holiday ahead of the playlist name, so every argument after it moved
     // up one: the row read "<blank> (<playlist> w/ Repeating Stop)".
+    // Also 34f1e6a45: the stop type came from the end item's entry, not the
+    // start item's own, so a start row named the wrong entry's stop.
     const rows = await preview(page, request, [daily(SHOW, '18:00:00', '22:00:00', 1, 1)]);
     const start = rows.filter({ hasText: 'Start Playing' }).first();
     await expect(start).toContainText(`${SHOW} (Repeating w/ Hard Stop)`);

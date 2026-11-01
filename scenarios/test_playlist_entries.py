@@ -556,6 +556,50 @@ def test_a_restart_resumes_the_scheduled_playlist_where_it_was(fppd):
     assert "A" not in v and "B" not in v, f"the playlist started over after the restart: {sorted(v)}"
 
 
+def scheduled_now(fppd, name, main):
+    """A playlist scheduled to be playing now, for the next ten minutes."""
+    import datetime
+    now = datetime.datetime.now().replace(microsecond=0)
+    start, end = now - datetime.timedelta(seconds=60), now + datetime.timedelta(seconds=600)
+    if start.date() != end.date():
+        pytest.skip("too close to midnight for a same-day window")
+    today = start.strftime("%Y-%m-%d")
+    fppd.write(f"playlists/{name}.json", {"name": name, "repeat": 0, "loopCount": 0, "leadIn": [],
+                                          "mainPlaylist": main, "leadOut": []})
+    fppd.write("config/schedule.json", [{
+        "enabled": 1, "day": 7, "playlist": name, "startTime": start.strftime("%H:%M:%S"),
+        "endTime": end.strftime("%H:%M:%S"), "startDate": today, "endDate": today,
+        "repeat": 0, "stopType": 0}])
+
+
+def test_a_restart_asked_for_by_a_playlist_entry_resumes_after_it(fppd):
+    """A scheduled playlist with a Restart FPPD entry restarts once and
+    carries on with the entry after it, instead of running the restart
+    again every few seconds.
+
+    Regression: e35d8d652. The restart resumed AT the entry that asked for
+    it, which was not yet marked finished, so each new fppd ran the command
+    again.
+    """
+    restart = {"type": "command", "enabled": 1, "playOnce": 0, "command": "Restart FPPD", "args": []}
+    scheduled_now(fppd, "Res", [mark("A"), restart, pause(8), mark("B"), pause(15), mark("C")])
+    fppd.start()
+
+    def reached_b():
+        try:
+            return (fppd.get("/variables", timeout=2) or {}).get("B")
+        except Exception:
+            return None  # fppd is restarting
+    # Variables don't survive the restart: only a fppd that came back and
+    # went on past the pause has B.
+    time.sleep(6)
+    fppd.wait_for(reached_b, timeout=90, interval=0.5,
+                  what="the entry after the restart (a restart loop never gets there)")
+    resumed = [l for l in fppd.log().splitlines() if "Restart: resuming playlist 'Res'" in l]
+    assert len(resumed) == 1 and "at position 2" in resumed[0], resumed
+    fppd.command("Stop Now")
+
+
 # --- playlist data fppd can only partly read ---------------------------------
 
 

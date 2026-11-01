@@ -43,7 +43,10 @@ def test_single_color_fills_exactly_the_range(fppd):
     Also guards 8506acb38 under TSan: the running test pattern pointer is
     atomic. As a plain pointer, Test Start's SetupTest() replacing it (HTTP
     thread, under m_testLock) raced Testing() reading it without the lock.
-    Shown red on master with the pointer made plain again."""
+    Shown red on master with the pointer made plain again.
+
+    Also 9c489b10a: the Test Start / Test Stop FPP Commands exist. Shown red
+    with neither registered (Test Start answers 500)."""
     setup(fppd)
     with DdpReceiver(CHANNELS) as rx:
         fppd.start()
@@ -154,7 +157,10 @@ def test_single_channel_chase_with_a_bad_size(fppd, size):
 def test_bad_test_start_arguments_are_survived(fppd, args, what):
     """Test Start with bad arguments answers (an error is fine) and leaves
     fppd running and able to run a good test afterwards (73b282af2,
-    9f80039ee, a117c89a7)."""
+    9f80039ee, a117c89a7).
+
+    Also f34202c74: a range given backwards (end before start) once ended
+    fppd."""
     setup(fppd)
     with DdpReceiver(CHANNELS) as rx:
         fppd.start()
@@ -323,7 +329,10 @@ def test_the_channel_range_argument_lists_the_output_ranges_as_choices(fppd):
 
     Regression: 6a8fd40a1 (#1316). The ranges were published as the
     argument's "default", so the editor started on one and offered no
-    choices."""
+    choices.
+
+    Also f889da4ba: the channel range is an argument each pattern lists
+    (the Test Start command itself has only the interval and pattern)."""
     setup(fppd)
     fppd.start()
     got = fppd.get("/fppd/testing/tests/RGB%20Chase", timeout=10)

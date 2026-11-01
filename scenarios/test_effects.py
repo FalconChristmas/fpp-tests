@@ -136,7 +136,10 @@ def test_effect_on_a_model_with_no_start_channel_starts_at_the_model(fppd):
     start channel given with a model counts from 1 at the model's start.
 
     Regression: 23c204684 (#2041). An empty start channel was 0, and the
-    model's start plus 0 put the effect one channel before the model."""
+    model's start plus 0 put the effect one channel before the model.
+
+    Also d0014305b: the Model argument itself (without it the effect
+    starts at the given channel, not at the model)."""
     frames = solid(20, SIZE, 0x5A)
     write_eseq(fppd, "fx", frames, START)
     outputs_only(fppd)

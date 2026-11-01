@@ -421,6 +421,7 @@ test('Multisync page renders correct device rows', async ({ page }) => {
     const marsBg = await marsRow.evaluate(el => (el as HTMLElement).style.background);
     expect(marsBg).toContain('rgb(128, 0, 128)');
 
+    // Also d743f7757: a player sending MultiSync packets is labelled "Player w/ Multisync".
     // VENUS — green background; multisync:true → mode cell shows "Player w/ Multisync"
     const venusRow = page.locator('tr.systemRow', { hasText: 'VENUS' });
     const venusBg = await venusRow.evaluate(el => (el as HTMLElement).style.background);

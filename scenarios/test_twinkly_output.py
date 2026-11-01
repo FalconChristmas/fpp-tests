@@ -104,7 +104,9 @@ def test_handshake_then_frames_carry_the_token(fppd):
     then every frame carries it.
 
     Also 2569d5819, which gave CurlManager requests a body: login is a POST
-    whose body the lights need, and without it realtime mode never came."""
+    whose body the lights need, and without it realtime mode never came.
+
+    Also 9c88497f9 (the Twinkly output type: nothing is sent without it)."""
     setup(fppd, 300)
     with lights() as tw:
         fppd.start()

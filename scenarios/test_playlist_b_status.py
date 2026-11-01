@@ -134,3 +134,23 @@ def test_the_loop_warning_names_a_command_entry_that_restarts_itself(fppd):
     assert "command entry" in w and "Restart" in w, w
     fppd.command("Stop Now")
     wait_idle(fppd)
+
+
+def test_a_pause_entry_reports_the_time_it_has_run(fppd):
+    """A playing Pause entry reports how long it has been running, in the
+    status's seconds played and elapsed, not a negative count down to its end.
+
+    Regression: c6ac513ac. The elapsed time was the clock minus the entry's
+    END time, so a 30 s pause 2 s in reported about -28 s.
+    """
+    fppd.write("playlists/P.json", playlist("P", main=[pause(30)]))
+    fppd.start()
+    start(fppd, "P")
+    time.sleep(2.5)
+    s = status(fppd)
+    assert s.get("status_name") == "playing", s
+    played, elapsed = int(s["seconds_played"]), int(s["seconds_elapsed"])
+    assert 2 <= played <= 5, f"seconds_played {played} for a pause 2.5 s in"
+    assert 2 <= elapsed <= 5, f"seconds_elapsed {elapsed} for a pause 2.5 s in"
+    fppd.command("Stop Now")
+    wait_idle(fppd)

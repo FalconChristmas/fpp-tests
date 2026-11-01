@@ -30,13 +30,15 @@ const url = (name: string) => `/upgradeOS.php?os=${encodeURIComponent(`https://$
 
 test('the image is fetched with wget, over HTTPS, into the uploads directory, and nothing is applied', async ({ request }) => {
   // Feature: de882850e (wget, not PHP's curl, whose OpenSSL was slow on
-  // FPP 8.x) and 0fd1be6da.
+  // FPP 8.x) and 0fd1be6da.  Also 6a4200b3b: a download-only run that
+  // succeeded ended with "FPP UPGRADE FAILED", as nothing was applied.
   const r = await request.get(url(IMAGE), { timeout: 120_000 });
   const out = await r.text();
   expect(out).toContain('Running command: sudo wget -c');
   expect(out).toContain(`https://${HOST}/os/${IMAGE}`);
   expect(out).toContain('Download complete...');
   expect(out).not.toContain('Applying OS image');
+  expect(out).not.toContain('FPP UPGRADE FAILED');
   expect(inPlayer('sh', '-c', `wc -c < ${UPLOAD}/${IMAGE}`).trim()).toBe(String(BODY.length));
   expect(fake.requests().filter((q) => q.path === `/os/${IMAGE}`).length).toBeGreaterThan(0);
 });

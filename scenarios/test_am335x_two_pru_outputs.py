@@ -76,6 +76,9 @@ def test_each_pru_runs_its_own_shift_string_program(fppd):
     Regression: 3e41649cf. The PRU0 branch called m_pru1.pru->run() with
     the PRU0 program: PRU1 was restarted with the wrong program and PRU0
     never started (the K128's second half of strings stayed dark).
+
+    Also 976f10748 (the firmware images built with the tree): with the
+    images not found neither core is started.
     """
     needs_bbb()
     pru = FakePruss(fppd)

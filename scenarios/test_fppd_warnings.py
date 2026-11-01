@@ -9,6 +9,9 @@ def test_the_boot_delay_warning_names_the_wait(fppd):
 
     Feature: 71985ef15 (the warning), with the auto form from 9ef699bb4's
     delay.
+
+    Also 35c03fd64: the /fppd/warnings endpoint it reads (a bare list of
+    the messages; 404 without it).
     """
     want = {
         "1767225600,30": "Boot delay in progress: Waiting 30 seconds before starting FPPD",

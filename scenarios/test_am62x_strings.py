@@ -162,6 +162,8 @@ def test_falcon_v5_packets_leave_the_pins_with_no_strings_at_zero(real_pru, fppd
     and filled only the lanes with a string mapped, but every lane is
     clocked out in the packet phase: the unused pins carried the output
     thread's old stack contents.
+
+    Also 5453e903a: with the ring write left out PRU1 renders no frames.
     """
     outs = shift_outputs()
     for n in (0, 4):
@@ -213,6 +215,10 @@ def test_the_string_ring_never_needs_re_seating_across_reloads(real_pru, fppd):
     still read one ring block for: every later frame sat one block (a byte
     per string) out, until fppd restarted. Since c6d86600e that is healed
     the next frame, and counted here.
+
+    Also 5453e903a (the SMEM ring for pixel data) and 976f10748 (the
+    firmware images built with the tree): with the ring write left out, or
+    the images not found, PRU1 renders no frames and the first check fails.
 
     Regression: 7f8d8f634. The pump issued the next command as soon as the
     firmware had taken the previous one, while frame data could still be
@@ -450,6 +456,8 @@ def test_a_port_is_clocked_at_its_protocols_bit_cell(real_pru, fppd, protocol, c
     Feature: 4e43e80f3. The bit cell was compiled into the firmware: every
     part got the ws281x cell, which puts a 400 kHz part's pulses outside
     the window it decodes.
+
+    Also 5453e903a: with the ring write left out no frame span is seen.
     """
     write_string_cape("TestShift16", {"driver": "BBShiftString", "outputs": shift_outputs()})
     ports = [pixel_output(n, 50, n * 150) for n in range(16)]

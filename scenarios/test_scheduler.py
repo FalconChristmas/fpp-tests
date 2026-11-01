@@ -160,7 +160,9 @@ def test_extend_schedule_refuses_an_argument_that_isnt_a_number(fppd, arg):
 
 def test_start_next_scheduled_item_starts_it_now(fppd):
     """Start Next Scheduled Item starts the next window's playlist straight
-    away, while idle, rather than at its start time."""
+    away, while idle, rather than at its start time.
+
+    Feature: efa4e3bd8 (the command behind the Start Next button)."""
     scheduled_show(fppd, 300, 600)
     fppd.start()
     time.sleep(2)

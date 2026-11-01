@@ -55,6 +55,7 @@ test('a second matrix on the cape takes its panel settings from the first, and i
   // so the panel settings belong to the cape: the second matrix hides its
   // Panel Settings box, says where they come from, and is saved with the
   // first one's panel size.
+  // Also 67a5ccb4f: Save gathers the config of every matrix tab, not one.
   writeOutputs([matrix(1, 1, [64, 32, 8], 0), matrix(2, 6145, [32, 16, 8], 1)]);
   await openPanels(page);
   await expect(page.locator('#panelMatrix1 .divPanelSettingsSection')).not.toHaveClass(/d-none/);

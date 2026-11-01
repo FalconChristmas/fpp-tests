@@ -46,6 +46,20 @@ test('a name-only file list is sorted', async ({ request }) => {
   }
 });
 
+// 751909715: /api/scripts is alphabetical (natural, case-insensitive), not in
+// directory order.
+test('the script list is sorted', async ({ request }) => {
+  const names = ['fpp-tests-b1.sh', 'fpp-tests-a10.sh', 'fpp-tests-A9.sh', 'fpp-tests-c.sh'];
+  for (const n of names) seed(`scripts/${n}`);
+  try {
+    const all: string[] = await (await request.get('/api/scripts')).json();
+    expect(all.filter((n) => n.startsWith('fpp-tests-')))
+      .toEqual(['fpp-tests-A9.sh', 'fpp-tests-a10.sh', 'fpp-tests-b1.sh', 'fpp-tests-c.sh']);
+  } finally {
+    remove(...names.map((n) => `scripts/${n}`));
+  }
+});
+
 // 2b4f0cc4f: /api/sequence lists sequences, not effects.
 test('the sequence list holds the .fseq files and not the effects', async ({ request }) => {
   seed('sequences/fpp-tests-seq.fseq');

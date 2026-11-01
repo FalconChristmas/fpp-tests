@@ -168,7 +168,9 @@ def test_json_describes_every_version_and_compression(tmp_path):
 
 def test_json_escapes_the_file_name(tmp_path):
     """A file name with a quote, a backslash, a tab and a newline in it still
-    comes out as valid JSON, naming the file exactly."""
+    comes out as valid JSON, naming the file exactly.
+
+    Also ae2f91e11: the quote in the name, which had been left unescaped."""
     name = 'a "quoted"\\ name\twith\na newline.fseq'
     path = str(tmp_path / name)
     write_fseq(path, unique_frames(2, CHANNELS))

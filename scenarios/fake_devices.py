@@ -43,6 +43,11 @@ def drop():
     return {"drop": True, "status": 0, "type": "", "body": "", "headers": {}}
 
 
+def raw(body):
+    """A response with no status line or headers, only the body: HTTP/0.9."""
+    return {"raw": body, "status": 0, "type": "", "body": "", "headers": {}}
+
+
 def requests_seen(address):
     """The requests a fake device was sent so far, as "GET /path?query"."""
     out = subprocess.run(["curl", "-s", "-m", "5", f"http://{address}/_requests"],
@@ -101,7 +106,7 @@ def wait_ready(proc, address, port=80):
         f"fake device server: {line}{proc.stdout.read() if proc.poll() is not None else ''}"
     deadline = time.monotonic() + 10
     host = f"[{address}]" if ":" in address else address
-    while subprocess.run(["curl", "-s", "-o", "/dev/null", "-m", "1",
+    while subprocess.run(["curl", "-s", "--http0.9", "-o", "/dev/null", "-m", "1",
                           f"http://{host}:{port}/"]).returncode:
         assert time.monotonic() < deadline, f"{address} never answered"
         time.sleep(0.2)

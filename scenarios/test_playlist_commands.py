@@ -372,6 +372,9 @@ def test_insert_random_item_comes_from_the_main_section(fppd):
 
     Regression: 6eedfedee. The random single entry was loaded with the
     lead-in first, which took the one slot: it always played the lead-in.
+
+    Also 0b6f2b41d: the Insert Random Item From Playlist command itself,
+    which plays one entry of the playlist (not all of it) and resumes.
     """
     fppd.write("playlists/P.json", playlist("P", main=[pause(60)]))
     fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0,

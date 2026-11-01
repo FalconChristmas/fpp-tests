@@ -21,6 +21,8 @@ for (const { shift, icon, text } of [
   { shift: 6 * 60 * 60, icon: 'text-danger', text: 'significantly different to the browser' },
 ]) {
   test(`the date check compares the player's clock with the browser's ${shift / 3600} hours ahead`, async ({ page }) => {
+    // Also 1353510b8: the page reads the helper's output with one ajax request
+    // and appends it (streaming left every check "Running..." in Firefox).
     // Feature: dc536c0d3.  The page sends the browser's time and the script
     // checks the player's against it: a warning past 10 minutes, a failure
     // past 4 hours.  A player without a clock source keeps the wrong time.

@@ -15,6 +15,9 @@ test.skip(!container, 'sets the host name in the settings file inside the run-we
 const SCRIPT = '/home/fpp/media/scripts/fpp-tests-zip-name.sh';
 
 test('a downloaded zip is named for the host it came from', async ({ request }) => {
+  // Also ee8f49b50: any folder of the media directory (Scripts here) can be
+  // downloaded as a zip; a folder the zip doesn't know is answered with a
+  // status, not a download.
   putFile(SCRIPT, '#!/bin/sh\necho fpp-tests\n');
   try {
     await keepingSettings(async () => {
@@ -35,5 +38,24 @@ test('a downloaded zip is named for the host it came from', async ({ request }) 
     });
   } finally {
     inPlayer('rm', '-f', SCRIPT);
+  }
+});
+
+test('a comma-separated list of folders is zipped together as "all"', async ({ request }) => {
+  // Feature: 3854dad2c.  /api/files/zip/<A>,<B> puts every named folder in one
+  // zip, named "all", instead of only the first.
+  const playlist = '/home/fpp/media/playlists/fpp-tests-zip-all.json';
+  putFile(SCRIPT, '#!/bin/sh\necho fpp-tests\n');
+  putFile(playlist, '{}');
+  try {
+    const r = await request.get('/api/files/zip/Scripts,Playlists');
+    expect(r.status()).toBe(200);
+    expect(r.headers()['content-disposition'] ?? '').toMatch(/_all_\d{8}_\d{4}\.zip"?$/);
+    const body = await r.body();
+    expect(body.subarray(0, 2).toString()).toBe('PK');
+    expect(body.includes(Buffer.from('Scripts/fpp-tests-zip-name.sh')), 'the first folder is missing').toBe(true);
+    expect(body.includes(Buffer.from('Playlists/fpp-tests-zip-all.json')), 'the second folder is missing').toBe(true);
+  } finally {
+    inPlayer('rm', '-f', SCRIPT, playlist);
   }
 });

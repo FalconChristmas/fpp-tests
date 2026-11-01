@@ -181,13 +181,14 @@ def test_zero_step_time(fppd):
     """A header whose step time byte is 0 plays at the 50 ms default.
 
     Regression: 74d476d5d. Every consumer divided by it: SIGFPE on x86 and
-    32-bit ARM. (On aarch64 a division by zero is 0, so there it can't go
-    red.)"""
+    32-bit ARM. (On aarch64 a division by zero is 0, so the crash can't
+    show there; fppd's log line saying the 0 was replaced can.)"""
     frames = unique_frames(40, CHANNELS)
     data = v2(frames)
     data[18] = 0
     during = play_bad_then_good(fppd, data)
     assert_faithful(frames, during)
+    assert "step time 0, using 50ms" in fppd.log(), "the zero step time was not replaced"
 
 
 def fc_header(entries):

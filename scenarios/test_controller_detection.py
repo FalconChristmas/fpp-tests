@@ -76,6 +76,11 @@ def test_each_vendor_is_recognised(fppd):
     from its page (38cfc76e9), and anything else as Unknown.
 
     Feature: 2babf4d5c, 38cfc76e9, dfa5b5b7a.
+
+    Also 73f42024e: the FPP probe's URL is /api/system/info?simple=1; with
+    "&simple=1" the fake FPP 404s and is listed with no name or version.
+    Also 7c7c77c45: a Falcon reporting 16 ports is an F16v4, not a bare
+    "Falcon Controller".
     """
     with fake_devices(DEVICES):
         got = discover(fppd, DEVICES)

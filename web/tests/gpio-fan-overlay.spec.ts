@@ -44,7 +44,8 @@ const lines = () => readFile(CONFIG).split('\n');
 // Regression: d7c527823 ("Remove the managed gpio-fan line when the GPIOFan
 // setting goes away"). The boot actions applied GPIOFan only when the key was
 // present, so once a cape's removeSettings took it away the line stayed in
-// config.txt for good.
+// config.txt for good. Also 330e8be83: the boot actions apply GPIOFan at all
+// (a cape or an OS update changed it and the OS side never caught up).
 test('the fan line goes when GPIOFan is gone, and is commented out at "0"', async ({ request }) => {
   setSettingInFile('GPIOFan', undefined);
   const out = runBootActions();

@@ -60,6 +60,28 @@ def test_an_unsigned_virtual_cape_is_detected(fppinit):
     assert settings_of(fppinit).get("CapeTestSetting") == "on", fppinit.media_file("settings")
 
 
+def test_a_cape_that_changes_settings_asks_for_the_boot_actions(fppinit):
+    """A default the cape applies leaves BootActions = "settings" behind, so
+    the next boot's handle_boot_actions applies the settings that act on the
+    OS (the fan, the HDMI port, passwords); a cape that changes nothing
+    leaves no request.
+
+    Regression: 330e8be83. The settings were written and the OS side of
+    them (config.txt, uEnv.txt) only caught up at the next unrelated
+    boot action."""
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(defaultSettings={"CapeTestSetting": "on"})))
+    detect(fppinit)
+    s = settings_of(fppinit)
+    assert s.get("CapeTestSetting") == "on", fppinit.media_file("settings")
+    assert s.get("BootActions") == "settings", fppinit.media_file("settings")
+
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(defaultSettings={"CapeTestSetting": "on"})))
+    fppinit.write("settings", fppinit.media_file("settings").replace('BootActions = "settings"\n', ""))
+    detect(fppinit)
+    assert "BootActions" not in settings_of(fppinit), \
+        "an unchanged default asked for the boot actions again"
+
+
 def test_a_cape_default_never_overrides_the_user(fppinit):
     """defaultSettings fills in what is unset and leaves alone what the
     user chose.

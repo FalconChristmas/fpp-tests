@@ -154,6 +154,9 @@ def test_a_repaired_pocketbeagle2_gets_a_unit_number_the_factory_cannot_issue(fp
     Regression: d3f92966d. Only the low four digits were randomized, inside
     the factory's range, so repaired boards could collide with real ones
     (and shared their first twelve characters with each other).
+    Also 666189e98: fix_pb2_eeprom.sh builds the board EEPROM from its
+    template where the board's is blank; without that merge nothing is
+    written.
     """
     for eeprom in (b"\xff" * 256, b"\xff" * 50 + b"00" + b"\xff" * 204):
         unit = repair(fppinit, script, eeprom)

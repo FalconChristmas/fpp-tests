@@ -163,8 +163,9 @@ test('Save resets the panel Testing dropdown along with the test it stops', asyn
 });
 
 test('a panel turned with its orientation arrow is saved turned, and stays turned through a reload and Save', async ({ page, request }) => {
-  // Coverage: acd4ce0b3 drew the orientation arrows with Font Awesome instead
-  // of images and kept the orientation in the icon; the arrows were shown
+  // Regression: acd4ce0b3 drew the orientation arrows with Font Awesome instead
+  // of images and kept the orientation in the icon (without it a click turns
+  // nothing and the panel is saved upright); the arrows were shown
   // from the back by default, so one click (N to R from the back) is saved
   // as "L", the panel's orientation seen from the front.
   writeOutputs({ channelOutputs: [v3Matrix()] });

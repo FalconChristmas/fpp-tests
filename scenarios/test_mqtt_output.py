@@ -243,6 +243,10 @@ def test_mqtt_output_payload_tokens(fppd):
 
     Regression: 85f33b352. The HSV and intensity tokens were computed from
     r / 255 in integer division, so they were only ever 0 or 100.
+
+    Also c03303bb4 (the MQTT output itself: no payloads published without
+    it) and 5ba3fee4a (the default payload is "%R%,%G%,%B%", not
+    "%R,%G,%B").
     """
     steps = list(zip(RGB_STEPS, RGBW_STEPS, SINGLE_STEPS))
     frames = []

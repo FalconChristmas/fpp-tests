@@ -69,6 +69,10 @@ def test_crash_handler_prunes_the_oldest_reports_by_time(fppd):
     """With more than ten reports in crashes/, the crash handler deletes the
     oldest by time, even when the newest sort first by name.
 
+    Also ea2123728 (only ten reports are kept: nothing is pruned without
+    it) and 52acd5bce (the handler is registered for the signal: without it
+    SIGABRT ends fppd by the default action, not through the handler).
+
     Regression: cce0e6327. Reports were pruned by name, and names start with
     the FPP version, so after an upgrade the newest ("10.x" sorts before
     "9.x") were the ones deleted.
@@ -90,6 +94,9 @@ def test_crash_report_is_written_in_this_media_folder(fppd):
     Regression: 462d7b884. generate_crash_report changed directory to a
     hard-coded /home/fpp/media (or /opt/fpp) and gave up when neither
     existed, so outside a standard device it wrote no report at all.
+
+    Also fdf8ea746: reports go in their own crashes/ directory. Shown red
+    with the report named under upload/ instead.
     """
     crashes = os.path.join(fppd.media, "crashes")
     os.makedirs(crashes, exist_ok=True)
@@ -217,6 +224,8 @@ def test_crash_on_the_warnings_thread_exits_through_the_handler(fppd):
     Also guards e3a7cf772: the warnings thread is named "FPP-Warnings" (in
     /proc, and so in crash reports); without the name there is no such
     thread to find.
+    Also ba777f822: the handler writes the "FPPD has crashed" warning into
+    www/warnings.json for the pages to show.
     """
     fppd.settings(ShareCrashData="0")
     fppd.start()
@@ -579,6 +588,10 @@ def test_stack_traces_only_report_carries_no_log_lines(fppd, tmp_path):
     crash context -- playlist state, registers -- but none of the retained
     log ring, which is log content (host names, LAN addresses, discovered
     devices) and ships only where logs/fppd.log does.
+
+    Also 85879fb81: ShareCrashData sets how much a report carries; with the
+    setting ignored (always the full level) this test, the kept-locally one
+    and the disabled one all go red.
 
     Regression: 8b5fc01e7. The ring was written into fppd_crash_context.log,
     which is copied at every level, so a user who narrowed sharing to stack

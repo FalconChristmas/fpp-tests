@@ -226,6 +226,9 @@ def test_the_oe_pru_stops_itself_with_the_display_off(real_pru, fppd):
     where the OE firmware waits for 0xFFFFFFFF, so PRU0 took it as a
     brightness of about a second, turned the display on, and was halted by
     the host mid-pulse: a lit row left on the panels.
+
+    Also a57a26467 (the OE PWM on the second PRU): without the start of the
+    OE firmware PRU0 stays offline and the first assertion fails.
     """
     fppd.write("config/channeloutputs.json", panels_config(matrix(1, (0,))))
     fppd.start(timeout=60)
@@ -280,6 +283,12 @@ def test_the_refresh_estimate_is_the_refresh_the_prus_reach(real_pru, fppd):
     ahead and hands it over through the scratchpad. (Its recalibrated
     cycles-per-pixel constants keep the estimate on the measured rate,
     which held on either side.)
+
+    Also 2ffb48e04 (the data prep thread pool: with one prep thread PRU1
+    waited 230k times in 10 s), a01b7d0ed and 6543a19b1 (the 16-output
+    firmware: on the 8-output images the PRUs refreshed at 108 Hz against
+    the 83 Hz estimate), d4601b313 (the output itself: with StartPRU()
+    failing both cores stay offline).
     """
     panels = [{"outputNumber": o, "panelNumber": n, "colorOrder": "", "xOffset": 64 * n,
                "yOffset": 32 * o, "orientation": "N", "row": o, "col": n}
@@ -381,6 +390,11 @@ def test_a_pwm_panel_type_runs_the_pwm_firmware(real_pru, fppd, ptype):
     SM16380SH, ICND2153). Without a type's case in parsePanelParams() the
     panel runs as a plain shift panel: the shift firmware, nothing for the
     chip.
+
+    Also 75e7f1d25 (no GCLK image on PRU0 fails the PRU0 check), 99f4666ce
+    (isPWMPanel() false: the shift firmware is loaded) and 098006987 (the
+    chip config word left zero: the FM6373, DP3364S, ICND1065L and
+    SM16380SH types fail).
     """
     fppd.settings(LogLevel_ChannelOut="info")
     fppd.write("config/channeloutputs.json", panels_config(matrix(1, (0,), panelType=ptype)))
@@ -429,6 +443,9 @@ def test_a_shift_register_row_addressing_mode_reaches_the_firmware(real_pru, fpp
 
     Feature: 5f40c8ee2. The modes did not exist; the firmware only wrote
     the row address straight onto the SEL pins.
+
+    Also c7c9023c7 (addressing types on the shift cape): with the mode left
+    out of the config word all three modes read back mode 0.
     """
     fppd.write("config/channeloutputs.json", panels_config(matrix(1, (0,), panelRowAddressType=mode)))
     fppd.start(timeout=60)
@@ -472,9 +489,11 @@ def test_blank_between_rows_blanks_once_before_each_row(real_pru, fppd):
 
     Regression: 70431457f. The flag was put on the last bit plane of each
     row (d == colorDepth - 1), so the blank came after the brightest
-    stride rather than between rows. Coverage for c7c9023c7, which made
-    output by row and blank between rows work on the shift panels at all
-    (since rewritten; no revert of it applies).
+    stride rather than between rows.
+
+    Also c7c9023c7, which made output by row and blank between rows work on
+    the shift panels: with the blank flag never set, or output by row
+    ignored (the strides then run bit plane by bit plane), this fails.
     """
     fppd.settings(LogLevel_ChannelOut="info")
     fppd.write("config/channeloutputs.json", panels_config(matrix(

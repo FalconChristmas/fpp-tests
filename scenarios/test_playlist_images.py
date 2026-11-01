@@ -39,6 +39,8 @@ def lit_with(frame, rgb):
 
 
 def test_an_image_the_size_of_the_model_is_drawn(fppd):
+    # Also 368a70804: the entry draws into a pixel overlay model (nothing
+    # reaches the wire when the draw is left out).
     setup(fppd, [matrix()])
     ppm(os.path.join(fppd.media, "images", "Exact.ppm"), WIDTH, HEIGHT, (0, 0, 77))
     frame = show_image(fppd, "Exact.ppm")
@@ -334,3 +336,86 @@ def test_an_image_turned_by_its_exif_orientation_is_drawn_upright(fppd):
     top_right = (0 * WIDTH + WIDTH - 1) * 3
     assert frame[top_right:top_right + 3] == bytes(red), frame[:WIDTH * 3].hex()
     assert frame[0:3] == bytes(green), frame[:6].hex()
+
+
+def png(path, w, h, rgb):
+    import struct
+    import zlib
+
+    def chunk(kind, data):
+        body = kind + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
+
+    rows = (b"\0" + bytes(rgb) * w) * h
+    with open(path, "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+                + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
+
+
+def test_a_cached_copy_of_the_wrong_size_is_not_scaled_again(fppd):
+    """When the cached copy of an image is not the model's size, the entry
+    goes back to the original file instead of scaling the cached copy.
+
+    Regression: cdfaca38d. A cached copy of another size was taken as the
+    starting point and scaled a second time, so the image was drawn from an
+    already-scaled picture, not the original. (The copy here is a different
+    colour, so a draw from it shows.)
+    """
+    setup(fppd, [matrix()])
+    ppm(os.path.join(fppd.media, "images", "Big.ppm"), WIDTH * 4, HEIGHT * 4, (66, 0, 0))
+    fppd.write("playlists/Img.json", {"name": "Img", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                      "mainPlaylist": [image_entry("Big.ppm"), pause(6)],
+                                      "leadOut": []})
+    idle = lambda: fppd.get("/fppd/status").get("status_name") == "idle"
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fppd.command("Start Playlist", "Img", "false", "false")
+        fppd.wait_for(lambda: lit_with(rx.last(), (66, 0, 0)), what="the first draw")
+        fppd.command("Stop Now")
+        fppd.wait_for(idle, what="the playlist to stop")
+        cache = os.path.join(fppd.media, "cache")
+        copies = [f for f in os.listdir(cache) if f.startswith("pei-Big.ppm-")]
+        assert len(copies) == 1, copies
+        # The copy for this model, replaced by one of another size and colour.
+        png(os.path.join(cache, copies[0]), WIDTH * 2, HEIGHT * 2, (0, 66, 0))
+        # A short playlist in between takes the tick that frees the first
+        # one's image entry, which would blank the model under the second
+        # draw (see the two-folders test).
+        fppd.write("playlists/PX.json", {"name": "PX", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                          "leadOut": [], "mainPlaylist": [pause(1)]})
+        fppd.command("Start Playlist", "PX", "false", "false")
+        time.sleep(0.5)
+        fppd.wait_for(idle, what="PX to finish")
+        again = time.monotonic()
+        fppd.command("Start Playlist", "Img", "false", "false")
+        time.sleep(3)
+        # The model still shows the first draw until the second one lands,
+        # so look at the last frame and for any frame of the planted colour.
+        assert not any(lit_with(d, (0, 66, 0)) for t, d in rx.snapshot(since=again)), \
+            "the cached copy was scaled again"
+        assert lit_with(rx.last(), (66, 0, 0)), f"the wire has {rx.last()[:12].hex()}"
+        fppd.command("Stop Now")
+
+
+def test_image_entries_on_one_folder_pick_in_their_own_order(fppd):
+    """Several image entries naming the same folder do not all pick the
+    same file: each starts its random choice from its own seed.
+
+    Regression: 602e7e559. Every entry seeded from the clock alone, so
+    entries created in the same second chose the same files in the same
+    order and played in lock-step.
+    """
+    setup(fppd, [matrix()])
+    for i in range(12):
+        ppm(os.path.join(fppd.media, "images", "Set", f"img{i:02d}.ppm"), WIDTH, HEIGHT, (0, 0, 20 + i))
+    entries = [image_entry("Set") for _ in range(6)]
+    fppd.write("playlists/Img.json", {"name": "Img", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                      "mainPlaylist": entries + [pause(30)], "leadOut": []})
+    fppd.start()
+    fppd.command("Start Playlist", "Img", "false", "false")
+    time.sleep(4)
+    cfg = fppd.get("/fppd/playlist/config")
+    names = [e.get("imageFilename") for e in cfg.get("mainPlaylist", []) if e.get("type") == "image"]
+    assert len(names) == 6 and all(names), names
+    assert len(set(names)) > 1, f"all six entries drew {names[0]}"
+    fppd.command("Stop Now")

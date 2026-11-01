@@ -28,6 +28,10 @@
 //                          "acquired <0|1> value <getValue()>"
 //   NATIVE_PLAYLIST_INSERTED  playlistInserted() appends "<playlist> <position>
 //                          <endPosition> <immediate>" to $NATIVE_PLAYLIST_LOG
+//   NATIVE_OVERLAY_EFFECT  registers a pixel overlay effect, "Native Test Effect",
+//                          with PixelOverlayEffect::AddPixelOverlayEffect() and
+//                          removes it again when the plugin is unloaded; it
+//                          enables the model and fills it with (11, 22, 33)
 //   NATIVE_I2C             "Native Test I2C Raw <bus> <addr> <reg> <count>"
 //                          writes <count> bytes (0x5A) to <reg> with
 //                          I2CUtils::writeRawI2CBlockData() and answers what
@@ -55,6 +59,22 @@
 #endif
 #if defined(NATIVE_SETTINGS)
 #include "settings.h"
+#endif
+#if defined(NATIVE_OVERLAY_EFFECT)
+#include "overlays/PixelOverlay.h"
+#include "overlays/PixelOverlayEffects.h"
+#include "overlays/PixelOverlayModel.h"
+
+class NativeTestEffect : public PixelOverlayEffect {
+public:
+    NativeTestEffect() :
+        PixelOverlayEffect("Native Test Effect") {}
+    bool apply(PixelOverlayModel* model, const std::string& enableState, const std::vector<std::string>& args) override {
+        model->setState(PixelOverlayState(PixelOverlayState::Enabled));
+        model->fill(11, 22, 33);
+        return true;
+    }
+};
 #endif
 #if defined(NATIVE_SETVALUE)
 #include "overlays/PixelOverlay.h"
@@ -197,6 +217,10 @@ public:
             return std::string("set");
         });
 #endif
+#if defined(NATIVE_OVERLAY_EFFECT)
+        overlayEffect = new NativeTestEffect();
+        PixelOverlayEffect::AddPixelOverlayEffect(overlayEffect);
+#endif
 #if defined(NATIVE_GPIO)
         add("Native Test GPIO", [](const std::vector<std::string>& a) {
             if (a.size() < 2) {
@@ -236,6 +260,10 @@ public:
 #endif
     }
     virtual ~NativeTestPlugin() {
+#if defined(NATIVE_OVERLAY_EFFECT)
+        PixelOverlayEffect::RemovePixelOverlayEffect(overlayEffect);
+        delete overlayEffect;
+#endif
 #if defined(NATIVE_TIMERS)
         for (auto& n : timerNames) {
             Timers::INSTANCE.stopPeriodicTimer(n);
@@ -271,6 +299,9 @@ private:
         CommandManager::INSTANCE.addCommand(c);
     }
     std::vector<Command*> commands;
+#if defined(NATIVE_OVERLAY_EFFECT)
+    PixelOverlayEffect* overlayEffect = nullptr;
+#endif
 #if defined(NATIVE_TIMERS)
     struct PairState {
         std::atomic<bool> aStopped{ false };

@@ -140,7 +140,10 @@ def test_controller_that_comes_up_late_gets_the_show(fppd):
     Regression: bc0747e90 (verify with --flavor tsan). The ping thread
     flipped each output's plain bool `valid` in SetHostValid() while the
     output thread read it in PrepData(): a data race TSan reports when the
-    controller comes back."""
+    controller comes back.
+
+    Also 0f4590afa: the pings fppd sends as the UDP output starts are what
+    arm the monitoring; without them the dead controller is never flagged."""
     import subprocess
 
     from ddp import DdpReceiver
@@ -369,6 +372,9 @@ def test_running_out_of_sockets_does_not_end_fppd(fppd):
 
     Regression: 43986b412. UDPOutput::createSocket() called exit(1) when
     socket() failed, and the whole show stopped.
+    Also 517912745: the output thread is started once at startup, so its
+    first socket() calls fall in the failing window; started lazily, the
+    failure is never hit.
     """
     from ddp import DdpReceiver
 
@@ -748,6 +754,9 @@ def test_output_comes_back_once_sockets_can_be_opened_again(fppd):
     was then non-empty, so findOrCreateSocket() never made another. Every
     send failed with EBADF, which doesn't trigger the EAGAIN rotation, and
     the controller stayed dark, with no banner, until a config save.
+
+    Also 517912745: the startup start of the output thread (see
+    test_running_out_of_sockets_does_not_end_fppd).
     """
     import os
     from ddp import DdpReceiver
@@ -807,6 +816,8 @@ def test_control_channel_hands_its_value_to_the_preset(fppd):
 
     Regression: 18bd13458 (the feature). Before it the preset ran with no
     keywords, so the URL went out with the placeholders as written.
+
+    Also b0088abd6 (the ControlChannel output type): no preset runs without it.
     """
     import http.server
     import threading

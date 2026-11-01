@@ -42,6 +42,11 @@ test('a backup with no timestamp in its name is listed, dated by its mtime', asy
 // Regression: 861315534. Extra config files are swept into a backup by name;
 // the test was "contains .json", so every sidecar copy beside a config file
 // (co-other.json.backup, gpio.json.conflict) was backed up as config as well.
+// Also 3b20ec1ff: any other JSON file in the config folder is backed up (the
+// control below), where only known areas' files were.
+// Also 271b6525b: backup.php, included by the backups API, prints none of its
+// page (it used to put the whole HTML page ahead of the JSON), so this call
+// and the large-area one below parse as JSON.
 test('a sidecar copy of a config file is not backed up as config', async ({ request }) => {
   const extra = `${MEDIA}/config/fpp-tests-extra.json`;
   const sidecar = `${MEDIA}/config/fpp-tests-extra.json.backup`;
@@ -63,10 +68,12 @@ test('a sidecar copy of a config file is not backed up as config', async ({ requ
 // Regression: 625978927. The full-backup folders on a backup drive were listed
 // minus every name that also existed in the media directory, so one stray
 // folder there (which restoring a drive's root creates) hid the backup folder
-// of the same name for good.
+// of the same name for good.  Also 9a001e343: GET /api/backups/list reads the
+// backups folder under the media directory at all.
 test("a stray media folder does not hide the backup folder of that name", async ({ request }) => {
   const name = 'FppTestsShow';
   inPlayer('mkdir', '-p', `${MEDIA}/backups/${name}/config`, `${MEDIA}/${name}`);
+  putFile(`${MEDIA}/backups/${name}/fpp-tests-notes.txt`, 'x');
   try {
     const r = await request.get('/api/backups/list');
     expect(r.status()).toBe(200);
@@ -75,6 +82,8 @@ test("a stray media folder does not hide the backup folder of that name", async 
     expect(dirs, 'the backup folder was hidden by the media folder of the same name').toContain(name);
     // Media subfolders inside it are still not offered as backups.
     expect(dirs).not.toContain(`${name}/config`);
+    // Also c200f4a36: only folders are offered, not a file inside a backup folder.
+    expect(dirs).not.toContain(`${name}/fpp-tests-notes.txt`);
   } finally {
     inPlayer('rm', '-rf', `${MEDIA}/backups/${name}`, `${MEDIA}/${name}`);
   }
@@ -129,6 +138,8 @@ test('an unchanged large area is stored once and restores intact', async ({ requ
 // Feature: d3e2de6cb. A setting change answers without waiting for its backup,
 // which is made by a detached request; the listing reads each backup's comment
 // from a cache keyed on size and mtime, so a rewritten backup is read again.
+// Also 16ba48687: a setting change takes a backup at all (others are
+// backup-triggers.spec.ts).
 test("a setting change's backup appears, and a rewritten backup's comment is read again", async ({ request }) => {
   const value = `fpp-tests-${Date.now()}`;
   const saved = await request.put('/api/settings/HostDescription', { data: value });

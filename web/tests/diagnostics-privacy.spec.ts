@@ -78,6 +78,10 @@ test('the crash disclosures are the privacy table\'s, and name the e-mail addres
     const without = await (await request.get('/api/crashes/disclosures')).json();
     expect(without.rows.map((r: any) => r.id)).toEqual(['crash', 'crash-settings', 'crash-config']);
     expect(without.goesTo).toContain('developers');
+    // Also 539ad204b: the crash row's text names the host the report goes to,
+    // the one uploadTarget gives, not the old server.
+    const target = await (await request.get('/api/crashes/uploadTarget')).json();
+    expect(without.rows.find((r: any) => r.id === 'crash').body).toContain(new URL(target.url).host);
     setSettingInFile('emailAddress', 'fpp-tests@example.invalid');
     const withMail = await (await request.get('/api/crashes/disclosures')).json();
     expect(withMail.rows.map((r: any) => r.id)).toEqual(['crash', 'crash-settings', 'crash-config', 'email']);
@@ -465,7 +469,43 @@ test('Cape Info contacts no signing service and loads no remote script for an un
   });
 });
 
-test('the About page loads nothing from PayPal', async ({ page, request }) => {
+test('Cape Info does not reach the signing service from the server for an unsigned cape', async ({ request }) => {
+  // Regression: afcf89ea3.  The page's PHP ran a curl to the signing API
+  //   before it had read the cape, on every view, for an answer only the
+  //   signing UI uses.  The API name is pointed at a listener inside the
+  //   player (whose own curl is the control: it must register), and the
+  //   page is fetched with a cape that needs no signing.
+  const CAPE = `${MEDIA}/tmp/cape-info.json`;
+  const HITS = `/tmp/fpp-tests-signing-hits-${process.pid}`;
+  const LISTENER = `import socket,sys
+s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+s.bind(('127.0.0.1',443)); s.listen(8)
+while True:
+    c,_=s.accept(); open(sys.argv[1],'ab').write(b'x'); c.close()
+`;
+  const hits = () => parseInt(inPlayer('sh', '-c', `wc -c < ${HITS}`).trim(), 10);
+  await keepingFile(HOSTS, () => keepingFile(CAPE, async () => {
+    inPlayer('sh', '-c', `echo '127.0.0.1 api.falconplayer.com' >> ${HOSTS}; : > ${HITS}`);
+    writeFile(`${HITS}.py`, LISTENER);
+    docker('exec', '-d', container, 'sh', '-c', `echo $$ > ${HITS}.pid; exec python3 ${HITS}.py ${HITS}`);
+    try {
+      await expect.poll(() => {
+        try { inPlayer('curl', '-sk', '-m', '3', 'https://api.falconplayer.com/'); } catch { /* the listener hangs up */ }
+        return hits();
+      }, { message: 'the stand-in signing service never saw a connection, so this proves nothing' }).toBeGreaterThan(0);
+      inPlayer('sh', '-c', `: > ${HITS}`);
+      writeFile(CAPE, JSON.stringify({ id: 'fpp-tests-cape', name: 'Test Cape', designer: 'fpp-tests', version: '1.0' }));
+      const r = await request.get('/cape-info.php', { timeout: 30_000 });
+      expect(r.ok()).toBe(true);
+      expect(await r.text()).toContain('Test Cape');
+      expect(hits(), 'the server contacted the signing API while rendering Cape Info').toBe(0);
+    } finally {
+      inPlayer('sh', '-c', `kill $(cat ${HITS}.pid); rm -f ${HITS} ${HITS}.py ${HITS}.pid; true`);
+    }
+  }));
+});
+
+test('the About page loads nothing from PayPal',async ({ page, request }) => {
   // Regression: 308874d58.  A 1x1 tracking pixel from paypal.com fired on
   // every view, and the CSP allowed PayPal images.
   const hits: string[] = [];

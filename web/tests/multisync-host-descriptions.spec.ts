@@ -90,3 +90,19 @@ test('a WLED is shown by the name its status gives, linked to the device', async
   await expect(link).toHaveText('fpptests-wled-porch', { timeout: 10_000 });
   expect(await link.getAttribute('href')).toContain(WLED);
 });
+
+test("a remote's description comes from the advancedView of its own status", async ({ page }) => {
+  // Regression: 3626f2b51.  The description under a remote's name was taken
+  // from a separate getHostNameInfo call to the device; it is now read from
+  // the HostDescription in the advancedView the status already carries.
+  const remote = STATUS.FPP[REMOTE] as { advancedView: Record<string, unknown> };
+  remote.advancedView.HostDescription = 'fpptests remote description';
+  try {
+    await openMultisync(page, []);
+    const row = page.locator('#fppSystems tr.systemRow', { hasText: 'FPPTESTREMOTE' });
+    await expect(row).toContainText('CPU:', { timeout: 15_000 });
+    await expect(row.locator('.hostDescriptionSM')).toHaveText('fpptests remote description');
+  } finally {
+    delete remote.advancedView.HostDescription;
+  }
+});

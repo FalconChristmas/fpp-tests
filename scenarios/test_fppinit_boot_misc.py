@@ -166,5 +166,8 @@ def test_the_audio_environment_file_is_in_run_and_names_the_backend_for_sdl_and_
     env = audio_env_after_setup(fppinit, "pipewire-simple")
     assert env.get("SDL_AUDIODRIVER") == "pulse" and env.get("ALSOFT_DRIVERS") == "pulse", env
     assert env.get("PIPEWIRE_RUNTIME_DIR") == "/run/pipewire-fpp", env
+    # Also 0e63a5c65: the PulseAudio socket directory is named too, so the
+    # pulse clients (SDL, OpenAL) find the PipeWire pulse server.
+    assert env.get("PULSE_RUNTIME_PATH") == "/run/pipewire-fpp/pulse", env
     assert not os.path.exists(os.path.join(fppinit.tree, "etc/systemd/fpp-audio.env")), \
         "the audio environment was written into the source tree"

@@ -84,6 +84,8 @@ test('the cape is reported without its serial, cs or vendor contact details', as
   // Regression: 08fc1175a.  The cape serial and cs -- a per-unit key into the
   // vendor's order records -- were sent, gated on SendVendorSerial, along with
   // the vendor's whole block (e-mail, site).
+  // Also 40b33e589: the vendor's name is still reported: the capeInfo mapping
+  // names it.
   const CAPE = `${MEDIA}/tmp/cape-info.json`;
   await keepingFile(CAPE, async () => {
     writeFile(CAPE, JSON.stringify({

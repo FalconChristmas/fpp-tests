@@ -150,18 +150,23 @@ test("a DHCP server's static leases and pool defaults load, and saving keeps the
   expect(posted.DHCPSERVER).toBe(true);
   expect([posted.DHCPOFFSET, posted.DHCPPOOLSIZE]).toEqual(['100', '50']);
 
+  // Also 2d1c52c1b (static leases), e5bb65881 (DHCP server, route metric and
+  // forwarding saved per interface).
+  //
   // The receiving end: the real API takes that save (under a scratch
   // interface name, so the player's own eth0 is untouched) and writes the
   // lease as the systemd-networkd [DHCPServerStaticLease] that fppinit's
   // network setup puts in place.
   const name = 'fpptestslease';
   try {
-    const r = await request.post(`/api/network/interface/${name}`, { data: { ...posted, INTERFACE: name } });
+    const r = await request.post(`/api/network/interface/${name}`, { data: { ...posted, INTERFACE: name, ROUTEMETRIC: 7, IPFORWARDING: 2 } });
     expect((await r.json()).status).toBe('OK');
     const conf = inPlayer('cat', `${MEDIA}/config/interface.${name}`);
     expect(conf).toMatch(/^DHCPSERVER=1$/m);
     expect(conf).toMatch(/^DHCPOFFSET=100$/m);
     expect(conf).toMatch(/^DHCPPOOLSIZE=50$/m);
+    expect(conf).toMatch(/^ROUTEMETRIC=7$/m);
+    expect(conf).toMatch(/^IPFORWARDING=2$/m);
     expect(inPlayer('cat', `${MEDIA}/config/leases.${name}`))
       .toBe('[DHCPServerStaticLease]\nMACAddress=02:00:00:00:50:10\nAddress=192.168.50.10\n\n');
   } finally {

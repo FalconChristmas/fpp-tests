@@ -282,6 +282,9 @@ def test_saving_a_model_image_stays_in_the_images_folder(fppd):
 
     Regression: e17e043ce. The name was appended to the images directory
     unchecked, so "../" walked out of it; fppd runs as root on a device.
+
+    Also cde0bf3ce: the save endpoint itself writes the model to a file in
+    the images folder.
     """
     setup(fppd, [matrix()])
     fppd.start()
@@ -506,10 +509,16 @@ def test_fonts_in_subdirectories_are_listed(fppd):
     skipped before the directory check, so no family directory was ever
     searched."""
     root = "/usr/share/fonts/truetype"
-    nested = set()
+    nested, flat = set(), set()
     for d, _, files in os.walk(root):
+        names = {f[:-4] for f in files if f.lower().endswith(".ttf")}
         if d != root:
-            nested |= {f[:-4] for f in files if f.lower().endswith(".ttf")}
+            nested |= names
+        else:
+            flat |= names
+    # a copy of one at the top (the image has DejaVuSans there) is found
+    # without searching any directory, so it cannot show that they are
+    nested -= flat
     if not nested:
         pytest.skip("no TrueType fonts in a family directory here")
     setup(fppd, [matrix()])

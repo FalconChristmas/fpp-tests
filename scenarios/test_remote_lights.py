@@ -132,6 +132,10 @@ def test_remote_lights_follow_a_part_frame_remote_offset(fppd):
     rounded to a frame: +30 ms at 20 fps puts them 30 ms ahead of the
     master's (median within 5 ms of that).
 
+    Also a9e2df492: a remote's sequence takes the sync packet's seconds (which
+    carry remoteOffset) rather than its frame number; without that the offset
+    does nothing (+2.5 ms here, not +30).
+
     Regression: b08fe4a62. The remote turned the master's offset seconds into a
     whole frame number, so +30 ms moved its lights a whole frame (50 ms)
     ahead, and anything under half a frame did nothing. Media takes the

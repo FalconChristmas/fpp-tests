@@ -172,6 +172,10 @@ def test_an_input_with_only_rising_commands_fires_on_every_press(pads, fppd):
     differs from the last one, and with no falling edge reported the last
     value stayed 1 after the first press: the input fired once and went
     dead until fppd restarted.
+
+    Also 4bf0bfeb4 (the libgpiod v2 edge request: without it the line is
+    requested with no edge detection and no press is ever reported) and
+    cc618a607 (the request lives in GPIOUtils::requestEventFile).
     """
     b = Button(fppd)
     gpio_json(fppd, {"pin": b.pin, "rising": [b.run("press")]})

@@ -6,7 +6,9 @@ devices' network namespace.
 Each server keeps a log of the requests it was sent ("GET /path?query"), which
 GET /_requests returns as a JSON list (that request itself is not logged). A
 response with "drop" set closes the connection without answering, so the
-client sees a failed transfer rather than an HTTP error."""
+client sees a failed transfer rather than an HTTP error. A response with
+"raw" set writes that text with no status line or headers, as an old
+controller's HTTP/0.9 reply does."""
 
 import http.server
 import json
@@ -33,6 +35,11 @@ def handler_for(pages):
                 p = pages.get(self.path) or pages.get(path) or {
                     "status": 404, "type": "text/html", "body": "Not found", "headers": {}}
             if p.get("drop"):
+                self.close_connection = True
+                return
+            if p.get("raw") is not None:
+                # HTTP/0.9: the body alone, no status line or headers
+                self.wfile.write(p["raw"].encode())
                 self.close_connection = True
                 return
             body = p["body"].encode()
