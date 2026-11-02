@@ -34,6 +34,8 @@ test('an interface added before it exists is listed, and is a config networkd ca
   // Regression: 6eb71e493.  The new interface's config was an empty file, so
   // setting the interface up from it wrote a broken networkd file; it now
   // starts as a DHCP interface.
+  // Also d35ec7783: the dialog's OK button read the new name from itself, not
+  // the dialog, so it posted an empty name and nothing was added.
   await page.goto('/networkconfig.php');
   await page.getByRole('button', { name: /Add New Interface/ }).click();
   const dialog = page.locator('#addNewInterfaceDialog');

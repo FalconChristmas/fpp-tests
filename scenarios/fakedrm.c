@@ -45,6 +45,8 @@
  *                         kmssink's non-square-pixel source size (GStreamer
  *                         #1555, FPP #3135) -- the stand-in sink sources the
  *                         frame's own size, so it can't trip that by itself
+ *   FAKEDRM_NO_RESOURCES  "1": drmModeGetResources() fails (NULL), as for a
+ *                         /dev/dri card that is not a display controller
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -913,6 +915,11 @@ int drmSetClientCap(int fd, uint64_t capability, uint64_t value) {
 drmModeResPtr drmModeGetResources(int fd) {
     if (!is_ours(fd)) {
         errno = EBADF;
+        return NULL;
+    }
+    const char* none = getenv("FAKEDRM_NO_RESOURCES");
+    if (none && *none == '1') {
+        errno = ENOSYS;
         return NULL;
     }
     drmModeResPtr r = calloc(1, sizeof(*r));

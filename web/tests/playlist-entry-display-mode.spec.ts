@@ -36,6 +36,8 @@ test.afterEach(async ({ request }) => {
 test('an entry row shows its arguments, its note, or both, as its Display Mode says', async ({ page, request }) => {
   // Feature: fca5b22d6 (#2480).  A row showed only the entry's arguments;
   // a note was only in the row's tooltip.
+  // Also 4e11b121b: a row's pause duration is a number in the JSON, which the
+  // row builder escaped as text, so no row with a pause could be drawn.
   await storePlaylist(request, [
     pause('fpp-tests args only'),
     pause('fpp-tests both', 'argsAndNote'),

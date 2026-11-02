@@ -13,6 +13,10 @@ import { container, inPlayer } from './container';
 // resumed, and the server spooled the whole thing at once.  The page here is
 // Chromium told it is Safari the same way, and a 70 MB file has to arrive as
 // two chunks, put back together byte for byte.
+//
+// Also 893850836: Safari stalls a request whose body is a slice of the picked
+// file, so each chunk is read into memory (FileReader) before it is sent; the
+// reads are counted here, as Chromium doesn't stall either way.
 
 test.skip(!container, 'checks the uploaded file inside the run-web.sh container');
 
@@ -33,7 +37,16 @@ test('Safari uploads a 70 MB file in 64 MB chunks, and it arrives whole', async 
     }
   });
   try {
-    await page.addInitScript(() => { (window as any).safari = { pushNotification: {} }; });
+    await page.addInitScript(() => {
+      (window as any).safari = { pushNotification: {} };
+      const reads: number[] = [];
+      (window as any).chunkReads = reads;
+      const read = FileReader.prototype.readAsArrayBuffer;
+      FileReader.prototype.readAsArrayBuffer = function (b: Blob) {
+        if (b.size >= 1024 * 1024) reads.push(b.size);
+        return read.call(this, b);
+      };
+    });
     await page.goto('/filemanager.php');
     await page.waitForLoadState('load');
     // The control: the page sees a Safari.
@@ -44,6 +57,7 @@ test('Safari uploads a 70 MB file in 64 MB chunks, and it arrives whole', async 
     await expect.poll(() => inPlayer('sh', '-c', `sha256sum /home/fpp/media/music/${name} 2>/dev/null | cut -d' ' -f1`).trim(),
       { timeout: 150_000 }).toBe(sha);
     expect(offsets, 'the file did not go up in 64 MB chunks').toEqual(['0', String(64 * MB)]);
+    expect(await page.evaluate(() => (window as any).chunkReads), 'the chunks were not read into memory first').toEqual([64 * MB, 6 * MB]);
   } finally {
     fs.rmSync(path.dirname(file), { recursive: true, force: true });
     inPlayer('sh', '-c', `rm -f /home/fpp/media/music/${name} /home/fpp/media/upload/${name}*`);

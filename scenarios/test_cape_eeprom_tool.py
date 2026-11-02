@@ -23,3 +23,20 @@ def test_a_signed_images_device_serial_is_read_from_after_the_cape_serial(tmp_pa
     out = r.stdout + r.stderr
     assert f"Device Serial #   : {device_serial}" in out, out
     assert f"{cape_serial}" in out, out
+
+
+def test_a_serial_given_with_s_is_written_to_the_image(tmp_path):
+    """generateEEPROM -s SERIAL (the value as the next argument) writes that
+    serial into the image it generates.
+
+    Regression: acf39a13a. -s was declared with an optional value, which
+    PHP's getopt only takes when attached to the option, so "-s SERIAL"
+    left the serial empty and the value was treated as a stray argument."""
+    tool = os.path.join(TREE, "scripts", "generateEEPROM")
+    img = tmp_path / "out.bin"
+    gen = subprocess.run(["php", "-d", "short_open_tag=1", tool, "-n", "TestCape", "-s", "SER12345", "-l", "file", "-o", str(img)],
+                         capture_output=True, text=True, timeout=30, cwd=tmp_path)
+    assert img.exists(), gen.stdout + gen.stderr
+    r = subprocess.run(["php", "-d", "short_open_tag=1", tool, "-e", str(img), "-i"],
+                       capture_output=True, text=True, timeout=30)
+    assert "Cape Serial #     : SER12345" in r.stdout + r.stderr, r.stdout + r.stderr

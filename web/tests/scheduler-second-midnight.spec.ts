@@ -5,6 +5,8 @@ import type { APIRequestContext } from '@playwright/test';
 // of 24:00:00 as the midnight that ends the day; the page shows it as
 // "12:00 Mid", apart from the "12:00 AM" that starts it.  The fields use
 // jquery.timepicker, which FPP patches for that second midnight.
+// Also 1371d56ff: the page's own conversions show 24:00:00 as "Mid" and save
+// "Mid" as 24:00:00 (not 00:00:00).
 
 const PLAYLIST = 'fpp-tests-sched-midnight';
 const year = new Date().getFullYear();

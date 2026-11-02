@@ -81,3 +81,22 @@ test('a Debian box without a device tree model is detected without a warning', (
   expect(opi.SubPlatform).toBe('Xunlong Orange Pi 5');
   expect(opi.Logo).toBe('orangepi_logo.png');
 });
+
+test('the Pi models with a "+" are given logo files that exist', async ({ request }) => {
+  // Regression: 68d016091.  The logo files of the A+, B+, 3A+ and 3B+ had a
+  // "+" in their names and were renamed to spell it out ("plus"); config.php
+  // has to name the renamed files, or the header's logo is a missing image.
+  const models: Record<string, string> = {
+    'Raspberry Pi Model A Plus Rev 1.1': 'Raspberry_Pi_Aplus.svg',
+    'Raspberry Pi Model B Plus Rev 1.2': 'Raspberry_Pi_Bplus.svg',
+    'Raspberry Pi 3 Model A Plus Rev 1.0': 'Raspberry_Pi_3Aplus.svg',
+    'Raspberry Pi 3 Model B Plus Rev 1.3': 'Raspberry_Pi_3Bplus.svg',
+  };
+  for (const [model, logo] of Object.entries(models)) {
+    const pi = board({ platform: 'Raspberry Pi\n', model: model + '\0' });
+    expect(pi.Logo, model).toBe(logo);
+    const r = await request.get(`/images/${pi.Logo}`);
+    expect(r.status(), `images/${pi.Logo}`).toBe(200);
+    expect(r.headers()['content-type'], model).toContain('image/svg+xml');
+  }
+});

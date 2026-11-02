@@ -278,6 +278,9 @@ def test_brightness_with_a_blank_or_bad_value(fppd, what):
     pow(x, 0) = 1 times the brightness, so dark channels lit up (at 100%
     with brightness 100); a brightness of 0 blacked the range out; 150
     scaled the range by 1.5. No warning was raised for any of them.
+
+    Also eb5c2b325: the processor read its description from the misspelt key
+    "desription", so the warning named it as ''.
     """
     values, fn, message = BRIGHTNESS_DEFAULTS[what]
     p = proc("Brightness", start=1, count=60, description="Porch")

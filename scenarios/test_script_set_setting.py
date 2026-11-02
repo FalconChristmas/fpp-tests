@@ -29,3 +29,26 @@ def test_set_setting_replaces_an_existing_value_without_waiting_on_itself(fppd):
     assert lines == ['FppTestsKey = "new-value"'], lines
     assert "still locked" not in done.stderr, done.stderr
     assert took < 3, f"setSetting waited {took:.1f}s on its own lock"
+
+
+def test_set_setting_replaces_a_value_that_was_written_without_quotes(fppd):
+    """setSetting on a key whose existing line has no quotes around the value
+    (a hand-edited settings file) replaces that line, leaving one.
+
+    Regression: 465988f5b. The delete pattern required the opening quote of
+    the value, so an unquoted line was never deleted and the new value was
+    appended after it, leaving the key twice."""
+    fppd.settings(FppTestsKey="old-value")
+    fppd.start()
+    path = os.path.join(fppd.media, "settings")
+    with open(path) as f:
+        text = f.read().replace('FppTestsKey = "old-value"', "FppTestsKey = old-value")
+    assert "FppTestsKey = old-value" in text, text
+    with open(path, "w") as f:
+        f.write(text)
+
+    done = common(fppd, "setSetting FppTestsKey new-value")
+
+    with open(path) as f:
+        lines = [l.strip() for l in f if l.startswith("FppTestsKey")]
+    assert lines == ['FppTestsKey = "new-value"'], (lines, done.stderr)

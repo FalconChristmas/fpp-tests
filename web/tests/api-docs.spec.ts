@@ -25,6 +25,8 @@ test('the API page is served at /api/, with its spec, and a cross-origin client 
   // page, and the page's PHP included ../config.php relative to the wrong
   // directory; and the CORS headers did not allow Content-Type, so another
   // site's request with a JSON body failed its preflight.
+  // Also f069df061: the spec is built from the shipped openapi.json (it was
+  // openapi.yaml); without that file the served spec has no openapi version.
   const page = await request.get('/api/');
   expect(page.status(), (await page.text()).slice(0, 500)).toBe(200);
   expect(await page.text()).toContain('/api/api.html');

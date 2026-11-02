@@ -76,6 +76,8 @@ test("a plugin's settings reach its page as written", async ({ request }) => {
   // Regression: f9cc6a348.  Plugin config files were read with
   // parse_ini_file(), which stripped the quotes from the JSON values
   // WriteSettingToFile() stores and turned "yes" into "1".
+  // Also 33d581ed8: LoadPluginSettings() opened an undefined $filename, so the
+  // file was never read and the page got no settings at all.
   seed('fpp-tests-cfg', {}, { 'page.php': '<?php echo "page";' });
   writeFile(`${CONFIG}/plugin.fpp-tests-cfg`, 'controllerBases = {"F16V5":1}\nflag = yes\nname = "plain"\n');
   const text = await (await request.get('/plugin.php?plugin=fpp-tests-cfg&page=page.php')).text();

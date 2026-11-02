@@ -61,6 +61,39 @@ def test_an_output_with_no_interface_does_not_fall_back_to_loopback(fppd, dummy_
     assert name.startswith("e"), f"interface chosen: {name}"
 
 
+def test_an_output_with_no_interface_prefers_an_ethernet_name_over_an_earlier_one(fppd, dummy_iface):
+    """With no interface set, a wired-looking name ("e...") wins over the
+    non-loopback interfaces getifaddrs lists before it; with no "e..." name
+    at all, the first non-loopback one is used.
+
+    Regression: e2d4c8548. The fallback was a hard-coded "eth0", which
+    isn't the name on a box with predictable interface names (or with only
+    a wifi adapter).
+
+    The container's own eth0 would win every time, so it is renamed for the
+    test, and the first interface listed is then a non-"e" name."""
+    ip("link", "del", dummy_iface)
+    if ip("link", "set", "eth0", "down").returncode or ip("link", "set", "eth0", "name", "zz0").returncode:
+        ip("link", "set", "eth0", "up")
+        pytest.skip("cannot rename the container's eth0")
+    ip("link", "set", "zz0", "up")
+    try:
+        ip("link", "add", dummy_iface, "type", "dummy")
+        ip("addr", "add", "10.67.0.1/24", "dev", dummy_iface)
+        ip("link", "set", dummy_iface, "multicast", "on", "up")
+        write_output(fppd)
+        fppd.start()
+        assert chosen(fppd) == dummy_iface, "an 'e' name listed after zz0 was not preferred"
+        fppd.stop()
+        ip("link", "del", dummy_iface)
+        fppd.start()
+        assert chosen(fppd) == "zz0", "with no 'e' name the first non-loopback interface is used"
+    finally:
+        ip("link", "set", "zz0", "down")
+        ip("link", "set", "zz0", "name", "eth0")
+        ip("link", "set", "eth0", "up")
+
+
 def test_a_renewed_address_does_not_re_ping_the_controllers(fppd, dummy_iface):
     """A new address arriving on an output interface that never went down (a
     DHCP renewal, a second address) is not "the interface came up": fppd does

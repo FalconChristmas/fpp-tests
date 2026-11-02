@@ -18,6 +18,8 @@ test('on a high-DPI screen the background fills the canvas once, not doubled in 
   // devicePixelRatio times the canvas size, so on a hidpi display only its
   // top-left quarter showed; the page now draws it with the plain canvas API
   // at the canvas's size.
+  // Also c9cf2ea2a: the background is fetched from api/file/Images/, not the
+  // nonexistent api/Images/, so it is drawn at all.
   await page.goto('about:blank');
   // A 16:9 background, red on the left half and blue on the right.
   const jpeg = await page.evaluate(() => {

@@ -5,6 +5,8 @@ import { container, inPlayer } from './container';
 // does not, each as {hash, author, date, msg} (Feature: e27c6d8b1 added the
 // author), from a git repository put at /opt/fpp for the test (the served
 // tree is an export, with none).
+// Also fe9c84336: the first test's date is the commit's author date as
+// YYYY-MM-DD, which the About page lists under Pending Git Changes.
 
 test.skip(!container, 'puts a git repository in the run-web.sh container');
 
@@ -26,6 +28,19 @@ test('origin\'s new commits come back with hash, author, date and message', asyn
     ['Pat Tester', '2026-03-04', 'fix: first new commit'],
   ]);
   for (const r of body.rows) expect(r.hash).toMatch(/^[0-9a-f]{40}$/);
+});
+
+test('a commit whose subject holds the log\'s field separator still comes back whole', async ({ request }) => {
+  // Regression: fe9c84336.  The log line was split at every "~~~~", so a
+  // subject holding one lost its tail (and with the date added, the row was
+  // dropped for having too few fields).
+  const G = 'git -c user.name=fpp-tests -c user.email=fpp-tests@invalid';
+  inPlayer('sh', '-c', `cd /opt/fpp && git init -q -b master && a=$(${G} commit-tree $(git mktree < /dev/null) -m base) && ` +
+    `git update-ref refs/heads/master $a && ` +
+    `b=$(GIT_AUTHOR_NAME='Pat Tester' GIT_AUTHOR_DATE='2026-03-04T10:00:00' ${G} commit-tree $(git mktree < /dev/null) -p $a -m 'fix: a ~~~~ inside the subject') && ` +
+    `git update-ref refs/remotes/origin/master $b`);
+  const body = await (await request.get('/api/git/originLog')).json();
+  expect(body.rows.map((r: any) => [r.author, r.date, r.msg])).toEqual([['Pat Tester', '2026-03-04', 'fix: a ~~~~ inside the subject']]);
 });
 
 test('the branch list holds the remote\'s usable branches and leaves out dependabot\'s and the very old ones', async ({ request }) => {

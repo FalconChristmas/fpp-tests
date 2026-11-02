@@ -30,3 +30,23 @@ def test_the_build_links_with_mold_when_it_is_installed(fppd, built):
     if not os.path.exists(path):
         pytest.skip(f"the tree has no {built}")
     assert "mold" in comment(path), comment(path)
+
+
+def test_fppd_is_linked_with_a_run_path_to_the_build_and_rf24(fppd):
+    """fppd carries a run path to the directory it was built in and to the
+    external RF24 library's, so it starts on a BeagleBone with no
+    LD_LIBRARY_PATH set.
+
+    Regression: e07485808. fppd was linked without one, so there it did not
+    start ("libfpp.so: cannot open shared object file"). The Docker build adds
+    $ORIGIN to every program, which finds libfpp.so whatever this says; what
+    the fix added is read from the ELF's run path.
+    """
+    if not shutil.which("readelf"):
+        pytest.skip("no readelf")
+    path = os.path.join(fppd.tree, "src", "fppd")
+    if not os.path.exists(path):
+        pytest.skip("the tree has no src/fppd")
+    dynamic = subprocess.run(["readelf", "-d", path], capture_output=True, text=True).stdout
+    runpath = [l for l in dynamic.splitlines() if "RUNPATH" in l or "RPATH" in l]
+    assert any(os.path.join(fppd.tree, "src") in l and "external/RF24" in l for l in runpath), runpath

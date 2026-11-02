@@ -60,6 +60,10 @@ def test_distcc_setting_builds_through_distcc_without_the_pch(tmp_path):
     Regression: 08eb242a2. The distcc developer settings and the makefile's
     reaction to DISTCC_HOSTS were added there; before it a rebuild from the
     UI always compiled locally, with the PCH.
+
+    Also 70ab95d4f: setup.mk's distcc branch ran a bare $(shell mkdir ...) on
+    a tab-indented line, which make read as a recipe, so any make with
+    DISTCC_HOSTS set stopped with "recipe commences before first target".
     """
     hosts = "helper-a:3632/6,lzo helper-b/2"
     for settings in ({"DistributedCompile": "distcc", "DistccHosts": hosts},

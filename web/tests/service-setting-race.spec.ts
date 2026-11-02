@@ -9,6 +9,10 @@ import { container, inPlayer } from './container';
 // "disable --now" had not finished) and did nothing, then the disable landed,
 // leaving the setting on and the service off.
 //
+// Also 673cea4a6: ApplyServiceSetting() lacked `global $settings`, so the path of
+// the apply script came out as "/scripts/apply_service_setting" and no save
+// ever reached systemctl (red with the line removed: the stand-in is never asked).
+//
 // systemctl in the player is replaced for the test by a stand-in that keeps
 // unit state in files and takes 2 s over "disable --now", as the real one
 // can.  (scripts/common puts /usr/bin first on PATH, so it has to be that one.)

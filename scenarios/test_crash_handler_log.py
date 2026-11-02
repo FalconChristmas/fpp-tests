@@ -115,3 +115,28 @@ def test_a_settings_level_report_carries_the_stats_when_they_are_shared(fppd):
         f"not a level-2 report, so this proves nothing: {sorted(texts)}"
     payload = file_named(texts, "fpp_stats.json")
     assert payload and "fpp-tests-plugin" in payload, f"no statistics in the report: {sorted(texts)}"
+
+
+@not_under_tsan
+def test_the_crash_handler_survives_an_exe_link_it_cannot_read(fppd):
+    """With /proc/self/exe unreadable (readlink fails) the crash handler
+    still logs the crash and exits through its own _exit(-1), with no
+    sanitizer report.
+
+    Regression: 9b0b7ed55. The failed readlink's -1 was used as the index
+    to put the string's end at, a write one byte before the name buffer."""
+    import shims
+    os.makedirs(os.path.join(fppd.media, "crashes"), exist_ok=True)
+    fppd.settings(ShareCrashData="0")
+    flag = os.path.join(fppd.media, "failreadlink")
+    fppd.start(preload=[shims.build("failreadlink.c")], extra_env={"FAILREADLINK_FLAG": flag})
+    open(flag, "w").close()
+    fppd.proc.send_signal(signal.SIGABRT)
+    try:
+        rc = fppd.proc.wait(timeout=180)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(f"the crash handler did not finish\n{fppd.tail()}")
+    fppd.exit_expected = True
+    assert not fppd.sanitizer_reports(), fppd.sanitizer_reports()[0][:3000]
+    assert rc == 255, f"fppd exited with {describe_rc(rc)}, not the crash handler's _exit(-1)\n{fppd.tail()}"
+    assert "Crash handler called" in fppd.log(), fppd.tail()

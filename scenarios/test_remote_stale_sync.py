@@ -58,7 +58,7 @@ def test_a_sync_for_the_last_media_does_not_close_the_next(fppd, audio):
     B.wav playing.
 
     Regression: 863b4ac0d. The straggler opened A.wav, closing B.wav to make
-    room for it."""
+    room for it.  (B.wav's own sync would rejoin it, so it is checked first.)"""
     sock, send = _remote(fppd)
     try:
         pos = _play(fppd, send, "A.wav")
@@ -67,6 +67,9 @@ def test_a_sync_for_the_last_media_does_not_close_the_next(fppd, audio):
         send("start", "media", 0, 0.0, "B.wav")
         send("sync", "media", 0, pos + 0.1, "A.wav")
         time.sleep(1.0)
+        # before B.wav's own sync: that would rejoin B.wav and hide the swap
+        s = status(fppd)
+        assert s.get("media_filename") == "B.wav", f"the stale sync displaced B.wav: {s}"
         send("sync", "media", 0, 1.0, "B.wav")
         time.sleep(0.5)
         s = status(fppd)

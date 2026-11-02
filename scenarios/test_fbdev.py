@@ -261,6 +261,25 @@ def test_a_missing_device_is_reported(fppd):
                   timeout=10, what="the could-not-open warning")
 
 
+def test_the_device_is_looked_for_in_dev_unless_told_otherwise(fppd):
+    """With no framebufferControlSocketPath set, a model on a framebuffer
+    device opens it under /dev, and says so when it cannot.
+
+    Regression: 7793bbae7. getSetting() returned an empty string for a setting
+    that is not in settings.json, whatever default the caller passed, so the
+    device was looked for at "/fb9".
+    """
+    fb_model(fppd, Device="fb9")
+    fppd.start()
+    def warned():
+        status = fppd.get("/fppd/status")
+        return [w if isinstance(w, str) else w.get("message", "") for w in
+                status.get("warnings", []) + status.get("warningInfo", [])]
+    fppd.wait_for(lambda: any("could not open device" in w for w in warned()), timeout=15,
+                  what="the could-not-open warning")
+    assert any("could not open device /dev/fb9" in w for w in warned()), warned()
+
+
 def virtual_display(device="fb1", model="", description=""):
     """A Virtual Display output: on `device` (auto-creating the "FB - fb1"
     model) when `model` is empty, otherwise drawing into that model."""

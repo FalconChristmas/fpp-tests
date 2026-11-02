@@ -21,18 +21,22 @@ DSI_PANEL = ("Screen 0: minimum 320 x 200, current 1280 x 720, maximum 8192 x 81
              "   720x1280      60.00*+\n")
 
 
-def run_kiosk(sb, outputs=DSI_PANEL):
+def run_kiosk(sb, outputs=DSI_PANEL, xrandr_rc=0, touch=False):
     """Run start_kiosk.sh as root's X session would, with the media
     directory's settings. Returns (CompletedProcess, calls of the
-    stand-ins)."""
+    stand-ins). xrandr_rc is the exit status of xrandr's rotate; touch
+    leaves xinput and udevadm to the scenario (touch_devices()) instead of
+    removing xinput."""
     sb.unstub("mount")
     stubs = "".join(f"printf '#!/bin/sh\\nprintf \"%%s\\\\n\" \"{t} $*\" >> /fppinit-calls.log\\n' > /usr/bin/{t}; "
                     f"chmod +x /usr/bin/{t}; " for t in TOOLS)
     sb.root_file("/usr/local/bin/xrandr",
                  "#!/bin/sh\n"
                  "if [ $# -eq 0 ]; then cat /tmp/xrandr.out; exit 0; fi\n"
-                 "printf '%s\\n' \"xrandr $*\" >> /fppinit-calls.log\n")
-    sb.root_file("/usr/bin/xinput", None)  # touch mapping is not under test here
+                 "printf '%s\\n' \"xrandr $*\" >> /fppinit-calls.log\n"
+                 f"exit {xrandr_rc}\n")
+    if not touch:
+        sb.root_file("/usr/bin/xinput", None)  # touch mapping is not under test here
     with open(os.path.join(sb.media, "tmp", "xrandr.out"), "w") as f:
         f.write(outputs)
     r = sb._run(["bash", "-c",
@@ -42,13 +46,14 @@ def run_kiosk(sb, outputs=DSI_PANEL):
                  # directory fppd last ran with; point it at the sandbox's.
                  f"echo {MEDIA} > /tmp/media_root.txt; "
                  "mount --bind /tmp/media_root.txt /opt/fpp/www/media_root.txt; "
+                 + ("mkdir -p /dev/input; touch /dev/input/event90 /dev/input/event91 /dev/input/event92; " if touch else "") +
                  "mkdir -p /root/.config/chromium/Default; "
                  "echo '{\"exited_cleanly\":false}' > '/root/.config/chromium/Local State'; "
                  "echo '{\"exited_cleanly\":false,\"exit_type\":\"Crashed\"}' > /root/.config/chromium/Default/Preferences; "
                  "PATH=/usr/local/bin:$PATH HOME=/root bash /opt/fpp/scripts/start_kiosk.sh; "
                  "echo \"exited $?\"; cat '/root/.config/chromium/Local State' /root/.config/chromium/Default/Preferences"],
                 timeout=60)
-    calls = [c for c in sb.calls() if c.split(" ", 1)[0] in TOOLS + ("xrandr",)]
+    calls = [c for c in sb.calls() if c.split(" ", 1)[0] in TOOLS + ("xrandr", "xinput")]
     return r, calls
 
 
@@ -101,3 +106,57 @@ def test_kiosk_blanking_follows_kiosk_timeout_and_chromium_starts_clean(fppinit)
     r, calls = run_kiosk(fppinit)
     assert "xset +dpms" in calls and "xset dpms 300 300 300" in calls, calls
     assert "xset -dpms" not in calls, calls
+
+
+def touch_devices(sb):
+    """Three touchscreens on the X server, as udev and xinput tell them: ids
+    8 and 10 on an internal bus (the panel and a second one), id 9 on USB.
+    Each answers list-props with its event node and a matrix."""
+    sb.root_file("/usr/local/bin/xinput",
+                 "#!/bin/sh\n"
+                 "case \"$1\" in\n"
+                 "list) printf '8\\n9\\n10\\n' ;;\n"
+                 "list-props)\n"
+                 "  case \"$2\" in 8) n=90;; 9) n=91;; *) n=92;; esac\n"
+                 "  printf \"Device 'touch':\\n\\tDevice Node (275):\\t\\\"/dev/input/event$n\\\"\\n\"\n"
+                 "  printf '\\tCoordinate Transformation Matrix (150):\\t1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000\\n' ;;\n"
+                 "*) printf '%s\\n' \"xinput $*\" >> /fppinit-calls.log ;;\n"
+                 "esac\n")
+    sb.root_file("/usr/local/bin/udevadm",
+                 "#!/bin/sh\n"
+                 "echo ID_INPUT_TOUCHSCREEN=1\n"
+                 "case \"$*\" in *event91) echo ID_BUS=usb ;; esac\n")
+
+
+def test_kiosk_rotate_maps_every_touchscreen_after_the_rotation(fppinit):
+    """With KioskRotate on, the kiosk rotates the panel and then maps every
+    non-USB touchscreen to that output (not only the first one found), and
+    leaves a USB touch monitor alone.
+
+    Regression: acd7b81ba. The touch transform was found for a single
+    device, so a second touchscreen kept the unrotated mapping.
+    """
+    fppinit.settings(KioskRotate="1")
+    touch_devices(fppinit)
+    r, calls = run_kiosk(fppinit, touch=True)
+    out = r.stdout + r.stderr
+    rotate = "xrandr --output DSI-1 --mode 720x1280 --rate 60 --rotate right"
+    maps = [c for c in calls if c.startswith("xinput map-to-output")]
+    assert maps == ["xinput map-to-output 8 DSI-1", "xinput map-to-output 10 DSI-1"], f"{calls}\n{out[-2000:]}"
+    assert calls.index(rotate) < calls.index(maps[0]), f"touch mapped before the rotation: {calls}"
+
+
+def test_kiosk_rotate_leaves_touch_alone_when_xrandr_fails(fppinit):
+    """When xrandr cannot rotate the panel, no touchscreen is mapped (touch
+    must not turn without the picture) and chromium still starts.
+
+    Regression: acd7b81ba. The touch matrix was applied first, whether or
+    not the display rotation that followed worked.
+    """
+    fppinit.settings(KioskRotate="1")
+    touch_devices(fppinit)
+    r, calls = run_kiosk(fppinit, xrandr_rc=1, touch=True)
+    out = r.stdout + r.stderr
+    assert "xrandr --output DSI-1 --mode 720x1280 --rate 60 --rotate right" in calls, f"{calls}\n{out[-2000:]}"
+    assert not [c for c in calls if c.startswith("xinput")], f"touch mapped after a failed rotation: {calls}"
+    assert [c for c in calls if c.startswith("chromium ") and "--kiosk" in c], calls

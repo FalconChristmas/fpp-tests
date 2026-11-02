@@ -72,3 +72,46 @@ def test_common_runs_a_helper_named_on_its_command_line(fppd, tmp_path):
         stdout, out = run(["bash", "-c", f'. "{scripts}/{helper}"; echo sourced', "-bash"])
         assert "sourced" in stdout, f"sourcing {helper} as a login shell failed:\n{out[-2000:]}"
         assert "basename" not in out.lower(), f"sourcing {helper} as a login shell printed:\n{out[-2000:]}"
+
+
+def common_vars(fppd, names):
+    """Source scripts/common with a media_root.txt in the tree and none of
+    the variables preset, and print the named ones."""
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("MEDIADIR", "FPPHOME", "FPPUSER", "FPPGROUP", "PLUGINDIR", "SETTINGSFILE", "CFGFILE")}
+    env["FPPDIR"] = fppd.tree
+    shown = "; ".join(f'echo "{n}=${{{n}}}"' for n in names)
+    r = subprocess.run(["bash", "-c", f'. "$FPPDIR/scripts/common"; {shown}'],
+                       env=env, cwd="/", capture_output=True, text=True, timeout=30)
+    return dict(l.split("=", 1) for l in r.stdout.splitlines() if "=" in l), r
+
+
+def test_common_takes_the_media_directory_from_media_root_txt(fppd):
+    """With www/media_root.txt present, MEDIADIR is the directory it names,
+    FPPHOME is that directory's parent, and the settings file and plugin
+    directory sit under MEDIADIR.
+
+    Regression: f60ed5daf, 48d6dbe18. The file's contents were taken as
+    FPPHOME and MEDIADIR was FPPHOME/media; the first fix read the file by a
+    relative path, so MEDIADIR came out empty away from www/. The plugin
+    directory and settings file were built from FPPHOME/media, not MEDIADIR."""
+    fppd.start()
+    root = open(os.path.join(fppd.tree, "www", "media_root.txt")).read().strip()
+    got, r = common_vars(fppd, ["MEDIADIR", "FPPHOME", "SETTINGSFILE", "PLUGINDIR"])
+    assert got.get("MEDIADIR") == root, (got, r.stderr)
+    assert got.get("FPPHOME") == os.path.dirname(root), got
+    assert got.get("SETTINGSFILE") == root + "/settings", got
+    assert got.get("PLUGINDIR") == root + "/plugins", got
+
+
+def test_common_sets_the_fpp_user_when_media_root_txt_exists(fppd):
+    """FPPUSER and FPPGROUP are "fpp" whether or not media_root.txt exists,
+    as the scripts chown what they write to them.
+
+    Regression: 88db58513. They were set only in the no-media_root.txt
+    branch, so on a tree with that file the owner and group were empty and
+    the settings file was chowned to nothing."""
+    fppd.start()
+    assert os.path.exists(os.path.join(fppd.tree, "www", "media_root.txt"))
+    got, r = common_vars(fppd, ["FPPUSER", "FPPGROUP"])
+    assert got == {"FPPUSER": "fpp", "FPPGROUP": "fpp"}, (got, r.stderr)

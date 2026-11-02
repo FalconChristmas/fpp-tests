@@ -190,6 +190,8 @@ test('a class-identified text setting saves the value of the input that changed'
   // which a class-identified input doesn't have, so it saved "undefined";
   // and a value failing the format check was meant to put the cursor back
   // in the box, but .on("focus") only binds a handler, so nothing happened.
+  // Also dd84b5b59: its deprecated-call rewrite turned the refocus into
+  // .on("focus"), which is how it stopped working.
   putFile(DRIVER, DRIVER_SRC);
   try {
     const html = JSON.parse(inPlayer('php', DRIVER, 'page').trim().split('\n').pop()!) as string;

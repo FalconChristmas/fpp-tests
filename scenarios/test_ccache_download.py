@@ -6,11 +6,11 @@ git that note what they were asked.
 from fppinit import MEDIA, fppinit  # noqa: F401 -- the fixture
 
 
-def populate(sb, branch=None, tag=None, env="", **settings):
+def populate(sb, branch=None, tag=None, env="", pagesize=4096, **settings):
     """Source scripts/functions and run populateCCACHE on a BeagleBone 64
-    with 4K pages; returns the URLs curl was asked for."""
+    with `pagesize` pages; returns the URLs curl was asked for."""
     sb.root_file("/etc/fpp/platform", "BeagleBone 64\n")
-    sb.root_file("/usr/bin/getconf", "#!/bin/sh\necho 4096\n")
+    sb.root_file("/usr/bin/getconf", f"#!/bin/sh\necho {pagesize}\n")
     sb.root_file("/usr/bin/curl", f"#!/bin/sh\nfor a in \"$@\"; do case \"$a\" in http*) echo \"$a\" >> {MEDIA}/tmp/curl.log;; esac; done\nexit 22\n")
     sb.root_file("/usr/bin/git", "#!/bin/sh\ncase \"$1\" in\n"
                  f"rev-parse) echo '{branch or 'master'}';;\n"
@@ -52,3 +52,13 @@ def test_no_ccache_is_downloaded_for_a_build_that_uses_nocc_helpers(fppinit):
         urls = populate(fppinit, branch="master", tag="10.2", env=env)
         assert urls == [], (env, urls)
     assert populate(fppinit, branch="master", tag="10.2"), "without nocc the cache is downloaded: the control"
+
+
+def test_no_ccache_is_downloaded_under_a_16k_page_kernel(fppinit):
+    """On a 16K-page kernel the update downloads no ccache -- the published
+    ones are built under 4K pages and nothing in them can hit; the same update on 4K pages downloads it.
+
+    Regression: f17bcd077. The download ran on a Pi in the 16K kernel and
+    fetched a cache whose objects, keyed on the 4K .gch, never matched."""
+    assert populate(fppinit, branch="master", tag="10.2", pagesize=4096), "4K pages download: the control"
+    assert populate(fppinit, branch="master", tag="10.2", pagesize=16384) == []

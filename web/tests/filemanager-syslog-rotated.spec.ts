@@ -19,6 +19,8 @@ function zipNames(path: string): string[] {
 test('the rotated syslog files are listed, open and are in the logs zip', async ({ page, request }) => {
   // Regression: a78eee23d.  GetFilesHelper() and ZipLogs() named
   // /var/log/syslog and /var/log/messages only.
+  // Also f5bdc8ea8: opening a /var/log file by the name the Logs tab lists it
+  // under (the API refuses it as outside the allowed directory otherwise).
   test.setTimeout(90_000);
   inPlayer('sh', '-c', 'echo "fpp-tests live syslog" > /var/log/syslog; echo "fpp-tests rotated once" > /var/log/syslog.1; ' +
     'echo "fpp-tests rotated twice" | gzip > /var/log/syslog.2.gz; chmod 644 /var/log/syslog*');

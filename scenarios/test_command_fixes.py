@@ -21,7 +21,10 @@ def test_get_test_mode_with_a_long_config(fppd):
     unbounded, was strcpy'd into the reply on the stack: an ASan
     stack-buffer-overflow. Proved by reverting 0b742c0c9 on master: at the
     fix and its parent the command socket times out on a SetTestMode this
-    long, so verify-fix fails on both sides before GetTestMode is sent."""
+    long, so verify-fix fails on both sides before GetTestMode is sent.
+
+    Also bba2b2912: the command buffer was 256 bytes; with it back at 256 the
+    SetTestMode above is cut short and answers "Test Mode Deactivated"."""
     fppd.start()
     config = {"enabled": 1, "mode": "SingleChase", "subMode": "RGBChase-RGB", "cycleMS": 500,
               "colorPattern": "FF000000FF000000FF", "channelSet": "1-30",
