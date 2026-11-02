@@ -22,17 +22,24 @@ test("the File Copy rsync warning links to the settings tab with \"Enable rsync\
   await page.route((u) => u.searchParams.get('ip') === HOST && u.pathname.endsWith('/api/settings/Service_rsync'),
     (route) => route.fulfill({ json: { name: 'Service_rsync', value: '0' } }));
 
+  // Any other player's answers (the player's own address is on the host list)
+  // would redraw the warning for that host, after this host's, when the
+  // direction change checks the host selected first.  They get nothing.
+  await page.route((u) => u.searchParams.has('ip') && u.searchParams.get('ip') !== HOST && u.pathname.includes('/api/'),
+    (route) => route.abort());
+
   await page.goto('/backup.php');
   await page.click('#backups-fileCopy-tab');
-  await page.selectOption('#backup\\.Direction', 'TOREMOTE');
+  // This host is the only one on the list, so picking TOREMOTE checks it and
+  // no other host's check can redraw the warning.
   await page.evaluate((host) => {
     const sel = document.getElementById('backup.Host') as HTMLSelectElement;
+    sel.innerHTML = '';
     sel.add(new Option(host, host));
+    sel.value = host;
   }, HOST);
-  await page.selectOption('#backup\\.Host', HOST);
+  await page.selectOption('#backup\\.Direction', 'TOREMOTE');
 
-  // Picking TOREMOTE checks whichever host is selected first (another player
-  // already on the list, in some runs): wait for this host's warning.
   const link = page.locator(`.host_rsyncd_warning a[href*="//${HOST}/"]`);
   await expect(link).toHaveCount(1, { timeout: 15_000 });
   const href = new URL((await link.getAttribute('href'))!);

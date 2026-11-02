@@ -10,6 +10,11 @@ import { container, inPlayer } from './container';
 // its command in place, as nsenter -m -t 1 does on a player.  umount and
 // mount log each call.  Anything the table doesn't hold goes to the real
 // tool.
+//
+// The stand-ins, the table and the log are one set per player, so specs that
+// use them can't run side by side in one player: they need workers: 1 (the
+// config's), and --workers N with --repeat-each makes them delete each
+// other's stand-ins and log.
 
 const MARK = 'fpp-tests-mount-stub';
 const TABLE = '/tmp/fpp-tests-mounts';
