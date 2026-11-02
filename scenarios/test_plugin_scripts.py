@@ -74,6 +74,9 @@ def test_lifecycle_and_playlist_events(fppd):
     """A plugin hears "startup" when fppd loads it, the playlist's start,
     each entry it plays and its stop, and "shutdown" when fppd exits.
 
+    Feature: 216d7fbe2 (the "lifecycle" callback type, run with startup and
+    shutdown).
+
     Also covers 00b23cca5: a fresh start was announced as "playing", never
     "start", because the status was set to playing before Start() read it.
 

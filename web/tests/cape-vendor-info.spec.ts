@@ -474,7 +474,8 @@ test.describe('cape vendor URLs from a crafted EEPROM', () => {
       const img = page.locator('#eeprom-about .aboutRight img');
       await expect(img).toHaveAttribute('src', `${info.vendor.image}?${q}`);
       await expect(img.locator('xpath=..')).toHaveAttribute('href', '');
-      // E-mail and forum are external links too, so their rows go; the
+      // E-mail and forum are external links too, so their rows go (0eacb23e1,
+      // "Hide/disable various external URL's ... in Kiosk mode"); the
       // control is that the block itself is still drawn.
       await expect(vendorRow(page, 'Vendor Name')).toHaveCount(1);
       await expect(vendorRow(page, 'E-mail')).toHaveCount(0);
