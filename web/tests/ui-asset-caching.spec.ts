@@ -48,6 +48,7 @@ test('every script and stylesheet a page includes carries a cache buster', async
   // Regression: 935ca0295.  Assets are cached for a year, and 52 page-local
   // <script>/<link> tags across these pages had no ?ref=, so an upgrade left
   // browsers running the old file.
+  // Also 1b24fe2ee: the shared head's jquery and bootstrap bundle got theirs.
   const bare: string[] = [];
   let seen = 0;
   for (const p of PAGES) {

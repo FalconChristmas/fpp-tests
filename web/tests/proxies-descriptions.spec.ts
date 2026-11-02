@@ -28,6 +28,8 @@ test('a proxy keeps its description in the API, the proxy file and the page', as
   // Regression: 04741805f ("Updated Proxy API to support Descriptions,
   // switch proxy UI to use API").  The API took and returned bare host
   // names; the page kept the descriptions to itself.
+  // Also 5bf8483fa ("Add a description for each proxy"): the "# D:" line
+  // that keeps a description in the proxy file.
   const r = await request.post('/api/proxies', { data: [{ host: HOST, description: DESC }] });
   expect(r.ok()).toBe(true);
   expect(inPlayer('cat', PROXY_CONF)).toContain(`# D:${DESC}\nRewriteRule ^${HOST}$`);
