@@ -4,8 +4,11 @@ The `audio` fixture runs a PipeWire of the scenario's own (audio.py), and
 fppd plays into it exactly as it plays into a sound card on a device.
 """
 
+import json
+import glob
 import os
 import statistics
+import subprocess
 import time
 import urllib.error
 
@@ -119,6 +122,43 @@ def test_sequence_and_media_play_together(fppd, audio):
     if not in_container:
         assert spread < 25, f"media and lights wandered {spread:.0f} ms apart over {secs} s"
 
+def _pw_top(audio):
+    """PipeWire's per-node error (xrun) counts, from pw-top's second sample.
+    Take it while the song is still playing: once the stream stops its nodes
+    go idle and the counts read as a quiet graph."""
+    try:
+        return subprocess.run(["pw-top", "-b", "-n", "2"], env=audio.env, capture_output=True,
+                              text=True, timeout=15).stdout
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"pw-top failed: {e}\n"
+
+
+def _diag(fppd, audio, name, data, pwtop=None):
+    """Evidence for a real-card failure that can't be told from a glitch by its
+    assertion alone: writes logs/diag-<name>.json (what the test measured, in
+    full), diag-<name>-pwtop.txt (pwtop: PipeWire's per-node error/xrun counts,
+    taken during playback) and diag-<name>-alsa.txt (the card's PCM status and
+    hw_params), which a failed scenario's artifacts carry. Never fails the
+    test."""
+    logs = os.path.join(fppd.media, "logs")
+    try:
+        os.makedirs(logs, exist_ok=True)
+        with open(os.path.join(logs, f"diag-{name}.json"), "w") as f:
+            json.dump(data, f, indent=1, default=str)
+        with open(os.path.join(logs, f"diag-{name}-pwtop.txt"), "w") as f:
+            f.write(pwtop if pwtop is not None else "(no pw-top snapshot was taken during playback)\n")
+        with open(os.path.join(logs, f"diag-{name}-alsa.txt"), "w") as f:
+            for path in sorted(glob.glob("/proc/asound/card*/pcm*p/sub*/status") +
+                               glob.glob("/proc/asound/card*/pcm*p/sub*/hw_params")):
+                try:
+                    f.write(f"== {path}\n{open(path).read()}\n")
+                except OSError:
+                    pass
+        print(f"diagnostics for {name} in {logs}/diag-{name}*")
+    except OSError as e:
+        print(f"could not write diagnostics for {name}: {e}")
+
+
 
 def test_long_song_stays_locked_to_the_sound_card(fppd, audio):
     """Over a long song, the lights follow the sound card's clock, not the
@@ -165,7 +205,10 @@ def test_long_song_stays_locked_to_the_sound_card(fppd, audio):
         from audio import card_position, card_rate
         readings, positions = [], []
         end = time.monotonic() + secs + 3
+        pwtop = None
         while time.monotonic() < end:
+            if pwtop is None and time.monotonic() > end - 10:
+                pwtop = _pw_top(audio)
             p = card_position()
             if p:
                 readings.append(p)
@@ -229,6 +272,29 @@ def test_long_song_stays_locked_to_the_sound_card(fppd, audio):
     # drift shows as wander.
     settled = [d for x, d in zip(xs, gap) if x >= 2]
     wander = max(settled) - min(settled)
+    # Everything needed to tell a real stall from one mismatched burst: every
+    # pair's audio and light times and the gap between them, which burst
+    # stands furthest from the median, the spacing of its neighbours on both
+    # sides (a burst heard late or a frame seen late shifts only its own
+    # pair), the bursts that found no frame, and the recording's length
+    # against the wall clock (a gap in the capture shows as a short one).
+    med = statistics.median(gap)
+    worst = max(range(len(gap)), key=lambda n: abs(gap[n] - med)) if gap else None
+    _diag(fppd, audio, "longsong", {
+        "seconds": secs, "wander_ms": wander, "limit_ms": 25, "card_ppm": card_ppm,
+        "onsets": len(onsets), "bursts_expected": secs // 2, "pairs": len(pairs),
+        "unmatched_bursts": [n for n in range(len(onsets)) if (1 + 2 * n) * 20 not in first_seen],
+        "capture_seconds": rec.count / rec.rate, "wall_seconds": rec.ended - rec.started - 0.5,
+        "worst_pair": worst,
+        "worst_neighbours": None if worst is None else [
+            {"pair": n, "audio_s": pairs[n][0] - a0, "light_s": pairs[n][1] - l0, "gap_ms": gap[n],
+             "audio_step_s": None if n == 0 else pairs[n][0] - pairs[n - 1][0],
+             "light_step_s": None if n == 0 else pairs[n][1] - pairs[n - 1][1]}
+            for n in range(max(0, worst - 3), min(len(pairs), worst + 4))],
+        "gap_ms_all": [round(d, 1) for d in gap],
+        "card_readings": [(round(r[1], 3), r[0]) for r in readings],
+        "fpp_positions": [(round(t, 3), p) for t, p in positions],
+    }, pwtop)
     assert wander <= 25, \
         f"from 3 s into the song the gap between lights and sound wandered over {wander:.0f} ms"
 
@@ -408,7 +474,10 @@ def test_continuous_tone_has_no_dropouts(fppd, audio):
     fppd.start()
     rec = audio.record(rate=8000)
     fppd.command("Start Playlist", "Tone", "false", "false")
-    time.sleep(secs + 3)
+    deadline = time.monotonic() + secs + 3
+    time.sleep(max(secs - 4, 0))
+    pwtop = _pw_top(audio)
+    time.sleep(max(deadline - time.monotonic(), 0))
     samples = rec.stop()
     # 2 ms windows: two periods of the tone, so each holds its peak.
     win = 16
@@ -426,6 +495,16 @@ def test_continuous_tone_has_no_dropouts(fppd, audio):
             run = 0
     print(f"tone heard for {(last - first) * 2 / 1000:.1f} s; gaps (s into the tone, ms): "
           f"{[(round((s - first) * 2 / 1000, 2), n * 2) for s, n in gaps]}")
+    # Whether a gap is the card's, PipeWire's or the capture's: the recording's
+    # length against the wall clock (samples lost in pw-record shorten it), the
+    # level around each gap, and PipeWire's xrun counts.
+    _diag(fppd, audio, "tone", {
+        "seconds": secs, "gaps_2ms_windows": gaps, "level": level,
+        "capture_seconds": rec.count / rec.rate, "wall_seconds": rec.ended - rec.started - 0.5,
+        "around_gaps": [{"at_s": round((st - first) * 2 / 1000, 3), "windows": n,
+                         "peaks": [round(p, 4) for p in peaks[max(first, st - 5):st + n + 5]]}
+                        for st, n in gaps],
+    }, pwtop)
     assert not gaps, f"{len(gaps)} gaps in the tone, {sum(n for _, n in gaps) * 2} ms in all"
 
 
