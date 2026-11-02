@@ -18,6 +18,9 @@ def test_a_pulse_shorter_than_the_inputs_debounce_time_runs_nothing(fppd):
 
     Regression: 032873141. Every input was debounced by a fixed 100 ms,
     whatever its gpio.json said, so the half-second press ran the command.
+
+    Also 817efaa56: the inputs are read from config/gpio.json (a path of
+    config/config/gpio.json finds no input, and the held press never runs).
     """
     if os.path.exists(FLAG):
         os.unlink(FLAG)

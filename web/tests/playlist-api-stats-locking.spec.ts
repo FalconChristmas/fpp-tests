@@ -52,6 +52,8 @@ test('adding an item through the API keeps the playlist\'s per-section totals', 
   // the entry and wrote the file back with the old playlistInfo: the
   // playlist kept its old item count and duration everywhere they show,
   // and the validate list had no per-section counts for the cards.
+  // Also c03fa1d3e: GET /api/playlist/<name> hands back playlistInfo's
+  // total_duration as the stored number of seconds, not as "00m:42s".
   const saved = await request.post(`/api/playlist/${NAME}`, {
     data: playlist({ version: 3, mainPlaylist: [pause(10)], playlistInfo: { total_duration: 10, total_items: 1 } }),
   });

@@ -55,6 +55,15 @@ test('ping takes a host, not an option', async ({ request }) => {
   expect(body).toContain('Invalid host name or address');
 });
 
+test('ping keeps a host name as typed, capitals included', async ({ request }) => {
+  // Regression: 6dfd9e453 (#1370).  ping.php stripped everything but
+  // lower-case letters, digits, '-' and '.' from the host, so "LOCALHOST"
+  // became an empty name and was refused.
+  const body = await (await request.get('/ping.php?ip=LOCALHOST&count=1')).text();
+  expect(body).toContain('Ping LOCALHOST');
+  expect(body).not.toContain('Invalid host name or address');
+});
+
 test('an event id that is not a name is refused', async ({ request }) => {
   // (An encoded slash never gets past Apache, which answers 404 itself.)  By
   // GET, which every FPP since the fix answers; POST came later.

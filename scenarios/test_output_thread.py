@@ -447,6 +447,10 @@ def test_an_outputs_disabled_preset_that_enables_an_overlay_model(fppd):
     parked behind the exiting one) forever. The command held the overlay
     models' lock while it waited, so /api/overlays/models hung from then on.
 
+    Also 44272e267: the OUTPUTS_DISABLED preset itself, fired by
+    OutputMonitor::DisableOutputs() (its OUTPUTS_ENABLED twin is in
+    test_outputs_enabled_preset.py).
+
     Also 517912745: the output thread is started once at startup; with it
     left to start on demand there is no startup idle-out to fire the preset.
     """

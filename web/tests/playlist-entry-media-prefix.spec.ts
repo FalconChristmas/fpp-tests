@@ -31,6 +31,10 @@ test('a random Media entry offers a file name prefix, and saves it', async ({ pa
   // by file name; the prefix is an advanced field, shown for the random
   // modes only.  fppd honouring it is scenarios/test_playlist_direct_media.py.
   //
+  // Also 6b7e212fa: the Add Entry dialog's parent selects (here File Mode)
+  // run UpdateChildVisibility() on change; without that handler the prefix
+  // row never appears.
+  //
   // Also guards the editor fix: the prefix row starts collapsed (inline
   // visibility:collapse, as a child of a parent value that isn't the
   // default), and UpdateChildVisibility() once only show()n it, which never

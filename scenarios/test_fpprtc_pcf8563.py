@@ -61,6 +61,23 @@ def test_a_pcf8563_is_set_up_at_0x51(fppinit):
     assert list(new_devices(fppinit).values()) == ["pcf8563 0x51"], new_devices(fppinit)
 
 
+def test_a_pcf85363_is_set_up_at_0x51(fppinit):
+    """piRTC 5 loads rtc-pcf85363 and creates a pcf85363 at 0x51 on the cape
+    bus.
+
+    Feature: 98d0d78ac (the boot half; options.php's "pcf85363 (Kulp)" entry
+    is its other, checked in web/tests/rtc-options-pcf8563.spec.ts). The
+    PocketBeagle2 test below needs real hardware; this one runs in the
+    sandbox, so a missing case 5 in fpprtc is caught on any machine."""
+    fppinit.stub_if_missing("/usr/sbin/modprobe", "/usr/sbin/hwclock")
+    fppinit.settings(piRTC="5")
+    fppinit.fake_path("/sys/bus/i2c/devices", dict(I2C))
+    out = fpprtc(fppinit)
+    assert "pcf85363" in out, out
+    assert any(c.split()[:2] == ["modprobe", "rtc-pcf85363"] for c in fppinit.calls()), fppinit.calls()
+    assert list(new_devices(fppinit).values()) == ["pcf85363 0x51"], new_devices(fppinit)
+
+
 @pytest.mark.skipif(not on_pb2(), reason="the internal RTC check is a PocketBeagle2's")
 def test_a_pb2_sets_up_the_capes_rtc_beside_the_internal_one(fppinit):
     """When rtc0 is the AM62x's own RTC (rtc-ti-k3, no battery), the cape's

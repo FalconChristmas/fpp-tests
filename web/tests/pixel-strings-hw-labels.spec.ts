@@ -95,6 +95,7 @@ test('smart receiver letters go after the cape\'s own port labels when the type 
   // Regression: fb1906757.  Changing a port to smart receivers redrew the
   // group's labels from the port's place in the table (1A, 2A...) instead of
   // the label the cape gives it, so a cape whose labels start at 5 lost them.
+  // Also 4d6bf8e8a: the label a port gets from its cape group's portStart.
   writeFile(CONFIG, JSON.stringify(stringsConfig(0)));
   await openStrings(page);
   expect(await labels(page), 'the control: as drawn from the saved config').toEqual(['5)', '6)', '7)', '8)']);

@@ -279,7 +279,10 @@ def test_output_specific_test_pattern_cycles(fppd):
     Regression: dbfa6fceb. A test pattern with no channels of its own was no
     longer cycled, and an Output Specific test never has any: every output's
     test (and every string tester) saw cycle 0 for as long as it ran, so the
-    left column stayed green."""
+    left column stayed green.
+
+    Also 052aff1b2: the ColorLight output draws the test pattern at all
+    (OverlayTestData); without it no frame ever shows the colours."""
     w, h = 32, 16
     with captured() as cap:
         fppd.write("config/channeloutputs.json", panels_output([panel(0, 0, 0, 0)], channels=w * h * 3))

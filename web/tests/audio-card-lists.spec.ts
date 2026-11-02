@@ -3,6 +3,7 @@ import { container, inPlayer } from './container';
 import { cleanupPipeWire } from './pw-helpers';
 import { CARDS, callApi, cleanupAsound, fakeCards, standInAplay } from './fake-asound';
 import { nullSink, startPipeWire, stopPipeWire } from './pw-live';
+import { setSettingInFile, snapshotSettings } from './settings-file';
 
 // The sound card lists: the card aliases screen, the audio output choices
 // and the PipeWire card list, from the cards in /proc/asound -- here a Pi's
@@ -14,7 +15,10 @@ test.skip(!container, 'stands in sound cards inside the run-web.sh container');
 
 const ALIASES = '/home/fpp/media/config/audio-card-aliases.json';
 
+let restoreSettings: (() => void) | null = null;
 test.afterEach(() => {
+  restoreSettings?.();
+  restoreSettings = null;
   cleanupAsound();
   stopPipeWire();
   cleanupPipeWire();
@@ -80,4 +84,22 @@ test("a card FPP drives through its own ALSA adapter is matched to that adapter'
   expect(s3, JSON.stringify(cards)).toBeTruthy();
   expect(s3.pwNodeName).toBe('fpp_alsa_s3');
   expect(cards.find((c: any) => c.cardId === 'Headphones').pwNodeName).toBe('');
+});
+
+test('the output devices are offered as a map of names, or as a plain list of "card, device" names', () => {
+  // Regression: 449681e02 ("Provide audio devices as direct list instead of
+  // map if needed that way").  AudioOutput is name -> card for a select's
+  // options; AudioOutputList (the full list) is the plain array of
+  // "<card name>, <device name>" for consumers that want the devices.
+  // (Under PipeWire the full list is its sinks instead.)
+  restoreSettings = snapshotSettings();
+  setSettingInFile('MediaBackend', 'gstreamer');
+  fakeCards();
+  standInAplay();
+  const map = callApi('GetOptions_AudioOutputDevice', false);
+  expect(Array.isArray(map), JSON.stringify(map)).toBe(false);
+  expect(map).toMatchObject({ 'bcm2835 Headphones': 'Headphones', 'Sound Blaster Play! 3': 'S3' });
+  const list = callApi('GetOptions_AudioOutputDevice', true);
+  expect(Array.isArray(list), JSON.stringify(list)).toBe(true);
+  expect(list).toEqual(['bcm2835 Headphones, bcm2835 Headphones', 'Sound Blaster Play! 3, USB Audio']);
 });

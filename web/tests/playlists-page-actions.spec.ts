@@ -11,6 +11,7 @@ import { container, inPlayer } from './container';
 
 const NAME = 'fpp-tests-pl-actions';
 const NEW = 'fpp-tests-pl-new';
+const COPY = 'fpp-tests-pl-copy';
 
 const pause = (duration: number) => ({ type: 'pause', enabled: 1, playOnce: 0, duration });
 
@@ -46,7 +47,7 @@ async function whenModalShown(page: Page, open: () => Promise<void>) {
 }
 
 test.afterEach(async ({ request }) => {
-  for (const n of [NAME, NEW]) await request.delete(`/api/playlist/${n}`);
+  for (const n of [NAME, NEW, COPY]) await request.delete(`/api/playlist/${n}`);
 });
 
 test.describe('adding a playlist', () => {
@@ -104,6 +105,8 @@ test.describe('adding a playlist', () => {
 test('deleting a playlist from its card asks first, and Cancel keeps it', async ({ page, request }) => {
   // Regression: a8ab37a83.  The card's Delete button deleted the playlist
   // at once, with no confirmation.
+  // Also c44e59d79: the card has a Delete button that names its own playlist
+  // (red with the button deleting whatever is open in the editor).
   await storePlaylist(request, NAME, { mainPlaylist: [pause(5)] });
   await page.goto('/playlists.php');
   await card(page, NAME).locator('.circularDeleteButton').click();
@@ -134,6 +137,26 @@ test('Back from the editor refreshes the card with what changed meanwhile', asyn
   await expect(page.locator('#playlistEditor')).not.toHaveClass(/hasPlaylistDetailsLoaded/);
   await expect(card(page, NAME)).toContainText(/Total Items: 2\b/);
   await expect(card(page, NAME)).toContainText('Total Duration: 01:15');
+});
+
+test('Copy Playlist saves the copy and lists it, with its entries counted', async ({ page, request }) => {
+  // Regression: 983092335 (#1072).  After a copy the editor stayed up on the
+  // playlist it was copied from and the list behind it was not refreshed, so
+  // the copy was not there until the page was reloaded.
+  await storePlaylist(request, NAME, { mainPlaylist: [pause(5), pause(7)], playlistInfo: { total_items: 2, total_duration: 12 } });
+  await openEditor(page);
+  await expect(page.locator('#tblPlaylistMainPlaylist tr.playlistRow')).toHaveCount(2);
+  await page.locator('#playlistEditMoreButton').click();
+  await whenModalShown(page, () => page.locator('.dropdown-item', { hasText: 'Copy Playlist' }).click());
+  await page.locator('#CopyPlaylistDialog .newPlaylistName').fill(COPY);
+  await page.locator('#CopyPlaylistDialog').getByRole('button', { name: 'Copy', exact: true }).click();
+  await expect.poll(() => exists(request, COPY)).toBe(true);
+  const stored = await (await request.get(`/api/playlist/${COPY}`)).json();
+  expect(stored.mainPlaylist).toHaveLength(2);
+  // The page is back on the list, with a card for the copy.
+  await expect(page.locator('#playlistEditor')).not.toHaveClass(/hasPlaylistDetailsLoaded/);
+  await expect(card(page, COPY)).toContainText(/Total Items: 2\b/);
+  await expect(card(page, NAME)).toBeVisible();
 });
 
 test('the browser\'s Back from the editor returns to the playlist list', async ({ page, request }) => {

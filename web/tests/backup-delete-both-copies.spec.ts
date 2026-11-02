@@ -45,6 +45,7 @@ function removeDrive() {
 }
 
 test('deleting a backup from the backup drive deletes the copy on the player too', async ({ request }) => {
+  // Also f829ec343: the delete's answer is under the capitalized Status key.
   const json = JSON.stringify({ fpp_backup_version: '8.0', backup_comment: 'fpp-tests both copies', backup_taken: 1790000000 });
   try {
     await keepingSettings(async () => {

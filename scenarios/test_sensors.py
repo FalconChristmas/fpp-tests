@@ -94,6 +94,9 @@ def test_a_thermal_zone_type_with_a_dashed_suffix(fppd):
     Regression: 7ba68c973. 1dcfae7b9's bounds check dropped the
     "thermal-zone" spelling, so the label kept the whole suffix:
     "SOC-THERMAL-ZONE: ".
+
+    Also 5828810f3: the suffix is dropped from a zone's label at all (it
+    was "SOC-THERMAL-ZONE: " before that strip existed).
     """
     sensors = thermal_zone(fppd, "soc-thermal-zone\n")
     assert [s["label"] for s in sensors] == ["SOC: "], sensors

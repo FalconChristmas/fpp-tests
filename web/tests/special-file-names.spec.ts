@@ -17,6 +17,7 @@ const NAMES = [
 
 for (const name of NAMES) {
   test(`a file named "${name}" is listed, downloaded and deleted`, async ({ request }) => {
+    // Also adf31929a: ?nameOnly=1 answers a plain array of names.
     const dir = 'scripts';
     inPlayer('sh', '-c', `mkdir -p ${MEDIA}/${dir} && printf %s hello > "${MEDIA}/${dir}/${name.replace(/"/g, '\\"')}"`);
     try {

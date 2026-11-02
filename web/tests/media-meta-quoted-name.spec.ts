@@ -21,6 +21,8 @@ const FFPROBE = '/usr/bin/ffprobe';
 const SEEN = '/tmp/fpp-tests-ffprobe-argv';
 
 test('a song named with a quote and a dollar sign is handed to ffprobe whole', async ({ request }) => {
+  // Also 40319225c ("Migrate from getID3 to FFProbe"): the duration and
+  // metadata of a song come from ffprobe -- here the stand-in's answer.
   const had = inPlayer('sh', '-c', `test -e ${FFPROBE} && echo y || echo n`).trim() === 'y';
   test.skip(had, 'the player has a real ffprobe, which would not record its argument');
   putFile(FFPROBE, [

@@ -185,6 +185,17 @@ def test_a_beagle_upgrade_keeps_the_device_identity(tmp_path):
     assert not (mnt / UNIT).exists(), f"the first-boot key regeneration unit was left enabled:\n{out}"
 
 
+def test_an_upgrade_leaves_the_marker_that_has_the_next_boot_reinstall_user_packages(tmp_path):
+    """part2 leaves /fppos_upgraded in the new root, which fppinit's next
+    boot takes as the cue to install config/userpackages.json
+    (test_fppinit_boot_services.py has that half).
+
+    Regression: f423a41d2. Without the marker a reflash dropped every
+    package the user had installed, with nothing to say so."""
+    mnt, out = upgrade_identity(tmp_path)
+    assert (mnt / "fppos_upgraded").exists(), f"no fppos_upgraded marker in the new root:\n{out}"
+
+
 def test_a_beagle_upgrade_without_the_keys_says_so(tmp_path):
     """With no host keys to restore, the upgrade log says clients will see a
     changed host key, and the first-boot regeneration unit is left alone.

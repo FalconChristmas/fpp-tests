@@ -67,7 +67,8 @@ def test_get_uuid_prefers_the_device_tree_serial_to_dmidecode(tmp_path):
 
     Regression: 87b6e674b. dmidecode was asked first, so a board whose
     firmware also answers dmidecode (with a value that can change with the
-    firmware, or be a vendor default) never used its device-tree serial."""
+    firmware, or be a vendor default) never used its device-tree serial.
+    Also 5da51cb21: the device-tree serial as a source (M3-) at all."""
     out, err = get_uuid(tmp_path, dt_serial=b"FPPDT0012345\x00", dmi_serial="DMI98765432")
     assert out == "M3-FPPDT0012345", f"get_uuid gave {out!r}\n{err[-2000:]}"
 
@@ -81,3 +82,38 @@ def test_get_uuid_falls_back_to_the_machine_id(tmp_path):
     mid = "3f2a9c0e5b7d4e1f8a6c2b9d0e4f7a13"
     out, err = get_uuid(tmp_path, machine_id=f"{mid}\n".encode())
     assert out == f"M4-{mid}", f"get_uuid gave {out!r}\n{err[-2000:]}"
+
+
+def test_get_uuid_does_not_run_dmidecode_where_it_is_not_installed(tmp_path):
+    """A system without dmidecode never has it run (through sudo): no call
+    for it reaches sudo.
+
+    Regression: f3e7b7e57. get_uuid ran "sudo dmidecode" unconditionally, so
+    a system without the package ran a failing sudo on every call."""
+    if not TREE:
+        pytest.skip("FPP_TREE is not set")
+    with open(os.path.join(TREE, "scripts", "get_uuid")) as f:
+        src = f.read()
+    for path in ("/sbin/dmidecode", "sudo dmidecode"):
+        assert path in src, f"get_uuid no longer reads {path}, so this test needs a rewrite"
+    (tmp_path / "cpuinfo").write_text("processor\t: 0\n")
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    log = tmp_path / "sudo.log"
+    (bindir / "sudo").write_text(f'#!/bin/sh\necho "$@" >> {log}\nexit 1\n')
+    (bindir / "sudo").chmod(0o755)
+    script = tmp_path / "get_uuid"
+    script.write_text(src.replace("/proc/cpuinfo", str(tmp_path / "cpuinfo"))
+                         .replace("/proc/device-tree/serial-number", str(tmp_path / "serial-number"))
+                         .replace("/sys/bus/i2c/devices/0-0050/eeprom", str(tmp_path / "eeprom"))
+                         .replace("/etc/machine-id", str(tmp_path / "machine-id"))
+                         .replace("/usr/sbin/dmidecode", str(tmp_path / "no-dmidecode"))
+                         .replace("/sbin/dmidecode", str(tmp_path / "no-dmidecode")))
+    subprocess.run(["bash", str(script)], capture_output=True, text=True, timeout=30, cwd=tmp_path,
+                   env=dict(os.environ, FPPDIR=TREE, PATH=f"{bindir}:{os.environ['PATH']}",
+                            FPP_DOCKERENV=str(tmp_path / "no-dockerenv"),
+                            FPP_CONTAINERFILE=str(tmp_path / "no-container"),
+                            FPP_UUIDFILE=str(tmp_path / "fpp_uuid"),
+                            FPP_UUIDMEDIAFILE=str(tmp_path / "media-fpp_uuid")))
+    calls = log.read_text().splitlines() if log.exists() else []
+    assert not [c for c in calls if c.startswith("dmidecode")], f"sudo was asked for dmidecode: {calls}"

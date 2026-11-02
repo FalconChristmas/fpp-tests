@@ -8,6 +8,9 @@ import { container, inPlayer, playerAddress } from './container';
 // rsync anyway, and copystorage.php then set rebootFlag, BootActions and
 // /fpp_restored as if a configuration had been copied in.
 //
+// Also 3b7a2abe0: a copy from a remote storage device (USB, SSD) first asks the
+// other player to mount it; without that request nothing refuses the copy.
+//
 // The "other player" is this one, at its own address, asked to mount a drive
 // it doesn't have.
 

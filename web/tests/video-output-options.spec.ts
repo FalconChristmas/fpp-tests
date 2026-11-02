@@ -13,6 +13,8 @@ test.skip(!container, 'stands in a display card inside the run-web.sh container'
 test.afterEach(() => cleanupAsound());
 
 test('the Video Output choices include a composite output, with the HDMI and DSI ones', () => {
+  // Also 3fa1d4988: without the DSI- branch of GetOptions_VideoOutput() the
+  // DSI-1 connector is not offered.
   // Regression: 94a028f09.  Only HDMI and DSI connectors were listed, so a
   // Pi's composite TV-out (Composite-1) could not be chosen as the video
   // output.  fppd taking the choice for a display is

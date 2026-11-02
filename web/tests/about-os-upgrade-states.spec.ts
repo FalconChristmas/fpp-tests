@@ -379,6 +379,25 @@ test("an OS upgrade's dialog title says which stage it is at", async ({ page, re
   }
 });
 
+test("an OS upgrade's stream failing leaves the dialog's Close button enabled", async ({ page, request, baseURL }) => {
+  // Regression: d95ce7d54.  The upgrade's stream was started with a done
+  // callback but no error callback, so when upgradeOS.php failed or the
+  // stream closed on the page, the progress dialog stayed on "Please Wait"
+  // with its Close button disabled, and the page had to be reloaded.  The
+  // request is answered with a 500 here; nothing is upgraded.
+  const IMAGE = 'Pi64-98.9_2098-11.fppos';
+  await openWith(page, request, baseURL!, UP_TO_DATE, [image(IMAGE, { downloaded: true })]);
+  const select = page.locator('#osSelect');
+  await select.selectOption(await select.locator('option', { hasText: IMAGE }).getAttribute('value'));
+  await page.route('**/upgradeOS.php*', (route) => route.fulfill({
+    status: 500, contentType: 'text/plain', body: 'fpp-tests: the upgrade could not run\n',
+  }));
+  page.once('dialog', (d) => d.accept());
+  await page.locator('#osUpgradeButton').click();
+  await expect(page.locator('#osUpgradeText')).toHaveValue(/the upgrade could not run/, { timeout: 15_000 });
+  await expect(page.locator('#osUpgrade #modalCloseButton')).toBeEnabled({ timeout: 15_000 });
+});
+
 test('an FAQ answer opens to its whole height, and opening another closes it', async ({ page, request, baseURL }) => {
   // Regression: 7098ee433 ("Fix FAQ reveal: drive max-height from JS
   // instead of grid rows").  At a phone's width the answers are tall.

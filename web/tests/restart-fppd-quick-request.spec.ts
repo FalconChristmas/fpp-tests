@@ -47,3 +47,26 @@ test('Restart FPPD for a change that needs a quick restart asks for ?quick=1 and
   }, { timeout: 60_000, intervals: [1000] }).not.toBe('');
   expect(pid(), 'fppd was stopped and started again, not restarted in place').toBe(before);
 });
+
+test('Restart FPPD with no restart flag set also asks for ?quick=1', async ({ page }) => {
+  // Regression: 97eb320a7.  Only a flag of 2 asked for a quick restart; the
+  // restart the page offers with nothing flagged (a plugin's, the status
+  // page's) did the full stop and start.
+  test.setTimeout(120_000);
+  await put(page, 'restartFlag', '0');
+  await page.goto('/index.php');
+  expect(Number(await page.evaluate(() => (window as any).settings['restartFlag']))).toBe(0);
+  const before = pid();
+  expect(before, 'no fppd running before the restart').toMatch(/^\d+$/);
+  const sent = page.waitForRequest((r) => r.url().includes('/api/system/fppd/restart'));
+  const answered = page.waitForResponse((r) => r.url().includes('/api/system/fppd/restart'));
+  await page.evaluate(() => (window as any).RestartFPPD());
+  const url = new URL((await sent).url());
+  expect(url.searchParams.get('quick')).toBe('1');
+  const res = await answered;
+  expect(res.status(), await res.text()).toBe(200);
+  await expect.poll(async () => {
+    try { return (await (await page.request.get('/api/fppd/status', { timeout: 5_000 })).json()).mode_name ?? ''; } catch { return ''; }
+  }, { timeout: 60_000, intervals: [1000] }).not.toBe('');
+  expect(pid(), 'fppd was stopped and started again, not restarted in place').toBe(before);
+});

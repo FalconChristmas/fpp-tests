@@ -220,7 +220,12 @@ def test_an_image_sent_during_a_transition_waits_for_it(fppd):
 
 def test_virtual_display_draws_its_map(fppd):
     """A Virtual Display on the device draws each mapped pixel at its place
-    in the preview, with y up, in the channel data's colour."""
+    in the preview, with y up, in the channel data's colour.
+
+    Also 330e2103d: the display draws into a Pixel Overlay Model (nothing
+    reaches the device if SendData() stops writing to the model). Also
+    3f059de84: given only a device and size it creates the "FB - fb1" model
+    to draw on (without that, Init() finds no model and nothing is drawn)."""
     fb = FakeFb(fppd, width=W, height=H, bpp=32)
     fppd.write("config/co-other.json", {"channelOutputs": [{
         "enabled": 1, "type": "VirtualDisplay", "startChannel": 1,

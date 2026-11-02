@@ -134,3 +134,20 @@ test('the vendor named exactly wins over one whose name is only a prefix, whiche
   await expect(page.locator('#eepromVendorCapes')).toBeDisabled();
   await expect(page.locator('#eepromHardwareLockedNote')).toBeVisible();
 });
+
+test('Upgrade posts the version picked from the vendor lists as the file to install', async ({ page, request }) => {
+  // Regression: 433a70a2d.  The upgrade still read its file from the old
+  // single list (#eepromList), so what was picked from the Vendor / Cape /
+  // Version lists was ignored and the upgrade asked for nothing.
+  installCape('fpp-tests Vendor');
+  await setLevel(request, '1');
+  await openUpgrade(page);
+  await expect(page.locator('#eepromVendorCapeVersions')).toHaveValue('https://vendor.fpp-tests.invalid/fpp-tests%20cape.bin');
+  const posted = page.waitForRequest((r) => r.method() === 'POST' && new URL(r.url()).pathname.endsWith('/upgradeCapeFirmware.php'));
+  // Answered here: the receiving end of the filename is cape-firmware-requests.spec.ts.
+  await page.route('**/upgradeCapeFirmware.php*', (r) => r.fulfill({ status: 200, contentType: 'text/plain', body: 'stubbed\n' }));
+  await page.locator('#UpdateFirmware').click();
+  const body = (await posted).postData() ?? '';
+  expect(body).toContain('name="filename"');
+  expect(body).toContain('https://vendor.fpp-tests.invalid/fpp-tests%20cape.bin');
+});

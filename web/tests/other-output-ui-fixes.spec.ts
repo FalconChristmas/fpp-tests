@@ -62,6 +62,8 @@ test('changing a virtual display\'s size sets its channel count to width x heigh
 
 test('a Control Channel output\'s preset rows can be removed one at a time', async ({ page, request }) => {
   // Feature: 6dc4a5455.  A preset row could only be added, never taken away.
+  // Also c526360e0: Remove Row is a button directly in the row, so removing
+  // takes its grandparent (red with one more parentElement: the whole list goes).
   await put(request, [{ type: 'ControlChannel', enabled: 0, startChannel: 40, channelCount: 1,
     values: [{ value: 1, preset: '' }, { value: 2, preset: '' }] }]);
   await open(page, 'ControlSignal');

@@ -248,6 +248,8 @@ test('a cape whose default connection is LEDscape runs the panel test pattern on
   // Testing dropdown asked fppd for a pattern on output "".
   // Also 050f33a9a: the test pattern's output type for a LEDscapeMatrix
   // matrix is "BBB Panels" (it was left as the connection's own name).
+  // Also 052aff1b2: the LED Panels page has a control that sends the panel
+  // test pattern (it was the Test Pattern button, now this dropdown).
   inPlayer('sh', '-c', 'mkdir -p "$(dirname "$2")" && printf "%s" "$1" > "$2"', 'sh',
     JSON.stringify({ name: 'FppTestsLEDscape', longName: 'fpp-tests LEDscape cape',
       defaults: { LEDPanelsConnection: 'LEDscapeMatrix' }, controls: {}, outputs: Array.from({ length: 8 }, () => ({})) }), CAPE);
@@ -317,5 +319,26 @@ test('on a Beagle, a ColorLight matrix\'s brightness is a percentage and the cap
   await brightness(1).selectOption('80');
   await panelSave(page).click();
   await expect.poll(async () => (await saved(request)).channelOutputs.map((m: any) => m.brightness), { timeout: 15_000 }).toEqual([80, 6]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('on a Pi, the Panel Row Address Type picks how the panel rows are addressed, and is saved as a number', async ({ page, request }) => {
+  // Regression: 66cf7b70f ("Added RGBMatrix led_row_address_type Option for
+  // Additional LED Panel Compatibility on Raspberry Pi").  The Pi's matrix has
+  // a Row Address Type list (Standard, AB, Direct Row Select, ABC, ABC Shift +
+  // DE Direct) that is opened at the saved value and saved as the integer
+  // panelRowAddressType, which the RGBMatrix output hands to the library.
+  // Page side only: Docker has no rpi-rgb-led-matrix to receive it.
+  await becomePi(request, 'Raspberry Pi 4 Model B Rev 1.4');
+  writeOutputs([{ ...matrix(1, 1, [64, 32, 16]), subType: 'RGBMatrix', ledPanelsOutputs: 3, panelRowAddressType: 2 }]);
+  await openPanels(page);
+  const rat = page.locator('#panelMatrix1 .LEDPanelsRowAddressType');
+  await expect(rat).toBeVisible();
+  await expect(rat.locator('option')).toHaveText(['Standard', 'AB-Addressed Panels', 'Direct Row Select', 'ABC-Addressed Panels', 'ABC Shift + DE Direct']);
+  await expect(rat).toHaveValue('2');
+  await rat.selectOption('3');
+  await expect(saveWarning(page)).toBeVisible();
+  await panelSave(page).click();
+  await expect.poll(async () => (await saved(request)).channelOutputs[0].panelRowAddressType, { timeout: 15_000 }).toBe(3);
   expect(pageErrors).toEqual([]);
 });

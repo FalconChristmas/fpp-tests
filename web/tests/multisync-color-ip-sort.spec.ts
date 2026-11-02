@@ -69,6 +69,7 @@ test("each remote's row is painted its colour, and Sort Systems by Color orders 
   // Feature: 8a4422d27.  The colour a remote reports went only into the
   // hidden FPP Color column: its row was not painted, and the colour sort
   // had no colour to sort the rows on.
+  // Also 16f3af2be: the row takes the colour the remote's status reports.
   // Feature: 8606a9fda, the Sort Systems by Color button itself.
   await openMultisync(page);
   const bg = (host: string) => page.locator('#fppSystems tr.systemRow', { hasText: host }).evaluate((r) => (r as HTMLElement).style.background);

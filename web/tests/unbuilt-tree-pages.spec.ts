@@ -47,3 +47,23 @@ test('a cleaned tree still draws the pages, with the menu, and runs their script
     await expect.poll(branch, { timeout: 15_000 }).toBe(was);
   }
 });
+
+test('the channel and effect pages draw without the generated fppdefines.php', async ({ request }) => {
+  // Regression: 594a0eadb.  These pages required fppdefines.php, which make
+  // generates, so on a tree that was never built they died before drawing
+  // anything; they now fall back to fppdefines_unknown.php.
+  const DEFINES = '/opt/fpp/www/fppdefines.php';
+  await keepingFile(DEFINES, async () => {
+    inPlayer('rm', '-f', DEFINES);
+    // The control: the generated file is gone.
+    inPlayer('test', '!', '-e', DEFINES);
+    for (const p of ['channeloutputs.php', 'channelinputs.php', 'effects.php', 'commandPresets.php', 'testing.php', 'co-universes.php']) {
+      const r = await request.get(`/${p}`);
+      expect(r.status(), p).toBe(200);
+      const body = await r.text();
+      // co-universes.php is a fragment the channel outputs page loads.
+      expect(body, `${p} is drawn`).toContain(p === 'co-universes.php' ? '<script>' : '</html>');
+      expect(body, `${p} hit a PHP error`).not.toMatch(/Fatal error|Failed opening required|<b>Warning<\/b>/);
+    }
+  });
+});

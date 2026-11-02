@@ -30,6 +30,10 @@ def test_a_removed_virtual_matrix_takes_its_framebuffer_model_with_it(fppd):
     re-creating the model at a new size on a save, is also done since by
     Init() removing a model of that name first, so only the deletion tells
     the fix apart now.)
+
+    Also 3d7435663: the model a Virtual Matrix with a device and no model
+    name creates for that device ("FB - fb1", over its width and height) is
+    made at all; without the creation the 64x32 model never appears.
     """
     fb = FakeFb(fppd, width=64, height=32, bpp=32)
     fppd.write("config/co-other.json", {"channelOutputs": [virtual_matrix(64, 32)]})

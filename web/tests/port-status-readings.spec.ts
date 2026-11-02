@@ -55,6 +55,8 @@ test('ports with a current sensor and no eFuse show their current and totals, an
 });
 
 test('a port with an eFuse still shows its status: tripped, normal, or just switched off', async ({ page }) => {
+  // Also 43b03c8b0: each state has its own title (Port Enabled, Port Disabled,
+  // eFuse Triggered, eFuse Normal), a switched-off port apart from a tripped one.
   // The control: ports that report a fuse are drawn as they always were.
   await showPorts(page, [
     port(1, { enabled: true, status: true, ma: 50 }),

@@ -311,6 +311,7 @@ test.describe('cape vendor URLs from a crafted EEPROM', () => {
 
   test('Cape Info shows what the EEPROM says about the vendor as text', async ({ page, request }) => {
     // Regression: 9ab8c9e9f for the description, beside the vendor block.
+    // Also c334cbed2: the vendor's Support Forum row.
     const description = `<img src=x onerror=${run('description')}><b id="fpp-tests-description">d</b>`;
     const vendor = {
       name: `<img src=x onerror=${run('name')}>`,

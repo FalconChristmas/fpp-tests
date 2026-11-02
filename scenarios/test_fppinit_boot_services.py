@@ -251,6 +251,9 @@ def test_user_packages_are_retried_next_boot_when_apt_fails(fppinit):
     apt succeeded: a failed apt-get leaves the marker for the next boot, and a
     good one removes it.
 
+    Also f423a41d2: the packages in config/userpackages.json are installed
+    at boot when /fppos_upgraded is there (the "install -y htop" below).
+
     Regression: d62418e17. The marker was removed whatever apt said, so a
     package install that failed at boot (no network yet) was never retried and
     the kiosk packages stayed missing."""

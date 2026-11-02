@@ -17,3 +17,16 @@ for (const tab of TABS) {
     await expect(page.locator('#tab-sequence')).toBeHidden();
   });
 }
+
+test('clicking a tab puts it in the address, so a reload or a copied link opens it', async ({ page }) => {
+  // Feature: 972a4d2d8.  The tab links changed the tab but not the URL, so
+  // the address could not be copied and a reload went back to the first tab.
+  await page.goto(`/filemanager.php?fpp-tests=${Date.now()}`);
+  await expect(page.locator('#tab-sequence-tab')).toHaveClass(/active/);
+  await page.locator('#tab-video-tab').click();
+  await expect(page.locator('#tab-video')).toBeVisible();
+  expect(new URL(page.url()).hash).toBe('#tab-video');
+  await page.reload();
+  await expect(page.locator('#tab-video-tab')).toHaveClass(/active/);
+  await expect(page.locator('#tab-video')).toBeVisible();
+});

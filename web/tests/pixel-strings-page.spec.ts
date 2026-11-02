@@ -294,6 +294,26 @@ test('Import Strings takes a model\'s pixel count from xLights\' named node-coun
   }
 });
 
+test('Import Strings is offered only when an xLights layout has been uploaded', async ({ page }) => {
+  // Regression: e38eb754e.  The button was shown at a UI level, not by
+  // whether there was an xlights_rgbeffects.xml in the upload folder to
+  // import, so it was offered with nothing behind it.
+  const XML = `${MEDIA}/upload/xlights_rgbeffects.xml`;
+  const savedXml = readFile(XML);
+  try {
+    writeFile(CONFIG, JSON.stringify(stringsConfig([vstring('', 0, 0)], [vstring('', 0, 0)])));
+    writeFile(XML, '<xrgb><models></models></xrgb>');
+    await openStrings(page);
+    await expect(page.locator('#stringTab input[value="Import Strings"]'), 'the control: an uploaded layout').toBeVisible();
+    inPlayer('rm', '-f', XML);
+    await openStrings(page);
+    await expect(page.locator('#stringTab input[value="Revert"]')).toBeVisible();
+    await expect(page.locator('#stringTab input[value="Import Strings"]')).toHaveCount(0);
+  } finally {
+    putBack(XML, savedXml);
+  }
+});
+
 test.describe('on a BBShiftString cape', () => {
   // The WS2811 800kHz family, as c5cce457b lists it: every one is driven
   // with the ws2811 bit cell, so each is a name, not a behaviour.
@@ -305,7 +325,8 @@ test.describe('on a BBShiftString cape', () => {
     // Feature: c5cce457b.  The dropdown said only "ws2811", leaving someone
     // with SK6812s to work out that it is a WS2811 in disguise.  Parts the
     // ws2811 cell would drive wrongly (the 400kHz ones, sk6822, tm1914) are
-    // not in the list.
+    // not in the list.  Also e214ff1f6: BBShiftString is a pixel-string
+    // driver, so the tab and its port details are drawn for the cape at all.
     writeFile(CAPE_FILE, JSON.stringify({ ...CAPE, driver: 'BBShiftString' }));
     const config = stringsConfig([vstring('first', 0, 50)], [vstring('second', 150, 50)]);
     config.channelOutputs[0].type = 'BBShiftString';

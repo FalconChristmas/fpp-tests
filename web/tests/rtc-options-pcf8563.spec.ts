@@ -12,3 +12,13 @@ test('the RTC choices include the PCF8563, as piRTC 6', async ({ request }) => {
   expect(options['pcf8563']).toBe('6');
   expect(Object.values(options).filter((v) => v === '6')).toHaveLength(1);
 });
+
+test('the RTC choices include the PCF85363, as piRTC 5', async ({ request }) => {
+  // Feature: 98d0d78ac (its options half; scenarios/test_fpprtc_pcf8563.py
+  // checks that fpprtc sets piRTC 5 up as a pcf85363 at 0x51).
+  const r = await request.get('/api/options/RTC');
+  expect(r.ok()).toBe(true);
+  const options = await r.json();
+  expect(options['pcf85363 (Kulp)']).toBe('5');
+  expect(Object.values(options).filter((v) => v === '5')).toHaveLength(1);
+});

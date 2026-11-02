@@ -114,7 +114,11 @@ def test_seed_pixels_on_a_noisy_sensor_are_counted(fppd):
     the end, which assumed a quiet sensor and pixels drawing tens of mA; a
     seed pixel is about one step of noise. It now reads each window dark,
     lit and dark again, and decides only once a reading clears its
-    threshold by twice its uncertainty."""
+    threshold by twice its uncertainty.
+
+    Also 54b2cc42f: the count is reported in the port's status as
+    "pixelCount" (OutputMonitor), which this waits for; without it the
+    count never finishes as far as the page can tell."""
     throw_plugin.install(fppd, source="pixelcountsim.cpp", name="PixelCountSim")
     fppd.write("config/co-pixelStrings.json", outputs(fppd, 37, 37, simPixelMA=8, simNoiseMA=12))
     fppd.settings(LogLevel_ChannelOut="info", E131BridgingInterval="10")

@@ -28,6 +28,7 @@ test('the ChangeLog lists the commits, filters them, and keeps its limit sane', 
   // Feature: d4e1157f7 ("Redesign changelog as a commit list with revert
   // modal").  The page was a table with no filter, and a limit of 0 or less
   // went into "head -<limit>" as it was.
+  // Also f1886b5aa: ?limit= lists more (or fewer) commits than the default 200.
   const shas = inPlayer('git', '--git-dir=/opt/fpp/.git', 'log', '--format=%h').trim().split('\n');
   await page.goto('/changelog.php');
   const rows = page.locator('#commitList .fpp-commit');

@@ -64,9 +64,12 @@ test('a cape firmware upgrade asks for its reboot after the browser goes', async
     putFile(FIRMWARE, 'fpp-tests firmware');
     const first = await startAndHangUp('/upgradeCapeFirmware.php?filename=fpp-tests-firmware.bin');
     expect(first).toContain('Upgrading firmware');
+    // Also bf098e8dc: the firmware is named in the request rather than
+    // uploaded with it, and a named upload is left in place after the flash.
     // The control: the flash itself ran to its end.
     await expect.poll(() => exists(DONE), { timeout: 30_000 }).toBe(true);
     await expect.poll(() => settingInFile('rebootFlag'), { timeout: 10_000, message: 'the reboot was never asked for' }).toBe('1');
+    expect(exists(FIRMWARE), 'a named upload was deleted').toBe(true);
   } finally {
     inPlayer('mv', '-f', `${SCRIPT}.fpp-tests-orig`, SCRIPT);
     inPlayer('rm', '-f', DONE, FIRMWARE);

@@ -46,6 +46,9 @@ def test_the_boot_loader_update_stages_on_the_real_boot_partition(tmp_path):
     """The step tells rpi-eeprom-update to write pieeprom.upd/.sig to
     /mnt/boot/firmware, the real disk's boot partition.
 
+    Also d95ce7d54: the step runs rpi-eeprom-update -a at all (the helper
+    fails if the call is gone or its argument is not -a).
+
     Regression: 6b6a61a9f (#2796). It wrote them to the chroot's own
     /boot/firmware, in the read-only image: "Read-only file system", and
     the update never reached the partition the board boots from.

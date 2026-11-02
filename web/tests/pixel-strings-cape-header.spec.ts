@@ -99,6 +99,21 @@ test("a strings-only cape's name heads the Pixel Strings tab and leaves the LED 
     .not.toContain('fpp-tests strings');
 });
 
+test("a panels-only cape's name does not head the Pixel Strings tab", async ({ page }) => {
+  // Regression: 7d0f384fe.  The Pixel Strings tab took the installed cape's
+  // name whatever the cape provides, as the LED Panels tab already took it
+  // only for a cape that provides panels.
+  writeFile(CAPE_INFO, JSON.stringify({ ...CAPE_INFO_JSON, provides: ['panels'] }));
+  page.on('dialog', (d) => d.accept());
+  await page.goto('/channeloutputs.php');
+  await page.locator('#stringTab-tab').click();
+  const h2 = page.locator('#divPixelString .tableTabPageHeader h2');
+  await expect(h2).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(1000);
+  await expect(h2, 'the panel cape\'s name heads the strings').not.toContainText('fpp-tests strings');
+  expect(await page.locator('#divPixelString').textContent()).not.toContain('Enable fpp-tests strings');
+});
+
 test('the Testing control stays on the header\'s first line, at the right edge, as the window narrows', async ({ page }) => {
   // Regression: 9cad6d17d.  The max-FPS note sat between Pixel Timing and
   // Testing at a fixed width, so a narrower window pushed Testing onto a

@@ -60,6 +60,19 @@ def test_a_video_to_a_connected_composite_output_takes_the_display_path(fppd, au
     assert not any("video+overlay" in l for l in lines), lines
 
 
+def test_a_video_to_a_connected_dsi_output_takes_the_display_path(fppd, audio):
+    """A video played to DSI-1, a connector with a display on it (the Pi's
+    touchscreen), goes to the display (kmssink) as HDMI-A-1 does, not to a
+    pixel overlay model that doesn't exist.
+
+    Regression: 3fa1d4988. Only HDMI- names were taken for displays, so a
+    video aimed at a DSI panel was looked for among the overlay models and
+    never reached the screen."""
+    lines = play(fppd, audio, "DSI-1", lambda: add_connector(fppd, "DSI-1", "connected"))
+    assert any("video+HDMI playback" in l and "output=DSI-1" in l for l in lines), lines
+    assert not any("video+overlay" in l for l in lines), lines
+
+
 def test_a_video_to_an_hdmi_output_with_nothing_connected_is_not_sent_to_the_display(fppd, audio):
     """A video played to HDMI-A-1 when the connector says "disconnected" is
     treated as a pixel overlay output, not a display: nothing reaches the

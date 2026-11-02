@@ -14,7 +14,9 @@ const helpMenu = (page: Page) => page.locator('#navbarDropdownMenuLinkHelp + .dr
 test('the Help menu sends the user to Get Help, which has the places to get help', async ({ page }) => {
   // Feature: fa7ecf6d6.  The manual, forum and issue tracker links, and the
   // API help, moved out of the Help menu to a "Get Help" page, which also
-  // names the Facebook group and the Zoom room.  Also covers 6ee57a954, which
+  // names the Facebook group and the Zoom room.  Also covers 149f2ea55 (the
+  // FPP Commands Help link; command-help-page.spec.ts checks the page) and
+  // 6ee57a954, which
   // added the Issue Tracker link (to the menu then, to Get Help since).
   await page.goto('/index.php');
   await page.locator('#navbarDropdownMenuLinkHelp').click();
@@ -121,4 +123,23 @@ test('Script Repository and Output Processors are in the menus only from the Adv
   await expect(entry('outputprocessors.php')).toHaveCount(1);
   await page.locator('#navbarDropdownMenuLinkInOut').click();
   await expect(entry('outputprocessors.php')).toBeVisible();
+});
+
+test('the Help menu leaves out the links that leave the player when external URLs are hidden', async ({ page }) => {
+  // Regression: 0eacb23e1.  A kiosk browser (or a request with the
+  // Hide-External-Links header) was offered the Donate and SSH Shell menu
+  // entries, links a kiosk cannot safely follow.  The internal entries stay.
+  const donate = page.locator('.navbar .dropdown-menu a', { hasText: 'Donate to FPP' });
+  const ssh = page.locator('.navbar .dropdown-menu a', { hasText: 'SSH Shell' });
+  await page.goto('/index.php');
+  await page.locator('#navbarDropdownMenuLinkHelp').click();
+  await expect(donate).toBeVisible();
+  await expect(ssh).toBeVisible();
+
+  await page.setExtraHTTPHeaders({ 'Hide-External-Links': 'true' });
+  await page.goto('/index.php?hidden');
+  await page.locator('#navbarDropdownMenuLinkHelp').click();
+  await expect(page.locator('.navbar .dropdown-menu a[href="credits.php"]')).toBeVisible();
+  await expect(donate).toBeHidden();
+  await expect(ssh).toBeHidden();
 });

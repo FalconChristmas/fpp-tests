@@ -29,6 +29,9 @@ async function addSensors(page: Page) {
 test('a wide header shows one sensor at a time and a click rotates to the next', async ({ page }) => {
   // Regression: 5ba9fafd4.  The rule hiding the inactive sensors only applied
   // below 1360px wide, so on a full-width window every sensor showed at once.
+  // Also 7eac62466: the inactive sensors are hidden by a class, not inline
+  // styles (red with RotateHeaderSensor back to hide()/show(), which the
+  // !important rule overrides).
   await addSensors(page);
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/index.php');

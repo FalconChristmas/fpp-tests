@@ -46,7 +46,9 @@ def test_an_upgrade_restores_the_screen_blanking_setting(fppinit):
     an FPPOS upgrade (consoleblank=<minutes>).
 
     Regression: 994b836ad. The reflash replaced cmdline.txt and the setting
-    was never applied again."""
+    was never applied again.
+    Also 89bbc576c: the minutes come from the screensaverTimeout setting
+    (7 here), not a fixed one."""
     fppinit.root_file("/etc/fpp/platform", "Raspberry Pi\n")
     with open(os.path.join(fppinit.boot, "cmdline.txt"), "w") as f:
         f.write("console=tty1 root=/dev/mmcblk0p2 rootwait\n")

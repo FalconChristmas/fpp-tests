@@ -111,6 +111,7 @@ test('a ColorLight matrix hides the Connection Type picker, which was chosen whe
 test('Auto Layout renumbering the panels shows the unsaved changes warning, and Save writes the new numbering', async ({ page, request }) => {
   // Regression: b40dac176.  Auto Layout rewrote every output and panel
   // number but left the "unsaved changes" warning hidden.
+  // Also bae71dd13: the Auto Layout button renumbers the panels at all.
   const m = colorlight([32, 16, 8], 2, 2);
   // numbered left to right, the reverse of what Auto Layout does
   m.panels.forEach((p: any) => { p.panelNumber = p.col; });

@@ -144,6 +144,10 @@ def test_a_pin_that_cannot_be_configured_is_logged(fppd):
 
     Regression: 4b1a6f263. The failure was only a warning on the web UI,
     gone after a restart and in no log or support zip.
+
+    Also 5d76dea3b: a line that cannot be requested is a warning, not an
+    exception out of the pin configuration (rethrown, there is no warning
+    and no log line).
     """
     if 'consumer="kernel"' not in line_info(2):
         pytest.skip("GPIO2 is not held by a kernel driver here (i2c1 off)")

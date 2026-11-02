@@ -7,6 +7,9 @@ import type { APIRequestContext } from '@playwright/test';
 // jquery.timepicker, which FPP patches for that second midnight.
 // Also 1371d56ff: the page's own conversions show 24:00:00 as "Mid" and save
 // "Mid" as 24:00:00 (not 00:00:00).
+// Also f6b4b23f4: the "2nd midnight" patch to jquery.timepicker (parse "12:00 Mid" as
+// 24, don't wrap the hour at 24, print the "Mid" suffix); each of its three
+// edits, taken out alone, leaves the field at "12:00 AM".
 
 const PLAYLIST = 'fpp-tests-sched-midnight';
 const year = new Date().getFullYear();

@@ -37,7 +37,9 @@ class FakeFb:
 
     width, height, bpp: the mode the "driver" reports.
     pages:              how many pages of video memory it has.
-    fixed:              behave like fbtft (mode changes are ignored).
+    fixed:              behave like fbtft (mode changes are ignored); "adjust"
+                        keeps the mode the same way but hands it back to the
+                        caller, as a driver that forces its depth does.
     """
 
     def __init__(self, fppd, name="fb1", width=64, height=32, bpp=32, pages=3, fixed=False):
@@ -56,7 +58,7 @@ class FakeFb:
         self.fppd.start(preload=[shim()], extra_env={
             "FAKEFB_DIR": self.dir,
             "FAKEFB_GEOM": "%dx%dx%d" % self.geom,
-            "FAKEFB_FIXED": "1" if self.fixed else "0",
+            "FAKEFB_FIXED": "2" if self.fixed == "adjust" else "1" if self.fixed else "0",
         }, **kw)
 
     def mode(self):

@@ -42,6 +42,8 @@ test('two drives listed at once each show their own folders, and are mounted sid
   // drive out from under its scan and it listed as "/" alone.  Each drive has
   // its own mount point now (/mnt/tmp_<device>), with a lock per mount point
   // and per device, so two drives are read together.
+  // Also ecaa90090: a drive is let go with a lazy unmount (umount -l), so files
+  // still being closed don't make the unmount fail.
   standInMounts([]);
   putStub('mount', SLOW_MOUNT);
   putStub('umount', EMPTYING_UMOUNT);

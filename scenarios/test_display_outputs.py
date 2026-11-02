@@ -172,6 +172,11 @@ def test_virtual_matrix_flips_horizontally(fppd):
     Regression: 53462480f. FBMatrix read only "invert" (the vertical flip),
     so a horizontally flipped matrix drew its first pixel at the top left,
     as if the box were not ticked.
+
+    Also 969c3feaa: the Virtual Matrix draws on a Pixel Overlay Model, so
+    its channels reach the device only through the model's setData() and
+    doOverlay() in SendData(); without the setData() call the device stays
+    dark.
     """
     fb = FakeFb(fppd, width=W, height=H, bpp=32)
     out = virtual_matrix(W, H)

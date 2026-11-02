@@ -155,3 +155,24 @@ test.describe('the host name in the header', () => {
     });
   });
 });
+
+test('the header gives each interface its address only on a wide window', async ({ page }) => {
+  // Regression: c62b30fe4 (#1065).  With room to spare the header names each
+  // interface's address next to it; below the wide-menu breakpoint (991px)
+  // only the interface name fits.  Wired, Wi-Fi and tether rows all carry it.
+  await openWithStatus(page, {
+    interfaces: [
+      { ifname: 'eth0', flags: UP, operstate: 'UP', addr_info: [inet('10.0.0.5', 24)] },
+      { ifname: 'wlan0', flags: UP, operstate: 'UP', addr_info: [inet('10.1.0.5', 16)],
+        wifi: { level: 70, unit: '%', desc: 'good' } },
+      { ifname: 'SoftAp0', flags: UP, operstate: 'UP', addr_info: [inet('192.168.8.1', 24)] },
+    ],
+  });
+  await expect(page.locator('#header_IPs .ipTooltip')).toHaveCount(3, { timeout: 15_000 });
+  const addresses = page.locator('#header_IPs .divIPAddress');
+  await expect(addresses).toHaveCount(3);
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  for (const a of await addresses.all()) await expect(a).toBeVisible();
+  await page.setViewportSize({ width: 800, height: 1000 });
+  for (const a of await addresses.all()) await expect(a).toBeHidden();
+});

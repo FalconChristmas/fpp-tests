@@ -176,6 +176,8 @@ test('a ColorLight matrix of 80x40 panels opens and saves as 80x40, and fppd dri
   // element read ColorLight5a75, and the page has none: they were never in
   // the list, and a saved 80x40 matrix opened with no size selected.
   // Also 306f0f606: the 48x48 1/6 scan size is one of them.
+  // Also 7351331ef: the list of sizes follows the connection, so these are
+  // offered for a ColorLight and not for every connection.
   writeOutputs({ channelOutputs: [colorLight(2, 1, [80, 40, 10])] });
   await openPanels(page);
   const size = page.locator('#panelMatrix1 .LEDPanelsSize');

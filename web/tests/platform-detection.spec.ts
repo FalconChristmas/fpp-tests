@@ -73,12 +73,16 @@ test('a Debian box without a device tree model is detected without a warning', (
   // Regression: de7c79a2d.  On Debian (not in a container) config.php read
   // /proc/device-tree/model whether or not it existed, so a PC or VM without
   // a device tree logged a file_get_contents() warning on every page.
+  // Also f5341c084: a Debian board with a device tree model (an Orange Pi
+  // running Debian) gets that board's variant and logo, not the plain Debian one.
   const debian = board({ platform: 'Debian\n' });
   expect(debian.Platform).toBe('Debian');
   expect(debian.warnings).toEqual([]);
   // The control: a board that has one gets its model.
   const opi = board({ platform: 'Debian\n', dtmodel: 'Xunlong Orange Pi 5\0' });
   expect(opi.SubPlatform).toBe('Xunlong Orange Pi 5');
+  // Also 8f212f87b: the model name is the variant the About page shows.
+  expect(opi.Variant).toBe('Xunlong Orange Pi 5');
   expect(opi.Logo).toBe('orangepi_logo.png');
 });
 
@@ -86,6 +90,8 @@ test('the Pi models with a "+" are given logo files that exist', async ({ reques
   // Regression: 68d016091.  The logo files of the A+, B+, 3A+ and 3B+ had a
   // "+" in their names and were renamed to spell it out ("plus"); config.php
   // has to name the renamed files, or the header's logo is a missing image.
+  // Also 0b637316b: the logos are SVGs, served as image/svg+xml (red with a
+  // model pointed back at a .png).
   const models: Record<string, string> = {
     'Raspberry Pi Model A Plus Rev 1.1': 'Raspberry_Pi_Aplus.svg',
     'Raspberry Pi Model B Plus Rev 1.2': 'Raspberry_Pi_Bplus.svg',

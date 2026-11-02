@@ -13,6 +13,8 @@ function exists(path: string): boolean {
 }
 
 test('A backup restore marks a restore, not an OS reflash', async ({ request }) => {
+  // Also f829ec343: the restore's answer names its result under the
+  // capitalized key (Success), like the other backup endpoints' Status.
   test.skip(!container, 'needs the player container that run-web.sh serves');
   inPlayer('rm', '-f', '/fpp_restored', '/fppos_upgraded');
   try {

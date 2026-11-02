@@ -68,6 +68,8 @@ test('a frame that is not a status snapshot does not switch the page to the sock
 });
 
 test('a snapshot without breadcrumbs clears the nested playlist label', async ({ page }) => {
+  // Also 404df02a6: the status heading names the playlists above a nested
+  // one (the control below: "Player Status (Main -> Inner):").
   // Regression: 497f934ea.  Each snapshot was merged into the last, so a
   // key fppd sends only some of the time -- breadcrumbs, while a nested
   // playlist runs -- kept its last value, and the status heading went on

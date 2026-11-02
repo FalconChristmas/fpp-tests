@@ -444,3 +444,28 @@ def test_more_strings_than_the_model_has_rows_are_refused(fppd):
     for r in range(HEIGHT):
         assert got[r * row:r * row + 30] == [0x40] * 30, f"row {r} did not draw its string"
     assert warned(fppd, "has fewer rows than the configured strings"), "no too-many-strings warning"
+
+
+def test_a_string_wider_than_the_model_is_refused(fppd):
+    """A 25-pixel string drawing into a model 20 pixels wide is refused (and
+    logged); the 10-pixel string after it still takes the first row, so row 0
+    holds ten lit pixels and then dark.
+
+    Regression: 30918389b. The string-length check against the model's
+    width, from when the output first drew into a model: a too-long string
+    was taken, and its row ran over into the next one.
+    """
+    model(fppd)
+    fppd.write("config/co-other.json", mps([vstring(start=0, pixels=25), vstring(start=75, pixels=10)]))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: "string length of 25 is too long for model width of 20" in fppd.log(),
+                  timeout=10, what="the too-long string to be refused")
+    set_range(fppd, 1, 105, 0x40)
+    fppd.wait_for(lambda: (d := model_data(fppd)) and 0x40 in d and d,
+                  timeout=10, what="the strings in the model")
+    time.sleep(1)
+    got = model_data(fppd)
+    row = WIDTH * 3
+    assert got[:30] == [0x40] * 30, f"row 0 did not draw the 10-pixel string: {got[:row]}"
+    assert not any(got[30:]), "the refused string drew into the model: " + " ".join(f"{v:02x}" for v in got[30:row * 2])

@@ -55,6 +55,10 @@ def test_a_flipped_layouts_panels_are_numbered_by_their_chain_position(fppd):
     ColorLight one turned the chain position round for a flipped layout:
     (longest chain - 1) - chain - 1, so the two panels showed 1 and 0.
     The number now comes from the panel (LEDPanel::drawTestPattern).
+
+    Also ed484f89a: the digits sit one row up on a 16-row panel (y = 1, not
+    2) so they stay clear of the centre white square; they are read at y = 1
+    here.
     """
     with captured() as cap:
         fppd.write("config/channeloutputs.json", panels_output(
@@ -75,3 +79,34 @@ def test_a_flipped_layouts_panels_are_numbered_by_their_chain_position(fppd):
         finally:
             fppd.command("Test Stop")
     assert sorted(got) == [(1, 1), (1, 2)], got
+
+
+def test_a_tenth_output_draws_its_zero(fppd):
+    """One 32x16 panel on the tenth output (output number 9): the Output
+    Specific test pattern numbers it "10", a one and then a zero
+    (the zero drawn two columns on from the one), and the chain
+    position beside it is 1.
+
+    Regression: 2abfca838. The zero was drawn as a bare 3x5 block with
+    its middle row empty only at the centre and no sides, so any number
+    with a zero in it (10, 20) read wrongly on the panel."""
+    with captured() as cap:
+        fppd.write("config/channeloutputs.json", panels_output([panel(9, 0, 0, 0)], channels=W * H * 3))
+        fppd.settings(DisableFakeNetworkBridges="1")
+        fppd.start()
+        fppd.command("Test Start", "1000", "Output Specific", "--ALL--", "1")
+
+        def drawn():
+            for _, rows in reversed(cap.frames()):
+                mine = {y: rows[9 * H + y] for y in range(H) if 9 * H + y in rows}
+                if len(mine) == H and all(len(r) == W * 3 for r in mine.values()):
+                    b = panel_blocks(mine, 1)[0]
+                    if glyph(b, W // 2 + 8, 1) == DIGITS[1]:
+                        return b
+            return None
+        try:
+            b = fppd.wait_for(drawn, timeout=15, interval=0.25, what="a test pattern frame with its numbers")
+        finally:
+            fppd.command("Test Stop")
+    assert [b[y][W // 2 + 1] for y in range(1, 6)] == [True] * 5, "the one before the zero"
+    assert glyph(b, W // 2 + 3, 1) == DIGITS[0], glyph(b, W // 2 + 3, 1)

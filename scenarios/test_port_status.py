@@ -18,6 +18,10 @@ def test_a_port_with_no_efuse_reports_no_fuse_status(fppd):
     Regression: 57b3072e5. A port with no fuse pin was reported
     "status": true whatever happened, so the Port Status page showed a green
     eFuse check that could never go red.
+
+    Also 44272e267: the port's current reading ("ma") comes with its status
+    (the current monitoring added there); a status with no "ma" fails the
+    30 mA check.
     """
     throw_plugin.install(fppd, source="pixelcountsim.cpp", name="PixelCountSim")
     fppd.write("config/co-pixelStrings.json", outputs(fppd, 50, 50))

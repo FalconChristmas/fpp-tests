@@ -172,6 +172,14 @@ test.describe('the Channel Fader', () => {
     expect((await testmode(request)).enabled, 'test mode stays on, at the last values').toBeTruthy();
   });
 
+  test('the tab and its heading are called Channel Fader', async ({ page }) => {
+    // Regression: 6fc5b156c.  Renamed from "DMX Tester".
+    await openTesting(page);
+    await expect(page.locator('#tab-dmx-tab')).toContainText('Channel Fader');
+    await page.locator('#tab-dmx-tab').click();
+    await expect(page.locator('#tab-dmx h2').first()).toHaveText('Channel Fader');
+  });
+
   test('picks a fixture model and marks the channels of each fixture', async ({ page, request }) => {
     // Feature: b7470997d.  The fader's Model list offers the fixture-sized
     // models (512 channels or fewer) and sets the fader to the one picked; the
@@ -185,6 +193,11 @@ test.describe('the Channel Fader', () => {
     }
     await expect(boxes.nth(0).locator('.dmxFixtureName')).toHaveText(MODEL);
     await expect(boxes.nth(5).locator('.dmxRelChannel')).toHaveText('Ch 150 / 150');
+
+    // Regression: 6fc5b156c.  The model's name spans the six boxes of its
+    // channels (90px each, 8px apart), not just the first box.
+    const nameBox = await boxes.nth(0).locator('.dmxFixtureName').boundingBox();
+    expect(nameBox!.width, 'the fixture name spans its channels').toBeGreaterThanOrEqual(6 * 90 + 5 * 8 - 1);
 
     const model = page.locator('#dmxModelName');
     await expect(model.locator('option', { hasText: `${MODEL} (Ch 1, 150ch)` })).toHaveCount(1);

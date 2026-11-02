@@ -277,7 +277,9 @@ def test_a_port_with_no_efuse_pin_survives_outputs_off_and_on(fppd):
     Outputs Off and Outputs On, and the enable pin follows.
 
     Regression: 7833e6c39. The check for a tripped fuse that cleared its
-    warning read the missing pin: a null dereference on the first pass."""
+    warning read the missing pin: a null dereference on the first pass.
+    Also f911f71c1 (the first eFuse and enable latch support): Outputs On
+    is what raises the enable pins, and every test here waits for that."""
     start_with_pins(fppd, {"enablePin": ENABLE})
     fppd.command("Outputs On")
     fppd.wait_for(lambda: high(ENABLE), timeout=10, what="the enable pin to go high")

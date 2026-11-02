@@ -27,6 +27,8 @@ test('a strings-only cape gets the LED Panels tab from the Advanced level and no
   // Regression: 0ec97516d (#1569).  The Advanced level (1) offers E1.31/DDP
   // output for any cape ("udp" is added to what it provides); ColorLight
   // output, which is on the LED Panels tab, is offered with it.
+  // Also 4bb2ce603: UDP outputs are added at the Advanced level for a cape
+  // that provides only strings or panels.
   cape({ id: 'fpp-tests', name: 'fpp-tests strings cape', provides: ['strings'] });
   await request.put('/api/settings/uiLevel', { data: '1' });
   await page.goto('/channeloutputs.php');

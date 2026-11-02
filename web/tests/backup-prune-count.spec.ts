@@ -20,7 +20,10 @@ test('backups written past the limit are pruned', async ({ request }) => {
       const made = await (await request.post('/api/backups/configuration', { data: `fpp-tests prune ${i}` })).json();
       expect(made.success, JSON.stringify(made)).toBe(true);
     }
+    // Also a84ce68c2: the count kept comes from $fpp_backup_min_number_kept,
+    // which the prune reads as a global; unset it kept none at all.
     expect(list().length, 'backups were not pruned').toBeLessThanOrEqual(60);
+    expect(list().length, 'the newest backups were pruned too').toBeGreaterThanOrEqual(60);
   } finally {
     for (const n of list()) if (!before.has(n)) inPlayer('rm', '-f', `${BACKUPS}/${n}`);
   }

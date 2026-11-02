@@ -69,3 +69,20 @@ test('the Items and Size badges count the rows the table shows', async ({ page, 
   await expect(page.locator('#fileCount_Music')).toHaveText('1');
   await expect(page.locator('#fileSize_Music')).toHaveText(formatBytes(3000));
 });
+
+test('deleting a file takes it out of the Items and Size badges', async ({ page, request }) => {
+  // Regression: 87c7579d7.  Delete removed the row but left the Items badge
+  // at the count from before.
+  const files = (await (await request.get('/api/files/music')).json()).files as any[];
+  const total = files.reduce((n, f) => n + (parseInt(f.sizeBytes) || 0), 0);
+  await page.goto('/filemanager.php#tab-audio');
+  await page.locator('#tab-audio-tab').click();
+  await expect(page.locator('#tblMusic tbody tr').filter({ hasText: B })).toHaveCount(1);
+  await expect(page.locator('#fileCount_Music')).toHaveText(String(files.length));
+  await page.locator('#tblMusic tbody tr').filter({ hasText: B }).click();
+  await page.locator('#btnDeleteMusic').click();
+  await page.locator('#confirmDeleteFile').getByRole('button', { name: 'Yes' }).click();
+  await expect(page.locator('#tblMusic tbody tr').filter({ hasText: B })).toHaveCount(0);
+  await expect(page.locator('#fileCount_Music')).toHaveText(String(files.length - 1));
+  await expect(page.locator('#fileSize_Music')).toHaveText(formatBytes(total - 3000));
+});

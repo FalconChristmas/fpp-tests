@@ -15,6 +15,9 @@
  *   FAKEFB_FIXED  "1": behave like fbtft, whose driver has no fb_check_var:
  *                 FBIOPUT_VSCREENINFO succeeds and changes nothing, and the
  *                 video memory is the file's size whatever was asked for
+ *               "2": the same, but the call hands back the mode the driver
+ *                 keeps (its fb_check_var forced it), as DRM's fbdev
+ *                 emulation does with a depth it does not have
  *
  * The file's size is the video memory (smem_len). A request for more
  * virtual height than it holds fails, as a driver short of memory does.
@@ -115,7 +118,9 @@ static int fakeIoctl(int fd, const char* path, unsigned long req, void* arg) {
     if (fstat(fd, &st)) {
         return -1;
     }
-    int fixed = getenv("FAKEFB_FIXED") && strcmp(getenv("FAKEFB_FIXED"), "1") == 0;
+    const char* fixedEnv = getenv("FAKEFB_FIXED");
+    int fixed = fixedEnv && (strcmp(fixedEnv, "1") == 0 || strcmp(fixedEnv, "2") == 0);
+    int handBack = fixedEnv && strcmp(fixedEnv, "2") == 0;
     pthread_mutex_lock(&lock);
     initVar();
     int rc = 0;
@@ -126,6 +131,9 @@ static int fakeIoctl(int fd, const char* path, unsigned long req, void* arg) {
         break;
     case FBIOPUT_VSCREENINFO: {
         if (fixed) {
+            if (handBack) {
+                memcpy(arg, &var, sizeof(var));
+            }
             break;
         }
         struct fb_var_screeninfo want;

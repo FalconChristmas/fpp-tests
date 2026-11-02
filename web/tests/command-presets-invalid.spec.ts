@@ -42,6 +42,21 @@ test('a preset with a name and no command is refused on Save and nothing is writ
   expect(await getPresets(request), 'a refused save still wrote the file').toBe(good);
 });
 
+test('a preset with a command and no name is refused on Save and says why', async ({ page, request }) => {
+  // Regression: 1ee9a7943.  The rows that cannot be saved were dropped
+  // without a word; the message names the command that has no preset name.
+  const bad = JSON.stringify({ commands: [{ name: '', command: 'All Lights Off', args: [], multisyncCommand: false, multisyncHosts: '', presetSlot: 0 }] });
+  await putPresets(request, bad);
+  await page.goto('/commandPresets.php');
+  await expect(page.locator('#tblCommandsBody > tr')).toHaveCount(1);
+  const dialog = page.waitForEvent('dialog');
+  await page.evaluate(() => setTimeout(() => (window as any).SaveCommands(), 0));
+  const d = await dialog;
+  expect(d.message()).toContain("All Lights Off won't be saved as it has no preset name");
+  await d.accept();
+  expect(await getPresets(request), 'a refused save still wrote the file').toBe(bad);
+});
+
 test('a presets file that is not JSON still lets the Channel Outputs page load', async ({ page, request }) => {
   // Regression: 091329170.  co-other-modules.php decoded the file and used
   // the result's "commands" without checking it.

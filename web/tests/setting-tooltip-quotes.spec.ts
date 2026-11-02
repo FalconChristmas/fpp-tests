@@ -19,3 +19,17 @@ test("a setting's tooltip is its whole tip, quotes and all", async ({ page, requ
   // runs of two spaces collapse.
   await expect(page.locator('.tooltip .tooltip-inner')).toHaveText(tip.replace(/\s+/g, ' '));
 });
+
+test("a setting's tooltip renders the markup in its tip", async ({ page, request }) => {
+  // Regression: f2e1fa5a4.  The tooltip showed its tip as text, so the
+  // <b>destination</b> in the rsync tip appeared with its tags.
+  const tip: string = (await (await request.get('/settings.json')).json()).settings.Service_rsync.tip;
+  expect(tip).toContain('<b>destination</b>');
+  await page.goto('/settings.php?tab=Services');
+  const icon = page.locator('#Service_rsync_tip');
+  await expect(icon).toBeVisible({ timeout: 15_000 });
+  await icon.hover();
+  const inner = page.locator('.tooltip .tooltip-inner');
+  await expect(inner.locator('b')).toHaveText('destination');
+  await expect(inner).not.toContainText('<b>');
+});

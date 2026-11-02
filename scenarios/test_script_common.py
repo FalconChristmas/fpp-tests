@@ -74,6 +74,19 @@ def test_common_runs_a_helper_named_on_its_command_line(fppd, tmp_path):
         assert "basename" not in out.lower(), f"sourcing {helper} as a login shell printed:\n{out[-2000:]}"
 
 
+def test_a_login_shell_sourcing_common_finds_the_tree_under_opt_fpp(fppinit):
+    """scripts/common sourced by a login shell (whose $0 is "-bash", from
+    .bashrc) with no FPPDIR set takes /opt/fpp as the tree, wherever the
+    shell is standing.
+
+    Regression: 16de14451. dirname "-bash" is ".", so the tree was taken to
+    be the parent of the directory the shell was in and every path built
+    from FPPDIR (media_root.txt, MEDIADIR) pointed at the wrong place."""
+    r = fppinit._run(["bash", "-c", 'unset FPPDIR MEDIADIR FPPHOME; cd /usr/bin; '
+                      '. /opt/fpp/scripts/common; echo "FPPDIR=${FPPDIR}"', "-bash"])
+    assert "FPPDIR=/opt/fpp\n" in r.stdout, r.stdout + r.stderr
+
+
 def common_vars(fppd, names):
     """Source scripts/common with a media_root.txt in the tree and none of
     the variables preset, and print the named ones."""

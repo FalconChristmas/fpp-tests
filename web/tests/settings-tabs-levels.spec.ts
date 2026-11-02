@@ -35,6 +35,19 @@ test('?tab=Storage opens the Storage tab at the Basic UI level', async ({ page }
   });
 });
 
+test('the Developer tab is offered at the Developer UI level and not below', async ({ page }) => {
+  // Regression: 4bb2ce603.  The tab was drawn from the Advanced level (1)
+  // up; it is for the Developer level (3).
+  await keepingSettings(async () => {
+    for (const [level, shown] of [['1', false], ['2', false], ['3', true]] as const) {
+      setSettingInFile('uiLevel', level);
+      await page.goto(`/settings.php?fpp-tests=${Date.now()}`);
+      await page.locator('#settingsManagerTabs').waitFor({ state: 'visible', timeout: 15_000 });
+      await expect(page.locator('#settings-developer-tab'), `UI level ${level}`).toHaveCount(shown ? 1 : 0);
+    }
+  });
+});
+
 test('the Services tab holds the OS services, the local MQTT broker among them', async ({ page }) => {
   // Feature: 6a800d2d3 ("Move Kiosk and OS Services settings to a Services
   // tab").  683dc3cdb declared Service_MQTT_localbroker and put it in the

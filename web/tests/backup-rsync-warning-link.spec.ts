@@ -9,6 +9,8 @@ import { test, expect } from './fixtures';
 // receiving end is the settings page the link names (every player's is the
 // same page, so this player's is opened), which has to show the setting.
 
+// Also ce4853c9f: the warning itself, next to the host, when the remote's
+// Service_rsync is off (red with the warning never added).
 const HOST = '192.0.2.11'; // TEST-NET-1: never a real player
 
 test("the File Copy rsync warning links to the settings tab with \"Enable rsync\"", async ({ page }) => {
