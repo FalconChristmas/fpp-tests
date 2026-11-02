@@ -407,6 +407,33 @@ def test_a_read_only_probe_keeps_the_cape_info(fppinit):
     assert fppinit.media_file("tmp/cape-info.json") == before
 
 
+I2C_ADAPTERS = {f"i2c-{n}/{f}": "" for n in range(4) for f in ("new_device", "delete_device")}
+
+
+def i2c_new_devices(sb):
+    return {n: sb.faked("/sys/bus/i2c/devices", f"i2c-{n}/new_device") for n in range(4)
+            if sb.faked("/sys/bus/i2c/devices", f"i2c-{n}/new_device")}
+
+
+def test_a_read_only_probe_does_not_register_the_capes_i2c_devices_again(fppinit):
+    """A cape's i2cDevices (an lm75 temperature sensor, say) are created
+    through the bus's new_device by the boot run; a read-only probe, which
+    fppd runs each time it starts, leaves them alone.
+
+    Regression: c62d9dad5 ("Don't try to re-register lm75 drivers every fppd
+    restart"). Every fppd restart wrote new_device again, which the kernel
+    refuses for an address already in use, logging an error each time. (The
+    block now sits inside a wider read-only check as well, so taking out
+    that commit's own guard alone leaves this green.)"""
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(i2cDevices=["lm75 0x48"])))
+    fppinit.fake_path("/sys/bus/i2c/devices", dict(I2C_ADAPTERS))
+    out = detect(fppinit, "-ro")
+    assert i2c_new_devices(fppinit) == {}, out[-3000:]
+    out = detect(fppinit)
+    assert list(i2c_new_devices(fppinit).values()) == ["lm75 0x48"], \
+        f"the control: the boot run registers it\n{i2c_new_devices(fppinit)}\n{out[-3000:]}"
+
+
 def on_pi():
     try:
         with open("/proc/device-tree/model") as f:

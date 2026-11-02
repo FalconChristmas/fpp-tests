@@ -83,3 +83,23 @@ def test_a_multi_source_joins_its_sources_channels_in_order(fppd):
     fppd.start(preload=[shims.build("fakeadc.c")], extra_env=env)
     values = reported(fppd)
     assert values == {"M0": 100.0, "M1": 101.0, "M2": 200.0, "M3": 201.0}, values
+
+
+def test_a_sensors_min_and_max_map_its_scaled_reading_onto_that_range(fppd):
+    """A sensor with min and max takes its source's scaled reading as a
+    fraction of the range and maps it onto [min, max + 1): 2048 raw scaled
+    by 1/4096 is 0.5, reported as 50 for 0-99 and 20 for 10-29, beside a
+    sensor with only the scale (0.5).
+
+    Regression: c6556730a ("Allow using min/max format for IIO sensors").
+    min and max on a sensor were ignored, so a cape's 0-100 % reading came
+    out as the 0-1 fraction."""
+    env = fake_iio_devices(fppd, {0: (2048,)})
+    scale = 1 / 4096
+    cape_sensors(fppd, [iio("adc", devId=0, vScale=1.0)],
+                 [dict(sensor("Pct", "adc", 0), scale=scale, min=0, max=99),
+                  dict(sensor("Range", "adc", 0), scale=scale, min=10, max=29),
+                  dict(sensor("Frac", "adc", 0), scale=scale)])
+    fppd.start(preload=[shims.build("fakeadc.c")], extra_env=env)
+    values = reported(fppd)
+    assert values == {"Pct": 50.0, "Range": 20.0, "Frac": 0.5}, values

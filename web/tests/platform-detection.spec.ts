@@ -96,6 +96,17 @@ test('a Pi Zero 2 is a PiZero 2, not a first Pi Zero, with its own logo', async 
   expect(board({ platform: 'Raspberry Pi\n', model: 'Raspberry Pi Zero 2 W Rev 1.0\0' }).Variant).toBe('PiZero 2 W');
 });
 
+test('a Debian container is a Docker player, whatever board it runs on', () => {
+  // Regression: f71436f0e ("Some Docker fixes for the about page").  In a
+  // container the device tree model is the host's (an SBC's, say), and the
+  // About page showed the host board as the player's SubPlatform.
+  const host = board({ platform: 'Debian\n', dtmodel: 'fpp-tests host board\0' });
+  expect(host.SubPlatform, 'the control: a Debian box reads the board model').toBe('fpp-tests host board');
+  const docker = board({ platform: 'Debian\n', container: '', dtmodel: 'fpp-tests host board\0' });
+  expect(docker.Platform).toBe('Debian');
+  expect(docker.SubPlatform).toBe('Docker');
+});
+
 test('a Debian box without a device tree model is detected without a warning', () => {
   // Regression: de7c79a2d.  On Debian (not in a container) config.php read
   // /proc/device-tree/model whether or not it existed, so a PC or VM without

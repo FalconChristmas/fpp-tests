@@ -414,3 +414,47 @@ def test_a_cape_image_with_a_byte_that_is_not_hex_leaves_fppoled_running(oled_me
     # no image where the page puts one, under "Booting."
     assert lit(f, 0, 24, 8, 8) == 0, f.text()
     assert screen.stop() == 0, screen.log()
+
+
+def test_fppoled_waits_out_a_slow_cape_detection(oled_media, screen):
+    """fppoled waits up to 20 s for cape detection (media/tmp/cape_detect_done)
+    before it sets up its buttons; a detection that takes 13 s is waited
+    for, not timed out on.
+
+    Regression: 227697cc3. The wait was 10 s, and registering GPIO
+    expanders and other drivers during cape detection can take longer: the
+    display went ahead before the pins it reads were set up, and its
+    buttons did nothing until fppoled was restarted."""
+    oled_media.put("tmp/cape_detect_done", None)
+    screen.start()
+    time.sleep(13)
+    oled_media.put("tmp/cape_detect_done", "")
+    deadline = time.monotonic() + 15
+    while "Cape detection completed after" not in screen.log() and time.monotonic() < deadline:
+        assert "Timed out after" not in screen.log(), screen.log()[-2000:]
+        time.sleep(0.2)
+    log = screen.log()
+    assert "Timed out after" not in log, log[-2000:]
+    assert "Cape detection completed after" in log, log[-2000:]
+
+
+def test_with_no_display_type_set_the_display_found_at_start_is_kept(oled_media, screen, fppd):
+    """With LEDDisplayType not in the settings at all (a fresh image, before
+    anything is saved), fppoled keeps the SSD1306 it found at start (type 7,
+    its default) once the settings are loaded, and goes on from the boot
+    notice to the status page.
+
+    Regression: 45f88c76f ("Fix issue with "FPP Booting" displaying on oleds
+    indefinitely"). The second read took the missing setting as 0, no
+    display, so fppoled dropped the display it had just drawn the boot
+    notice on, and "FPP Booting..." stayed on it."""
+    path = os.path.join(MEDIA, "settings")
+    kept = [l for l in open(path).read().splitlines() if l.split("=")[0].strip() != "LEDDisplayType"]
+    oled_media.put("settings", "\n".join(kept) + "\n")
+    fppd.start()
+    screen.start()
+    f = screen.wait_for(lambda f: f.line(0) == "No Network", timeout=20,
+                        what='the status page ("No Network" on the top line)')
+    # fppd's status under it (the two-colour layout puts it lower than type 1's)
+    f = screen.wait_for(lambda f: any(f.text_at(y) == "Player: idle" for y in range(8, 57)), timeout=10,
+                        what="fppd's status on the page")

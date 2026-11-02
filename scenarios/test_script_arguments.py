@@ -214,6 +214,24 @@ def test_os_upgrade_refuses_an_image_outside_the_upload_directory(fppinit):
     assert "BootActions" not in fppinit.media_file("settings")
 
 
+def test_the_os_upgrade_wrapper_says_how_to_call_it_and_what_is_missing(fppinit):
+    """SD/upgradeOS.sh, the command-line way into an FPP OS upgrade: with no
+    argument it prints its usage, and with an image that is not in
+    media/upload it says so, and neither starts the upgrade.
+
+    Feature: d341b2067 ("Add a wrapper so we can fppos upgrade from the CLI
+    if needed")."""
+    r = fppinit._run(["/opt/fpp/SD/upgradeOS.sh"], media_home=True)
+    out = r.stdout + r.stderr
+    assert "USAGE: /opt/fpp/SD/upgradeOS.sh FILENAME_OF_FPPOS_IMAGE.fppos" in out, out[-3000:]
+    r = fppinit._run(["/opt/fpp/SD/upgradeOS.sh", "fpp-tests-missing.fppos"], media_home=True)
+    out = r.stdout + r.stderr
+    assert "ERROR: /home/fpp/media/upload/fpp-tests-missing.fppos does not exist." in out, out[-3000:]
+    assert "Upgrading FPP OS" not in out, out[-3000:]
+    assert not fppinit.media_exists("tmp/upgradeOS-part1.sh")
+    assert not [c for c in fppinit.calls() if c.startswith("mount")], fppinit.calls()
+
+
 def plugin_script(sb, script, *args):
     view = f"{MEDIA}/tmp/fppdir"
     if not sb.media_exists("tmp/fppdir"):
