@@ -9,6 +9,7 @@ import os
 import pytest
 
 import shims
+import time
 
 GONE = "fpp-tests-output.invalid"
 
@@ -153,3 +154,40 @@ def test_a_gpio_output_on_a_missing_pin_is_refused_with_a_warning(fppd, pin):
     fppd.wait_for(lambda: any(text in w for w in fppd.get("/fppd/status").get("warnings", [])),
                   timeout=10, what=f"the {text!r} warning")
     fppd.check_alive()
+
+
+@pytest.mark.parametrize("active", [0, 1])
+def test_an_inactive_udp_output_host_is_not_looked_up(fppd, active):
+    """A GenericUDP output to a host name that doesn't resolve: set inactive,
+    fppd neither looks the name up nor raises the "could not resolve"
+    warning (14); active, it does both (the control, so the check can fail).
+    countgai.c fails the lookup at once and records each call. GenericUDP
+    is used because MultiSync resolves every co-universes.json host itself
+    and so hides the outputs' own lookups, but never reads co-other.json.
+
+    Regression: cc391f1a3. An inactive UDP output's host name was still
+    resolved by its output (the E1.31, ArtNet, DDP, KiNet, Twinkly and
+    GenericUDP outputs all did), so a name that no longer resolves cost
+    seconds of DNS wait, and a warning, for an output that was turned off."""
+    from test_multisync_startup import main_loop_after, readers
+    log = os.path.join(fppd.media, "tmp", "countgai.log")
+    fppd.write("config/co-universes.json", {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 10,
+        "universes": [{"active": 1, "description": "d", "id": 1, "universeCount": 1,
+                       "startChannel": 1, "channelCount": 10, "type": 5, "address": "127.0.0.1",
+                       "priority": 0, "monitor": 0, "deDuplicate": 0}]}]})
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "GenericUDP", "enabled": 1, "startChannel": 1, "channelCount": 10,
+        "active": active, "address": GONE, "port": 9000, "tokens": "{data}"}]})
+    fppd.settings(DisableScheduler="1")
+    fppd.start(preload=[shims.build("countgai.c")],
+               extra_env={"COUNTGAI_NAME": GONE, "COUNTGAI_FILE": log})
+    main_loop_after(fppd)
+    wait_for_warnings(fppd, [(19, "FPP Scheduler is disabled")])
+    time.sleep(1)
+    lookups = [s for s in readers(log, first_field=True) if "libcurl" not in s]
+    resolve = [w for w in fppd.get("/fppd/status").get("warningInfo", []) if w.get("id") == 14]
+    if active:
+        assert lookups and resolve, f"lookups={len(lookups)} warnings={resolve}"
+    else:
+        assert not lookups and not resolve, f"lookups={len(lookups)} warnings={resolve}"

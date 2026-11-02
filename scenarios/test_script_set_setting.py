@@ -15,7 +15,10 @@ def test_set_setting_replaces_an_existing_value_without_waiting_on_itself(fppd):
     takes a shared lock on the file setSetting already holds exclusively
     (through another open of it, as the read ran in a $(...) subshell): the
     read waited out the five-second timeout and warned "still locked after
-    5s" before the value was replaced."""
+    5s" before the value was replaced.
+
+    Also e7dd9b2d6 (setSetting deletes the old line, then appends, without macOS-incompatible sed).
+    """
     fppd.settings(FppTestsKey="old-value")
     fppd.start()
     path = os.path.join(fppd.media, "settings")

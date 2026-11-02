@@ -216,3 +216,25 @@ def test_the_kiosk_state_survives_the_upgrade_only_when_it_was_on(tmp_path):
                   + mark)
         bash(script, cwd=str(root))
         assert (root / "mnt" / "fpp_kiosk").exists() is expect_marked, f"Kiosk={setting}"
+
+
+def test_the_root_rsync_keeps_roots_ssh_keys(tmp_path):
+    """part2's root rsync (--delete-during) leaves /root/.ssh of the running
+    system alone, though the image has no such directory.
+
+    Regression: e8e484455. The root rsync deleted root's .ssh with the rest
+    of what the image lacks, and the upgraded system lost its root keys."""
+    line = next((l for l in part2().splitlines() if l.startswith("stdbuf") and " rsync " in l and " /mnt " in l), None)
+    assert line, "no root rsync in upgradeOS-part2.sh"
+    image, root = tmp_path / "image", tmp_path / "root"
+    write(str(image / "root" / ".profile"), "image\n")
+    for d in ("bin", "lib", "opt", "sbin", "usr", "var"):
+        (image / d).mkdir()
+    write(str(image / "etc" / "new"), "image\n")
+    write(str(root / "root" / ".ssh" / "authorized_keys"), "ssh-ed25519 AAAA key\n")
+    write(str(root / "root" / "stale"), "gone\n")
+    cmd = line.replace(" /mnt ", f" {root} ").replace("${SKIPFPP}", "").replace("-aAXxv", "-av")
+    bash(f"cd {image} && {cmd}", image)
+    assert (root / "etc" / "new").exists(), "the rsync copied nothing"
+    assert not (root / "root" / "stale").exists(), "the rsync deleted nothing (the control)"
+    assert (root / "root" / ".ssh" / "authorized_keys").read_text() == "ssh-ed25519 AAAA key\n"

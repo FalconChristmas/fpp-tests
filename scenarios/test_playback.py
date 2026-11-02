@@ -243,7 +243,10 @@ def test_stopping_a_sequence_while_output_is_disabled(fppd):
     while the output thread was awake (the blank sleeps 5 ms under
     m_sequenceLock first, at 100 fps about half of all stops) deadlocked
     both threads, then the playlist and HTTP threads behind them. The fix
-    has the output thread send the blank as a forced frame instead."""
+    has the output thread send the blank as a forced frame instead.
+
+    Also b0b1d12b2 (a stopped sequence still pushes blank data while channel output is disabled).
+    """
     frames = solid_frames(1000, CHANNELS, 77)  # 10 s at 100 fps
     with DdpReceiver(CHANNELS) as rx:
         install(fppd, frames, step_ms=10)

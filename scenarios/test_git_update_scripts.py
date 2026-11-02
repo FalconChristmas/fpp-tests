@@ -184,3 +184,58 @@ def test_a_branch_from_the_new_features_repository(fppinit):
     assert gitout(fpp, "rev-parse", "--abbrev-ref", "HEAD") == "nf-feature", out[-3000:]
     assert head(fpp) == feature, f"not on the new-features branch's commit:\n{out[-3000:]}"
     assert gitout(fpp, "rev-parse", "--abbrev-ref", "nf-feature@{u}") == "newfeatures/nf-feature"
+
+
+def dirty_submodule(sb):
+    """checkout_with_src() whose v1 has a submodule, with a tracked file in
+    it edited by hand. Returns (checkout, the edited file's path)."""
+    fpp = checkout_with_src(sb)
+    tmp = os.path.join(sb.media, "tmp")
+    sub, work = os.path.join(tmp, "sub"), os.path.join(tmp, "work")
+    git("init", "-q", sub)
+    with open(os.path.join(sub, "lib.c"), "w") as f:
+        f.write("original\n")
+    git("add", "-A", cwd=sub)
+    git("commit", "-q", "-m", "sub", cwd=sub)
+    in_sandbox_git(sb, "push", "-q", "origin", "HEAD:v1")  # the src commit
+    # origin's v1 gains the submodule (its URL as the sandbox sees it)
+    git("fetch", "-q", "origin", cwd=work)
+    git("checkout", "-q", "-B", "v1", "origin/v1", cwd=work)
+    with open(os.path.join(work, ".gitmodules"), "w") as f:
+        f.write(f'[submodule "external"]\n\tpath = external\n\turl = {MEDIA}/tmp/sub\n')
+    git("add", ".gitmodules", cwd=work)
+    git("update-index", "--add", "--cacheinfo", f"160000,{head(sub)},external", cwd=work)
+    git("commit", "-q", "-m", "add submodule", cwd=work)
+    git("push", "-q", "origin", "HEAD:v1", cwd=work)
+    in_sandbox_git(sb, "pull", "-q")
+    in_sandbox_git(sb, "-c", "protocol.file.allow=always", "submodule", "update", "--init")
+    path = os.path.join(fpp, "external", "lib.c")
+    assert os.path.exists(path), "the submodule was not checked out"
+    with open(path, "w") as f:
+        f.write("hand edited\n")
+    return fpp, path
+
+
+def test_a_branch_switch_resets_a_dirtied_submodule(fppinit):
+    """git_branch resets the checkout's submodules ('git submodule foreach
+    git reset --hard') as well as the checkout, so an edit to a file of an
+    external is discarded on a branch change.
+
+    Regression: af8ec7cd9. Only the top-level checkout was reset; a dirtied
+    submodule kept its edit and could block the submodule update."""
+    fpp, path = dirty_submodule(fppinit)
+    r, out = run_script(fppinit, "git_branch", "v1")
+    with open(path) as f:
+        assert f.read() == "original\n", f"the submodule file was not reset:\n{out[-3000:]}"
+
+
+def test_an_upgrade_resets_a_dirtied_submodule(fppinit):
+    """upgrade_FPP resets the submodules before it switches version, so an
+    edit to a file of an external is discarded.
+
+    Regression: a37cc6052. The externals were not reset during an upgrade."""
+    fpp, path = dirty_submodule(fppinit)
+    from test_system_scripts import upgrade_fpp
+    r = upgrade_fpp(fppinit, "v2")
+    with open(path) as f:
+        assert f.read() == "original\n", f"the submodule file was not reset:\n{(r.stdout + r.stderr)[-3000:]}"

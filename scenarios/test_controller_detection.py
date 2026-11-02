@@ -574,3 +574,35 @@ def test_a_falcon_reporting_type_130_is_an_f16v5(fppd):
     with fake_devices({"10.88.0.3": v5}):
         got = discover(fppd, {"10.88.0.3": v5})
     assert "v5" in got["10.88.0.3"]["type"].lower(), got["10.88.0.3"]
+
+
+def test_a_sandevices_beta_firmware_version_is_read(fppd):
+    """Regression: 1403ed180. The SanDevices 5.050 beta firmware reports its
+    version as " 5.050-W12" (a leading space and a -Wnn suffix); the version
+    pattern wanted the digits straight after the cell and so the controller was
+    not recognised as a SanDevices at all."""
+    page_html = ("<html>Controller Model E682 <table><tr><th>MAC Address:</th><td>00:11:22:00:00:09"
+                 "</td></tr><tr><th>Firmware Version:</th></td><td> 5.050-W12</td></tr></table></html>")
+    devs = {"10.88.0.9": {"/": page(page_html)}}
+    with fake_devices(devs):
+        got = discover(fppd, devs)
+    assert got["10.88.0.9"]["type"] == "SanDevices", got["10.88.0.9"]
+    assert got["10.88.0.9"]["version"] == "5.050", got["10.88.0.9"]
+
+
+def test_the_local_system_lists_its_host_description(fppd):
+    """The host description set in settings is in the local entry of
+    /api/fppd/multiSyncSystems as HostDescription (and not in remote ones).
+
+    Regression: 2e073daf9. MultiSyncSystem::toJSON had no HostDescription for
+    the local system, so the multisync page and API clients had no
+    description for this player."""
+    fppd.settings(HostDescription="fpp-tests desk player")
+    fppd.start()
+    local = []
+
+    def have():
+        local[:] = [s for s in fppd.get("/fppd/multiSyncSystems")["systems"] if s.get("local")]
+        return bool(local)
+    fppd.wait_for(have, timeout=20, interval=0.5, what="the local system to be listed")
+    assert local[0].get("HostDescription") == "fpp-tests desk player", local[0]

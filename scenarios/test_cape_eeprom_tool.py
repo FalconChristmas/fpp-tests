@@ -55,3 +55,27 @@ def test_an_images_files_are_extracted_to_a_directory_with_x(tmp_path):
     r = subprocess.run(["php", "-d", "short_open_tag=1", os.path.join(TREE, "scripts", "generateEEPROM"),
                         "-e", str(img), "-x", str(out)], capture_output=True, text=True, timeout=30)
     assert (out / "tmp" / "cape-info.tgz").stat().st_size > 0, r.stdout + r.stderr
+
+
+def test_an_image_made_for_location_file_is_written_as_any(tmp_path):
+    """generateEEPROM -l file writes the image's location record as "any"
+    (0), so the image can also be written to a physical EEPROM; -l eeprom
+    keeps its own tag (the control).
+
+    Regression: b49953b33. A file-tagged image stayed file-tagged through
+    writing, and a cape EEPROM made from it could not be used on a chip."""
+    tool = os.path.join(TREE, "scripts", "generateEEPROM")
+
+    def location_of(loc):
+        copy = tmp_path / f"{loc}.bin"
+        r = subprocess.run(["php", "-d", "short_open_tag=1", tool, "-n", "TestCape", "-s", "SER12345", "-l", loc,
+                            "-o", str(copy)], capture_output=True, text=True, timeout=30, cwd=tmp_path)
+        assert copy.exists(), r.stdout + r.stderr
+        data = copy.read_bytes()
+        # the type-98 record: length "2", type "98", then the value
+        i = data.find(b"2\0\0\0\0\0" + b"98")
+        assert i >= 0, f"no location record in the image: {data[:120]!r}"
+        return data[i + 8:i + 9]
+
+    assert location_of("eeprom") == b"1"
+    assert location_of("file") == b"0"
