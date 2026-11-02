@@ -242,7 +242,7 @@ def test_a_bad_seek_landing_doesnt_leave_a_remote_seeking(fppd, audio):
     its seeks as far ahead as it will, B.wav, joined 3 s late, takes at most
     three resync seeks in 40 s.
 
-    Issue #3156, fixed by fpp 87da41c21. On a video remote an accurate seek decodes from the
+    Issue #3156, fixed by fpp e88792667 (with 1e944a35a for video). On a video remote an accurate seek decodes from the
     previous keyframe, so with keyframes seconds apart it can take 1-3 s to
     resume; AdjustFeedSpeed() reads that as a landing behind and aims the
     next seek further ahead. The aim (s_feedResyncLeadS) is static, so it
