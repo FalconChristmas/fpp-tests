@@ -65,7 +65,8 @@ test('the mixer does not scroll sideways on a phone and stacks the fader under i
   const fb = await slider.boundingBox();
   const lb = await strip.locator('.pw-mixer-strip-label').boundingBox();
   // Stacked: the fader sits under the name, inside the strip.
-  expect(fb!.y).toBeGreaterThan(lb!.y + lb!.height - 2);
+  // (4px of slack: the label's box is sub-pixel and a pixel off is not beside it.)
+  expect(fb!.y).toBeGreaterThan(lb!.y + lb!.height - 4);
   expect(fb!.x + fb!.width).toBeLessThanOrEqual(sb!.x + sb!.width + 1);
 });
 

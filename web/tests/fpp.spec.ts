@@ -105,7 +105,14 @@ test('Playlists Add New Playlist', async ({ page }) => {
 
   try {
     await gotoPage(page, '/playlists.php');
+    // Bootstrap drops a hide() that arrives while the dialog is still
+    // fading in, so wait for it to be shown before pressing Add.
+    await page.evaluate(() => {
+      (window as any).fppTestsModalShown = false;
+      document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsModalShown = true; }, { once: true });
+    });
     await page.locator('.playlistAddNewBtn').first().click();
+    await page.waitForFunction(() => (window as any).fppTestsModalShown);
     await page.fill('#txtAddPlaylistName', name);
     await page.locator('#AddPlaylistDialog button', { hasText: 'Add' }).first().click();
 

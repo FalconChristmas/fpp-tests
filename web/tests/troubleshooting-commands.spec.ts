@@ -85,7 +85,8 @@ test('the Disk tab gives the filesystems in human units and the media folders la
 
     const du = await output(page, 'Disk', 'MediaDirectoryUsage', `${MEDIA}/videos/`);
     const rows = du.trim().split('\n').map((l) => l.split(/\s+/));
-    expect(rows[0], du).toEqual(['3.0M', `${MEDIA}/videos/`]);
+    // Not rows[0]: a long run leaves logs bigger than 3M, and they sort first.
+    expect(rows.find((r) => r[1] === `${MEDIA}/videos/`), du).toEqual(['3.0M', `${MEDIA}/videos/`]);
     expect(rows.find((r) => r[1] === `${MEDIA}/music/`), du).toEqual(['1.0M', `${MEDIA}/music/`]);
     const sizes = rows.map((r) => bytes(r[0]));
     expect(sizes, du).toEqual([...sizes].sort((a, b) => b - a));

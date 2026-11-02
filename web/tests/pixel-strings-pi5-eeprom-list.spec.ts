@@ -38,7 +38,9 @@ test.beforeEach(() => {
 test.afterEach(async ({ request }) => {
   if (inPlayer('sh', '-c', `grep -c 'fpp-tests-' ${CONFIG} || true`).trim() !== '0') {
     inPlayer('sh', '-c', `sed -i 's#"${PIMODEL}"#"/sys/firmware/devicetree/base/model"#' ${CONFIG}; rm -f ${PIMODEL}`);
-    await expect.poll(() => drawnWith(request, 'fpp-tests-'), { timeout: 15_000 }).toBe(false);
+    // The page is checked for this test's own file, not any 'fpp-tests-' text:
+    // other specs' leftovers are printed on it too.
+    await expect.poll(() => drawnWith(request, PIMODEL), { timeout: 15_000 }).toBe(false);
   }
   inPlayer('sh', '-c', savedPlatform ? `printf '%s' '${savedPlatform.trim()}' > ${PLATFORM}` : `rm -f ${PLATFORM}`);
   for (const [p, b64] of Object.entries(savedFiles)) {
