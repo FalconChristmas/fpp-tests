@@ -93,6 +93,37 @@ def test_a_failing_ads7828_read_holds_the_last_value(fppd):
         assert reported(fppd) == first
 
 
+
+def ads7828_cmd(ch):
+    """The ADS7828's command byte for single-ended channel ch, external
+    reference: SD=1, the channel select's odd/even interleave, PD=01."""
+    return 0x84 | (((ch >> 1) | (ch & 1) << 2) << 4)
+
+
+def test_an_ads7828_reads_only_the_channels_its_sensors_use(fppd):
+    """An ADS7828 with one sensor, on channel 5: every block read fppd asks
+    of the chip is channel 5's, poll after poll.
+
+    Regression: 1d78c9cf3 ("Update sensors to only grab requested/enabled
+    channels"). Each poll read all eight channels, three samples deep, to
+    average them, so a cape using one or two of them kept the I2C bus busy
+    with conversions nothing reported.
+    """
+    log = os.path.join(fppd.media, "fakeadc-i2c.log")
+    cape_sensors(fppd, [{"type": "ads7828", "id": "adc", "i2cBus": BUS, "i2cAddress": "0x48"}],
+                 [sensor("ADC", "adc", 5)])
+    fppd.start(preload=[shims.build("fakeadc.c")],
+               extra_env={"FAKEADC_I2C_BUS": str(BUS), "FAKEADC_GOOD_READS": "100000",
+                          "FAKEADC_I2C_LOG": log})
+    for _ in range(3):
+        # The control: the one sensor is read, so the chip is being asked.
+        assert reported(fppd) == {"ADC": float(0x123)}
+    with open(log) as f:
+        cmds = {int(line, 16) for line in f if line.strip()}
+    assert cmds, "no block reads were logged"
+    assert cmds == {ads7828_cmd(5)}, \
+        f"channels read: {sorted(hex(c) for c in cmds)} (channel 5 is {hex(ads7828_cmd(5))})"
+
 def test_bad_multiplexer_sources_are_dropped(fppd):
     """Multiplexer sources fppd can't use -- no channels, a select pin that
     doesn't exist, a source that doesn't exist -- are each dropped with a

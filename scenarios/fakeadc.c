@@ -14,6 +14,9 @@
  * 0x01 0x23 pairs -- an ADS7828 sample of 0x123 -- for the first
  * $FAKEADC_GOOD_READS block reads (default 0), then fails with EIO every
  * time, as a chip that stopped answering does.
+ *
+ * FAKEADC_I2C_LOG=<file>: each I2C block read's command byte (an ADS7828's
+ * channel select) is appended to <file>, two hex digits a line.
  */
 #undef _TIME_BITS
 #undef _FILE_OFFSET_BITS
@@ -219,6 +222,14 @@ static int smbus(struct i2c_smbus_ioctl_data* d) {
         return 0;
     }
     if (d->size == I2C_SMBUS_I2C_BLOCK_DATA && d->data) {
+        const char* logPath = getenv("FAKEADC_I2C_LOG");
+        if (logPath) {
+            FILE* f = fopen(logPath, "a");
+            if (f) {
+                fprintf(f, "%02x\n", d->command);
+                fclose(f);
+            }
+        }
         if (goodReads < 0) {
             const char* g = getenv("FAKEADC_GOOD_READS");
             goodReads = g ? atoi(g) : 0;
