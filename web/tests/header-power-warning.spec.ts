@@ -4,8 +4,8 @@ import { test, expect } from './fixtures';
 // Raspberry Pi voltage thing triggers").  fppd reports the Pi firmware's
 // under-voltage flag as powerBad in its status; the header shows a bolt
 // over the board's logo while it is set, and takes it away once it clears.
-// (fppd's side reads the firmware mailbox, /dev/vcio, so only a Pi has it;
-// here the status the page is handed carries the flag.)
+// Here the status the page is handed carries the flag; fppd's side (the
+// firmware mailbox, /dev/vcio) is scenarios/test_pi_power_warning.py.
 
 test('the header shows a bolt while fppd reports bad power, and clears it after', async ({ page }) => {
   await page.goto('/index.php');

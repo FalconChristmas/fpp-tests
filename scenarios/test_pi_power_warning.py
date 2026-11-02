@@ -34,6 +34,9 @@ def test_the_voltage_warning_waits_for_repeated_bad_readings_and_goes_when_they_
     Regression: afebeef13 (and c30f26f79, which moved the power-bad test from
     the PWR led to this word). The banner went up on the first bad reading, so a
     single dip at power-up left it on screen; (comes down: a later change.)
+
+    Also 6fa534a38, fppd's half of the header bolt: the reading reaches
+    /fppd/status as powerBad (shown red on a CM5 with the field taken out).
     """
     supply(fppd, "0x1")
     fppd.start(preload=[shims.build("fakevcio.c")],
