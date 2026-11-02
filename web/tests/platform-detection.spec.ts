@@ -82,6 +82,20 @@ test('a Compute Module 4 is a Pi 4, with the Pi 4 logo', async ({ request }) => 
   expect((await request.get(`/images/${cm4.Logo}`)).status(), `images/${cm4.Logo}`).toBe(200);
 });
 
+test('a Pi Zero 2 is a PiZero 2, not a first Pi Zero, with its own logo', async ({ request }) => {
+  // Regression: e09e307b8 ("Add php support for Pi Zero 2").  Its model,
+  // "Raspberry Pi Zero 2 Rev 1.0", was only matched by the original Pi Zero's
+  // case, so it was shown as a PiZero with that board's logo.
+  const zero = board({ platform: 'Raspberry Pi\n', model: 'Raspberry Pi Zero Rev 1.3\0' });
+  expect(zero.Variant, 'the control: a first Pi Zero').toBe('PiZero');
+  const zero2 = board({ platform: 'Raspberry Pi\n', model: 'Raspberry Pi Zero 2 Rev 1.0\0' });
+  expect(zero2.Variant).toBe('PiZero 2');
+  expect(zero2.Logo).not.toBe(zero.Logo);
+  expect((await request.get(`/images/${zero2.Logo}`)).status(), `images/${zero2.Logo}`).toBe(200);
+  // The W has a case of its own, ahead of this one.
+  expect(board({ platform: 'Raspberry Pi\n', model: 'Raspberry Pi Zero 2 W Rev 1.0\0' }).Variant).toBe('PiZero 2 W');
+});
+
 test('a Debian box without a device tree model is detected without a warning', () => {
   // Regression: de7c79a2d.  On Debian (not in a container) config.php read
   // /proc/device-tree/model whether or not it existed, so a PC or VM without

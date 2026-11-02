@@ -553,7 +553,7 @@ def test_the_capture_check_records_from_a_source_in_the_graph(fppd, audio):
     to print) and says nothing about whether the daemon hands a client
     capture data, which is what the input groups read.
 
-    Also guards the default-source lookup: the script read
+    Also f00476635, the default-source lookup: the script read
     default.audio.source from the settings metadata, where it never is, so it
     always fell back to the first source in the graph."""
     from audio import env
