@@ -217,6 +217,58 @@ def test_an_unsigned_cape_cannot_set_the_serials_with_a_serial_record(fppinit):
     assert info.get("serialNumber") == "HEADER0001", info
 
 
+SIGNED_EEPROM = os.environ.get("FPP_TESTS_SIGNED_EEPROM", "/home/fpp/media/tmp/eeprom.bin")
+
+
+def test_a_signed_cape_retires_a_setting_the_user_has_set(fppinit):
+    """A signed cape read from its chip may retire a setting it lists in
+    removeSettings even when the user has given it a value: a removal's
+    precondition is that the key is set, and the signature authorizes it.
+
+    The image is the device's own signed cape EEPROM (as cape detection
+    copied it at boot, or $FPP_TESTS_SIGNED_EEPROM), presented on the i2c bus
+    by i2c_cape.py so fppcapedetect reads it as a chip's contents; the
+    device's chip is not touched. Skipped where the cape lists none.
+
+    Regression: 0c47162da. removeSettings went through the rule that guards
+    defaultSettings, which refuses a key holding a value: every removal that
+    could do anything was refused with "cape may not remove setting ...".
+    """
+    import i2c_cape
+    if not os.path.exists(SIGNED_EEPROM):
+        pytest.skip(f"no signed cape EEPROM image at {SIGNED_EEPROM}")
+    with open(SIGNED_EEPROM, "rb") as f:
+        image = f.read()
+
+    if on_pi():
+        with open(os.path.join(fppinit.boot, "config.txt"), "w") as f:
+            f.write("[all]\ndtparam=audio=on\n")
+
+    def run():
+        r = fppinit._run(i2c_cape.present(fppinit, image) + ["/opt/fpp/src/fppcapedetect", "-no-set-permissions"],
+                         media_home=True, timeout=180)
+        out = r.stdout + r.stderr
+        assert r.returncode == 0, out[-3000:]
+        return out
+
+    out = run()
+    if not fppinit.media_exists("tmp/cape-info.json"):
+        # a Pi's first detection adds the cape's overlay to config.txt and
+        # stops for the reboot that loads it; the next boot publishes the info
+        out = run()
+    assert fppinit.media_exists("tmp/cape-info.json"), out[-2500:]
+    info = cape_info(fppinit)
+    keys = [k for k in info.get("removeSettings", []) if isinstance(k, str)]
+    if not info.get("capeStatus", "").startswith("SIGNED") or not keys:
+        pytest.skip(f"this device's cape is {info.get('capeStatus')} with removeSettings {keys}\n{out[-1500:]}")
+    key = keys[0]
+    fppinit.settings(**{key: "chosen-by-the-user"})
+    assert settings_of(fppinit).get(key) == "chosen-by-the-user"
+    out = run()
+    assert key not in settings_of(fppinit), f"{fppinit.media_file('settings')}\n{out[-2000:]}"
+    assert "may not remove setting" not in out, out[-2000:]
+
+
 def test_unsigned_copy_files_stay_inside_the_media_directory(fppinit):
     """copyFiles from an unsigned image may copy a file from FPP's own tree
     into the media directory, and nothing else: not from elsewhere (the
