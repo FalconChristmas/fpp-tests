@@ -165,7 +165,12 @@ ZRAM = ("/dev/zram0", "partition", 245000)
     (2, "armv7l", meminfo(493000, swap=245000), [ZRAM], 1),
     # the same with 100MB of disk swap: 2 jobs (the control)
     (2, "armv7l", meminfo(493000, swap=345400), [ZRAM, ("/home/fpp/media/tmp/swapfile", "file", 100400)], 2),
-], ids=["under-1GB", "cma-pool", "zram-only", "disk-swap"])
+    # under 425MB it is one job whatever the swap: a 4-core box with 400MB and
+    # 100MB of disk swap would otherwise take the 493MB board's -j2 (06b2e7b7b)
+    (4, "armv7l", meminfo(400000, swap=345400), [ZRAM, ("/home/fpp/media/tmp/swapfile", "file", 100400)], 1),
+    # a 64-bit board under 512MB gets one job (its compiles take more memory)
+    (4, "aarch64", meminfo(480000), [], 1),
+], ids=["under-1GB", "cma-pool", "zram-only", "disk-swap", "under-425MB-with-swap", "64-bit-under-512MB"])
 def test_build_jobs_fit_the_memory_the_compile_can_use(fppinit, cpus, arch, memory, swap_entries, jobs):
     """ComputeMakeParallelism, the make -j for a build on the device,
     sized from /proc: a 4-core box under 1GB gets 3 jobs; CMA (the Pi's
@@ -177,7 +182,8 @@ def test_build_jobs_fit_the_memory_the_compile_can_use(fppinit, cpus, arch, memo
     OOM-killed), 5dd19628f (a 493MB board counted its zram as swap and
     got -j2, which thrashed it).
 
-    Also abe237482 (-j picked from the memory, zram swap).
+    Also abe237482 (-j picked from the memory, zram swap) and 06b2e7b7b (under
+    425MB is one job whatever the swap).
     """
     build_box(fppinit, cpus, arch, memory, swap_entries)
     r = fppinit._run(["bash", "-c", FUNCTIONS + 'echo "jobs: $(ComputeMakeParallelism)"'], timeout=60)

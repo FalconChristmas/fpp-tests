@@ -66,3 +66,13 @@ def test_without_kms_the_fb_devices_are_listed(fppd):
     fake_fb(fppd)
     fppd.start()
     assert listing(fppd) == ["fb0"]
+
+
+def test_with_no_display_device_at_all_the_listing_is_an_empty_list(fppd):
+    """On a box with no KMS card and no framebuffer, fpp -FB prints [] -- a
+    JSON list the display pickers can iterate -- and not the null an empty
+    value is written as.
+
+    Regression: 4ee0ebea3 (the empty-listing special case).
+    """
+    assert listing(fppd) == []

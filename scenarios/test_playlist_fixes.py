@@ -15,7 +15,7 @@ import pytest
 
 from ddp import DdpReceiver
 from show import CHANNELS, playlist as show_playlist
-from test_playlist_entries import branch, playlist, run, status, step, trace
+from test_playlist_entries import TRACE, branch, playlist, run, status, step, trace
 from test_playlist_media import both, song
 from test_plugin_scripts import playlist_actions, plugin
 
@@ -203,3 +203,28 @@ def test_playlist_callbacks_start_playing_and_stop(fppd):
     time.sleep(2)
     acts = [a for a in playlist_actions(d) if a in ("start", "playing", "stop")]
     assert acts == ["start", "playing", "stop"], playlist_actions(d)
+
+
+@pytest.mark.parametrize("command", ["Insert Playlist After Current", "Insert Playlist Immediate"])
+def test_an_insert_with_no_start_item_and_end_item_1_plays_the_first_item_not_a_random_one(fppd, command):
+    """Insert Playlist (After Current or Immediate) of a six step playlist
+    with the start item left at -1 and the end item 1 plays just its first
+    step, every time.
+
+    Regression: 450793cae. The 1-based start and end items became 0-based by
+    taking one off, so a start of -1 ("from the top") became -2, which with
+    an end of 0 is fppd's code for "play one random item": the insert played
+    any one of the steps, the first only one time in six.
+    """
+    # no lead-in: the start and end items count every entry, trace reset and all
+    fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                    "mainPlaylist": [step(d) for d in range(1, 7)], "leadOut": []})
+    fppd.start()
+    seen = []
+    for _ in range(8):
+        fppd.command("Set Variable", TRACE, "Value", "0")
+        fppd.command(command, "Q", "-1", "1", "false")
+        fppd.wait_for(lambda: trace(fppd) and status(fppd).get("status_name") == "idle", timeout=10,
+                      interval=0.1, what="the inserted playlist to play and finish")
+        seen.append(trace(fppd))
+    assert seen == ["1"] * 8, f"steps the inserts played: {seen}"
