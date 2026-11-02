@@ -7,6 +7,8 @@ PocketBeagle, with the device's own fppd stopped. The GPIO lines and the PRU
 cores are the real ones.
 """
 
+import mmap
+import os
 import time
 
 import pytest
@@ -46,3 +48,47 @@ def test_a_bbb48string_output_runs_a_real_pru_and_its_memory_can_be_read(real_pr
             assert read(off) == 0xA5A55A5A, f"offset {off:#x} of the memory did not hold what was written"
             write(off, 0)
 
+
+
+ADDRESS_DMA, COMMAND, RESPONSE = 0, 4, 8  # BBB48StringData, at the start of PRU1's data RAM
+
+
+def ddr_frame(address, size=4096):
+    """`size` bytes of the DDR the PRU reads its frame from, at physical
+    `address`, as words."""
+    page = address & ~0xFFF
+    fd = os.open("/dev/mem", os.O_RDONLY | os.O_SYNC)
+    try:
+        mm = mmap.mmap(fd, size + (address - page), mmap.MAP_SHARED, mmap.PROT_READ, offset=page)
+    finally:
+        os.close(fd)
+    try:
+        return bytes(mm[address - page:address - page + size])
+    finally:
+        mm.close()
+
+
+def test_the_frame_in_the_prus_ddr_follows_the_pixels_fppd_is_sending(real_pru_am335x, fppd):
+    """With a BBB48String output running, PRU1 is taking frames (it sets the
+    response word as it takes each) from the DDR address fppd handed it, and
+    what is there is the pixel data bit-planed for the pins: a black frame
+    is the same every time and a white one is not the same as it.
+
+    The harness's end-to-end check, with its control (black twice); it holds
+    for any change that stops the pixel data reaching the PRU's buffer.
+    """
+    start_strings(fppd)
+    fppd.command("Test Start", "1000", "RGB Single Color", "*", "#000000")
+    with Pruss() as pruss:
+        fppd.wait_for(lambda: pruss.dram(1, RESPONSE) == 1 and not pruss.halted(1), timeout=30,
+                      what="PRU1 to take a frame")
+        address = pruss.dram(1, ADDRESS_DMA)
+        assert 0x80000000 <= address < 0xA0000000, f"PRU1 was handed {address:#x}, not a DDR address"
+        time.sleep(0.5)
+        black_a = ddr_frame(address)
+        time.sleep(0.5)
+        black_b = ddr_frame(address)
+        assert black_a == black_b, "the control: a black frame changed between reads"
+        fppd.command("Test Start", "1000", "RGB Single Color", "*", "#FFFFFF")
+        fppd.wait_for(lambda: ddr_frame(address) != black_a, timeout=15, what="the white frame to reach the DDR")
+    fppd.command("Test Stop")
