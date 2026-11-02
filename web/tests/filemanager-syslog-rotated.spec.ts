@@ -19,6 +19,9 @@ function zipNames(path: string): string[] {
 test('the rotated syslog files are listed, open and are in the logs zip', async ({ page, request }) => {
   // Regression: a78eee23d.  GetFilesHelper() and ZipLogs() named
   // /var/log/syslog and /var/log/messages only.
+  // Also adf31929a: the full Logs listing compared the resolved directory
+  // path with "Logs", which it never is, and put /var/log/syslog in an array
+  // it then dropped, so the system log was never listed.
   // Also f5bdc8ea8: opening a /var/log file by the name the Logs tab lists it
   // under (the API refuses it as outside the allowed directory otherwise).
   test.setTimeout(90_000);

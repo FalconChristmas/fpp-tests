@@ -461,3 +461,43 @@ def test_insert_one_item_status_shows_only_that_item(fppd):
     assert (cur["type"], cur["count"], cur["index"]) == ("pause", "1", "1"), cur
     wait_idle(fppd)
     assert trace(fppd) == "12", trace(fppd)
+
+
+def test_start_at_item_on_the_running_playlist_keeps_its_start_time(fppd):
+    """Start Playlist At Item on the playlist that is already playing moves
+    it to that item; the player's start time stays the time the playlist
+    started. Another playlist started over it gets a start time of its own.
+
+    Regression: dc430789a. StartPlaylist() reset the player's state fields
+    (start time, stop time, stop method, priority) on every start, so a jump
+    within the running playlist reported it as just started.
+    """
+    fppd.write("playlists/P.json", playlist("P", main=[pause(30), pause(30), pause(30)]))
+    fppd.write("playlists/Q.json", playlist("Q", main=[pause(30)]))
+    fppd.start()
+
+    def started():
+        return fppd.get("/player/status")["playlists"][0]["startTime"]
+
+    def position():
+        return status(fppd).get("current_playlist", {}).get("index")
+
+    start(fppd, "P")
+    fppd.wait_for(lambda: status_name(fppd) == "playing", timeout=10, interval=0.1,
+                  what="P to start")
+    t0 = started()
+    assert t0 > 0
+    first = position()
+    time.sleep(2.2)  # startTime is in whole seconds
+    fppd.command("Start Playlist At Item", "P", "4", "false", "false")
+    fppd.wait_for(lambda: position() not in (None, first), timeout=10, interval=0.1,
+                  what="P to move to item 4")
+    assert status_name(fppd) == "playing"
+    assert started() == t0, "a jump within the running playlist reset its start time"
+
+    # The control: a different playlist is a new start.
+    start(fppd, "Q")
+    fppd.wait_for(lambda: started() > t0, timeout=10, interval=0.1,
+                  what="Q to get a start time of its own")
+    fppd.command("Stop Now")
+    wait_idle(fppd)

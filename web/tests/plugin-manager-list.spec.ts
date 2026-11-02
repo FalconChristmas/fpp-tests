@@ -58,6 +58,10 @@ test('a GitHub repository URL loads the plugin from its pluginInfo.json', async 
   // Regression: bc7698015 ("load a plugin from its GitHub repo URL").  Only a
   // URL ending in pluginInfo.json loaded a plugin; a repository's address was
   // searched for as text.
+  // Also 6a16eb084 ("Auto replace non-raw pluginInfo.json URL with raw
+  // version"): a pluginInfo.json URL copied from GitHub's file page
+  // (github.com/<owner>/<repo>/blob/<branch>/...) is fetched from
+  // raw.githubusercontent.com, not from the HTML page it names.
   const NAME = 'fpp-tests-ghurl';
   const m = await major(request);
   const info = listed(NAME, [{ minFPPVersion: `${m}.0`, maxFPPVersion: '0', branch: 'master', sha: '' }]);
@@ -76,6 +80,7 @@ test('a GitHub repository URL loads the plugin from its pluginInfo.json', async 
     [`github.com/fpp-tests/${NAME}`, `https://raw.githubusercontent.com/fpp-tests/${NAME}/HEAD/pluginInfo.json`],
     [`https://www.github.com/fpp-tests/${NAME}.git`, `https://raw.githubusercontent.com/fpp-tests/${NAME}/HEAD/pluginInfo.json`],
     [`https://github.com/fpp-tests/${NAME}/tree/v2/`, `https://raw.githubusercontent.com/fpp-tests/${NAME}/v2/pluginInfo.json`],
+    [`https://github.com/fpp-tests/${NAME}/blob/v3/pluginInfo.json`, `https://raw.githubusercontent.com/fpp-tests/${NAME}/v3/pluginInfo.json`],
   ]) {
     fetched.length = 0;
     await input.fill('');

@@ -25,6 +25,8 @@ test.afterEach(async ({ request }) => {
 test('a preset with a name and no command is refused on Save and nothing is written', async ({ page, request }) => {
   // Regression: 169353ba7.  Save wrote every row, a nameless or commandless
   // preset included, and fppd's load of the file then failed on it.
+  // Also 1ee9a7943: Save says which row it won't save, and why, instead of
+  // dropping it without a word.
   const good = JSON.stringify({ commands: [{ name: 'fpp-tests-ok', command: 'All Lights Off', args: [], multisyncCommand: false, multisyncHosts: '', presetSlot: 0 }] });
   await putPresets(request, good);
   await page.goto('/commandPresets.php');

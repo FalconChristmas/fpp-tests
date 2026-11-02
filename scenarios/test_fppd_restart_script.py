@@ -23,6 +23,9 @@ def test_fppd_restart_clears_the_restart_flag_in_the_media_settings(fppinit):
     Regression: cdd3a74a9. The flag was cleared in $FPPHOME/media/settings,
     which is not the media directory when it lives elsewhere (macOS), so the
     "restart needed" banner stayed after a restart.
+
+    Also 18a02039d: the flag was written back unquoted (restartFlag = 0),
+    unlike every other value in the file.
     """
     fppinit.write("settings", 'restartFlag = "1"\nKioskRotate = "0"\n')
     fppinit.unstub("mount")

@@ -78,3 +78,27 @@ test('an upload shows up in its table without a reload', async ({ page }) => {
     sh(`rm -f ${MEDIA}/music/${old} ${MEDIA}/music/${name} ${MEDIA}/upload/${name}`);
   }
 });
+
+test('the Items badge counts one fewer once a file is deleted', async ({ page }) => {
+  // Also 87c7579d7 ("filemanager - update file item count on file
+  // deletion"): DeleteFile() took the row out but left the badge counting it.
+  const a = 'fpp-tests-count-a.mp3';
+  const b = 'fpp-tests-count-b.mp3';
+  sh(`echo x > ${MEDIA}/music/${a}; echo x > ${MEDIA}/music/${b}`);
+  try {
+    await openAudio(page);
+    await expect(row(page, 'Music', b)).toHaveCount(1);
+    const before = parseInt(await page.locator('#fileCount_Music').innerText());
+    // The control: the badge counts the table's rows to begin with.
+    expect(before).toBe(await page.locator('#tblMusic tbody tr:visible').count());
+
+    await row(page, 'Music', b).click();
+    await page.locator('#btnDeleteMusic').click();
+    await page.locator('#confirmDeleteFile').getByRole('button', { name: 'Yes' }).click();
+    await expect.poll(() => exists(`${MEDIA}/music/${b}`)).toBe(false);
+    await expect(row(page, 'Music', b)).toHaveCount(0);
+    await expect(page.locator('#fileCount_Music')).toHaveText(String(before - 1));
+  } finally {
+    sh(`rm -f ${MEDIA}/music/${a} ${MEDIA}/music/${b}`);
+  }
+});
