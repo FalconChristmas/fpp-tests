@@ -56,8 +56,8 @@ static long long nowMs(void) {
     return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
-static void emit(const char* line) {
-    const char* out = getenv("FAKESSD1306_OUT");
+static void emitTo(const char* var, const char* line) {
+    const char* out = getenv(var);
     if (!out) {
         return;
     }
@@ -72,6 +72,10 @@ static void emit(const char* line) {
         realWrite(fd, line, strlen(line));
         close(fd);
     }
+}
+
+static void emit(const char* line) {
+    emitTo("FAKESSD1306_OUT", line);
 }
 
 static void emitFrame(void) {
@@ -253,6 +257,18 @@ ssize_t write(int fd, const void* buf, size_t len) {
     }
     const unsigned char* b = buf;
     pthread_mutex_lock(&lock);
+    if (getenv("FAKESSD1306_STREAM")) {
+        /* the raw transaction, for a test of a controller whose frame this
+         * file does not decode (other heights, SH1107's page-at-a-time walk) */
+        static char line[8 + 2 * 4096 + 2];
+        size_t n = (size_t)snprintf(line, 8, "W %02x ", b[0]);
+        for (size_t i = 1; i < len && i < 4096; i++) {
+            n += (size_t)sprintf(line + n, "%02x", b[i]);
+        }
+        line[n++] = '\n';
+        line[n] = 0;
+        emitTo("FAKESSD1306_STREAM", line);
+    }
     /* Co = 0 throughout, as fppoled sends it: one control byte, then the
      * rest of the message is commands (0x00) or data (0x40). */
     for (size_t i = 1; i < len; i++) {

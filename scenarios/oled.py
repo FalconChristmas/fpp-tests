@@ -91,15 +91,18 @@ class Fppoled:
     def __init__(self, tree, workdir):
         self.tree = tree
         self.out = os.path.join(workdir, "oled-frames.txt")
+        self.stream_out = os.path.join(workdir, "oled-stream.txt")
         self.glyphs = font(tree)
         self.proc = None
         self.output = []
 
     def start(self, preload=(), extra_env=None):
-        if os.path.exists(self.out):
-            os.remove(self.out)
+        for f in (self.out, self.stream_out):
+            if os.path.exists(f):
+                os.remove(f)
         src = os.path.join(self.tree, "src")
-        env = dict(os.environ, LD_LIBRARY_PATH=src, FAKESSD1306_OUT=self.out)
+        env = dict(os.environ, LD_LIBRARY_PATH=src, FAKESSD1306_OUT=self.out,
+                   FAKESSD1306_STREAM=self.stream_out)
         env["LD_PRELOAD"] = " ".join([shims.build("fakessd1306.c"), *preload])
         if extra_env:
             env.update(extra_env)
@@ -120,6 +123,16 @@ class Fppoled:
     def frames(self):
         return [Frame(int(r[1]), bytes.fromhex(r[2]), self.glyphs)
                 for r in self.records() if r[0] == "F" and len(r) == 3 and len(r[2]) == 2048]
+
+    def stream(self):
+        """Every write to the panel, in order: [("cmd"|"data", bytes)]."""
+        try:
+            with open(self.stream_out) as f:
+                rows = [l.split() for l in f if l.endswith("\n")]
+        except FileNotFoundError:
+            return []
+        return [("data" if int(r[1], 16) & 0x40 else "cmd", bytes.fromhex(r[2] if len(r) > 2 else ""))
+                for r in rows if r[0] == "W"]
 
     def commands(self):
         return [(int(r[1]), r[2]) for r in self.records() if r[0] == "C"]
@@ -155,3 +168,45 @@ class Fppoled:
 
     def log(self):
         return "".join(self.output)[-3000:]
+
+
+def decode_stream(ops):
+    """What a page-addressed controller holds after `ops` (Fppoled.stream()):
+    {page: bytearray(columns)}, following 0xB0+n page selects and 0x22
+    page windows, and how many data bytes each refresh sent.
+
+    A refresh is the run of data between two runs of commands; the SH1107
+    and SH1106 interleave a page select with every page, so for them the
+    count is per page and `refreshes` stays one entry a page."""
+    pages, per_page = {}, []
+    page, page_end, col, window = 0, 7, 0, False
+    sent = 0
+    for kind, b in ops:
+        if kind == "cmd":
+            i = 0
+            while i < len(b):
+                c = b[i]
+                if 0xB0 <= c <= 0xBF:
+                    page, col, window = c & 0x0F, 0, False
+                elif c == 0x22 and i + 2 < len(b):
+                    page, page_end, col, window = b[i + 1] & 0x0F, b[i + 2] & 0x0F, 0, True
+                    i += 2
+                elif c == 0x21 and i + 2 < len(b):
+                    col = b[i + 1]
+                    i += 2
+                i += 1
+            if sent:
+                per_page.append(sent)
+                sent = 0
+        else:
+            for x in b:
+                pages.setdefault(page, bytearray(256))[col] = x
+                sent += 1
+                col += 1
+                if col >= 128 and window:
+                    col, page = 0, (page + 1 if page < page_end else 0)
+                elif col >= 256:
+                    col = 0
+    if sent:
+        per_page.append(sent)
+    return pages, per_page

@@ -175,6 +175,36 @@ def test_expander_buttons_are_labelled_and_dispatched_by_action(oled_media, scre
             screen.stop()
 
 
+def test_four_expander_buttons_count_as_direction_controls(oled_media, screen):
+    """Up, Down, Back and Enter on an expander's lines are the full set of
+    navigation buttons, so the main menu offers Network (given an eth0, which
+    the test's network namespace is given a dummy of).
+
+    Regression: e46d94824. The expander branch never recorded the buttons it
+    configured, so fppoled took the player for one without all four
+    direction buttons and a cape whose buttons hang off a pca9675 lost the
+    Network submenu with every button working.
+    """
+    subprocess.run(["ip", "link", "add", "eth0", "type", "dummy"], check=True)
+    try:
+        ipin, igpio, buttons, env = start_expander(oled_media, screen, 4)
+        oled_media.put("tmp/cape-inputs.json", expander_inputs(
+            ipin, zip(("Enter", "Up", "Down", "Back"), buttons)))
+        with hosttools.pads_kept([igpio, *buttons]):
+            try:
+                screen.start(preload=[shims.build("gpioexpander.c")], extra_env=env)
+                wait_held(screen, igpio, *buttons)
+                screen.wait_for(lambda f: True, timeout=30, what="a first frame")
+                time.sleep(1)
+                press_expander(igpio, buttons[0])
+                screen.wait_for(lambda f: "Network" in f.text(), timeout=15,
+                                what="Network in the main menu after Enter")
+            finally:
+                screen.stop()
+    finally:
+        subprocess.run(["ip", "link", "del", "eth0"], check=False)
+
+
 def tap(gpio, hold=0.3):
     pull(gpio, "pd")
     time.sleep(hold)
