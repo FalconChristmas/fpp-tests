@@ -1,4 +1,4 @@
-"""The real PRUs of an AM62x BeagleBone, read from the test's side, for
+"""The real PRUs of an AM62x or AM335x BeagleBone, read from the test's side, for
 scenarios run with run-local.sh --host-pru (the device's own fppd stopped).
 
 `Pruss` maps the PRU subsystem through /dev/mem: the cores' data RAMs, the
@@ -22,10 +22,30 @@ import struct
 
 import pytest
 
-PRUSS_BASE = 0x30040000
-PRUSS_SIZE = 0x80000
+
+
+def _soc():
+    try:
+        with open("/proc/device-tree/compatible", "rb") as f:
+            compatible = f.read()
+    except OSError:
+        return "am62x"
+    return "am335x" if b"am33xx" in compatible or b"am335x" in compatible else "am62x"
+
+
+SOC = _soc()
+if SOC == "am335x":
+    PRUSS_BASE = 0x4A300000
+    PRUSS_SIZE = 0x40000
+    SHARED_SIZE = 0x3000       # 12KB shared RAM
+    CORE_NAMES = ("4a334000.pru", "4a338000.pru")  # remoteproc0 and 1
+else:
+    PRUSS_BASE = 0x30040000
+    PRUSS_SIZE = 0x80000
+    SHARED_SIZE = 0x8000       # 32KB shared RAM
+    CORE_NAMES = ("30074000.pru", "30078000.pru")
 DRAM = (0x00000, 0x02000)  # each core's 8KB data RAM, within the window
-SHARED = 0x10000           # 32KB shared RAM
+SHARED = 0x10000           # shared RAM
 SHARED_PRU_ADDR = 0x10000  # where the PRUs see it (SMEM_RING_SMEM_PRU_ADDR)
 CTRL = (0x22000, 0x24000)  # core control blocks
 DEBUG = 0x400              # debug registers (r0-r31 of a halted core), past CTRL
@@ -42,25 +62,17 @@ RING_CONFIG = 0x1FF0
 REMOTEPROC = "/sys/class/remoteproc"
 
 
-@pytest.fixture
-def real_pru():
-    """For a scenario whose fppd drives the real PRUs of an AM62x board:
-    skips unless run-local.sh --host-pru gives it them with nothing else
-    running them, and makes the tree's own PRU programs the ones fppd loads
-    (use_tree_firmware). Ask for it ahead of the fppd fixture: it is torn
-    down after it, and stops any core a killed fppd left running.
-    """
+def _real_pru(soc):
     if not os.environ.get("FPP_TESTS_BEAGLE") or not os.environ.get("FPP_TESTS_HOST_PRU"):
         pytest.skip("needs a BeagleBone under run-local.sh --host-pru")
-    try:
-        with open("/proc/device-tree/compatible", "rb") as f:
-            if b"am62" not in f.read():
-                pytest.skip("AM62x only")
-    except OSError:
+    if not os.path.exists("/proc/device-tree/compatible"):
         pytest.skip("no device tree")
+    if SOC != soc:
+        pytest.skip(f"{soc.upper()} only")
     tree = os.environ["FPP_TREE"]
-    if not os.path.exists(os.path.join(tree, "src", "libfpp-co-BBShiftString.so")):
-        pytest.skip("the tree is not built for a BeagleBone")
+    lib = "libfpp-co-BBShiftString.so" if soc == "am62x" else "libfpp-co-BBB48String.so"
+    if not os.path.exists(os.path.join(tree, "src", lib)):
+        pytest.skip("the tree is not built for this BeagleBone")
     for core in (0, 1):
         if core_state(core) == "running":
             pytest.skip(f"PRU {core} is running: stop the device's own fppd first")
@@ -72,11 +84,29 @@ def real_pru():
                 f.write("stop")
 
 
+@pytest.fixture
+def real_pru():
+    """For a scenario whose fppd drives the real PRUs of an AM62x board:
+    skips unless run-local.sh --host-pru gives it them with nothing else
+    running them, and makes the tree's own PRU programs the ones fppd loads
+    (use_tree_firmware). Ask for it ahead of the fppd fixture: it is torn
+    down after it, and stops any core a killed fppd left running.
+    """
+    yield from _real_pru("am62x")
+
+
+@pytest.fixture
+def real_pru_am335x():
+    """real_pru for an AM335x BeagleBone (a BeagleBone Black or a
+    PocketBeagle), whose PRUSS is at 0x4a300000 with 12KB of shared RAM."""
+    yield from _real_pru("am335x")
+
+
 def core_state_file(core):
     for r in glob.glob(os.path.join(REMOTEPROC, "remoteproc*")):
         try:
             with open(os.path.join(r, "name")) as f:
-                if f.read().strip() == ("30074000.pru", "30078000.pru")[core]:
+                if f.read().strip() == CORE_NAMES[core]:
                     return os.path.join(r, "state")
         except OSError:
             pass
