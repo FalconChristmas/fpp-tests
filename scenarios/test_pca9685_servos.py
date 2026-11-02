@@ -8,6 +8,7 @@ config, which comes out of a signed cape EEPROM; fakepwmcape.cpp hands it
 one from the media directory instead.
 """
 
+import json
 import math
 import os
 
@@ -173,4 +174,48 @@ def test_a_16_bit_absolute_servo_port_reads_its_high_byte_first(fppd):
         fppd.wait_for(lambda: servo_value(bus, PCA, 0) == want, timeout=5, what="the port's pulse")
     except TimeoutError:
         raise AssertionError(f"OFF count {servo_value(bus, PCA, 0)}, wanted {want}")
+    fppd.command("Test Stop")
+
+
+def test_the_range_limit_test_drives_the_chosen_servo_to_its_end_and_the_others_to_center(fppd):
+    """The Servos tab's Range Limits test (Output Specific test type 1, with
+    the port and whether it is the min or max end) drives that port to the
+    end of its range -- the minimum or the maximum pulse -- and holds every
+    other servo port at center.
+
+    Feature: db72a416a (Range Limits testing for PWM/Servos), which added
+    the type-1 test and the "manipulation" port/value/isMin the page sends.
+    """
+    bus = Bus(fppd, [PCA])
+    capes = os.path.join(fppd.media, "fakecape")
+    fppd.write("fakecape/TestServos.json", {"driver": "PCA9685", "name": "TestServos",
+                                            "address": PCA, "bus": "i2c-1"})
+    port = {"type": "Servo", "min": 1000, "max": 2000, "is16bit": 0, "reverse": 0, "zero": "Hold",
+            "dataType": "Scaled"}
+    outputs = [dict(port, startChannel=0, description="a"), dict(port, startChannel=1, description="b")]
+    fppd.write("config/co-pwm.json", {"channelOutputs": [{
+        "type": "PCA9685", "subType": "TestServos", "enabled": 1, "startChannel": 0,
+        "channelCount": -1, "frequency": "50hz", "outputs": outputs}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start(preload=[shims.build("fakei2c.c"), shims.build("fakepwmcape.cpp", libs=(
+        "-ldl", "-I/usr/include/jsoncpp", "-ljsoncpp"))],
+        extra_env=dict(bus.env, FAKEPWMCAPE_DIR=capes))
+    lo, mid, hi = rnd(ticks(1000)), rnd(ticks(1500)), rnd(ticks(2000))
+
+    def run(is_min):
+        cfg = {"outputs": outputs, "manipulation": {"port": 0, "value": 0, "isMin": is_min}}
+        fppd.command("Test Start", "500", "Output Specific", "--ALL--", "1", json.dumps(cfg))
+
+    run(False)
+    try:
+        fppd.wait_for(lambda: servo_value(bus, PCA, 0) >= hi - 2, timeout=8, what="port 1 at its maximum")
+    except TimeoutError:
+        raise AssertionError(f"port 1 at {servo_value(bus, PCA, 0)}, the maximum is {hi}")
+    assert abs(servo_value(bus, PCA, 1) - mid) <= 4, (servo_value(bus, PCA, 1), mid)
+    run(True)
+    try:
+        fppd.wait_for(lambda: servo_value(bus, PCA, 0) <= lo + 2, timeout=8, what="port 1 at its minimum")
+    except TimeoutError:
+        raise AssertionError(f"port 1 at {servo_value(bus, PCA, 0)}, the minimum is {lo}")
+    assert abs(servo_value(bus, PCA, 1) - mid) <= 4, (servo_value(bus, PCA, 1), mid)
     fppd.command("Test Stop")

@@ -94,7 +94,11 @@ def test_the_port_number_test_cycles_red_green_blue(fppd):
     white.
 
     Regression: 9e17aab9f. The cycle ran green, red, blue, against the
-    convention of every other test."""
+    convention of every other test.
+
+    Also 690d75bfc: the port number test is the string tester behind Output
+    Specific test 1 (PixelStringTester::getPixelStringTester()); with test 1
+    pointed at another tester this pattern is not on the wire."""
     start(fppd, port_config(fppd, 4))
     fppd.command("Test Start", "1000", "Output Specific", "--ALL--", "1")
     seen = []
@@ -177,3 +181,48 @@ def test_an_auto_created_model_with_a_string_missing_is_still_made(fppd):
     m = fppd.wait_for(lambda: models(fppd).get("Arch"), what="the auto-created model")
     assert (m["StartChannel"], m["ChannelCount"]) == (1, 90), m
     assert m["StringCount"] == 2, m
+
+
+def test_a_v2_smart_receiver_chain_has_a_ten_channel_gap_between_receivers(fppd):
+    """A port with two v2 smart receivers of 2 pixels each (differentialType
+    5) puts a 10 channel gap between the receivers' data: 6 bytes, the gap,
+    6 bytes.
+
+    Regression: a5b872416. Newer receivers need a smaller gap than the 15
+    channels the first v2 support used, so the second receiver's data
+    started 5 bytes late.
+    """
+    port = port_config(fppd, 2, differentialType=5)
+    port["virtualStringsB"] = [dict(port["virtualStrings"][0], description="b", startChannel=6)]
+    start(fppd, port)
+    fppd.request("PUT", "/overlays/range/1-12", {"Value": 0x55})
+    fppd.wait_for(lambda: (d := wire(fppd)) and d[-1:] == b"\x55", timeout=10,
+                  what=f"the channels on the wire ({wire(fppd)!r})")
+    data = wire(fppd)
+    assert len(data) == 6 + 10 + 6, f"{len(data)} bytes: {data.hex(' ')}"
+    assert data[:6] == bytes([0x55] * 6) and data[16:] == bytes([0x55] * 6), data.hex(" ")
+    assert data[6:16] == bytes(10), data.hex(" ")
+
+
+def test_a_smart_receivers_marker_strings_get_no_auto_model(fppd):
+    """A port with two v2 smart receivers gets overlay models for the strings
+    it was given and nothing for the marker string fppd puts between the
+    receivers (it stands for the gap on the wire and covers no channels
+    anyone configured).
+
+    Regression: 666f3b3fb. Every virtual string was given a model, so the
+    gap marker showed up as a model named String-1B-1.
+    """
+    throw_plugin.install(fppd, source="pixelstringdump.cpp", name="PixelStringDump")
+    p = port_config(fppd, 2, differentialType=5)
+    p["virtualStrings"][0]["description"] = "first"
+    p["virtualStringsB"] = [dict(p["virtualStrings"][0], description="third", startChannel=6)]
+    fppd.write(fppd.strings_config, {"channelOutputs": [{
+        "type": "PixelStringDump", "enabled": 1, "startChannel": 1, "channelCount": 12,
+        "outputCount": 1, "outputs": [p]}]})
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": []})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: {"first", "third"} <= set(models(fppd)), what="the auto-created models")
+    time.sleep(1)
+    assert sorted(models(fppd)) == ["first", "third"], sorted(models(fppd))

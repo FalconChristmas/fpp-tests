@@ -77,6 +77,33 @@ def test_the_gpio_command_answers_ok_for_a_pin_it_drove(fppd):
     assert "No Pin Named" in str(getattr(e.value, "body", e.value)), e.value
 
 
+def test_an_outputs_base_gpios_are_configured_when_it_starts(fppd):
+    """An output config's base.gpios list (the pins a controller's own
+    config says the output needs) is applied as the output starts: a pin
+    configured as an output with value 1 is driven high, one with value 0
+    low, and a pin with an invalid direction or value is logged and left
+    alone rather than stopping the others.
+
+    Regression: 5462e34e7, which let a controller's JSON config configure
+    GPIO pins.
+    """
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "type": "GPIO", "enabled": 1, "startChannel": 1, "channelCount": 1, "pin": "TF-4",
+        "base": {"gpios": [
+            {"pin": "TF-1", "mode": "gpio", "direction": "out", "value": 1},
+            {"pin": "TF-2", "mode": "gpio", "direction": "sideways", "value": 1},
+            {"pin": "TF-3", "mode": "gpio", "direction": "out", "value": 7},
+            {"pin": "TF-5", "mode": "gpio", "direction": "out", "value": 1}]}}]})
+    fppd.start()
+    pins = tmpfile_pins(fppd, 5)
+    # a TmpFile pin is high while its file exists
+    high = [os.path.exists(f"/tmp/GPIO-{p}") for p in pins]
+    assert high == [True, False, False, False, True], high
+    log = fppd.log()
+    assert "Invalid pin direction of 'sideways' on GPIO pin TF-2" in log, fppd.tail()
+    assert "Invalid pin value of '7' on GPIO pin TF-3" in log, fppd.tail()
+
+
 def test_a_gpio_output_error_warning_comes_down_when_the_pin_works(fppd):
     """A GPIO channel output whose pin throws on every write raises one
     "Exception in GPIO output" warning; once the pin works again the

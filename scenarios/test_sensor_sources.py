@@ -79,6 +79,9 @@ def test_a_failing_ads7828_read_holds_the_last_value(fppd):
     asked for more than it holds, and the loop never ended (an ASan
     stack-buffer-overflow here; in the field, a SIGBUS through a pointer
     the overrun had written ADC data into).
+
+    Also 7d9ccf197: an "ads7828" source is read directly over I2C and its
+    sample reaches the sensor (without the source type the sensor reports 0).
     """
     cape_sensors(fppd, [{"type": "ads7828", "id": "adc", "i2cBus": BUS, "i2cAddress": "0x48"}],
                  [sensor("ADC", "adc", 0)])
@@ -118,3 +121,23 @@ def test_bad_multiplexer_sources_are_dropped(fppd):
     assert "has invalid channels (0) or muxCount (0)" in log
     assert "references unknown pin 'NO_SUCH_PIN'" in log
     assert "references unknown source 'nothing'" in log
+
+
+def test_an_iio_adc_with_no_channels_warns_and_its_sensors_read_zero(fppd):
+    """An IIO sensor source whose device has no voltage channels (the ADC
+    isn't there) raises the "Could not enable IIOSensorSource" warning, and
+    a sensor on a channel it doesn't have reads 0 -- fppd keeps running and
+    reporting its status.
+
+    Regression: 067705ffd. The source's value list was empty and a sensor
+    read it by channel number past its end, which crashed fppd; the warning
+    is the one place the user is told the ADC is missing.
+    """
+    cape_sensors(fppd, [iio_source()], [sensor("P0", "iio", 3)])
+    fppd.start(preload=[shims.build("fakeadc.c")], extra_env={})
+    fppd.wait_for(lambda: any("Could not enable IIOSensorSource" in str(w)
+                              for w in fppd.get("/fppd/warnings")),
+                  timeout=10, what="the warning for the missing ADC")
+    fppd.check_alive()
+    assert reported(fppd).get("P0", 0) == 0, reported(fppd)
+    fppd.check_alive()
