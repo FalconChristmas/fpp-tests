@@ -20,8 +20,9 @@ pytestmark = pytest.mark.skipif(not on_pi(), reason="DPIPixels is built for a Ra
 
 
 @pytest.mark.parametrize("model,alt", [("Raspberry Pi 5 Model B Rev 1.0", "a1"),
+                                       ("Raspberry Pi Compute Module 5 Rev 1.0", "a1"),
                                        ("Raspberry Pi 4 Model B Rev 1.5", "a2")],
-                         ids=["pi5", "pi4"])
+                         ids=["pi5", "cm5", "pi4"])
 def test_dpi_data_pins_get_the_dpi_function_of_the_soc(fppd, model, alt):
     """DPIPixels' two strings on GPIO4 and GPIO5 (P1-7, P1-29): each pad is
     set to the SoC's DPI function, alt1 on a Pi 5's RP1 and alt2 on the
@@ -30,7 +31,9 @@ def test_dpi_data_pins_get_the_dpi_function_of_the_soc(fppd, model, alt):
     Regression: 58118066b. Every Pi got alt1, which on a Pi 4 is the
     secondary memory interface, so the strings there never saw the DPI.
     Also ce2e621f3, which first muxed a Pi 5's pins to alt1 for the DPI
-    (the pi5 case): without it no pinctrl call reaches the pad.
+    (the pi5 case): without it no pinctrl call reaches the pad. And
+    5e755c402 (the cm5 case): a Compute Module 5 is a Pi 5 too, and got the
+    BCM2711's alt2.
 
     The board is told apart by /proc/device-tree/model; fakesys.so serves
     fppd the one this case names (so a Pi 5 can run the Pi 4 case).
