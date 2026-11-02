@@ -226,3 +226,28 @@ def test_a_smart_receivers_marker_strings_get_no_auto_model(fppd):
     fppd.wait_for(lambda: {"first", "third"} <= set(models(fppd)), what="the auto-created models")
     time.sleep(1)
     assert sorted(models(fppd)) == ["first", "third"], sorted(models(fppd))
+
+
+def test_an_empty_middle_smart_receiver_leaves_the_output_enabled_and_gets_no_model(fppd):
+    """A port with three v2 smart receivers whose middle receiver has no
+    strings gets models for the real strings only.  fppd fills the empty
+    receiver with a one-pixel placeholder parked on the off channel; it must
+    not get a model, which would sit past the last channel and make fppd
+    disable the whole output ("channels ... outside 1-8388608").
+
+    Regression: the auto-model pass created a model for the placeholder.
+    """
+    throw_plugin.install(fppd, source="pixelstringdump.cpp", name="PixelStringDump")
+    p = port_config(fppd, 2, differentialType=6)
+    p["virtualStrings"][0]["description"] = "first"
+    p["virtualStringsB"] = []
+    p["virtualStringsC"] = [dict(p["virtualStrings"][0], description="third", startChannel=6)]
+    fppd.write(fppd.strings_config, {"channelOutputs": [{
+        "type": "PixelStringDump", "enabled": 1, "startChannel": 1, "channelCount": 12,
+        "outputCount": 1, "outputs": [p]}]})
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": []})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.wait_for(lambda: {"first", "third"} <= set(models(fppd)), what="the auto-created models")
+    time.sleep(1)
+    assert sorted(models(fppd)) == ["first", "third"], sorted(models(fppd))
