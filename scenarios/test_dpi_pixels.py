@@ -51,3 +51,23 @@ def test_a_shared_output_index_past_the_outputs_is_refused(fppd):
          "channelCount": 60, "outputCount": 2, "outputs": [output(0, 10, 0), output(1, 10, 30)]}]})
     fppd.start()
     assert "shares output 1001, which has no DPI pin" in fppd.log(), fppd.tail()
+
+
+@pytest.mark.skipif(not on_pi(), reason="spixels is built for a Raspberry Pi")
+@pytest.mark.parametrize("protocol", ["WS2801", "APA102", "LPD8806"])
+def test_an_spixels_protocol_is_matched_whatever_its_case(fppd, protocol):
+    """An spixels output whose protocol is spelled in capitals, as the pixel
+    strings page saves it, is a known protocol: nothing is logged about an
+    unknown one.
+
+    Regression: f119c50e1. The protocol was compared as saved against
+    lower-case names, so "WS2801" was "Unknown Pixel Protocol" and the
+    output refused to start.
+    """
+    fppd.write("config/co-other.json", {"channelOutputs": [
+        {"type": "spixels", "enabled": 1, "startChannel": 1, "channelCount": 30,
+         "outputCount": 1, "outputs": [dict(output(0, 10, 0), protocol=protocol)]}]})
+    fppd.start()
+    log = fppd.log()
+    assert "Loading output plugin: type=spixels" in log, log[-1500:]
+    assert "Unknown Pixel Protocol" not in log, log[-1500:]

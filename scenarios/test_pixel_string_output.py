@@ -79,6 +79,9 @@ def test_a_tm1814_port_leads_with_its_constant_current_words(fppd):
     Regression: 5b4a92f11. The port's protocol was saved by the UI but
     never read: a TM1814 string got plain ws2811 data, no C1/C2 (so the
     parts sat at their 6.5 mA floor) and an uninverted line.
+
+    Also d957beb00: the channel map's per-string length, which the wire
+    bytes are copied through; with it zero nothing reaches the buffer.
     """
     start(fppd, port_config(fppd, 4, protocol="tm1814"))
     fppd.request("PUT", "/overlays/range/1-12", {"Value": 0x40})
