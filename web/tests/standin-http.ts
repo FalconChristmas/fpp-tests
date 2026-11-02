@@ -25,7 +25,7 @@ class H(http.server.BaseHTTPRequestHandler):
         n = int(self.headers.get('Content-Length') or 0)
         body = self.rfile.read(n).decode('utf-8', 'replace') if n else ''
         with open(log, 'a') as f:
-            f.write(json.dumps({'method': self.command, 'host': self.headers.get('Host', ''), 'path': self.path, 'body': body}) + '\\n')
+            f.write(json.dumps({'method': self.command, 'host': self.headers.get('Host', ''), 'path': self.path, 'body': body, 'auth': self.headers.get('Authorization', '')}) + '\\n')
         try:
             with open(routes) as f:
                 table = json.load(f)
@@ -57,7 +57,7 @@ srv.serve_forever()
 `;
 
 export type Route = { status?: number; json?: unknown; body?: string; contentType?: string };
-export type Logged = { method: string; host: string; path: string; body: string };
+export type Logged = { method: string; host: string; path: string; body: string; auth?: string };
 
 function writeIn(where: string, path: string, content: string) {
   execFileSync('docker', ['exec', '-i', where, 'sh', '-c', `cat > '${path}'`], { input: content });
