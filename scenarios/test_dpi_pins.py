@@ -84,3 +84,31 @@ def test_dpi_pads_are_parked_low_when_fppd_stops(fppd):
             last[w[1]] = " ".join(w[2:])
     assert last.get("4") == "op dl" and last.get("5") == "op dl", \
         f"the pads after fppd stopped: {last} ({calls.calls()})"
+
+
+def test_a_port_with_no_pixels_is_not_muxed_to_the_dpi(fppd):
+    """DPIPixels on a virtual EEPROM with an empty string on GPIO4 (P1-7)
+    and one with pixels on GPIO5 (P1-29): only GPIO5's pad is set to the DPI
+    function, so the unused output stays what the board had it as. (An empty
+    string last in the list is dropped whatever, so the empty one is first.)
+
+    Regression: cc363cf65. Every configured output's pad was muxed to the
+    DPI whether or not a string was attached, taking pins from whatever else
+    the hat used them for.
+    """
+    from test_dpi_refresh import string
+    if not hosttools.stubbed("pinctrl"):
+        pytest.skip("needs run-local.sh's pinctrl stub (no --host-pinctrl)")
+    setup(fppd)
+    fppd.write("config/co-pixelStrings.json", {"channelOutputs": [
+        {"type": "DPIPixels", "subType": "TestDPIRate", "enabled": 1, "startChannel": 1,
+         "channelCount": 60, "outputCount": 2, "outputs": [string(0, 0, pixels=0), string(1, 30)]}]})
+    preload, env = fakedrm.dpi_env(fppd)
+    calls = hosttools.pinctrl_calls()
+    fppd.start(preload=preload, extra_env=env)
+    fppd.wait_for(lambda: "DPIPixels: framebuffer 1920x" in fppd.log(), timeout=15,
+                  what="DPIPixels to come up on the fake DPI panel")
+    fppd.wait_for(lambda: [c for c in calls.calls() if c.split()[:2] == ["set", "5"]], timeout=5,
+                  what="GPIO5 to be muxed")
+    sets = [c.split()[1] for c in calls.calls() if c.split()[:1] == ["set"]]
+    assert "4" not in sets, f"GPIO4 has no pixels but was muxed: {calls.calls()}"
