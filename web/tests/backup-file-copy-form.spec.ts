@@ -27,8 +27,16 @@ async function onlyConfiguration(page: Page) {
 async function startCopy(page: Page) {
   page.on('dialog', (d) => d.accept());
   const started = page.waitForRequest((r) => r.url().includes('copystorage.php'));
+  // Bootstrap drops a hide asked for while the modal is still fading in, and
+  // the stubbed copy is done at once: let the dialog finish showing first.
+  const shown = page.evaluate(() => new Promise<void>((resolve) => {
+    document.addEventListener('shown.bs.modal', (e) => {
+      if ((e.target as HTMLElement).id === 'copyPopup_Modal') resolve();
+    }, { once: false });
+  }));
   await page.click('#tab-fileCopy input[type=button][value="Copy"]');
   const url = new URL((await started).url());
+  await shown;
   // The copy dialog has to be closed before the form can be used again.
   await expect(page.locator('#copyPopup_ModalCloseButton')).toBeEnabled({ timeout: 15_000 });
   await page.click('#copyPopup_ModalCloseButton');
@@ -85,6 +93,9 @@ test('a File Copy to a remote host sends the remote storage device picked', asyn
 // be copied into Automatic_Backups on the drive.
 test('choosing a drive for the JSON backups offers to copy the existing ones to it', async ({ page }) => {
   await openFileCopy(page);
+  // The page fills this list from the drives it finds once it has loaded:
+  // let that finish before putting a drive of our own in it.
+  await page.waitForLoadState('networkidle');
   await page.evaluate(() => {
     const sel = document.getElementById('jsonConfigbackup.USBDevice') as HTMLSelectElement;
     sel.innerHTML = '<option value="none">None</option><option value="sdz4">sdz4</option>';

@@ -182,6 +182,24 @@ called_from_lib:libpipewire-0.3.so
 # to this plugin, and reads as an unlock of an unlocked mutex: seen from
 # PipeWireOutputStream::WaitDrained()'s flush.
 called_from_lib:libgstpipewire.so
+# PipeWire's audio converter plugin and the libsamplerate resampler under it
+# (AES67Manager's pipelines, torn down by StopAllPipelines() while the graph's
+# data thread is still releasing its buffers): the converter's state moves
+# between PipeWire's own threads through its locks, which TSan can't see. Not
+# called_from_lib: PipeWire unloads the plugin, which TSan treats as fatal.
+race:libspa-audioconvert.so
+race:libsamplerate.so.0
+# The H.264 / H.265 / AAC decode paths (test_hevc_software_decode.py,
+# test_remote_video_seek_loop.py, test_hardware_decoding_setting.py): the
+# codec parsers, openh264 and faad fill their frame and context buffers on one
+# streaming thread and hand them to the next through GStreamer's pad locks,
+# which TSan can't see. The races are inside those libraries (memcpy, their own
+# state), none in FPP's code.
+called_from_lib:libgstcodecparsers-1.0.so
+called_from_lib:libgstopenh264.so
+called_from_lib:libgstfaad.so
+race:libopenh264.so.8
+race:libfaad.so.2
 called_from_lib:libgstplayback.so
 called_from_lib:libgstvolume.so
 # The video paths (test_video.py): demux, decode, the test source, and RTP

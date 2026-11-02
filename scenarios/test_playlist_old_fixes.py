@@ -82,7 +82,11 @@ def test_an_inserted_random_playlist_is_shuffled(fppd):
         fppd.command("Insert Playlist Immediate", name, "0", "0", "false")
         fppd.wait_for(lambda: len(trace(fppd) or "") == 6, timeout=10, what=f"{name} to play")
         got = trace(fppd)
-        fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("type") == "pause",
+        # P is back once its status says playing again, not at the first
+        # "paused" (type pause) the status shows as the inserted playlist ends:
+        # an insert sent in that window, while P is still resuming, is lost.
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "playing" and
+                      status(fppd).get("current_playlist", {}).get("type") == "pause",
                       what="P to carry on")
         return got
 
