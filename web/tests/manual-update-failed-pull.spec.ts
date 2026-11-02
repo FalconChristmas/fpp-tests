@@ -52,6 +52,9 @@ test('a failed pull is reported as a failed update, and fppd is not restarted', 
     expect(out, out).toContain('Upgrade FAILED');
     expect(out, out).not.toContain('Upgrade Complete');
     expect(out, out).not.toContain('Restarting FPP');
+    // Regression: b547b572a.  The update's output said nothing of
+    // how long the pull took.
+    expect(out, out).toMatch(/Elapsed Time: \d\d:\d\d:\d\d\s*$/m);
     expect(inPlayer('sh', '-c', `test -e ${RESTARTED} && echo ran || echo not`).trim(),
       'fppd was restarted after a failed pull').toBe('not');
     // What the About page's update dialog then reads.

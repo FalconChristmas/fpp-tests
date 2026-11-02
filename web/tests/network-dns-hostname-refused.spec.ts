@@ -9,6 +9,9 @@ test('a host name in a DNS server field is refused, with the warning on both tab
   // letter in it through ("is it a hostname?" matched any text), so
   // "dns.example.com" or "abc" saved as a DNS server; and the warning text
   // went to the one tab's element only.
+  // Also 3853cb504: hostnames are allowed only where a caller asks for them
+  // (the universe address fields), so the DNS fields refuse them whatever
+  // the name looks like.
   await page.route((u) => u.pathname.endsWith('/api/network/dns'), (route) =>
     route.request().method() === 'GET' ? route.fulfill({ json: { DNS1: '192.0.2.53', DNS2: '192.0.2.54' } }) : route.abort());
   await page.goto('/networkconfig.php');

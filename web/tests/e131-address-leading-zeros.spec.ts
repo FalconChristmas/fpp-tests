@@ -51,6 +51,8 @@ test('a unicast hostname is still saved', async ({ page, request }) => {
   // The other side of 427204159: names, including ones with digits in
   // them, are still allowed; only an all-digits-and-dots address must be
   // a dotted quad.
+  // Also 42004efa2: a dotted name (here a three-label one) passes the
+  // hostname pattern, which used to refuse any name with a dot in it.
   const r = await request.post('/api/channel/output/universeOutputs', { data: config('10.0.0.5') });
   expect(r.ok()).toBe(true);
   page.on('dialog', (d) => d.accept());

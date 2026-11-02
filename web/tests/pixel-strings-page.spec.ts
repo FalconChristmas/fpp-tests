@@ -266,6 +266,9 @@ test('saving the strings turns test mode off', async ({ page, request }) => {
 });
 
 test('Import Strings takes a model\'s pixel count from xLights\' named node-count attributes, or an old parm2', async ({ page, request }) => {
+  // Also 48a25f7a8: with an xLights layout uploaded the tab tested
+  // `!models_xml` (no $), an undefined constant that is an Error in PHP 8,
+  // so the Pixel Strings tab never rendered.
   // Regression: 6b0b4e34f.  The import read the pixel count from the parm2
   // attribute, which current xLights no longer writes (it has per-type names
   // such as NodesPerString), so a current layout imported 0-pixel strings.

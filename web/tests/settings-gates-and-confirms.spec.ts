@@ -107,3 +107,25 @@ test('a select built around a value not among its options shows that value', asy
   expect(r.options).toContain('zzz');
   expect(r.value).toBe('zzz');
 });
+
+test('a select built with no current value gets no "undefined" option', async ({ page }) => {
+  // Regression: the "keep an unlisted value selected" branch of CreateSelect()
+  // (b7ce4b014) also ran for a value that was not there at all -- a new Other
+  // output's default config has no device -- and added <option
+  // value='undefined' selected>, which saving would store as the device.
+  await page.goto('/index.php');
+  await page.waitForFunction(() => typeof (window as any).CreateSelect === 'function');
+  const r = await page.evaluate(() => {
+    const opts = (cur: any) => {
+      const host = document.createElement('div');
+      host.innerHTML = (window as any).CreateSelect({ a: 'A', b: 'B' }, cur, 'Pick', 'None', 'fpptests-sel');
+      const sel = host.querySelector('select') as HTMLSelectElement;
+      return { value: sel.value, options: Array.from(sel.options).map((o) => o.value) };
+    };
+    return { none: opts(undefined), nul: opts(null), listed: opts('b') };
+  });
+  expect(r.none.options).toEqual(['a', 'b']);
+  expect(r.nul.options).toEqual(['a', 'b']);
+  // The control: a listed value is still the one chosen.
+  expect(r.listed.value).toBe('b');
+});
