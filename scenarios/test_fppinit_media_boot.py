@@ -56,7 +56,10 @@ def test_upgrade_125_puts_back_the_distros_pipewire_gstreamer_plugin(fppinit):
 
     plugin_box(fppinit, current="1.4.2")
     plugin, cache = after_125(fppinit)
-    assert plugin == "built against PipeWire 1.6.0\n" and cache == ["registry.x86_64.bin"], (plugin, cache)
+    # The box's own GStreamer cache (registry.<arch>.bin, written by any gst tool
+    # that ran in the same container) may sit beside the seeded one: what matters
+    # is that the seeded cache was left alone.
+    assert plugin == "built against PipeWire 1.6.0\n" and "registry.x86_64.bin" in cache, (plugin, cache)
 
 
 def test_a_retired_alsa_media_backend_is_moved_to_pipewire_simple(fppinit):

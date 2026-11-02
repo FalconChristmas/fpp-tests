@@ -25,6 +25,7 @@
 #include "channeloutput/ChannelOutput.h"
 #include "channeloutput/PixelString.h"
 #include "channeloutput/stringtesters/PixelStringTester.h"
+#include "Sequence.h"
 #include "log.h"
 #include "overlays/PixelOverlay.h"
 
@@ -104,7 +105,9 @@ public:
     virtual void GetRequiredChannelRanges(const std::function<void(int, int)>& addRange) override {
         for (auto& p : ports) {
             for (auto& vs : p.ps->m_virtualStrings) {
-                if (vs.pixelCount) {
+                // A placeholder for an empty receiver is parked on the off
+                // channel and has none: real outputs leave it out of their ranges.
+                if (vs.pixelCount && vs.startChannel < FPPD_MAX_CHANNELS) {
                     addRange(vs.startChannel, vs.startChannel + vs.pixelCount * vs.channelsPerNode() - 1);
                 }
             }

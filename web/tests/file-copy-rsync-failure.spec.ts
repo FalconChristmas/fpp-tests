@@ -67,7 +67,7 @@ test('a Restore From Remote of the configuration and plugins hands rsync directo
   // The control: both items ran their rsync from the other player's folder.
   const src = `127\\.0\\.0\\.1::media/backups/${FOLDER}`;
   expect(sent.filter((l) => new RegExp(` -- ${src}/ /home/fpp/media$`).test(l))).toHaveLength(2);
-  expect(sent.some((l) => l.includes("--include=plugin*"))).toBe(true);
+  expect(sent.some((l) => l.includes("--include=/plugin*/***"))).toBe(true);
   for (const l of sent) {
     expect(l).not.toMatch(/::\S*\/\*/);
     expect(l.match(/ -- /g) ?? []).toHaveLength(1);

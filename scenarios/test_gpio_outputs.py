@@ -24,6 +24,17 @@ def tmpfile_pins(fppd, n):
     return want
 
 
+def clear_tmpfile_pins(n):
+    """A TmpFile pin reads high while /tmp/GPIO-<pin> exists, and /tmp is shared
+    by every scenario in the container: a pin an earlier one left high would
+    read as set here. Start from all low."""
+    for i in range(1, n + 1):
+        try:
+            os.unlink(f"/tmp/GPIO-TF-{i}")
+        except FileNotFoundError:
+            pass
+
+
 def test_pins_set_from_several_clients_at_once(fppd):
     """Four clients each setting their own pin through POST /api/gpio,
     toggling it with the GPIO command's Opposite and reading it back with
@@ -87,6 +98,7 @@ def test_an_outputs_base_gpios_are_configured_when_it_starts(fppd):
     Regression: 5462e34e7, which let a controller's JSON config configure
     GPIO pins.
     """
+    clear_tmpfile_pins(5)
     fppd.write("config/co-other.json", {"channelOutputs": [{
         "type": "GPIO", "enabled": 1, "startChannel": 1, "channelCount": 1, "pin": "TF-4",
         "base": {"gpios": [

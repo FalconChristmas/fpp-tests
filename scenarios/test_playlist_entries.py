@@ -690,7 +690,9 @@ def test_status_names_the_first_entry_of_a_dynamic_entry(fppd):
                                    not in (None, "", "command")) and
                           status(fppd)["current_playlist"]["type"], what="P to play")
     fppd.wait_for(lambda: trace(fppd) == "6", what="the dynamic entry's second pause")
-    second = status(fppd)["current_playlist"]["type"]
+    # The step has run but may still be the current entry for a moment.
+    second = fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("type") not in (None, "", "command") and
+                           status(fppd)["current_playlist"]["type"], what="the entry after the step")
     assert (first, second) == ("pause", "pause"), (first, second)
     fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=15,
                   what="P to finish")
