@@ -99,6 +99,33 @@ def test_lifecycle_and_playlist_events(fppd):
     assert events(d)[-1] == "lifecycle shutdown", events(d)[-3:]
 
 
+PY_CALLBACKS = """#!/usr/bin/env python3
+# The callbacks.sh above, in Python: logs every call next to itself.
+import os, sys
+log = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "events.log")
+if sys.argv[1:2] == ["--list"]:
+    print("lifecycle")
+elif sys.argv[1:2] == ["--type"]:
+    with open(log, "a") as f:
+        f.write(" ".join(sys.argv[2:]) + "\\n")
+"""
+
+
+def test_a_python_callbacks_script_is_run_with_python3(fppd):
+    """A plugin whose callbacks are callbacks.py is loaded and called.
+
+    Regression: 196e9e072. scripts/eventScript ran .py callbacks with
+    /usr/bin/python, which Debian no longer installs (the image here has only
+    python3), so --list failed, fppd saw no callback types and never called
+    the plugin."""
+    d = plugin(fppd, name="fpp-test-py", script="callbacks.py")
+    with open(os.path.join(d, "callbacks.py"), "w") as f:
+        f.write(PY_CALLBACKS)
+    fppd.start()
+    fppd.wait_for(lambda: "lifecycle startup" in events(d), timeout=10,
+                  what="the python plugin's startup lifecycle event")
+
+
 def test_plugin_command_runs_its_script(fppd):
     """A command declared in commands/descriptions.json is listed with fppd's
     commands and runs its script with the arguments and the plugin's
