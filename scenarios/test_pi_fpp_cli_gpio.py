@@ -37,3 +37,24 @@ def test_fpp_g_drives_a_pin_nothing_set_up(pads, fppd):
     assert rc == 0, out
     fppd.wait_for(lambda: pad(gpio)[2] == "lo", timeout=5, what=f"{pin}'s pad to go low")
     fppd.check_alive()
+
+
+def test_fpp_G_on_a_gpio_the_header_does_not_have_is_refused(fppd):
+    """`fpp -G 99 Output` names a GPIO no header pin has: fppd answers that
+    it could not configure it, and carries on.
+
+    Regression: f1fe4a246 ("Fix piface gpio outputs"). A GPIO number not in
+    the Pi's pin table was looked up again by the same provider instead of
+    being passed on to the PiFace's. The call to itself is a tail call, so
+    the optimised build loops in it for ever: fppd's main loop never comes
+    back to answer the command, or anything after it. (The PiFace's own
+    pins need its SPI board.)"""
+    fppd.start()
+    rc, out = fpp(fppd, "-G", "99", "Output")
+    fppd.check_alive()
+    assert ",Configuring GPIO,99,Output" in out, out
+    assert out.split(",")[1] == "0", f"configuring GPIO 99 did not fail: {out}"
+    # The control: fppd still answers its command socket.
+    rc, out = fpp(fppd, "-s")
+    assert rc == 0 and out, out
+    fppd.check_alive()

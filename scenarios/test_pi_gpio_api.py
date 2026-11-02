@@ -36,6 +36,10 @@ def test_the_gpio_commands_opposite_flips_the_pin(pads, fppd):
     Regression: 87dd120d9, which made the command's second argument an
     action (On/Off/Opposite) rather than a bool; Opposite was unknown
     before it ("Invalid Action").
+
+    Also f91bda09b, on a Pi 5: the RP1 pin controller is found by its
+    pinctrl-rp1 label; fppd took gpiod chip 4, which a Pi 5 on a current
+    kernel does not have (rp1 is gpiochip0), so every line request failed.
     """
     pin = free_pin()
     gpio = PLAIN_PINS[pin]
