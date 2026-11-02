@@ -111,3 +111,27 @@ def test_genius_pro_and_generic_genius_ping_ids_are_named(fppd):
     assert got == {0xa3: (0xa3, "Genius PRO 16"),
                    0xa4: (0xa4, "Genius PRO 32"),
                    0xaf: (0xaf, "Genius Controller")}, got
+
+
+@pytest.mark.parametrize("model", ["BeagleBoard.org PocketBeagle2", "BeagleBoard.org BeaglePlay"],
+                         ids=["pocketbeagle2", "beagleplay"])
+def test_a_pocketbeagle2_is_listed_as_one_not_as_a_pocketbeagle(fppd, model):
+    """A PocketBeagle2 and a BeaglePlay (device-tree models "BeagleBoard.org
+    PocketBeagle2" and "BeagleBoard.org BeaglePlay") list the local system as
+    a PocketBeagle2 -- the type it announces in its pings -- not as a
+    PocketBeagle 1 or unknown hardware.
+
+    Regression: 7a6ba68cb, which added the PocketBeagle2 type for the BB64
+    platform; the later check ahead of the PocketBeagle one is what keeps
+    "PocketBeagle2" from reading as a PocketBeagle.
+    """
+    tree = os.path.join(fppd.media, "fakesys", "devicetree")
+    fppd.write("fakesys/devicetree/model", model + "\0")
+    with interface("10.77.0.1"):
+        fppd.start(preload=[shims.build("fakesys.c")],
+                   extra_env={"FAKESYS": f"/sys/firmware/devicetree/base={tree}"})
+        s = fppd.wait_for(lambda: next((s for s in fppd.get("/fppd/multiSyncSystems")["systems"]
+                                        if s.get("local") and s["address"] == "10.77.0.1"), None),
+                          timeout=10, what="the local system to be listed")
+    assert s["model"] == model, s
+    assert s["type"] == "PocketBeagle2", s

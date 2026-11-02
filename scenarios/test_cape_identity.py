@@ -259,3 +259,32 @@ def test_a_signed_eeprom_keeps_its_signature_when_the_backup_copy_fails(fppinit)
     assert "Found Cape" in out, out[-3000:]
     assert b"S" * 64 in result and b"KEY123" in result, f"the signature section was lost:\n{out[-2500:]}"
     assert "Preserved signature section from previous EEPROM" in out, out[-2500:]
+
+
+def upgrade_in_place(sb, old, new, *args):
+    sb.write_bytes("config/cape-eeprom.bin", old)
+    sb.write_bytes("config/fpp-tests-image.bin", new)
+    r = sb._run(["/opt/fpp/scripts/upgradeCapeFirmware", *args, "/home/fpp/media/config/fpp-tests-image.bin"],
+                timeout=180, media_home=True)
+    with open(os.path.join(sb.media, "config", "cape-eeprom.bin"), "rb") as f:
+        return f.read(), r.stdout + r.stderr
+
+
+def test_a_cape_with_no_serial_takes_the_new_images_serial_only_for_the_same_cape(fppinit):
+    """Upgrading a virtual EEPROM whose cape serial is all zeros copies the
+    new image's serial in when it is the same cape, and keeps the zeros when
+    the image is a different cape (forced over it).
+
+    Regression: 2790866fd. The serial was copied whatever the cape name, so
+    forcing a different cape's image over a blank-serial one gave it the
+    other cape's sample serial.
+    Also 001e05cb0: the upgrade script's force argument, and the new image's
+    serial going into a virtual EEPROM that had none.
+    """
+    old = ee.image(ee.cape_info(), name="CapeA", serial="0000000000000000")
+    same, out = upgrade_in_place(fppinit, old, ee.image(ee.cape_info(), name="CapeA", serial="SAMPLE-SERIAL-1"))
+    assert same[42:58].rstrip(b"\0") == b"SAMPLE-SERIAL-1", f"the control: same cape copies it\n{out[-1500:]}"
+    other, out = upgrade_in_place(fppinit, old, ee.image(ee.cape_info(), name="CapeB", serial="SAMPLE-SERIAL-2"),
+                                  "force")
+    assert other[6:32].rstrip(b"\0") == b"CapeB", f"the force did not apply\n{out[-1500:]}"
+    assert other[42:58] == b"0000000000000000", f"serial {other[42:58]!r}\n{out[-1500:]}"

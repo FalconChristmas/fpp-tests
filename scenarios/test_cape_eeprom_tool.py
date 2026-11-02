@@ -40,3 +40,18 @@ def test_a_serial_given_with_s_is_written_to_the_image(tmp_path):
     r = subprocess.run(["php", "-d", "short_open_tag=1", tool, "-e", str(img), "-i"],
                        capture_output=True, text=True, timeout=30)
     assert "Cape Serial #     : SER12345" in r.stdout + r.stderr, r.stdout + r.stderr
+
+
+def test_an_images_files_are_extracted_to_a_directory_with_x(tmp_path):
+    """generateEEPROM -e IMAGE -x DIR writes each file record of the image
+    under DIR at its own path.
+
+    Regression: f646cf304 added -x; without it getopt left DIR a stray
+    argument and the image was read as an -e dump.
+    """
+    img = tmp_path / "in.bin"
+    img.write_bytes(ee.image(ee.cape_info()))
+    out = tmp_path / "extracted"
+    r = subprocess.run(["php", "-d", "short_open_tag=1", os.path.join(TREE, "scripts", "generateEEPROM"),
+                        "-e", str(img), "-x", str(out)], capture_output=True, text=True, timeout=30)
+    assert (out / "tmp" / "cape-info.tgz").stat().st_size > 0, r.stdout + r.stderr

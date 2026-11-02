@@ -172,6 +172,51 @@ def test_an_unsigned_cape_cannot_remove_settings(fppinit):
     assert "ignoring removeSettings" in out, out
 
 
+def test_an_unsigned_cape_keeps_its_provides_list(fppinit):
+    """cape-info.json's provides array reaches the published cape info of an
+    unsigned image: it names the outputs a cape offers, and the UI lists them.
+
+    Regression: 81052a72a. The unsigned path deleted `provides` from the
+    result, so a virtual EEPROM could not offer any.
+    """
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(provides=["strings", "panels"])))
+    detect(fppinit)
+    info = cape_info(fppinit)
+    assert info["capeStatus"] == "UNSIGNED", info
+    assert info.get("provides") == ["strings", "panels"], info
+
+
+def test_repeated_extras_of_an_unsigned_cape_become_an_array(fppinit):
+    """Type-97 extra records add keys to the cape info: one record for a key
+    is a string, several for the same key are an array in file order, and
+    on an unsigned image they are not offered as signed extras (a control
+    that holds on both sides: 9e2c91026 moved the signed ones under "signed").
+
+    Regression: ef9cdadf6. Several records of a key overwrote one another.
+    """
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(), extras={
+        "single": "one", "several": ["first", "second", "third"]}))
+    detect(fppinit)
+    info = cape_info(fppinit)
+    assert info.get("single") == "one", info
+    assert info.get("several") == ["first", "second", "third"], info
+    assert "signed" not in info, info
+
+
+def test_an_unsigned_cape_cannot_set_the_serials_with_a_serial_record(fppinit):
+    """A type-96 record (cape and device serial) is read only when the
+    image's signature verifies: an unsigned one leaves the serial the header
+    gave.
+
+    Regression: de985ed5d. Any image could claim any serial.
+    """
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(), serial="HEADER0001",
+                                         serials=("FORGED0002", "FORGEDDEVICE")))
+    detect(fppinit)
+    info = cape_info(fppinit)
+    assert info.get("serialNumber") == "HEADER0001", info
+
+
 def test_unsigned_copy_files_stay_inside_the_media_directory(fppinit):
     """copyFiles from an unsigned image may copy a file from FPP's own tree
     into the media directory, and nothing else: not from elsewhere (the

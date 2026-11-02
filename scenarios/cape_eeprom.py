@@ -89,15 +89,19 @@ END = b"0".ljust(6, b"\0")
 
 
 def image(cape_info, files=None, links=None, location=None, signature=None, extras=None,
-          name="TestCape", serial="TEST0001"):
+          name="TestCape", serial="TEST0001", serials=None):
     """An unsigned image whose archive holds cape-info.json plus `files`.
 
     location: the type-98 value, or None for no record.
     signature: (key id, bytes) for a type-99 record that will not verify.
-    extras: {key: value} type-97 records."""
+    extras: {key: value} type-97 records; a list value is one record each.
+    serials: (cape serial, device serial) as a type-96 record."""
     out = header(name=name, serial=serial)
     for k, v in (extras or {}).items():
-        out += record(97, k.encode().ljust(12, b"\0") + v.encode())
+        for one in (v if isinstance(v, list) else [v]):
+            out += record(97, k.encode().ljust(12, b"\0") + one.encode())
+    if serials is not None:
+        out += record(96, serials[0].encode().ljust(16, b"\0") + serials[1].encode().ljust(42, b"\0"))
     if signature is not None:
         key, sig = signature
         out += record(99, key.encode().ljust(6, b"\0") + sig)

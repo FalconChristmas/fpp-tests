@@ -59,6 +59,24 @@ def test_pins_set_from_several_clients_at_once(fppd):
         assert fppd.get(f"/gpio/{pin}").get("value") == 1, pin
 
 
+def test_the_gpio_command_answers_ok_for_a_pin_it_drove(fppd):
+    """The GPIO command sets the pin and says OK; an unknown pin is an
+    error that names it.
+
+    Regression: 1905ed3e2. The success path built its OK result and dropped
+    it, so every GPIO command fell through to "No Pin Named" after driving
+    the pin.
+    """
+    fppd.start()
+    pin, = tmpfile_pins(fppd, 1)
+    r = fppd.command("GPIO", pin, "true")
+    assert "OK" in str(r), r
+    assert fppd.get(f"/gpio/{pin}").get("value") == 1
+    with pytest.raises(Exception) as e:
+        fppd.command("GPIO", "NoSuchPin-9", "true")
+    assert "No Pin Named" in str(getattr(e.value, "body", e.value)), e.value
+
+
 def test_a_gpio_output_error_warning_comes_down_when_the_pin_works(fppd):
     """A GPIO channel output whose pin throws on every write raises one
     "Exception in GPIO output" warning; once the pin works again the
