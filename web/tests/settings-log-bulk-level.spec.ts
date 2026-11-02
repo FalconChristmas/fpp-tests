@@ -1,0 +1,32 @@
+import { test, expect } from './fixtures';
+import { container } from './container';
+import { setSettingInFile, settingInFile, snapshotSettings } from './settings-file';
+
+// The Logging tab's Bulk Change Log Level buttons set every log level at
+// once, except Channel Data: debug or excess logging of channel data writes a
+// line per frame, which fills the log and slows the player.
+//
+// Regression: 68cc39764 ("Skip Channel Data when bulk setting Log Level").
+
+test.skip(!container, 'sets the settings file inside the run-web.sh container');
+
+let restoreSettings: () => void;
+test.beforeEach(() => {
+  restoreSettings = snapshotSettings();
+  setSettingInFile('uiLevel', '3');
+  setSettingInFile('LogLevel_General', 'info');
+  setSettingInFile('LogLevel_ChannelData', 'warn');
+});
+test.afterEach(() => restoreSettings());
+
+test('Bulk Change sets every log level but Channel Data', async ({ page }) => {
+  await page.goto('/settings.php?tab=Logging');
+  await expect(page.locator('#LogLevel_General')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('#LogLevel_ChannelData')).toHaveValue('warn');
+  await page.locator('#settings-logs').getByRole('button', { name: 'Debug' }).click();
+  // The control: the bulk change did change the others, and saved them.
+  await expect(page.locator('#LogLevel_General')).toHaveValue('debug');
+  await expect.poll(() => settingInFile('LogLevel_General')).toBe('debug');
+  await expect(page.locator('#LogLevel_ChannelData')).toHaveValue('warn');
+  expect(settingInFile('LogLevel_ChannelData')).toBe('warn');
+});

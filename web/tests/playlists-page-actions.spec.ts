@@ -59,6 +59,21 @@ test.describe('adding a playlist', () => {
     await expect(page.locator('#txtAddPlaylistName')).toBeFocused();
   });
 
+  test('the name box is empty each time the Add dialog opens', async ({ page }) => {
+    // Regression: 7141ee3e3 (#1391).  The dialog's body is the page's own
+    // #playlistAdd, moved into the modal, so a name typed and then cancelled
+    // was still there the next time Add was clicked.
+    await page.goto('/playlists.php');
+    await whenModalShown(page, () => page.locator('.playlistAddNewBtn').first().click());
+    await page.locator('#txtAddPlaylistName').fill('fpp-tests-left-over');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.modal.show')).toHaveCount(0);
+    // The control: the typed name is still in the (hidden) box.
+    await expect(page.locator('#txtAddPlaylistName')).toHaveValue('fpp-tests-left-over');
+    await whenModalShown(page, () => page.locator('.playlistAddNewBtn').first().click());
+    await expect(page.locator('#txtAddPlaylistName')).toHaveValue('');
+  });
+
   test('a new playlist opens in the editor under its own name', async ({ page, request }) => {
     // Regression: c168715e9.  After Add Playlist the editor opened with the
     // header still empty (or naming the last playlist shown).
