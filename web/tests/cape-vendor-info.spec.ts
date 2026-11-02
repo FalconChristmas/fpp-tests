@@ -56,6 +56,8 @@ test.describe('cape vendor links', () => {
     // string literal on every page, so a quote in it ran the EEPROM's script
     // everywhere in the UI, and a javascript: landing page became the
     // logo's href.
+    // Also 8ea3c4694: the cape here has no verifiedKeyId, and the logo is
+    // still drawn (it was only drawn for a cape signed with a known key).
     writeJson(CAPE_INFO, cape({
       url: 'https://vendor.invalid/',
       landingPage: 'javascript:window.__fppTestsVendor=2',

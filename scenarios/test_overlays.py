@@ -1167,6 +1167,18 @@ def test_overlay_commands_exist_with_no_models(fppd):
     assert "No model found" in str(reply), reply
 
 
+def test_the_model_list_with_no_models_is_an_empty_list(fppd):
+    """GET /overlays/models on a player with no models answers [].
+
+    Regression: 90df26dc4. The handler appended each model to an untyped
+    Json::Value, so with none it stayed null and the reply was "null": the
+    Pixel Overlay Models page and anything iterating the list (xLights, a
+    script) got no array to walk."""
+    setup(fppd, [])
+    fppd.start()
+    assert fppd.get("/overlays/models") == []
+
+
 def test_stop_effects_does_not_stall_the_output(fppd):
     """Stopping a model's effect doesn't hold up the output: the frames on
     the wire keep their cadence through the stop.

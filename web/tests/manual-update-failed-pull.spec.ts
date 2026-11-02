@@ -66,3 +66,32 @@ test('a failed pull is reported as a failed update, and fppd is not restarted', 
     inPlayer('rm', '-f', LOG, RESTARTED, '/home/fpp/media/tmp/fppd_restarted');
   }
 });
+
+test('a pull that leaves no fppd behind is reported as a failed update', async ({ request }) => {
+  // Regression: 4c506da4f ("Make it more obvious when fppd builds fail",
+  // #963).  manualUpdate.php printed "Update Complete" after any pull that
+  // returned, so an update whose build produced no fppd looked like it had
+  // worked until the player came back without one.  git_pull here succeeds
+  // having done nothing, and src/fppd is moved aside for the length of the
+  // test (the running fppd keeps its own copy).
+  test.setTimeout(120_000);
+  const FPPD = '/opt/fpp/src/fppd';
+  const SAVED = '/opt/fpp/src/fppd.fpp-tests-saved';
+  inPlayer('rm', '-f', LOG);
+  const restores = [
+    replaceScript('git_pull', '#!/bin/sh\necho "fpp-tests: nothing to pull"\nexit 0\n'),
+    replaceScript('fppd_restart', '#!/bin/sh\nexit 0\n'),
+  ];
+  inPlayer('mv', FPPD, SAVED);
+  try {
+    const out = await (await request.post('/manualUpdate.php?wrapped=1', { timeout: 90_000 })).text();
+    // The control: the stand-in ran and the update went on past it.
+    expect(out).toContain('fpp-tests: nothing to pull');
+    expect(out, out).toContain('Upgrade FAILED');
+    expect(out, out).not.toMatch(/Upgrade Complete|Update Complete/);
+  } finally {
+    inPlayer('mv', '-f', SAVED, FPPD);
+    for (const restore of restores) restore();
+    inPlayer('rm', '-f', LOG, '/home/fpp/media/tmp/fppd_restarted');
+  }
+});

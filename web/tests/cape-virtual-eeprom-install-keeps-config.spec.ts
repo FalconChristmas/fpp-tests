@@ -41,6 +41,8 @@ test('installing a virtual EEPROM over an installed one drops the old output con
   // The control for the test above: the cleanup still happens when an EEPROM
   // is being replaced, so the keep is down to the condition and not to the
   // install failing before it got there.
+  // Also 93c02bb79: a /opt/fpp/capes/... name is installed from there (not
+  // looked for in the upload directory), and resets the string configs.
   inPlayer('sh', '-c', `printf 'FPP02' > ${EEPROM}`);
   for (const f of FILES) inPlayer('sh', '-c', `printf '{"channelOutputs":[]}' > ${f}`);
   await install(request);

@@ -266,6 +266,24 @@ def test_a_missing_device_is_reported(fppd):
                   timeout=10, what="the could-not-open warning")
 
 
+def test_a_model_whose_device_is_missing_can_be_enabled_and_filled(fppd):
+    """An FB model whose device could not be opened still takes data and
+    state like any model, and fppd draws nothing for it rather than
+    dereferencing the framebuffer it does not have.
+
+    Regression: 8dd9d76df. A failed framebuffer init left the model holding
+    the half-made FrameBuffer, and the overlay's draw went through it."""
+    fb = FakeFb(fppd, width=W, height=H, bpp=32)
+    fb_model(fppd, Device="fb9")
+    fb.start()
+    send(fppd, image(W, H))
+    fppd.request("PUT", f"/overlays/model/{MODEL}/fill", {"RGB": [255, 0, 0]})
+    time.sleep(2)
+    fppd.check_alive()
+    model = [m for m in fppd.get("/overlays/models") if m["Name"] == MODEL]
+    assert model and model[0]["isActive"], model
+
+
 def test_the_device_is_looked_for_in_dev_unless_told_otherwise(fppd):
     """With no framebufferControlSocketPath set, a model on a framebuffer
     device opens it under /dev, and says so when it cannot.

@@ -69,6 +69,19 @@ test('a Compute Module 5 is a Pi 5, with the Pi 5 logo', async ({ request }) => 
   expect((await request.get(`/images/${cm5.Logo}`)).status(), `images/${cm5.Logo}`).toBe(200);
 });
 
+test('a Compute Module 4 is a Pi 4, with the Pi 4 logo', async ({ request }) => {
+  // Regression: 477bf8b25 ("Set the icon for the compute module 4 to the Pi4
+  // icon").  A CM4's model is "Raspberry Pi Compute Module 4 ...", which the
+  // "Pi 4" match does not take, so it got no variant and no logo.
+  const pi4 = board({ platform: 'Raspberry Pi\n', model: 'Raspberry Pi 4 Model B Rev 1.4\0' });
+  expect(pi4.Variant, 'the control: a Pi 4 is recognised').toBe('Pi 4');
+  const cm4 = board({ platform: 'Raspberry Pi\n', model: 'Raspberry Pi Compute Module 4 Rev 1.0\0' });
+  expect(cm4.Platform).toBe('Raspberry Pi');
+  expect(cm4.Variant).toBe('Pi 4');
+  expect(cm4.Logo).toBe(pi4.Logo);
+  expect((await request.get(`/images/${cm4.Logo}`)).status(), `images/${cm4.Logo}`).toBe(200);
+});
+
 test('a Debian box without a device tree model is detected without a warning', () => {
   // Regression: de7c79a2d.  On Debian (not in a container) config.php read
   // /proc/device-tree/model whether or not it existed, so a PC or VM without

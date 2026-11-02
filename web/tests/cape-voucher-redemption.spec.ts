@@ -129,3 +129,46 @@ test('the Voucher Redemption tab is offered until a voucher has been redeemed', 
   await expect(page.locator('#eeprom-signature-tab')).toBeVisible();
   await expect(page.locator('#eeprom-voucher-tab')).toHaveCount(0);
 });
+
+test('the documentation voucher is turned away on the page, without asking the signing site', async ({ page }) => {
+  // Regression: 844859ea3 ("Display a message if someone uses the
+  // test/documentation voucher").  The manual's example voucher, SUDCAEPP, was
+  // sent to the signing site like any other, and came back as a plain invalid
+  // voucher; the page now says what it is and sends nothing.
+  const posts: string[] = [];
+  page.on('request', (r) => { if (r.method() === 'POST' && r.url().includes('api/cape/eeprom/voucher')) posts.push(r.url()); });
+  const alerts: string[] = [];
+  page.on('dialog', (d) => { alerts.push(d.message()); d.accept().catch(() => {}); });
+  await page.goto('/cape-info.php');
+  await page.locator('#eeprom-voucher-tab').click();
+  // Lower case: the page upper-cases what is typed.  The other fields are
+  // good ones, so nothing else stops the redemption.
+  await page.locator('#voucherNumber').fill('sudcaepp');
+  await page.locator('#voucherFName').fill('Alex');
+  await page.locator('#voucherLName').fill('Tester');
+  await page.locator('#voucherEmail').fill('alex@example.com');
+  await page.locator('#voucherPassword').fill('goodpass1');
+  await page.locator('input[value="Redeem Voucher"]').click();
+  await expect.poll(() => alerts.length).toBeGreaterThan(0);
+  expect(alerts[0]).toContain('documentation use only');
+  await page.waitForTimeout(1000);
+  expect(posts, 'POSTs to api/cape/eeprom/voucher').toEqual([]);
+});
+
+test('signing is offered online when the signing site answers, and offline only when it does not', async ({ page, request }) => {
+  // Regression: 7b9788d02 ("Change method of checking to see if we can sign
+  // via online method").  The page pinged 8.8.8.8 to decide whether to sign
+  // online, which says nothing about the signing site: a network that blocks
+  // ICMP was put in offline mode although it could sign, and one that answers
+  // pings but cannot reach the signing site was offered online signing that
+  // could only fail.  It now asks the signing site (SigningAPIHost) itself.
+  await page.goto('/cape-info.php');
+  await expect(page.locator('#eeprom-signature-tab')).toBeVisible();
+  await expect(page.locator('#eeprom-offline-tab'), 'offline mode with the signing site answering').toHaveCount(0);
+
+  // A signing site that does not answer is offline mode, whatever else the
+  // player can reach.
+  await request.put('/api/settings/SigningAPIHost', { data: 'localhost:1' });
+  await page.goto('/cape-info.php');
+  await expect(page.locator('#eeprom-offline-tab')).toHaveCount(1);
+});

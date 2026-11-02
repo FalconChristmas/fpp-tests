@@ -74,3 +74,29 @@ test('a signed EEPROM is written back, the old one backed up, and the cape detec
   expect(inPlayer('sh', '-c', `head -c ${REAL.length} ${backup}`)).toBe(REAL);
   expect(inPlayer('sh', '-c', `cat ${MARK} 2>/dev/null || true`).trim(), 'detect_cape was run').toBe('ran');
 });
+
+test('signing an EEPROM does not restart fppd', async ({ request }) => {
+  // Regression: 85a7f1661 ("Don't restart fppd after signing an EEPROM").
+  // POST signingData ran "systemctl restart fppd" once the EEPROM was
+  // written, which stopped a running show to sign a cape; detect_cape picking
+  // the new EEPROM up is all it needs.  systemctl is replaced by one that
+  // records what it is asked, for the length of the test.
+  const STATE = '/tmp/fpp-tests-sign-systemctl';
+  putFile(BIN, REAL);
+  putFile(DETECT, `#!/bin/sh\necho ran > ${MARK}\n`);
+  inPlayer('chmod', '755', DETECT);
+  inPlayer('sh', '-c', `rm -rf ${STATE} && mkdir -p ${STATE} && cp -a /usr/bin/systemctl ${STATE}/systemctl.real && : > ${STATE}/calls`);
+  putFile('/usr/bin/systemctl', `#!/bin/sh\necho "$*" >> ${STATE}/calls\nexit 0\n`);
+  inPlayer('chmod', '755', '/usr/bin/systemctl');
+  try {
+    const r = await request.post('/api/cape/eeprom/signingData', {
+      data: { key: 'FPP-TESTS-KEY', orderID: '12345', eeprom: Buffer.from(HEADER + pad(0)).toString('base64') },
+    });
+    expect(await r.json()).toMatchObject({ Status: 'OK', Message: 'EEPROM Signed.' });
+    // The control: the signing went through to the cape being detected again.
+    expect(inPlayer('sh', '-c', `cat ${MARK} 2>/dev/null || true`).trim(), 'detect_cape was run').toBe('ran');
+    expect(inPlayer('cat', `${STATE}/calls`), 'systemctl calls').not.toMatch(/restart\s+fppd/);
+  } finally {
+    inPlayer('sh', '-c', `cp -a ${STATE}/systemctl.real /usr/bin/systemctl && rm -rf ${STATE}`);
+  }
+});
