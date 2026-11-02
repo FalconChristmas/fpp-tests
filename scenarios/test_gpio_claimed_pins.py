@@ -237,3 +237,55 @@ def test_a_pwm_output_whose_pwm_cannot_be_set_up_starts(pads, pinctrl, debugfs, 
     fppd.get("/fppd/status")
     fppd.command("Test Stop")
     assert pinctrl.calls(), "the output never muxed its pin for PWM"
+
+
+HOLDER = "fpp-tests-i2s"  # no such platform device: nothing to unbind
+
+
+@pytest.fixture
+def held_gpio18():
+    """/sys/kernel/debug/pinctrl staged with the strict pinmux format and
+    GPIO18 (P1-12) held by HOLDER, every other pin unclaimed, as
+    test_pi_claimed_spi_pin.py stages GPIO20. A tmpfs in the run's own
+    mount namespace, so nothing real is looked at or unbound. Pi 5 (RP1)
+    only: the pin controller directory is RP1's."""
+    with open("/proc/device-tree/model") as f:
+        model = f.read()
+    if "Pi 5" not in model and "Compute Module 5" not in model:
+        pytest.skip(f"stages RP1's pin controller; this is a {model.strip(chr(0))}")
+    r = subprocess.run(["mount", "-t", "tmpfs", "tmpfs", "/sys/kernel/debug"], capture_output=True, text=True)
+    if r.returncode:
+        pytest.skip("cannot mount over /sys/kernel/debug here: " + r.stderr.strip())
+    try:
+        d = "/sys/kernel/debug/pinctrl/1f000d0000.gpio-pinctrl-rp1"
+        os.makedirs(d)
+        with open(os.path.join(d, "pinmux-pins"), "w") as f:
+            for g in range(54):
+                if g == 18:
+                    f.write(f"pin 18 (gpio18): device {HOLDER} function i2s0 group gpio18\n")
+                else:
+                    f.write(f"pin {g} (gpio{g}): UNCLAIMED\n")
+        yield
+    finally:
+        subprocess.run(["umount", "/sys/kernel/debug"])
+
+
+def test_a_pwm_output_on_a_pin_a_driver_holds_tries_to_free_it(pads, pinctrl, held_gpio18, fppd):
+    """A GPIO output in PWM mode on a pin a kernel driver holds goes
+    through the same reclaim as a GPIO does before the pin is re-muxed:
+    here the holder has no driver to unbind, and fppd says the pin cannot
+    be used for PWM.
+
+    Regression: ffacf9b1d. The reclaim ran only for the gpio modes; a pin
+    muxed for PWM (or DPI, or UART) went straight to "pinctrl set", which the
+    pin controller undoes while the driver's claim stands, so the output
+    silently stayed on the other function with no warning."""
+    if "consumer=" in line_info(18):
+        pytest.skip(f"GPIO18 is in use on this device: {line_info(18).strip()}")
+    fppd.write("config/co-other.json", {"channelOutputs": [{
+        "enabled": 1, "type": "GPIO", "startChannel": 1, "channelCount": 1, "pin": "P1-12",
+        "pwm": 1, "invert": 0}]})
+    fppd.start()
+    want = f"Pin P1-12 is claimed by {HOLDER} (i2s0) and cannot be used for PWM"
+    fppd.wait_for(lambda: want in fppd.log(), timeout=10, what="the warning that the PWM pin is held")
+    fppd.check_alive()
