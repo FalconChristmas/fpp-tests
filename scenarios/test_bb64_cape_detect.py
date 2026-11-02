@@ -252,7 +252,10 @@ def test_a_chip_is_read_from_a_copy_and_let_go(fppinit):
 
     Regression: 68d0086cc. The chip stayed instantiated and was read (and
     reported) in place: the eeprom sysfs file stayed writable for the
-    whole uptime."""
+    whole uptime.
+
+    Also 8589afa84 (the EEPROM location and its validity in cape-info).
+    """
     img = ee.image(ee.cape_info())
     data = img + b"\xff" * (32768 - len(img))  # an erased 24c256 past the image
     devs = {}

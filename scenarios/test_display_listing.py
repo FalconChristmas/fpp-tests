@@ -46,7 +46,10 @@ def test_with_a_kms_card_only_its_connectors_are_listed(fppd):
 
     Regression: 7f77fe16e. The fb devices were listed first and the KMS
     connectors after them, so a KMS box offered its fbdev emulation
-    device as a display next to the real connector."""
+    device as a display next to the real connector.
+
+    Also 44959de89 (fpp -FBdebug lists the formats).
+    """
     fake_fb(fppd)
     fppd.start()
     preload, env = fakedrm.panel_env(fppd, "DSI-1", "800x480")

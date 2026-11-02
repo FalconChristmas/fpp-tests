@@ -280,6 +280,8 @@ def test_a_cape_with_no_serial_takes_the_new_images_serial_only_for_the_same_cap
     other cape's sample serial.
     Also 001e05cb0: the upgrade script's force argument, and the new image's
     serial going into a virtual EEPROM that had none.
+
+    Also 4e2e84896 (upgradeCapeFirmware falls back to the virtual EEPROM; its timestamped backups have no test).
     """
     old = ee.image(ee.cape_info(), name="CapeA", serial="0000000000000000")
     same, out = upgrade_in_place(fppinit, old, ee.image(ee.cape_info(), name="CapeA", serial="SAMPLE-SERIAL-1"))

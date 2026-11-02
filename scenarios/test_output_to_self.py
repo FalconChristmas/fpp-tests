@@ -41,7 +41,10 @@ def test_output_to_self_keeps_sending_when_bridge_monitoring_is_disabled(fppd):
 def test_output_to_self_is_switched_off_by_default(fppd):
     """Without the setting, the same output is disabled with a warning and
     the receiver on that address never gets a packet (the control for the
-    test above: it shows the setting is what lets the data through)."""
+    test above: it shows the setting is what lets the data through).
+
+    Also 79ffaa629 (the warning when a UDP output is set to self).
+    """
     fppd.write("config/co-universes.json", ddp_output(CHANNELS, address="127.0.0.1"))
     with DdpReceiver(CHANNELS) as rx:
         fppd.start()

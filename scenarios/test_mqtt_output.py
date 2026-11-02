@@ -247,6 +247,8 @@ def test_mqtt_output_payload_tokens(fppd):
     Also c03303bb4 (the MQTT output itself: no payloads published without
     it) and 5ba3fee4a (the default payload is "%R%,%G%,%B%", not
     "%R,%G,%B").
+
+    Also 4c5b8be3a (channel data is already offset).
     """
     steps = list(zip(RGB_STEPS, RGBW_STEPS, SINGLE_STEPS))
     frames = []

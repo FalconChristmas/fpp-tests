@@ -175,7 +175,10 @@ def test_build_jobs_fit_the_memory_the_compile_can_use(fppinit, cpus, arch, memo
     Regressions: c86553440 (a 4-core box with under 1GB got -j4), 6d790b72f
     (a 1GB Pi 4 counted its 512MB CMA pool, got -j3, and cc1plus was
     OOM-killed), 5dd19628f (a 493MB board counted its zram as swap and
-    got -j2, which thrashed it)."""
+    got -j2, which thrashed it).
+
+    Also abe237482 (-j picked from the memory, zram swap).
+    """
     build_box(fppinit, cpus, arch, memory, swap_entries)
     r = fppinit._run(["bash", "-c", FUNCTIONS + 'echo "jobs: $(ComputeMakeParallelism)"'], timeout=60)
     out = r.stdout + r.stderr

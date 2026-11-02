@@ -86,7 +86,10 @@ def test_a_cape_default_never_overrides_the_user(fppinit):
     """defaultSettings fills in what is unset and leaves alone what the
     user chose.
 
-    Regression: 5d10a7067 (with 55ed9a5d1's rework of the same check)."""
+    Regression: 5d10a7067 (with 55ed9a5d1's rework of the same check).
+
+    Also a94cf0874 (defaultSettings apply without a valid signature).
+    """
     fppinit.settings(CapeTestChosen="mine")
     fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(defaultSettings={
         "CapeTestChosen": "cape", "CapeTestUnset": "cape"})))

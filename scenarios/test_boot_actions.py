@@ -85,7 +85,10 @@ def test_an_upgrade_starts_the_services_it_enables_right_away(fppinit):
     --now, so the service is running as well as enabled.
 
     Regression: 084cecf54. The services were enabled for the next boot
-    only, and rsync did not answer until then."""
+    only, and rsync did not answer until then.
+
+    Also 1d7a4152e (the rsync/smb/vsftp settings applied after an upgrade) and ec1493fc5 (their enable and disable through ApplyServiceSetting).
+    """
     import time
     out = boot_actions(fppinit, Service_rsync="1")
     deadline = time.time() + 20
