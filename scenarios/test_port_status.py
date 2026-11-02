@@ -50,3 +50,48 @@ def test_outputs_on_and_off_and_port_status_with_only_a_high_port_configured(fpp
         fppd.command(cmd)
     assert fppd.get("/fppd/ports")
     fppd.check_alive()
+
+
+def test_port_status_is_published_over_mqtt_when_asked_for(fppd):
+    """With MQTTPortStatusFrequency set, fppd publishes every monitored
+    port's status on the port_status topic as a JSON array of objects (name,
+    row, col, enabled/status where it has them, and the current in "ma"),
+    and with it left at 0 publishes none.
+
+    Regression: 40e657d6b (the option to publish output port information,
+    including current draw).
+    """
+    import json
+    import shutil
+    import subprocess
+    import time
+    if not shutil.which("mosquitto") or not shutil.which("mosquitto_sub"):
+        import pytest
+        pytest.skip("mosquitto and mosquitto_sub are not installed")
+    mqtt_port = "18831"
+    broker = subprocess.Popen(["mosquitto", "-p", mqtt_port], stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL)
+    sub = None
+    try:
+        time.sleep(0.5)
+        sub = subprocess.Popen(["mosquitto_sub", "-h", "127.0.0.1", "-p", mqtt_port, "-t", "#", "-v"],
+                               stdout=subprocess.PIPE, text=True)
+        throw_plugin.install(fppd, source="pixelcountsim.cpp", name="PixelCountSim")
+        fppd.write("config/co-pixelStrings.json", outputs(fppd, 50, 50))
+        fppd.settings(MQTTHost="127.0.0.1", MQTTPort=mqtt_port, MQTTPortStatusFrequency="1")
+        fppd.start()
+        fppd.wait_for(lambda: port(fppd), what=f"{PORT} to be monitored")
+        time.sleep(4)
+    finally:
+        if sub:
+            sub.terminate()
+        broker.terminate()
+    out = sub.communicate(timeout=5)[0] if sub else ""
+    import re
+    # mosquitto_sub -v: "topic payload", the payload (pretty printed) running over lines
+    parts = re.split(r"(?m)^(falcon/\S+) ", out)
+    msgs = [(t, body) for t, body in zip(parts[1::2], parts[2::2]) if t.endswith("/port_status")]
+    assert msgs, f"no port_status publishes:\n{out[:1500]}"
+    ports = json.loads(msgs[-1][1])
+    mine = [p for p in ports if p.get("name") == PORT]
+    assert mine and mine[0].get("ma") == 30, ports
