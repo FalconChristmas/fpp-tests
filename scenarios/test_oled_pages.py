@@ -9,9 +9,11 @@ test_oled_expander_buttons.py).
 Device only: run-local.sh on a Pi (fppoled isn't built in a container).
 """
 
+import http.server
 import json
 import os
 import subprocess
+import threading
 import time
 
 import pytest
@@ -266,3 +268,220 @@ def test_a_gpio_json_buttons_line_is_labelled_for_its_action(oled_media, screen)
         wait_held(screen, keys["Up"])
         from test_pi_gpio_inputs import line_info
         assert 'consumer="FPPOLED-Up"' in line_info(keys["Up"]), line_info(keys["Up"])
+
+
+@pytest.fixture
+def web_stand_in():
+    """A stand-in for the player's web server on 127.0.0.1:80, which is where
+    fppoled sends its menu actions: records (method, path) of each request
+    and answers 200 "{}" ."""
+    seen = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def handle_any(self):
+            n = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(n).decode() if n else ""
+            seen.append((self.command, self.path, body))
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        do_GET = do_POST = do_PUT = do_DELETE = handle_any
+
+        def log_message(self, *a):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 80), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield seen
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def open_main_menu(screen, keys):
+    screen.wait_for(lambda f: f.line(0) in ("FPP Booting...", "No Network"), timeout=30,
+                    what="the status page")
+    press(keys["Enter"])
+    screen.wait_for(in_main_menu, timeout=5, what="the main menu")
+
+
+def down_to_reset_page(screen, keys):
+    """From the main menu to the Reset page: Reset is selected when it is the
+    one item missing with Shutdown, the item above it, on the screen."""
+    for _ in range(10):
+        t = everything(screen.frames()[-1])
+        if "Shutdown" in t and "Reset" not in t:
+            break
+        press(keys["Down"])
+    else:
+        pytest.fail(f"never got to Reset; last frame:\n{everything(screen.frames()[-1])}")
+    press(keys["Enter"])
+    screen.wait_for(lambda f: "-------------" in everything(f), timeout=5, what="the Reset page")
+
+
+def test_resetting_the_ticked_areas_asks_the_web_server_for_just_those(oled_media, screen, no_reboot,
+                                                                      web_stand_in):
+    """Main Menu > Reset: ticking Networking and Schedule and answering Yes to
+    Perform Reset asks the web server to reset those two areas, in list
+    order, and nothing else.
+
+    Regression: 8378421c3 (the Reset menu). Pressing Perform Reset with no
+    area ticked asks for nothing.
+    """
+    keys = buttons(oled_media, "Enter", "Down", "Up")
+    with hosttools.pads_kept(keys.values()):
+        screen.start()
+        wait_held(screen, *keys.values())
+        for g in keys.values():
+            pull(g, "pu")
+        open_main_menu(screen, keys)
+        down_to_reset_page(screen, keys)
+        # Perform Reset, Back, the separator, All, then Networking
+        for _ in range(4):
+            press(keys["Down"])
+        press(keys["Enter"])
+        for _ in range(7):  # ... Configuration, Outputs, Settings, Sequences, Media, Playlists, Schedule
+            press(keys["Down"])
+        press(keys["Enter"])
+        for _ in range(11):
+            press(keys["Up"])
+        press(keys["Enter"])  # Perform Reset
+        screen.wait_for(lambda f: "Reset FPP?" in everything(f), timeout=5, what="the reset prompt")
+        press(keys["Down"])
+        press(keys["Enter"])  # Yes
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not [r for r in web_stand_in if "resetConfig" in r[1]]:
+            time.sleep(0.2)
+        got = [r for r in web_stand_in if "resetConfig" in r[1]]
+        assert [r[1] for r in got] == ["/resetConfig.php?areas=networking,schedule"], \
+            (web_stand_in, everything(screen.frames()[-1]), screen.log())
+
+
+def test_choosing_remote_in_the_fpp_mode_menu_sets_the_mode_and_restarts_fppd(oled_media, screen, no_reboot,
+                                                                              web_stand_in):
+    """Main Menu > FPP Mode > Remote sets the fppMode setting to "remote"
+    through the settings API and restarts fppd, and asks for nothing else of
+    the web server.
+
+    Regression: 54ece1ff8, which moved this menu off the fppxml and fppjson
+    helpers onto /api/settings and /api/system/fppd/restart.
+    """
+    keys = buttons(oled_media, "Enter", "Down", "Up")
+    with hosttools.pads_kept(keys.values()):
+        screen.start()
+        wait_held(screen, *keys.values())
+        for g in keys.values():
+            pull(g, "pu")
+        open_main_menu(screen, keys)
+        press(keys["Down"])  # Start Playlist, then FPP Mode
+        press(keys["Enter"])
+        screen.wait_for(lambda f: "Back" in everything(f) and not in_main_menu(f), timeout=5,
+                        what="the FPP Mode menu (Player, Remote, Back)")
+        press(keys["Down"])  # Remote
+        press(keys["Enter"])
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not any("restart" in r[1] for r in web_stand_in):
+            time.sleep(0.2)
+        assert ("PUT", "/api/settings/fppMode", "remote") in web_stand_in, \
+            (web_stand_in, everything(screen.frames()[-1]))
+        assert ("POST", "/api/system/fppd/restart", "") in web_stand_in, web_stand_in
+
+
+def test_the_testing_menu_starts_and_stops_a_test_through_the_command_api(oled_media, screen, no_reboot,
+                                                                         web_stand_in):
+    """Main Menu > Testing > White asks the web server's command API for a
+    Test Start of the single colour #ffffff (the menu's test speed first),
+    not multisync, and Off then sends Test Stop.
+
+    Regression: 615e0f9be (fppoled starts and stops tests with FPP
+    commands), fd45611b8 (the Test action starting nothing).
+    """
+    keys = buttons(oled_media, "Enter", "Down", "Up")
+    with hosttools.pads_kept(keys.values()):
+        screen.start()
+        wait_held(screen, *keys.values())
+        for g in keys.values():
+            pull(g, "pu")
+        open_main_menu(screen, keys)
+        for _ in range(3):  # Start Playlist, FPP Mode, Tethering, then Testing
+            press(keys["Down"])
+        press(keys["Enter"])
+        screen.wait_for(lambda f: "White" in everything(f) or "Cycle" in everything(f), timeout=5,
+                        what="the Testing menu")
+        for _ in range(2):  # Enable Multisync, Off, then White
+            press(keys["Down"])
+        press(keys["Enter"])
+        press(keys["Up"])  # Off
+        press(keys["Enter"])
+
+        def commands():
+            return [json.loads(b) for m, p, b in web_stand_in if p == "/api/command" and b]
+
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and len(commands()) < 2:
+            time.sleep(0.2)
+        start, stop = (commands() + [{}, {}])[:2]
+        assert start.get("command") == "Test Start" and start["args"][1:] == ["RGB Single Color", "", "#ffffff"], \
+            (web_stand_in, everything(screen.frames()[-1]))
+        assert start.get("multisyncCommand") is False, start
+        assert stop.get("command") == "Test Stop", (stop, web_stand_in)
+
+
+def test_a_gpio_json_button_overrides_the_capes_button_on_the_same_pin(oled_media, screen):
+    """A pin named in both gpio.json (Enter) and the cape's cape-inputs.json
+    (Up) acts as the gpio.json one: a press opens the main menu, which Up on
+    the status page would not.
+
+    Regression: 4f1e13cc2. The cape's inputs were read first, so the cape's
+    action held the pin and the user's own gpio.json choice was skipped.
+    """
+    (pin, gpio), = lines(1)
+    oled_media.put("config/gpio.json", json.dumps([
+        {"pin": pin, "enabled": True, "mode": "gpio_pu", "rising": [], "falling": nav("Enter")}]))
+    oled_media.put("tmp/cape-inputs.json", json.dumps({"inputs": [
+        {"pin": pin, "mode": "gpio_pu", "edge": "falling", "type": "Up"}]}))
+    with hosttools.pads_kept([gpio]):
+        screen.start()
+        wait_held(screen, gpio)
+        pull(gpio, "pu")
+        screen.wait_for(lambda f: f.line(0) in ("FPP Booting...", "No Network"), timeout=30,
+                        what="the status page")
+        press(gpio)
+        screen.wait_for(in_main_menu, timeout=5, what="the main menu from gpio.json's Enter")
+
+
+def test_the_status_page_shows_the_wifi_qr_screen_while_its_image_exists(oled_media, screen):
+    """With a Wi-Fi QR image in media/tmp (wifi-L.ascii, '#' for a dark
+    module, two characters to a module) the status page, after its first
+    15 refreshes, alternates to a screen with the image and "WiFi Hot Spot"
+    beside it, and goes back to the status text once the file is gone.
+
+    Regression: ba9c6d3f5 (the QR screen), 2a233c99d (it comes down when
+    tethering is disabled and the image removed).
+    """
+    modules = 21
+    art = "\n".join("".join(("##" if (x + y) % 2 else "  ") for x in range(modules))
+                    for y in range(modules)) + "\n"
+    oled_media.put("tmp/wifi-L.ascii", art)
+
+    def qr_screen(f):
+        # the QR bitmap's rows are dark/light modules, which the text decoder
+        # reads as nothing: no status line is legible and the glass is lit
+        return not everything(f).strip() and sum(1 for b in f.data if b) > 100
+
+    screen.start()
+    screen.wait_for(qr_screen, timeout=60, what="the Wi-Fi QR screen")
+    os.remove("/home/fpp/media/tmp/wifi-L.ascii")
+    mark = len(screen.frames())
+    screen.wait_for(lambda f: f.ms > screen.frames()[mark - 1].ms and f.line(0) in ("FPP Booting...", "No Network"), timeout=40,
+                    what="the status text back once the image is gone")
+    # 30 refreshes cover a whole alternation: nothing after that is the QR screen
+    deadline = time.monotonic() + 35
+    while time.monotonic() < deadline and len(screen.frames()) < mark + 32:
+        time.sleep(0.5)
+    later = screen.frames()[mark + 2:]
+    assert later and not any(qr_screen(f) for f in later), \
+        f"the QR screen came back after its image was removed: {len(later)} frames"
