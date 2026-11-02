@@ -98,6 +98,38 @@ test('the cape is reported without its serial, cs or vendor contact details', as
   });
 });
 
+test('the cape\'s signing key id is reported, so a cape signed with a key that is not its vendor\'s shows', async ({ request }) => {
+  // Regression: 109a5085b (include the signing key in the stats reported).
+  // The id is one of the few keys the player knows, not anything the cape
+  // text can set; with it absent from the mapping the stats could not show a
+  // cape signed by a key that does not match its claimed vendor.
+  const CAPE = `${MEDIA}/tmp/cape-info.json`;
+  await keepingFile(CAPE, async () => {
+    writeFile(CAPE, JSON.stringify({
+      id: 'fpp-tests-cape', name: 'Test Cape', designer: 'fpp-tests', verifiedKeyId: 'ft',
+    }));
+    const { json } = await payload(request);
+    expect(json.capeInfo).toEqual({ id: 'fpp-tests-cape', name: 'Test Cape', designer: 'fpp-tests', verifiedKeyId: 'ft' });
+  });
+});
+
+test('a cape that elects not to send stats is not described in them, and one that does is', async ({ request }) => {
+  // Regression: dc7804dec (allow the cape vendor to elect not to send stats
+  // on cape installs).  The cape's own sendStats: 0 -- which a vendor's
+  // signed cape sets -- leaves the player's report with no cape in it;
+  // anything else, or nothing, sends it.
+  const CAPE = `${MEDIA}/tmp/cape-info.json`;
+  await keepingFile(CAPE, async () => {
+    const cape = { id: 'fpp-tests-cape', name: 'Test Cape', designer: 'fpp-tests' };
+    writeFile(CAPE, JSON.stringify({ ...cape, sendStats: 1 }));
+    expect((await payload(request)).json.capeInfo, 'the control: sendStats 1 is sent').toEqual(cape);
+    writeFile(CAPE, JSON.stringify({ ...cape, sendStats: 0 }));
+    const { text, json } = await payload(request);
+    expect(json.capeInfo).toEqual({ name: 'None' });
+    expect(text).not.toContain('fpp-tests-cape');
+  });
+});
+
 test('uuidSource is a source, never the identity, and a bad cached identity is not used', async ({ request }) => {
   // Regression: f53203a34.  The cached `get_uuid --source` answer was trusted
   // forever, and a get_uuid without --source printed the UUID into it, so

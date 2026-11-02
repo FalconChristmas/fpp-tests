@@ -15,17 +15,18 @@ test.skip(!container, 'adds an interface and runs fppinit inside the run-web.sh 
 const CONFIG = '/home/fpp/media/config';
 const NETDIR = '/etc/systemd/network';
 const ENX = 'enx020000aabbcc';
+const WLP = 'wlp2s0'; // a wireless adapter under systemd's predictable names
 
 function cat(path: string): string {
   return inPlayer('sh', '-c', `cat '${path}' 2>/dev/null || true`);
 }
 
 test.beforeEach(() => {
-  netAdmin(`ip link del ${ENX} 2>/dev/null; ip link add ${ENX} type dummy`);
+  netAdmin(`ip link del ${ENX} 2>/dev/null; ip link add ${ENX} type dummy; ip link del ${WLP} 2>/dev/null; ip link add ${WLP} type dummy`);
 });
 
 test.afterEach(() => {
-  netAdmin(`ip link del ${ENX} 2>/dev/null || true`);
+  netAdmin(`ip link del ${ENX} 2>/dev/null || true; ip link del ${WLP} 2>/dev/null || true`);
   inPlayer('sh', '-c', `rm -f ${CONFIG}/interface.${ENX} ${CONFIG}/interface.eth1 ${CONFIG}/interface.eth2 ` +
     `${NETDIR}/10-${ENX}.network ${NETDIR}/10-eth1.network ${NETDIR}/10-eth2.network ` +
     `${NETDIR}/99-default.link ${NETDIR}/73-usb-net-by-mac.link ${NETDIR}/5*-fpp-*.link`);
@@ -92,4 +93,15 @@ test('persistent names switch off the default naming links, clearing them puts t
   expect((await (await request.post('/api/network/persistentNames')).json()).status).toBe('OK');
   expect(masked('99-default.link')).toBe(false);
   expect(masked('73-usb-net-by-mac.link')).toBe(false);
+});
+
+test('a wireless adapter\'s name is pinned and matched by its original wl* name', async ({ request }) => {
+  // Regression: 386b873a1 (initial support for the newer persistent names).
+  // Under predictable naming a wireless adapter is wlp2s0, not wlan0; its
+  // .link file keeps the name it is given and also matches OriginalName=wl*,
+  // as only an interface that starts with "wl" -- not only "wlan" -- gets.
+  expect((await (await request.post('/api/network/persistentNames')).json()).status).toBe('OK');
+  const link = inPlayer('sh', '-c', `cat ${NETDIR}/5*-fpp-${WLP}.link 2>/dev/null || true`);
+  expect(link).toContain('OriginalName=wl*');
+  expect(link).toContain(`[Link]\nNamePolicy=\nName=${WLP}`);
 });

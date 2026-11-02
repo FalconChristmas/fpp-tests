@@ -80,3 +80,25 @@ test('a new Virtual Matrix with no model to draw on starts with channels for its
   const row = rows(page).nth(1);
   await expect(row.locator('input.count')).toHaveValue(String(192 * 108 * 3));
 });
+
+test('a new Virtual Matrix drawing on a framebuffer model takes the model\'s channel count', async ({ page, request }) => {
+  // Regression: d23c76fab.  The channel count of a Virtual Matrix added with a
+  // framebuffer model to draw on was left as it was, so the output claimed
+  // channels that were not its model's (which then overlapped or fell short).
+  // The model is the one an enabled Virtual Matrix on fb2 makes (fb0 and fb1
+  // are left out of the list the page offers).
+  const r = await request.post('/api/channel/output/co-other', { data: { channelOutputs: [
+    { type: 'VirtualMatrix', enabled: 1, startChannel: 1, channelCount: 40 * 30 * 3, width: 40, height: 30,
+      layout: '40x30', colorOrder: 'RGB', invert: 0, device: 'fb2', scaling: 'Hardware', modelName: '' }] } });
+  expect(r.ok(), await r.text()).toBe(true);
+  await expect.poll(async () => (await (await request.get('/api/overlays/models')).json())
+    .filter((m) => m.Name === 'FB - fb2').length, { message: 'the FB - fb2 model', timeout: 15_000 }).toBe(1);
+  await open(page, false);
+  await addMatrix(page);
+  const row = rows(page).nth(1);
+  // a new row starts at the default size; choosing the model to draw on puts
+  // the model's channels in the row
+  await expect(row.locator('input.count')).toHaveValue(String(192 * 108 * 3));
+  await row.locator('select.device').selectOption('FB - fb2');
+  await expect(row.locator('input.count')).toHaveValue(String(40 * 30 * 3));
+});
