@@ -31,7 +31,8 @@ STUBS = {
     "pgrep": 'case "$*" in *chronyd*) [ -n "$CHRONYD" ] && { echo 4242; exit 0; }; exit 1 ;; esac\nexit 1\n',
     "chronyc": 'echo "Last offset     : +0.000012345 seconds"\n',
     "curl": 'printf "curl %s\\n" "$*" >> "$CALLS"\nexit 7\n',
-    "getent": 'echo "140.82.112.3    github.com"\n',
+    # answers unless $NODNS is set
+    "getent": '[ -n "$NODNS" ] && exit 2\necho "140.82.112.3    github.com"\n',
 }
 
 
@@ -270,3 +271,16 @@ def test_the_text_report_labels_each_status(tmp_path, status, label):
                      f'PrintItemHead "fpp-tests item"; STATUS={status}; '
                      f'STATUSSTR="fpp-tests status"; PrintItemFoot')
     assert f"{label} - fpp-tests status" in out, out[-2000:]
+
+
+def test_the_dns_check_asks_getent(tmp_path):
+    """External DNS passes when getent resolves github.com and fails when it
+    can't, without pinging anything.
+
+    Regression: c80497f2d. The check pinged github.com and read ping's error
+    text, which took as long as the ping."""
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_DNS")
+    assert "DNS lookup of github.com was successful" in out, out[-2000:]
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_DNS", NODNS="1")
+    assert "Unable to query github.com via DNS" in out, out[-2000:]
+    assert not (tmp_path / "calls").exists(), (tmp_path / "calls").read_text()
