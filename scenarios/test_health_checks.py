@@ -381,3 +381,13 @@ def test_two_different_default_gateways_are_reported(tmp_path):
               + "0.0.0.0         10.0.0.2        0.0.0.0         UG        0 0          0 wlan0\n")
     out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_CheckGateways", routes=routes)
     assert "Fail - Multiple default gateways were found!" in out, out[-2000:]
+
+
+def test_the_text_report_lines_its_items_up_at_40_columns(tmp_path):
+    """Each item of the text report has its name padded with dots to 40
+    columns, so the results line up.
+
+    Regression: 33e7d6fcd."""
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN,
+                     'PrintItemHead "An item"; STATUS=1; STATUSSTR="fine"; PrintItemFoot')
+    assert "An item" + "." * 33 + ": Pass - fine" in out, out[-2000:]
