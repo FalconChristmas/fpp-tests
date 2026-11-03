@@ -57,6 +57,7 @@ def test_a_new_system_uuid_is_reported_without_a_restart(fppd):
 
 
 def test_sync_stats_reset_while_a_packet_is_being_counted(fppd):
+    # Also guards 3811d4d7b: /fppd/multiSyncStats counts the packets.
     """Resetting the sync stats (GET /fppd/multiSyncStats?reset=1) while the
     main loop is still handling a sender's packet zeroes that sender's
     counters and keeps it listed; the packet is counted once it has been
