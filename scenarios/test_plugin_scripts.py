@@ -127,6 +127,7 @@ def test_a_python_callbacks_script_is_run_with_python3(fppd):
 
 
 def test_plugin_command_runs_its_script(fppd):
+    # Also guards c98e1737c: a script plugin's command runs its script.
     """A command declared in commands/descriptions.json is listed with fppd's
     commands and runs its script with the arguments and the plugin's
     directories in the environment."""
