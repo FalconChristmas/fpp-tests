@@ -296,6 +296,30 @@ def test_sunset_is_worked_out_for_the_day_each_item_runs(fppd):
     assert all(b - a < 180 for a, b in zip(of_day, of_day[1:])), starts
 
 
+def test_a_sunset_to_sunrise_entry_runs_through_a_weekend(fppd):
+    """An everyday SunSet to SunRise entry, seen from a Saturday, starts each
+    evening and ends the next morning, Saturday into Sunday as any other day.
+
+    Regression: b328bf5b5."""
+    from zoneinfo import ZoneInfo
+    zone = "America/Denver"
+    saturday = datetime.date(YEAR, 3, 20)
+    saturday += datetime.timedelta((5 - saturday.weekday()) % 7)
+    fppd.settings(Latitude="39.74", Longitude="-104.99")
+    fppd.write("playlists/Show.json", {"name": "Show", "repeat": 0, "loopCount": 0,
+                                       "leadIn": [], "leadOut": [], "mainPlaylist": []})
+    fppd.write("config/schedule.json", [entry(7, "SunSet", "SunRise", startDate=f"{saturday}",
+                                              endDate=f"{saturday + datetime.timedelta(days=2)}")])
+    fppd.start(fake_time=f"{saturday} 12:00:00", tz=zone)
+    got = fppd.get("/fppd/schedule")["schedule"]["items"]
+    spans = [(datetime.datetime.fromtimestamp(i["startTime"], ZoneInfo(zone)),
+              datetime.datetime.fromtimestamp(i["endTime"], ZoneInfo(zone))) for i in got]
+    assert [a.date() for a, _ in spans][:2] == [saturday, saturday + datetime.timedelta(days=1)], spans
+    for a, b in spans:
+        assert 17 <= a.hour <= 20, spans
+        assert b.date() == a.date() + datetime.timedelta(days=1) and 5 <= b.hour <= 8, spans
+
+
 def test_time_format_too_long_for_the_buffer_is_left_empty(fppd):
     """A date format whose result doesn't fit the scheduler's buffer gives
     an empty time string in the schedule status, not whatever the failed
