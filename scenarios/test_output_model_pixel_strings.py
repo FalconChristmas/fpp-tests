@@ -360,6 +360,7 @@ def test_a_zigzag_folds_only_its_own_virtual_string(fppd):
 
 
 def test_a_reversed_single_colour_string_loads_without_reading_past_its_map(fppd):
+    # Also guards 9f7df64a4: colour order W is one channel a node.
     """A reversed 10-pixel single colour string ("W", one channel a node),
     the last on its port, loads without reading past its channel map, and
     fppd lives. (The output then refuses the string as not 8 bit RGB, so
