@@ -102,3 +102,18 @@ test('a new Virtual Matrix drawing on a framebuffer model takes the model\'s cha
   await row.locator('select.device').selectOption('FB - fb2');
   await expect(row.locator('input.count')).toHaveValue(String(40 * 30 * 3));
 });
+
+test('a new Virtual Display keeps the whole channel range, not a matrix-sized count', async ({ page }) => {
+  // Regression: 6ce4ec249 ("Don't set initial channel count if not needed (ie,
+  // Virtual Display)").  A Virtual Display shows every channel, so its count is
+  // the channel space and not editable; with no model to draw on, the shared
+  // defaults overwrote it with a default-size matrix's width x height x 3.
+  // (The Virtual Matrix still gets that count: the test above.)
+  await open(page, true);
+  await expect(rows(page)).toHaveCount(1);
+  await page.locator('#tab-other-VirtualDisplay button', { hasText: 'Add' }).click();
+  await page.locator('#outputType-VirtualDisplay').selectOption('VirtualDisplay');
+  await expect(rows(page)).toHaveCount(2);
+  const max = await page.evaluate(() => String((window as any).FPPD_MAX_CHANNELS));
+  await expect(rows(page).nth(1).locator('input.count')).toHaveValue(max);
+});
