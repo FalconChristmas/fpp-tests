@@ -681,3 +681,18 @@ def test_a_panel_on_output_20_is_sent_to_the_receiver(fppd):
         fppd.wait_for(lambda: any(any(r[2::3].count(0x5A) for r in rows.values())
                                   for _, rows in cap.frames()),
                       timeout=15, interval=0.2, what="the frame's pixels on the wire")
+
+
+def test_twenty_panels_on_one_output_all_show(fppd):
+    """Twenty panels chained on one output are all driven: each row carries
+    all of them.
+
+    Regression: 6cc7e232d. The limit was 16 panels an output."""
+    w, h, count = 32, 16, 20
+    frame = unique_frame(w * count, h)
+    panels = [panel(0, count - 1 - i, i * w, 0) for i in range(count)]  # 0 is last on a row
+    with captured() as cap:
+        play(fppd, frame, panels_output(panels, channels=w * count * h * 3))
+        _, rows = lit_frame(fppd, cap, h, w * count * 3)
+    for y in range(h):
+        assert rows[y] == frame[y * w * count * 3:(y + 1) * w * count * 3], f"row {y}"
