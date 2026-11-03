@@ -524,3 +524,21 @@ def test_multisync_works_with_no_co_universes_file(fppd):
     wait_listed(fppd, "10.20.30.60")
     missing = [l for l in fppd.log().splitlines() if "co-universes.json does not exist" in l]
     assert not missing, missing
+
+
+def test_a_host_name_too_long_for_a_ping_is_cut_and_terminated(fppd):
+    """A host name longer than a ping's 64 characters goes out as its first
+    64 and a NUL, and the version after it is untouched.
+
+    Regression: 83b7612b9. The strings could fill their fields, with no NUL."""
+    fppd.settings(HostName="h" * 80)
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(interface("10.77.0.1"))
+        fppd.start()
+        cap = stack.enter_context(UdpCapture(PORT, "127.0.0.3"))
+        send(ping_packet("10.20.30.46", "peer-g", discover=True), src="127.0.0.3")
+        fppd.wait_for(lambda: [p for _, _, _, p in cap.snapshot() if p[4:5] == b"\x04"],
+                      timeout=5, interval=0.1, what="a ping back")
+        reply = next(p for _, _, _, p in cap.snapshot() if p[4:5] == b"\x04")
+    assert reply[19:84] == b"h" * 64 + b"\0", reply[19:84]
+    assert reply[84:125].split(b"\0")[0], reply[84:125]
