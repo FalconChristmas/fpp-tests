@@ -251,6 +251,31 @@ def test_stop_by_pattern_and_list(fppd):
     assert running(fppd) == []
 
 
+def test_effect_start_if_not_running(fppd):
+    """Effect Start with "If Not Running" leaves a running copy of that effect
+    alone and says so; a different effect still starts, and without the
+    option a second copy runs.
+
+    Regression: 36a43a419, which added the option to .eseq effects (the FSEQ
+    one is test_fseq_effect_start_options)."""
+    write_eseq(fppd, "fx", model_frames(40, SIZE), START)
+    write_eseq(fppd, "other", model_frames(40, SIZE, seed=1), START)
+    outputs_only(fppd)
+    fppd.start()
+
+    def start(name, if_not_running):
+        return fppd.command("Effect Start", name, 0, "true", "false", if_not_running)
+
+    assert "NOT Started" not in str(start("fx", "true")), "nothing was running, so it should start"
+    assert running(fppd) == ["fx"]
+    assert "Effect NOT Started" in str(start("fx", "true"))
+    assert running(fppd) == ["fx"], "If Not Running started a second copy"
+    start("other", "true")
+    assert running(fppd) == ["fx", "other"], "If Not Running refused a different effect"
+    start("fx", "false")
+    assert running(fppd) == ["fx", "fx", "other"], "a plain second start should run a second copy"
+
+
 def test_fseq_effect_start_options(fppd):
     """FSEQ Effect Start runs a sequence as an effect. Started twice it runs
     twice; "If Not Running" refuses the second start, and "Restart If
