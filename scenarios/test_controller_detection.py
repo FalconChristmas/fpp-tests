@@ -659,3 +659,18 @@ def test_an_older_falcons_version_loses_the_name_in_front_of_it(fppd):
     with fake_devices(devs):
         got = discover(fppd, devs)["10.88.0.9"]
     assert got["version"] == "2.01", got
+
+
+def test_a_device_named_by_hostname_is_listed_at_its_address(fppd):
+    """A name in MultiSyncHTTPSubnets that resolves to an IPv4 address is
+    probed, and the device is listed at the address, not the name.
+
+    Regression: 6feb97e0b, where a system found by hostname crashed fppd."""
+    name = "named-device.fpptest"
+    with open("/etc/hosts", "a") as h:
+        h.write(f"10.88.0.9 {name}\n")
+    devs = {"10.88.0.9": FALCON}
+    with fake_devices(devs):
+        got = discover(fppd, devs, subnets=name)
+    assert got["10.88.0.9"]["hostname"] == "fake-falcon", got
+    assert name not in got, got
