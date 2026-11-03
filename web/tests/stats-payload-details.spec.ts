@@ -46,6 +46,12 @@ test('each interface is reported with the link state the kernel gives it', async
   }
 });
 
+test('the network block carries the wifi list', async ({ request }) => {
+  // Feature: de95cc088.  Empty on a player with no wifi, but there.
+  const json = await payload(request);
+  expect(Array.isArray(json.network.wifi), JSON.stringify(json.network.wifi)).toBe(true);
+});
+
 test('the memory block carries what /proc/meminfo says', async ({ request }) => {
   // Also guards 1777f1a48: the usage stats' memory section.
   // Feature: 14363cfb6 (stats_memory() learned memory_pressure for macOS; the
