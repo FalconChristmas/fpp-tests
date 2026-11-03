@@ -145,3 +145,17 @@ def test_a_local_system_without_a_cape_says_so(fppd):
         fppd.start()
         s = local_entry(fppd)
     assert s.get("capeInfo") == {"present": False}, s
+
+
+def test_a_ping_with_no_uuid_keeps_the_one_known(fppd):
+    """A system's UUID stays when a later ping from it carries none.
+
+    Regression: 47775721f. Every ping overwrote it, with "Unknown" if it had none."""
+    fppd.start()
+    send(ping_packet("10.20.30.81", "known", type_id=ESPS, uuid="real-uuid-0002", ver="1.0"))
+    wait_listed(fppd, "10.20.30.81")
+    assert uuid_of(fppd, "10.20.30.81") == "real-uuid-0002", remotes(fppd)
+    send(ping_packet("10.20.30.81", "known", type_id=ESPS, ver="2.0"))
+    fppd.wait_for(lambda: any(s["address"] == "10.20.30.81" and s["version"] == "2.0" for s in remotes(fppd)),
+                  timeout=5, what="the second ping to be taken in")
+    assert uuid_of(fppd, "10.20.30.81") == "real-uuid-0002", remotes(fppd)
