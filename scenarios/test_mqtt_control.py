@@ -40,6 +40,7 @@ def publish(topic, payload=""):
                                    "set/playlist/ALLPLAYLISTS/stop/now",
                                    "set/playlist/Show/stop/graceful"])
 def test_mqtt_stop_keeps_the_scheduled_playlist_stopped(fppd, topic):
+    # Also guards 85abee748: stop/now goes through the Player.
     """A playlist stopped over MQTT inside its schedule window stays
     stopped, as one stopped from the UI or the API does.
 
