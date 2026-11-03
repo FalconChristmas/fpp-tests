@@ -1,7 +1,7 @@
 commit	outcome	test	proof	note	subject	release	area	feature	where
 65ab5b503	covered-marked	web/tests/other-output-spi-ws2801.spec.ts::an SPI-WS2801 output offers the SPI devices, an editable channel count and a PI36 option that is saved	red-green-parent	found by this sweep: verify-fix.sh: on the parent the new row's device select has no spidev0.0 option; green with the fix	fix(ui): the SPI-WS2801 output passes its device list to the right argument	unreleased	ui	Web UI (shared JS/CSS/pages)	web
 4ebbe20d0	todo		none	auto: not examined yet	fix(ui): a plugin theme's scripts are closed with </script>	unreleased	ui	Web UI (shared JS/CSS/pages)	web
-fc64ba169	todo		none	auto: not examined yet	fix(ui): a select with no current value gets no "undefined" option	unreleased	ui	Web UI (shared JS/CSS/pages)	web
+fc64ba169	covered-marked	web/tests/settings-gates-and-confirms.spec.ts::a select built with no current value gets no "undefined" option	red-green-parent	found by this sweep: verify-fix.sh: on the parent CreateSelect() with no value adds an "undefined" option after a and b; green with the fix	fix(ui): a select with no current value gets no "undefined" option	unreleased	ui	Web UI (shared JS/CSS/pages)	web
 6931d749a	todo		none	auto: not examined yet	fix(ui): remote content lists load from the page's own origin	unreleased	ui	Web UI (shared JS/CSS/pages)	web
 e487ca959	todo		none	auto: not examined yet	fix(pixelstrings): start nulls count in a DPI port's pixels and power; End Channel is whole nodes on first draw	unreleased	pixelstrings	BB pixel strings & PRU	web
 c579b82b4	todo		none	auto: not examined yet	fix(pixelstring): no auto overlay model for the placeholder of an empty smart receiver	unreleased	pixelstring	BB pixel strings & PRU	docker

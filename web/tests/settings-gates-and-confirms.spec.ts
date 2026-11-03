@@ -113,6 +113,7 @@ test('a select built with no current value gets no "undefined" option', async ({
   // (b7ce4b014) also ran for a value that was not there at all -- a new Other
   // output's default config has no device -- and added <option
   // value='undefined' selected>, which saving would store as the device.
+  // Fixed by fc64ba169.
   await page.goto('/index.php');
   await page.waitForFunction(() => typeof (window as any).CreateSelect === 'function');
   const r = await page.evaluate(() => {
