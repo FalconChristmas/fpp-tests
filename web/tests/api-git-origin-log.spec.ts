@@ -15,6 +15,7 @@ test.afterEach(() => {
 });
 
 test('origin\'s new commits come back with hash, author, date and message', async ({ request }) => {
+  // Also guards e698adb0e, which added GET /api/git/originLog.
   const G = 'git -c user.name=fpp-tests -c user.email=fpp-tests@invalid';
   inPlayer('sh', '-c', `cd /opt/fpp && git init -q -b master && a=$(${G} commit-tree $(git mktree < /dev/null) -m base) && ` +
     `git update-ref refs/heads/master $a && ` +
