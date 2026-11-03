@@ -51,7 +51,7 @@ ESPS = 0xC3  # a controller type that is not fetched over HTTP
 
 
 def test_a_device_with_no_uuid_is_identified_by_its_mac(fppd):
-    # # Also guards ec80b924d: the uuid reaches the systems API.
+    # Also guards ec80b924d: the uuid reaches the systems API.
     """A device that reports no UUID, on a directly attached subnet, is
     identified as "MAC:" plus its hardware address; a real UUID it reports
     later replaces that stand-in, and a device the ARP table doesn't know

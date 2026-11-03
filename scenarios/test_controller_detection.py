@@ -71,7 +71,7 @@ def discover(fppd, devices, subnets=None, timeout=30, want=None):
 
 
 def test_each_vendor_is_recognised(fppd):
-    # # Also guards 6baab0bf7: an FPP on another subnet is found by its front page.
+    # Also guards 6baab0bf7: an FPP on another subnet is found by its front page.
     """One device of each vendor is listed with its name, type, version and
     identity: an FPP's own UUID, a Falcon's and a WLED's MAC from their APIs
     (dfa5b5b7a), a Twinkly from its gestalt (2babf4d5c), a SanDevices' MAC
@@ -334,7 +334,7 @@ def hinkspix(info):
 
 
 def test_hinkspix_versions_come_from_the_board_info_cgi(fppd):
-    # # Also guards a541f8b0e; test_alphapix_detection.py has the AlphaPix half.
+    # Also guards a541f8b0e; test_alphapix_detection.py has the AlphaPix half.
     """HinksPix controllers (a page titled "HinksPix Config") are listed as
     HinksPix in bridge mode, with the version built from
     /XLights_BoardInfo.cgi: each part's 3-character prefix stripped, as
