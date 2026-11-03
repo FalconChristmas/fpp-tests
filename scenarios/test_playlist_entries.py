@@ -953,6 +953,7 @@ def test_repeating_instant_playlist_runs_a_pass_a_second(fppd):
 
 
 def test_branch_to_another_playlist_runs_it_then_continues(fppd):
+    # # Also guards 39eb30e2d: a Playlist branch doesn't crash and the entry after it still runs.
     """A branch entry whose true side is "Playlist" runs that playlist, and
     the branching playlist carries on after it.
 
