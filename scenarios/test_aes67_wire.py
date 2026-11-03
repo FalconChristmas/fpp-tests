@@ -486,3 +486,38 @@ def test_a_card_far_off_the_media_clock_is_followed_not_clamped(fppd, audio):
     trim, offset = summaries()[-1]
     assert abs(float(offset)) < 10, f"offset {offset} ms, trim {trim} ppm"
     assert float(trim) > 600, f"trim {trim} ppm: never reached the 1100 ppm the clock needs"
+
+
+def test_a_rate_converted_graph_reports_no_source_gaps_but_a_real_one_is(fppd):
+    """A sender on an 88.2 kHz graph (a fixed-clock cape's, where PipeWire
+    converts the stream to 48 kHz) has its audio and its buffer timestamps
+    right, so its source reports no gaps -- and when the feed really is cut
+    for 300 ms, it reports that one.
+
+    Regression: 35f1ceea6. pipewiresrc stamps each
+    buffer's duration from the graph's clock rate, not the stream's (6.3 ms
+    for a 557-frame, 11.6 ms buffer), and the probe read the difference to the
+    next buffer's timestamp as a 5.3 ms gap on every buffer: some 85 lines a
+    second for as long as the sender ran. The control is the real gap: a probe
+    that stopped looking would pass the first half."""
+    import shutil
+    from audio import AudioServer
+    if not shutil.which("pipewire") or not shutil.which("wireplumber"):
+        pytest.skip("PipeWire and WirePlumber are not installed")
+    gap_line = r"AES67 source \[1\]: gap \+([0-9.]+) ms"
+    graph = AudioServer(rate=88200)
+    try:
+        with RtpCapture(5004):
+            start_sender(fppd, graph)
+            time.sleep(8)
+            spurious = re.findall(gap_line, fppd.log())
+            assert not spurious, f"{len(spurious)} source gaps in 8 s with the feed untouched: {spurious[:5]}"
+            link(graph, NODE, connect=False)
+            time.sleep(0.3)
+            link(graph, NODE)
+            fppd.wait_for(lambda: len(re.findall(gap_line, fppd.log())) > len(spurious), timeout=10,
+                          what="the source to report the 300 ms it was cut for")
+    finally:
+        graph.close()
+    real = [float(g) for g in re.findall(gap_line, fppd.log())]
+    assert any(100 <= g <= 600 for g in real), f"gaps reported: {real}"
