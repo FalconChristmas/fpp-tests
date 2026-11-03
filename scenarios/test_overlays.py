@@ -1693,3 +1693,29 @@ def test_a_slash_in_a_model_name_becomes_an_underscore(fppd):
     fppd.start()
     model = fppd.get("/overlays/model/Roof_Left")
     assert model and model["StartChannel"] == 1, model
+
+
+def rle_decode(data, channels):
+    """Runs of [count, then `channels` values], as the /rle form sends them."""
+    out = []
+    for i in range(0, len(data), channels + 1):
+        out += data[i + 1:i + 1 + channels] * data[i]
+    return out
+
+
+def test_model_data_in_rle_form(fppd):
+    """GET /api/overlays/model/<m>/data/rle gives a model's pixels as runs of
+    a count and a colour, says so, and decodes to the plain /data.
+
+    Regression: 3df8159ab, which added the form."""
+    setup(fppd, [matrix()])
+    fppd.start()
+    put(fppd, "model/M/state", {"State": 1})
+    put(fppd, "model/M/fill", {"RGB": [10, 20, 30]})
+    plain = fppd.get("/overlays/model/M/data")
+    assert plain["data"] == [10, 20, 30] * (WIDTH * HEIGHT), plain
+    assert not plain["rle"], plain
+    rle = fppd.get("/overlays/model/M/data/rle")
+    assert rle["rle"] is True, rle
+    assert rle["data"] == [WIDTH * HEIGHT, 10, 20, 30], rle
+    assert rle_decode(rle["data"], 3) == plain["data"]
