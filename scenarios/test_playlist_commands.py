@@ -285,6 +285,25 @@ def test_next_and_prev_item(fppd):
     wait_idle(fppd)
 
 
+def test_next_item_walks_from_the_lead_in_to_the_lead_out(fppd):
+    """Next Playlist Item works in the lead-in and the lead-out too: from the
+    lead-in to the main section, on to the lead-out, and off its end to idle.
+
+    Regression: 802efb2bf. Outside the main section Next started the same
+    entry again."""
+    fppd.write("playlists/P.json", playlist(
+        "P", lead_in=[step(1), pause(30)], main=[step(2), pause(30)], lead_out=[step(3), pause(30)]))
+    fppd.start()
+    start(fppd, "P")
+    wait_in_pause(fppd, "1")
+    fppd.command("Next Playlist Item")      # out of the lead-in's pause
+    wait_in_pause(fppd, "12")
+    fppd.command("Next Playlist Item")      # out of the main section's pause
+    wait_in_pause(fppd, "123")
+    fppd.command("Next Playlist Item")      # off the end of the lead-out
+    wait_idle(fppd)
+
+
 def test_toggle_playlist(fppd):
     """Toggle Playlist starts the playlist when it isn't running and stops
     it when it is."""
