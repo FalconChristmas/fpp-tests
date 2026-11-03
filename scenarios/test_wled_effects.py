@@ -44,6 +44,7 @@ def test_every_wled_effect_runs(fppd, shape):
 
 
 def test_every_palette(fppd):
+    # Also guards afe3c11e9: the WLED effects are in the overlay effects list.
     """A palette-driven effect with every palette in the list: the
     built-ins, the FastLED ones and every gradient table."""
     w, h = 32, 16
