@@ -883,3 +883,28 @@ def test_the_status_says_whether_channel_inputs_are_enabled(fppd):
     time.sleep(1.1)  # a save in a later second, as a person makes it
     fppd.write("config/ci-universes.json", {"channelInputs": []})
     fppd.wait_for(lambda: enabled() is False, timeout=15, what="the inputs to be reported off")
+
+
+def test_bridged_data_is_processed_on_every_frame(fppd):
+    """A Brightness output processor over bridged channels dims every frame
+    that goes out, however the input's packets fall between them.
+
+    Regression: 4808ac9b3. The input wrote straight into the channel data, so
+    a packet landing after the processors had run went out undimmed."""
+    from test_output_processors import proc
+    setup(fppd)
+    fppd.write("config/outputprocessors.json", {"outputProcessors": [
+        proc("Brightness", start=E131_START, count=E131_SIZE, brightness=50, gamma=1.0)]})
+    data = bytes([0xE0]) * E131_SIZE
+    with Listener(OUT_PORT) as out:
+        fppd.start()
+        with Sender(lambda n: [(e131(10, data, seq=n), E131_PORT)]):
+            wait_output(fppd, out, lambda f: 0 < region(f, E131_START, E131_SIZE)[0] < 0xE0,
+                        "the dimmed input")
+            since = time.monotonic()
+            time.sleep(4)
+            with out.lock:
+                seen = [region(d, E131_START, E131_SIZE) for t, d in out.packets
+                        if t >= since and len(d) == CHANNELS]
+    assert len(seen) > 20, len(seen)
+    assert not [r for r in seen if r[0] == 0xE0], "a frame went out undimmed"
