@@ -295,3 +295,18 @@ def test_the_same_default_gateway_listed_twice_is_one_gateway(tmp_path):
     out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_CheckGateways",
                      routes=ROUTE_HEADER + route + route)
     assert "A single gateway was found." in out, out[-2000:]
+
+
+def test_only_the_first_of_two_default_gateways_is_pinged(tmp_path):
+    """The text health check's Default Gateway item names and pings the first
+    default route alone.
+
+    Regression: 4166b93d8. With two routes, the address it took was both of
+    them, a line each."""
+    routes = (ROUTE_HEADER
+              + "0.0.0.0         10.0.0.1        0.0.0.0         UG        0 0          0 eth0\n"
+              + "0.0.0.0         10.0.0.2        0.0.0.0         UG        0 0          0 wlan0\n")
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_PingGateway", routes=routes, REACHABLE="10.0.0.1")
+    assert "Default Gateway (10.0.0.1)" in out, out[-2000:]
+    pings = (tmp_path / "calls").read_text()
+    assert "10.0.0.1" in pings and "10.0.0.2" not in pings, pings
