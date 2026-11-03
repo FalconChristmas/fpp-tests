@@ -2,6 +2,9 @@
 
 import os
 import time
+import urllib.error
+
+import pytest
 
 
 def set_variable(name, value):
@@ -148,3 +151,26 @@ def test_fired_preset_timers_leave_nothing_behind(fppd):
     time.sleep(1.5)  # every timer has fired
     grew = rss_mb(fppd.proc.pid) - before
     assert grew < 20, f"fppd grew {grew:.1f} MB over 50 fired preset timers"
+
+
+def two_presets(fppd):
+    fppd.write("config/commandPresets.json", {"commands": [
+        dict(set_variable("A1", 1), name="Alpha"),
+        dict(set_variable("B1", 2), name="Beta")]})
+
+
+def test_one_preset_is_fetched_by_name(fppd):
+    """GET /api/commandPresets/<name> answers with that preset alone; a name
+    with no preset is a 404, not some other preset.
+
+    Regression: 9d614b423, which added the lookup. Without it the path is
+    answered with the whole file, whatever the name."""
+    two_presets(fppd)
+    fppd.start()
+    beta = fppd.get("/commandPresets/Beta")
+    assert beta.get("name") == "Beta", beta
+    assert beta.get("args", [None])[0] == "B1", beta
+    assert "commands" not in beta, beta
+    with pytest.raises(urllib.error.HTTPError) as e:
+        fppd.get("/commandPresets/Gamma")
+    assert e.value.code == 404, (e.value.code, e.value.body)
