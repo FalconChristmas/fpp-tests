@@ -297,3 +297,19 @@ def test_a_short_broker_drop_raises_no_disconnected_warning(fppd):
         relay.restore()
         fppd.wait_for(lambda: connected(fppd), timeout=30, interval=0.5, what="fppd to reconnect")
         fppd.wait_for(lambda: not disconnected(), timeout=10, what="the warning to clear")
+
+
+def test_the_mqtt_command_retains_only_when_asked(fppd):
+    """The MQTT FPP Command publishes to the topic it is given, retained only
+    with its retain argument: a later subscriber gets that one alone.
+
+    Regression: 8de019232, which added the argument and made not retaining
+    the default."""
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    with broker():
+        fppd.start()
+        fppd.wait_for(lambda: connected(fppd), timeout=15, what="fppd to connect to the broker")
+        fppd.command("MQTT", f"{BASE}/kept", "stays", "true")
+        fppd.command("MQTT", f"{BASE}/passing", "goes", "false")
+        fppd.wait_for(lambda: retained("kept") == "stays", timeout=10, what="the retained message")
+        assert retained("passing") is None
