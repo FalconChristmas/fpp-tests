@@ -157,7 +157,8 @@ test('a DPI port\'s power estimate counts the end nulls\' idle draw', async ({ p
 
 test('a DPI port\'s pixel count and power estimate count its start nulls', async ({ page }) => {
   // Regression: the port details read the start nulls from .vsNullNodes, a
-  // class no row has (the field is .vsStartNulls), so they were never counted.
+  // class no row has (the field is .vsStartNulls), so they were never counted
+  // (fixed by e487ca959).
   // 100 pixels and 50 start nulls come to 150 pixels and 6 A + 150 * 2 mA = 6.3 A.
   write(PLATFORM, 'Raspberry Pi');
   write(CAPE_FILE, JSON.stringify({

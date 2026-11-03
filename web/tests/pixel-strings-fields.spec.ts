@@ -110,7 +110,7 @@ test('the end channel as first drawn from a saved config is a whole number too',
   // Regression: 3d7a1e369 (master bug).  The commit made the edit path round
   // the last partial group up, but the first draw of a row divided plainly,
   // so ten RGB pixels in groups of four opened at 8.5.  Now it rounds up, like
-  // the edit path, and an empty string ends at 0.
+  // the edit path, and an empty string ends at 0 (fixed by e487ca959).
   writeFile(CONFIG, JSON.stringify(stringsConfig([
     { pixelCount: 10, groupCount: 4 }, { pixelCount: 0 }, { pixelCount: 12, groupCount: 4 }, { pixelCount: 10 },
   ])));
