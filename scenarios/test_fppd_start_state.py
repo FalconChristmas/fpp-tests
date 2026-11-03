@@ -59,6 +59,20 @@ def test_quick_restart_removes_fpp_info(fppd):
         assert "10.77.0.1" in open(path).read(), open(path).read()
 
 
+def test_a_quick_restart_keeps_the_log_levels(fppd):
+    """Loggers set on fppd's command line keep their levels across a quick
+    restart, which re-executes fppd.
+
+    Regression: c6b7ea0ed. The restart ran fppd without the option."""
+    with interface("10.77.0.1"):
+        fppd.start(argv=[os.path.join(fppd.tree, "src", "fppd"), "-f", "--log-level", "debug:Schedule"])
+        assert fppd.get("/fppd/log")["log"]["Schedule"] == "debug"
+        command("restart", reply=False)
+        fppd.wait_for(lambda: fppd.log().count(LOOP_LINE) >= 2, timeout=60, interval=0.25,
+                      what="the restarted fppd to reach its main loop")
+        assert fppd.get("/fppd/log")["log"]["Schedule"] == "debug"
+
+
 def test_unknown_mode_is_named_unknown(fppd):
     """A MultiSync ping from a system announcing a mode fppd does not know
     (0x55) lists that system with fppModeString "unknown", and fppd keeps
