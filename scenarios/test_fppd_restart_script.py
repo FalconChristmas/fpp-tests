@@ -46,3 +46,21 @@ def test_fppd_restart_clears_the_restart_flag_in_the_media_settings(fppinit):
     assert 'KioskRotate = "0"' in settings, settings
     calls = [c for c in fppinit.calls() if c in ("fppd_stop", "fppd_start")]
     assert calls == ["fppd_stop", "fppd_start"], f"{calls}\n{out[-2000:]}"
+
+
+def test_fppd_restart_on_a_device_is_not_fooled_by_a_similar_name(fppinit):
+    """On a device (no container marker) fppd_restart starts fppd when it
+    isn't running, even with something else called fppd_* up: the running
+    check is for that exact name.
+
+    Regression: 8e30ac05d. pgrep without -x matched fppd_helper, so a stopped
+    fppd was told to reload instead of being started."""
+    fppinit.write("settings", 'restartFlag = "1"\n')
+    r = fppinit._run(["bash", "-c",
+                      "rm -f /etc/fpp/container; cp /bin/sleep /tmp/fppd_helper; "
+                      "/tmp/fppd_helper 30 & sleep 0.2; "
+                      "bash /opt/fpp/scripts/fppd_restart; echo \"exited $?\"; kill %1"], timeout=60)
+    out = r.stdout + r.stderr
+    assert "exited 0" in out, out[-2000:]
+    calls = [c for c in fppinit.calls() if "fppd" in c and "systemctl" in c]
+    assert calls and all("start" in c for c in calls), f"{calls}\n{out[-2000:]}"
