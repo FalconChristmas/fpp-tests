@@ -838,23 +838,32 @@ def test_channel_outputs_enabled_means_universe_outputs(fppd):
 
     Also 812bdaab3: a co-universes.json saved while fppd runs is loaded
     without a restart; before it outputs were read only at startup.
+
+    The local system is listed only once fppd has an address other than
+    loopback: a dummy interface gives it one where the run has nothing else
+    (run-local.sh's network namespace).
     """
+    from test_multisync_systems import interface
+
     fppd.write("config/co-other.json", {"channelOutputs": [{
         "type": "ControlChannel", "enabled": 1, "startChannel": 1, "channelCount": 1,
         "values": []}]})
-    fppd.start()
+    with interface("10.77.0.1"):
+        fppd.start()
 
-    def enabled():
-        local = [s for s in fppd.get("/fppd/multiSyncSystems")["systems"] if s.get("local")]
-        return (fppd.get("/fppd/status").get("channelOutputsEnabled"),
-                local[0].get("channelOutputsEnabled") if local else "no local system")
+        def enabled():
+            local = [s for s in fppd.get("/fppd/multiSyncSystems")["systems"] if s.get("local")]
+            return (fppd.get("/fppd/status").get("channelOutputsEnabled"),
+                    local[0].get("channelOutputsEnabled") if local else "no local system")
 
-    fppd.wait_for(lambda: "Calling Init() on ControlChannel output" in fppd.log(),
-                  what="the control channel output to load")
-    assert enabled() == (False, False), f"with only a control channel output: {enabled()}"
-    fppd.write("config/co-universes.json", universes("added"))
-    fppd.wait_for(lambda: enabled() == (True, True), timeout=10,
-                  what="channelOutputsEnabled once a universe output is loaded")
+        fppd.wait_for(lambda: "Calling Init() on ControlChannel output" in fppd.log(),
+                      what="the control channel output to load")
+        fppd.wait_for(lambda: enabled()[1] != "no local system", timeout=10,
+                      what="the local system to be listed")
+        assert enabled() == (False, False), f"with only a control channel output: {enabled()}"
+        fppd.write("config/co-universes.json", universes("added"))
+        fppd.wait_for(lambda: enabled() == (True, True), timeout=10,
+                      what="channelOutputsEnabled once a universe output is loaded")
 
 
 def test_control_channel_hands_its_value_to_the_preset(fppd):
