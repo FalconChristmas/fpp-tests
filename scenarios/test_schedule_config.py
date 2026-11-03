@@ -275,6 +275,27 @@ def test_sunset_in_the_polar_night_is_in_the_evening(fppd):
     assert first.hour == 20, f"SunSet in the polar night scheduled for {first}"
 
 
+def test_sunset_is_worked_out_for_the_day_each_item_runs(fppd):
+    """A SunSet entry over a week near the equinox starts at each day's own
+    sunset, about a minute later each day, not the same time as today's.
+
+    Regression: e863a40d9."""
+    from zoneinfo import ZoneInfo
+    zone = "America/Denver"
+    fppd.settings(Latitude="39.74", Longitude="-104.99")
+    fppd.write("playlists/Show.json", {"name": "Show", "repeat": 0, "loopCount": 0,
+                                       "leadIn": [], "leadOut": [], "mainPlaylist": []})
+    fppd.write("config/schedule.json", [entry(7, "SunSet", "23:00:00", startDate=f"{YEAR}-03-18",
+                                              endDate=f"{YEAR}-03-24")])
+    fppd.start(fake_time=f"{YEAR}-03-18 12:00:00", tz=zone)
+    got = fppd.get("/fppd/schedule")["schedule"]["items"]
+    starts = [datetime.datetime.fromtimestamp(i["startTime"], ZoneInfo(zone)) for i in got]
+    assert len({d.date() for d in starts}) >= 4, starts
+    of_day = [d.hour * 3600 + d.minute * 60 + d.second for d in starts]
+    assert all(b > a for a, b in zip(of_day, of_day[1:])), starts
+    assert all(b - a < 180 for a, b in zip(of_day, of_day[1:])), starts
+
+
 def test_time_format_too_long_for_the_buffer_is_left_empty(fppd):
     """A date format whose result doesn't fit the scheduler's buffer gives
     an empty time string in the schedule status, not whatever the failed
