@@ -108,6 +108,25 @@ test('what every page reads about the player is still printed on every page', as
   }
 });
 
+test('the settings every page reads are printed as declared ones, without the undeclared note', async ({ page }) => {
+  // c77e0c17c (Platform, Variant, SubPlatform, OSImagePrefix, IsDesktop,
+  // BeaglePlatform) and f211108eb (Logo, LogoLink, hideExternalURLs, locale)
+  // declared these in settings.json.  Undeclared, PrintJSSettings() still
+  // prints a setting on every page but marks its line "// Needs proper
+  // defintion in JSON"; the value is the same, so the note is what tells a
+  // declared setting from an undeclared one.
+  const KEYS = ['Platform', 'Variant', 'SubPlatform', 'OSImagePrefix', 'IsDesktop', 'BeaglePlatform',
+    'Logo', 'LogoLink', 'hideExternalURLs', 'locale'];
+  for (const path of PAGES) {
+    const html = await (await page.request.get(path)).text();
+    for (const k of KEYS) {
+      const line = html.split('\n').find((l) => l.includes(`settings[${JSON.stringify(k)}] =`));
+      expect(line, `${k} is printed on ${path}`).toBeTruthy();
+      expect(line, `${k} on ${path} is printed as undeclared`).not.toContain('Needs proper');
+    }
+  }
+});
+
 function system(address: string, hostname: string, local = 0) {
   return {
     address, hostname, local, fppMode: local ? 2 : 8, fppModeString: local ? 'player' : 'remote',
