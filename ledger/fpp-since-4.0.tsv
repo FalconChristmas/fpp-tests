@@ -6243,14 +6243,14 @@ a9c6426df	superseded		none	script check: none of the 7 lines this commit added a
 ab1b56639	todo		none	script check: 0 of 1 added lines are still in master	Always display "statusHostname" - #1044	5.0	css	Web UI (shared JS/CSS/pages)	web
 cedca80f7	todo		none	script check: 13 of 40 added lines are still in master	Detect if a proxy is needed to access the Falcon v4's	5.0	www	MultiSync & remotes	web
 38ff51475	todo		none	script check: 1 of 2 added lines are still in master	Move RGB order message to the RGB Order section.	5.0	www	Web UI (shared JS/CSS/pages)	web
-9d614b423	todo		none	script check: 4 of 7 added lines are still in master	Allow gettings the json for a single preset command	5.0	commands	Commands & presets	docker,web
+9d614b423	todo		none	read 2026-11-03: GET /api/commandPresets/<name> still returns the one preset's JSON (Commands.cpp render_GET). docker: write config/commandPresets.json with two presets, assert GET /api/commandPresets/B is B's object and an unknown name is not a 200 with A in it; test_api_robustness.py only fuzzes the path. The testing.php <hr> is cosmetic	Allow gettings the json for a single preset command	5.0	commands	Commands & presets	docker,web
 5a35ef615	todo		none	script check: 0 of 1 added lines are still in master	Add Title to Solid Color Testing page	5.0	www	Web UI (shared JS/CSS/pages)	web
-05a68e1ed	todo		none	script check: 10 of 19 added lines are still in master	Fill in potential list of command presets for Trigger command	5.0	commands	Commands & presets	docker
+05a68e1ed	todo		none	read 2026-11-03: GET /api/commandPresets?names=true (the Trigger Preset command's content list) is still there; recurring-tasks-presets.spec.ts and events.spec.ts read it but assert nothing about it. docker: two presets in commandPresets.json give ["A","B"], none gives []; check the Trigger Preset command's contentListUrl names it	Fill in potential list of command presets for Trigger command	5.0	commands	Commands & presets	docker
 6bd447cdd	todo		none	script check: 98 of 143 added lines are still in master	Bunch of fixes for multisync page, updates for removal of master mode, etc...	5.0	api	MultiSync & remotes	docker,web
 3c9da56f2	todo		none	script check: 0 of 1 added lines are still in master	Fix version for gitCheckoutVersion	5.0	www	Web UI (shared JS/CSS/pages)	web
 071f7b46f	todo		none	script check: 0 of 0 added lines are still in master	Remove Stats UUID from UI	5.0	www	Settings & config	web
 b20c5b862	todo		none	script check: 45 of 85 added lines are still in master; 3 of 19 files gone	[WIP] Remove "master" mode, sending sync packets is a settings for player mode	5.0	channeloutput	Playlists, schedule & sequences	device,docker,web
-a205abdfb	todo		none	script check: 0 of 1 added lines are still in master	Update backup.php	5.0	www	Upgrade, backup & files	web
+a205abdfb	untestable		none	wording: "Master/Slave" -> "Master/Remote" in a backup.php label (master's restore dialog and help word it again differently)	Update backup.php	5.0	www	Upgrade, backup & files	web
 0928d1c8a	todo		none	script check: 7 of 15 added lines are still in master	Updated documentation	5.0	.vscode	Settings & config	docker
 5e1455c48	todo		none	script check: 6 of 8 added lines are still in master	Add more recommended extentions	5.0	.vscode	Other	docker
 5188f9d34	todo		none	script check: 1 of 3 added lines are still in master	Fix logic	5.0	www	MultiSync & remotes	web
@@ -6261,12 +6261,12 @@ fea6a65cd	todo		none	script check: 0 of 1 added lines are still in master	Don't 
 4abb4da89	todo		none	script check: 9 of 18 added lines are still in master	Sequence timing should take precedence over bridge timing	5.0	channeloutput	Other channel outputs	docker
 a9e91e3eb	todo		none	script check: 9 of 13 added lines are still in master	Fix percentage display for media storage, expand dialog for copy storage output	5.0	www	Web UI (shared JS/CSS/pages)	web
 0b30d3765	untestable		none	auto: changes no runtime file (docs)	Reserve multisync ID's for the Falcon v4 controllers	5.0	docs	Other	none
-6252407dc	todo		none	script check: 34 of 83 added lines are still in master; 1 of 3 files gone	Updated JSON Backup to support plugins with multi config files	5.0	css	Upgrade, backup & files	web
+6252407dc	superseded		none	the extra plugin config files of a JSON backup (www/backup_locations.json) are gone: the file was removed and master's backup.php has the json_decode of it commented out; the backup version and plugin listing were reworked since	Updated JSON Backup to support plugins with multi config files	5.0	css	Upgrade, backup & files	web
 91b1ce092	todo		none	script check: 7 of 35 added lines are still in master	Added WLED Wifi and Uptime to Multisync Page	5.0	www	MultiSync & remotes	web
 5f11c525a	todo		none	script check: 0 of 2 added lines are still in master	Check for eeprom on i2c1 for about page as well	5.0	www	Web UI (shared JS/CSS/pages)	web
 556223f42	superseded		none	script check: every file this commit changed has since been removed from master	Update fppcapedetect to configure i2c pins on i2c1 to look for eeprom on i2c1	5.0	src	Capes & EEPROM	docker
 f4729df2e	superseded		none	the unconditional INFLATE;DEFLATE proxy filter was replaced by b2b19166f (re-compression scoped to the clients that need it); the FPPCFGVER line has moved on too	Enable the deflate when going back to the browser. FPP_Install will include the changes so set to the new version	5.0	SD	Boot, OS image & install	os-image,docker
-12ebe78f2	todo		none	script check: 1 of 7 added lines are still in master; 1 of 2 files gone	Fix for issue 1031	5.0	etc	Network, Apache & security	docker
+12ebe78f2	superseded		none	the proxy's Accept-Encoding/INFLATE handling was replaced by b2b19166f (re-compression only for clients that need it, covered by proxy-passthrough.spec.ts); upgrade/67 is not on master	Fix for issue 1031	5.0	etc	Network, Apache & security	docker
 c2517366e	todo		none	read 2026-11-03: the boot IP announcement skipping the USB-tether addresses lives on in src/boot/FPPINIT_Network.cpp (192.168.6.2/7.2/8.1 filtered); test_fppinit_tethering_boot.py's announcing() harness could add usb0 with 192.168.7.2 next to eth0 and assert the flite text names 10.99.0.2 but not 192.168.7.2 [docker]. The AudioOutput reboot flag (settings.json "reboot": 1) is still there too (web: changing Audio Output raises the reboot banner, not restart). The .vscode launch config is dev-only	Don't announce the USB tether IP addresses over audio, changing audio settings mostly requires reboots, not restarts	5.0	.vscode	Boot, OS image & install	docker,web
 5f20a60a1	todo		none	script check: 3 of 20 added lines are still in master; 2 of 3 files gone	Adjust the dmix buffer/period sizes to reduce latency	5.0	mediaoutput	Media: audio & video	docker
 acd3b3b99	todo		none	script check: 14 of 33 added lines are still in master	Added WLED to Multisync Discovery	5.0	docs	MultiSync & remotes	docker
@@ -6318,9 +6318,9 @@ ed4687ce6	todo		none	script check: 15 of 41 added lines are still in master; 2 o
 ece9e71b3	superseded		none	script check: every file this commit changed has since been removed from master	Start on fix for GET/POST in help.php	5.0	api	Web API	web
 5564adc78	superseded		none	script check: every file this commit changed has since been removed from master	Redirect api/help	5.0	api	Web API	web
 b25391bd2	todo		none	script check: 45 of 85 added lines are still in master	Start creating PixelOverlayModels automatically from outputs, only FBMatrix working so far	5.0	channeloutput	Pixel overlays	device,docker,web
-19c55e29b	todo		none	script check: 0 of 4 added lines are still in master	Add validation to Branch name before switching Related to https://www.huntr.dev/bounties/29-other-FalconChristmas/fpp/	5.0	scripts	Upgrade, backup & files	docker,web
+19c55e29b	superseded		none	git_branch's branch-name check and changebranch.php's escaping were rewritten (git_branch now checks refs/remotes/$REMOTE with grep -F; changebranch.php validates $rawBranch), covered by multisync-change-branch-refused.spec.ts and shell-input-refused.spec.ts	Add validation to Branch name before switching Related to https://www.huntr.dev/bounties/29-other-FalconChristmas/fpp/	5.0	scripts	Upgrade, backup & files	docker,web
 a10c8a377	todo		none	script check: 0 of 1 added lines are still in master	Removes any html tags (or data between "<" and ">" in playlist arguments This appears to be safe to me.  We do allow arguments to be sent to scripts, and this would prevent ">" from being used, but I think that is a good thing. Releated to https://www.huntr.dev/bounties/30-other-FalconChristmas/fpp/	5.0	js	Web UI (shared JS/CSS/pages)	web
-09d6d3e43	todo		none	script check: 4 of 12 added lines are still in master	Fix to Validate and Delete proxy 1) Previous commit missed validation code 2) Found a bug where unable delete proxies. Fixed this by    using jquery vs assuming all rows IDs are present.	5.0	www	Network, Apache & security	web
+09d6d3e43	todo		none	read 2026-11-03: proxies.php still refuses a proxy that is neither an IP nor a hostname (isValidHostname/isValidIpAddress at :104 and :220) and deletes rows by jQuery rather than by row index. web: add a row "a b/c", save, assert it is not saved and the message says so; add three, delete the middle one, save, assert the other two remain. proxies-*.spec.ts cover listing and DHCP names, not this	Fix to Validate and Delete proxy 1) Previous commit missed validation code 2) Found a bug where unable delete proxies. Fixed this by    using jquery vs assuming all rows IDs are present.	5.0	www	Network, Apache & security	web
 46b30f062	todo		none	script check: 8 of 23 added lines are still in master	Add validation to proxy names Related to https://www.huntr.dev/bounties/31-other-FalconChristmas/fpp/	5.0	js	Web UI (shared JS/CSS/pages)	web
 31924727f	todo		none	script check: 2 of 4 added lines are still in master	Reorder elements in help menu	5.0	www	Web UI (shared JS/CSS/pages)	web
 5ca8a7f84	todo		none	script check: 5 of 7 added lines are still in master; 1 of 2 files gone	Troubleshooting page: Scroll to achors that are supplied in URL Requires scrolling be updated after dynamic content is loaded	5.0	api	Web API	web
@@ -6330,7 +6330,7 @@ d727061db	todo		none	script check: 22 of 48 added lines are still in master; 1 o
 f7eb3bbbd	todo		none	script check: 1 of 4 added lines are still in master	Remove enabled/disabled setting for ntp Server can still be changed via settings, if not specified the debian pool is used as before. (This is clarified in the settings ui) Closes #1020	5.0	common	Settings & config	docker,web
 1cfdc526b	todo		none	script check: 1 of 2 added lines are still in master	Fix XSS on invalid IP https://www.huntr.dev/bounties/32-other-FalconChristmas/fpp/	5.0	www	MultiSync & remotes	web
 1142fc231	todo		none	script check: 16 of 22 added lines are still in master	Add some sanity check to uploaded file names https://www.huntr.dev/bounties/38-FalconChristmas/fpp/	5.0	api	Web UI (shared JS/CSS/pages)	web
-244e8ff55	todo		none	script check: 0 of 1 added lines are still in master	Prevents Cross-site scripting https://www.huntr.dev/bounties/1624743564895-FalconChristmas/fpp/	5.0	www	Upgrade, backup & files	web
+244e8ff55	todo		none	read 2026-11-03: backup.php still prints ?tab= only when it is numeric (:3438). web: GET backup.php?tab=1%27%3Balert(1)%2F%2F and assert the page's script holds no part of it (and ?tab=2 opens the second tab). request-input-escaped.spec.ts covers other pages	Prevents Cross-site scripting https://www.huntr.dev/bounties/1624743564895-FalconChristmas/fpp/	5.0	www	Upgrade, backup & files	web
 37f3cad95	todo		none	script check: 4 of 7 added lines are still in master	Troubleshoot Page: Take fix header into account This patch isn't perfect, but makes it more likely that it will scroll to the correct location.	5.0	css	Web UI (shared JS/CSS/pages)	web
 8bfba3c2c	todo		none	script check: 1 of 4 added lines are still in master	OS Injection issue with plugins https://huntr.dev/bounties/1624730404898-FalconChristmas/fpp/	5.0	api	Plugins	docker,web
 3cb9c99d3	superseded		none	script check: every file this commit changed has since been removed from master	REstore /www/api/help.php endpoint	5.0	api	Web API	web
@@ -6354,8 +6354,8 @@ af8cee229	todo		none	script check: 0 of 3 added lines are still in master	Bump p
 998e81670	untestable		none	auto: changes no runtime file (SECURITY.md)	Create Security policy file	5.0	SECURITY.md	Other	none
 29809ca92	todo		none	script check: 25 of 47 added lines are still in master	Update pixel strings to allow end nulls in addition to start nulls	5.0	channeloutput	BB pixel strings & PRU	docker,web
 5c28df837	todo		none	script check: 3 of 4 added lines are still in master	Fix Undefined index of currentHeaderSensor in menu.inc Only happens if a default value is not rpesent in settings. If settings is empty, assume sensor 1. Undefined index: currentHeaderSensor in /opt/fpp/www/menu.inc on line 91, referer: http://fppdev/	5.0	www	Web UI (shared JS/CSS/pages)	web
-ee16c9c26	todo		none	script check: 1 of 2 added lines are still in master	Fix Header on Backup Page Related to #1013.  We should only disable the configuration in POST mode when creating the download file.  Otherwise the header doesn't work correctly.	5.0	www	Upgrade, backup & files	web
-e9fb05077	todo		none	script check: 1 of 1 added lines are still in master	Attempted fix on downloading settings backup as JSON	5.0	www	Upgrade, backup & files	web
+ee16c9c26	todo		none	read 2026-11-03: backup.php sets skipJSsettings only for its POST download, so the page header/JS loads on GET and the JSON download holds no <script>. web: download a JSON settings backup and assert it parses as JSON (starts with "{"); backup-*.spec.ts likely already do -- check and mark	Fix Header on Backup Page Related to #1013.  We should only disable the configuration in POST mode when creating the download file.  Otherwise the header doesn't work correctly.	5.0	www	Upgrade, backup & files	web
+e9fb05077	todo		none	read 2026-11-03: same as ee16c9c26 (the first try at it): a settings backup downloaded as JSON has no <script> from config.php in front of it. web; check backup-*.spec.ts, which download backups, and mark	Attempted fix on downloading settings backup as JSON	5.0	www	Upgrade, backup & files	web
 c9e958aaa	todo		none	script check: 0 of 4 added lines are still in master	Add descriptions to GPIO input ports that can be entered by users	5.0	www	OLED, GPIO & sensors	web
 a132dc196	todo		none	script check: 0 of 1 added lines are still in master	Implement 64x64x1/8 scan panels for Colorlight	5.0	www	LED panels	web
 e7e4e0ab5	todo		none	script check: 5 of 12 added lines are still in master	Error on Playlist Details if image missing	5.0	js	Web UI (shared JS/CSS/pages)	web
@@ -6365,19 +6365,19 @@ f3a56c4f0	todo		none	script check: 0 of 4 added lines are still in master	playli
 aeea6993c	todo		none	script check: 2 of 6 added lines are still in master	Sequence validator should check videos too	5.0	api	Playlists, schedule & sequences	web
 02124b4f4	superseded		none	FPPCFGVER in FPP_Install.sh has been bumped many times since; the line is gone	config version is actuall at 66 after FPP_Install now	5.0	SD	Boot, OS image & install	os-image
 1d3277194	todo		none	script check: 0 of 2 added lines are still in master; 1 of 3 files gone	Use dmix in asoundrc by default	5.0	etc	Media: audio & video	docker
-7f4073d3e	todo		none	script check: 0 of 0 added lines are still in master	Back out earlier change from another branch that has not yet been accepted and should not exist in this branch	5.0	commands	Commands & presets	docker
-657dfc520	todo		none	script check: 2 of 15 added lines are still in master	Add Remote Start Playlist command	5.0	commands	Commands & presets	docker
-400665f97	todo		none	script check: 0 of 1 added lines are still in master	Implement If Not Running for Remote Effect Start	5.0	commands	Commands & presets	docker
+7f4073d3e	untestable		none	backs out 400665f97's unaccepted ifNotRunning arg on the remote effect start before it shipped; the two commits net to nothing	Back out earlier change from another branch that has not yet been accepted and should not exist in this branch	5.0	commands	Commands & presets	docker
+657dfc520	superseded		none	the Remote Playlist Start command was removed with the other remote commands by 58087f2ed (test_commands.py::test_the_remote_commands_are_gone); FPPINIT_Config.cpp maps a saved one to Start Playlist	Add Remote Start Playlist command	5.0	commands	Commands & presets	docker
+400665f97	superseded		none	its ifNotRunning arg on the remote effect start was backed out by 7f4073d3e before 5.0, and the remote commands were removed by 58087f2ed	Implement If Not Running for Remote Effect Start	5.0	commands	Commands & presets	docker
 88bee8f93	todo		none	script check: 0 of 1 added lines are still in master	Fix music validation path	5.0	api	Playlists, schedule & sequences	web
 134349bf2	superseded		none	script check: every file this commit changed has since been removed from master	Link creation is backwords	5.0	SD	Boot, OS image & install	os-image
 8f6fad7b0	superseded		none	script check: every file this commit changed has since been removed from master	Fix wifi compile, vlc compile on BBB	5.0	SD	Boot, OS image & install	os-image
-36a43a419	todo		none	script check: 11 of 12 added lines are still in master	Add "If Not Running" functionality to local Effect Sequences	5.0	commands	Commands & presets	docker
+36a43a419	todo		none	read 2026-11-03: Effect Start's If Not Running (EventCommands.cpp:255 "Effect NOT Started") is still there; test_effects.py::test_fseq_effect_start_options covers only the FSEQ Effect Start one (1c7641851). docker: start an .eseq effect, start it again with ifNotRunning true, assert one copy runs and the result is "Effect NOT Started"; without it two run	Add "If Not Running" functionality to local Effect Sequences	5.0	commands	Commands & presets	docker
 6addf4c9c	todo		none	script check: 133 of 237 added lines are still in master; 1 of 7 files gone	Display warning if media, sequence, or sub-playlist is missing	5.0	api	Playlists, schedule & sequences	web
 e5a4d7c6e	superseded		none	script check: every file this commit changed has since been removed from master	Fix rtl8192cu compile	5.0	patches	Boot, OS image & install	os-image
 af32a8397	superseded		none	script check: every file this commit changed has since been removed from master	Provide a message	5.0	SD	Boot, OS image & install	os-image
 9d8ebb104	todo		none	script check: 1 of 1 added lines are still in master	Allow eseq to run from UI Found this while investigating #990	5.0	www	Web UI (shared JS/CSS/pages)	web
 928109f18	superseded		none	script check: none of the 26 lines this commit added are in master any more	More updates for new images	5.0	SD	Boot, OS image & install	os-image
-bf87e5fb3	todo		none	script check: 0 of 2 added lines are still in master	Replaced a strcpy call by strncpy	5.0	src	Commands & presets	docker
+bf87e5fb3	superseded		none	src/command.c (the old text command socket) is gone from master; nothing of the strncpy is left	Replaced a strcpy call by strncpy	5.0	src	Commands & presets	docker
 5a63c5cfc	superseded		none	script check: none of the 14 lines this commit added are in master any more	Replaced sprintf by snprintf and strcpy by strncpy to prevent buffer overflows	5.0	src	fppd core & utilities	docker
 122d7eceb	todo		none	script check: 0 of 1 added lines are still in master	Sanitizing $_GET['tab'] against XSS	5.0	www	Web UI (shared JS/CSS/pages)	web
 10f102bff	todo		none	script check: 0 of 1 added lines are still in master	Sanitizing ip variable against XSS	5.0	www	MultiSync & remotes	web
@@ -6390,7 +6390,7 @@ b23678241	todo		none	script check: 0 of 1 added lines are still in master	Saniti
 1842a105e	superseded		none	upgradeOS.php's 'os' escaping was rewritten by e402d6c68 (basename, URL validation, htmlspecialchars with ENT_QUOTES), covered by shell-input-refused.spec.ts; none of these lines remain	Sanitize $_GET['os'] and $baseFile to prevent XSS and OS command injection	5.0	www	Boot, OS image & install	web
 21d45ca6c	superseded		none	upgradeOS.php's 'os' escaping was rewritten by e402d6c68 (basename, URL validation, htmlspecialchars with ENT_QUOTES), covered by shell-input-refused.spec.ts; none of these lines remain	Fix Cross-site Scripting (XSS) https://huntr.dev/bounties/13-other-FalconChristmas/fpp/	5.0	www	Boot, OS image & install	web
 b6782642b	todo		none	script check: 0 of 1 added lines are still in master	Escaping $command to prevent XSS	5.0	www	Web UI (shared JS/CSS/pages)	web
-1dd755bb7	todo		none	script check: 0 of 1 added lines are still in master	Escape `version` variable	5.0	www	Upgrade, backup & files	web
+1dd755bb7	superseded		none	upgradefpp.php's version handling was rewritten ($rawVersion validated, not escapeshellcmd'd), covered by upgrade-version-ref.spec.ts and shell-input-refused.spec.ts	Escape `version` variable	5.0	www	Upgrade, backup & files	web
 704aaa75d	superseded		none	script check: every file this commit changed has since been removed from master	Escape $ip before passing it to system	5.0	www	MultiSync & remotes	web
 8150b8d66	todo		none	script check: 0 of 1 added lines are still in master	Escaping arguments before passing them to system	5.0	www	Web UI (shared JS/CSS/pages)	web
 59b7f7e80	todo		none	script check: 1 of 8 added lines are still in master; 1 of 2 files gone	Prevent os command injection https://huntr.dev/bounties/3-other-FalconChristmas/fpp/	5.0	www	Web UI (shared JS/CSS/pages)	web
@@ -6416,8 +6416,8 @@ e5cd469e7	superseded		none	script check: only 4 of the 127 lines this commit add
 33aa0fd09	todo		none	script check: 17 of 134 added lines are still in master	Restore insert functionality in Playlist Editor, Make .tablePageHeader sticky	5.0	common	Web UI (shared JS/CSS/pages)	web
 c60734ab3	todo		none	script check: 26 of 40 added lines are still in master	Add row grips to pixeloverlaymodels.php and commandPresets.php	5.0	js	Web UI (shared JS/CSS/pages)	web
 39aa11e6f	superseded		none	script check: only 6 of the 125 lines this commit added are still in master; the rest were rewritten	Multiple UI fixes, details in description	5.0	css	Web UI (shared JS/CSS/pages)	web
-ce2732bb0	todo		none	script check: 0 of 1 added lines are still in master	Typo on previous commit - Fix #988	5.0	www	Network, Apache & security	web
-1d1f85be8	todo		none	script check: 0 of 2 added lines are still in master	Don't uuencode Wifi Post msg -#988	5.0	www	Network, Apache & security	web
+ce2732bb0	superseded		none	networkconfig.php's wifi save was rewritten by the network settings page revamp (d57649ef6): SSID/PSK now come from per-interface #eth_ssid_<name> fields	Typo on previous commit - Fix #988	5.0	www	Network, Apache & security	web
+1d1f85be8	superseded		none	networkconfig.php's wifi save was rewritten by the network settings page revamp (d57649ef6): SSID/PSK now come from per-interface #eth_ssid_<name> fields; network-manual-ssid.spec.ts covers saving an SSID	Don't uuencode Wifi Post msg -#988	5.0	www	Network, Apache & security	web
 cb0038c1d	superseded		none	script check: none of the 5 lines this commit added are in master any more	More additions and notes to user oriented docker compose file	5.0	Docker	Boot, OS image & install	os-image
 0081d4be6	untestable		none	moves a developer docker-compose sample from docs/ to Docker/; nothing at runtime	Move user oriented docker compose file into Docker subdir	5.0	Docker	Boot, OS image & install	os-image
 2c9795357	untestable		none	comments in Docker/docker-compose-dev.yml only	Update notes in renamed file.	5.0	Docker	Boot, OS image & install	os-image
@@ -6426,10 +6426,10 @@ cb0038c1d	superseded		none	script check: none of the 5 lines this commit added a
 ceee43699	todo		none	script check: 3 of 11 added lines are still in master	A few small fixes; plugin filtering, modal widths, and button styles	5.0	css	Web UI (shared JS/CSS/pages)	web
 5be81790f	todo		none	script check: 4 of 11 added lines are still in master	Update button placement & heading on initial setup	5.0	www	Web UI (shared JS/CSS/pages)	web
 24327f57a	superseded		none	script check: every file this commit changed has since been removed from master	switch to lowercase	5.0	api	Web API	web
-d12db14fb	todo		none	script check: 0 of 1 added lines are still in master; 1 of 2 files gone	Remove `skipJSsettings=1` from backup.php	5.0	www	Upgrade, backup & files	web
+d12db14fb	superseded		none	backup.php's skipJSsettings was put back for POST only by ee16c9c26 and is now set in its download paths (:27, :37); the settings-time.php row layout was redone since	Remove `skipJSsettings=1` from backup.php	5.0	www	Upgrade, backup & files	web
 7fffc9eb7	todo		none	script check: 4 of 18 added lines are still in master	Make "advanced" functionality part of default multisync view	5.0	css	MultiSync & remotes	web
 0a3217db2	todo		none	script check: 24 of 35 added lines are still in master	Add Grips to playlist editor rows	5.0	css	Web UI (shared JS/CSS/pages)	web
-6203f60df	todo		none	script check: 1 of 4 added lines are still in master	Bug fixes for proxies.php and commandPresets.php (See description)	5.0	www	Commands & presets	web
+6203f60df	todo		none	read 2026-11-03: the Command Presets Delete button (DeleteSelectedEntries('tblCommandsBody')) is still there. web: add two presets, select one, Delete, Save, assert commandPresets.json holds only the other; command-presets-*.spec.ts don't delete. The proxies.php config.php include half is covered by any proxies page test loading	Bug fixes for proxies.php and commandPresets.php (See description)	5.0	www	Commands & presets	web
 e852aa743	todo		none	script check: 7 of 48 added lines are still in master; 1 of 7 files gone	Docker enhancements	5.0	api	Settings & config	os-image,docker,web
 61fd2473d	todo		none	script check: 2 of 3 added lines are still in master	fix css syntax bug	5.0	css	Web UI (shared JS/CSS/pages)	web
 c5a1bc66a	todo		none	script check: 4 of 5 added lines are still in master	Fix column size in multisync copy settings	5.0	css	Web UI (shared JS/CSS/pages)	web
@@ -6472,7 +6472,7 @@ a56f40dcd	todo		none	script check: 23 of 25 added lines are still in master	Fix 
 03a805881	todo		none	script check: 24 of 64 added lines are still in master	Fix for Add New Playlist button.	5.0	css	Web UI (shared JS/CSS/pages)	web
 b1404b02e	todo		none	script check: 1 of 2 added lines are still in master; 1 of 2 files gone	Fix a couple compile warnings on newer g++	5.0	mediaoutput	Media: audio & video	device,docker
 d03c33fd8	superseded		none	script check: only 1 of the 24 lines this commit added are still in master; the rest were rewritten	Give local users API access Prevent bypassing basic auth by local users at the root level	5.0	api	Boot, OS image & install	docker,web
-fd15474e6	todo		none	script check: 9 of 23 added lines are still in master	Update command presets action buttons	5.0	css	Commands & presets	web
+fd15474e6	untestable		none	commandPresets.php action buttons restyled into bootstrap button groups/a mobile dropdown; layout only (the Delete behaviour is 6203f60df's row)	Update command presets action buttons	5.0	css	Commands & presets	web
 fabafe657	todo		none	script check: 62 of 144 added lines are still in master; 2 of 6 files gone	Spacing Updates	5.0	css	Web UI (shared JS/CSS/pages)	web
 5ffd03e91	todo		none	script check: 11 of 27 added lines are still in master; 1 of 2 files gone	Remove 'IsFppdRunning' API - #944	5.0	js	Web UI (shared JS/CSS/pages)	web
 c79a7a837	todo		none	script check: 37 of 99 added lines are still in master; 4 of 30 files gone	remove container breakpoints. table inputs spacing tweaks	5.0	css	Web UI (shared JS/CSS/pages)	web
@@ -6504,7 +6504,7 @@ c6c82c7e5	untestable		none	comments only (and a comment line in www/.user.ini); 
 1e39e1496	superseded		none	script check: only 1 of the 10 lines this commit added are still in master; the rest were rewritten	Fix issue loading UI under php-fpm.	5.0	common	Settings & config	docker,web
 1dace2a00	todo		none	script check: 3 of 5 added lines are still in master	Include hostname in page title if screen really small	5.0	css	Web UI (shared JS/CSS/pages)	web
 b49a53f45	todo		none	script check: 0 of 0 added lines are still in master	Remove debugging code from the wifi issue on multisync	5.0	www	MultiSync & remotes	web
-cad757de6	todo		none	script check: 5 of 8 added lines are still in master	Warning on 192.168.{6,7,8}.x subnets	5.0	www	Network, Apache & security	web
+cad757de6	todo		none	read 2026-11-03: networkconfig.php still warns on a static IP in 192.168.6/7/8.x (tether subnets). web: on the network page set a static IP 192.168.7.50, assert the #ipWarning text names the tethering subnets; 192.168.1.50 gives no such warning	Warning on 192.168.{6,7,8}.x subnets	5.0	www	Network, Apache & security	web
 db4a89d17	todo		none	script check: 269 of 269 added lines are still in master	add fpp icons	5.0	webfonts	Web UI (shared JS/CSS/pages)	web
 e863a40d9	todo		none	script check: 63 of 285 added lines are still in master	Scheduler fixes and enhancements	5.0	src	fppd core & utilities	docker
 3553777b8	todo		none	script check: 2 of 2 added lines are still in master	Reload the UI if the date or time format settings are changed.	5.0	www	Settings & config	web
@@ -6512,7 +6512,7 @@ a3438503f	todo		none	script check: 4 of 6 added lines are still in master	Detect
 8f3e578c3	untestable		none	make -j CPUS in FPP_Install.sh: build speed of an image/Docker install only	Use All CPUs for FPP_Install.sh Helps with docker!	5.0	SD	Boot, OS image & install	os-image
 e80d29bcc	todo		none	script check: 1 of 1 added lines are still in master	fix ip line break in header on mobile	5.0	css	Web UI (shared JS/CSS/pages)	web
 fcda5d3bd	todo		none	auto: not examined yet	Clean up the Fedora logo some.	5.0	images	Web UI (shared JS/CSS/pages)	web
-78792aaf9	todo		none	script check: 56 of 78 added lines are still in master; 2 of 10 files gone	fix Channel Input selected row bug. Fix wifi icon in multisync	5.0	css	Network, Apache & security	web
+78792aaf9	todo		none	read 2026-11-03: channelinputs.php picks the selected E1.31 input row by $('#tblUniverses tbody tr'), so the header row no longer shifts the index. web: with three input universes, click the second and Delete, assert the second (not the third) is removed. The wifi icons/CSS are cosmetic	fix Channel Input selected row bug. Fix wifi icon in multisync	5.0	css	Network, Apache & security	web
 3723a3b81	todo		none	script check: 0 of 0 added lines are still in master	Removed display of a previously removed setting which caused a warning	5.0	www	Settings & config	web
 114ad8221	todo		none	script check: 0 of 2 added lines are still in master	Fixed Kiosk button styling issue on Raspberry Pi	5.0	www	Settings & config	web
 649b5158d	todo		none	script check: 82 of 105 added lines are still in master; 2 of 9 files gone	add grip to scheduler rows	5.0	common	Web UI (shared JS/CSS/pages)	web
@@ -6529,7 +6529,7 @@ abdf935ad	todo		none	script check: 42 of 59 added lines are still in master; 2 o
 0e24cb33e	todo		none	script check: 35 of 64 added lines are still in master	add behavior to reveal hostname when header is swiped on mobile	5.0	css	Web UI (shared JS/CSS/pages)	web
 9c70552c5	todo		none	script check: 7 of 23 added lines are still in master	restore row number and add grabber cursor on scheduler	5.0	css	Web UI (shared JS/CSS/pages)	web
 86def06cb	superseded		none	script check: only 30 of the 499 lines this commit added are still in master; the rest were rewritten	fix schedule popup	5.0	css	Web UI (shared JS/CSS/pages)	web
-65f2ae98e	todo		none	script check: 6 of 6 added lines are still in master	Remove stats during upgrade	5.0	api	Upgrade, backup & files	docker,web
+65f2ae98e	todo		none	read 2026-11-03: upgrade_FPP and manualUpdate.php still DELETE /api/statistics/usage, and stats.php uses $settings['statsFile']. docker: put a stats file in place, run scripts/upgrade_FPP's stats step (or manualUpdate.php with git stubbed), assert the file is gone; stats-*.spec.ts cover the stats file's contents but not this	Remove stats during upgrade	5.0	api	Upgrade, backup & files	docker,web
 2fe08f805	todo		none	script check: 0 of 0 added lines are still in master	Disable shutdown stat collection Stats collected during shutdown are incomplete.	5.0	src	fppd core & utilities	docker
 b60ca1259	todo		none	script check: 11 of 49 added lines are still in master	styles for script manager	5.0	css	Web UI (shared JS/CSS/pages)	web
 7f3e1776f	todo		none	script check: 26 of 78 added lines are still in master; 1 of 13 files gone	bunch o' style updates	5.0	css	Other channel outputs	web
@@ -6570,7 +6570,7 @@ c297da82d	superseded		none	script check: none of the 13 lines this commit added 
 2e1bd4aaf	todo		none	script check: 32 of 73 added lines are still in master	UI improvements for Time/Date	5.0	js	Settings & config	docker,web
 2c9bf22ff	todo		none	script check: 3 of 15 added lines are still in master	fix playlist details editing	5.0	js	Playlists, schedule & sequences	web
 b19957cfa	todo		none	script check: 0 of 1 added lines are still in master	Fix class on stats preview button.	5.0	www	Settings & config	web
-e9b20cfa3	todo		none	script check: 48 of 59 added lines are still in master	Convert WiFi Tethering tab to use settings defined in settings.json	5.0	www	Network, Apache & security	web
+e9b20cfa3	todo		none	read 2026-11-03: settings.json's 'optionsCommand' (a select's options from a shell command, common.php PrintSetting) is still used. web: the Tethering settings render through it -- assert the tether-interface select lists the options its command prints; the EnableTethering setting saves from the settings.json definition	Convert WiFi Tethering tab to use settings defined in settings.json	5.0	www	Network, Apache & security	web
 d547a1357	todo		none	script check: 3 of 4 added lines are still in master	Status UI changes	5.0	css	Web UI (shared JS/CSS/pages)	web
 c24381265	todo		none	script check: 6 of 28 added lines are still in master	Extend 'playlist exists' check to handle scheduled .fseq files.	5.0	src	fppd core & utilities	docker
 1d6853a1d	todo		none	script check: 11 of 12 added lines are still in master	Add Celsius/Fahrenheit temperature display setting to UI settings	5.0	www	Settings & config	web
@@ -6582,7 +6582,7 @@ b1e03b51f	superseded		none	script check: none of the 10 lines this commit added 
 d20d91d90	todo		none	script check: 3 of 19 added lines are still in master	Fix column order in channel outputs. Fix dimming bug in dialogerror	5.0	css	Web UI (shared JS/CSS/pages)	web
 d768d1cc5	todo		none	script check: 70 of 380 added lines are still in master; 2 of 8 files gone	styles for playlist editor	5.0	css	Web UI (shared JS/CSS/pages)	web
 c9de7a118	todo		none	script check: 12 of 12 added lines are still in master	Add a health check to see if the hostname is set.	5.0	scripts	fppd core & utilities	docker
-0aba592d6	todo		none	script check: 3 of 6 added lines are still in master	Use HostName and HostDescription settings on network config page	5.0	www	Network, Apache & security	web
+0aba592d6	todo		none	read 2026-11-03: networkconfig.php shows HostName/HostDescription via PrintSettingGroup('host'). web: change Host Description on the network page and assert it is saved to settings and shown in /api/fppd/multiSyncSystems; network-config-page.spec.ts may cover HostName -- check	Use HostName and HostDescription settings on network config page	5.0	www	Network, Apache & security	web
 67b16fc6e	todo		none	script check: 117 of 150 added lines are still in master; 1 of 8 files gone	Initial Setup UI and outbound Email config enhancements	5.0	api	Settings & config	web
 9b925df14	superseded		none	fpp_postnetwork.service's KillMode=process (so flite could finish) went with the boot-script rewrite (ffdf735ff); the announcement now has its own unit (ca64544e2, covered by test_fppinit_tethering_boot.py)	Set KillMode to process so flite can finish announcing IPs	5.0	systemd	Boot, OS image & install	os-image
 994eb19ab	todo		none	script check: 47 of 142 added lines are still in master; 1 of 6 files gone	update ux for playlists	5.0	css	Web UI (shared JS/CSS/pages)	web
@@ -6609,9 +6609,9 @@ eb3fe43b5	superseded		none	script check: none of the 8 lines this commit added a
 5eb3e6277	todo		none	script check: 1 of 3 added lines are still in master; 1 of 3 files gone	move usage statics ahead of performance stats	5.0	api	Web API	web
 4264ada4d	todo		none	script check: 3 of 4 added lines are still in master	Fixed error message if invalid channel file	5.0	api	Web API	web
 ba009ec4a	todo		none	script check: 11 of 47 added lines are still in master; 1 of 2 files gone	statistics API does more work to find UUID of multisync	5.0	api	Web API	web
-bcd6ce7d9	todo		none	script check: 45 of 91 added lines are still in master; 2 of 5 files gone	Move network config API -- #945	5.0	api	Network, Apache & security	web
-9f462eac2	todo		none	script check: 12 of 39 added lines are still in master	bootstrapify backup.php - part 1 of 2	5.0	www	Upgrade, backup & files	web
-5c3a875b4	todo		none	script check: 19 of 29 added lines are still in master	fixed SetVolume() during restore	5.0	api	Upgrade, backup & files	web
+bcd6ce7d9	todo		none	read 2026-11-03: GET/POST /api/network/interface/:interface (moved from fppjson.php) are still there and well exercised by network-*.spec.ts (network-interface-names, -no-address, -config-page). Likely covered: run one with the endpoint dispatch removed and mark	Move network config API -- #945	5.0	api	Network, Apache & security	web
+9f462eac2	untestable		none	backup.php's Backup Configuration form moved from tables to bootstrap rows; layout only	bootstrapify backup.php - part 1 of 2	5.0	www	Upgrade, backup & files	web
+5c3a875b4	todo		none	read 2026-11-03: backup.php's restore still applies a saved volume through setVolume() in www/common/settings.php (writes the setting, sends fppd 'v,N,' and sets the mixer). web/docker: restore a JSON settings backup holding volume=37 and assert settings 'volume' and GET /api/system/volume are 37 afterwards, with no PHP error in the restore output; backup-*.spec.ts restore other areas, not volume	fixed SetVolume() during restore	5.0	api	Upgrade, backup & files	web
 7b0264982	todo		none	script check: 0 of 1 added lines are still in master	What? That little guy right there? You don't have to worry about that little guy right there.	5.0	www	Web UI (shared JS/CSS/pages)	web
 7f6fcba65	todo		none	script check: 0 of 3 added lines are still in master	added font-awesome icons to settings.php	5.0	www	Settings & config	web
 403cad2ac	todo		none	script check: 23 of 39 added lines are still in master	status page layout fixes and skeleton loader in top schedule status	5.0	css	Web UI (shared JS/CSS/pages)	web
@@ -6688,7 +6688,7 @@ ec80b924d	todo		none	script check: 12 of 32 added lines are still in master; 1 o
 1314321a7	todo		none	script check: 0 of 0 added lines are still in master	minor css fixes after merge	5.0	css	Web UI (shared JS/CSS/pages)	web
 38b3b4373	todo		none	script check: 0 of 1 added lines are still in master	Fixed jGrowl missing style for status > play button	5.0	js	Web UI (shared JS/CSS/pages)	web
 9eeb8c606	superseded		none	script check: none of the 9 lines this commit added are in master any more	Fix modal top position, added support for FPPD Stop header icon	5.0	css	Web UI (shared JS/CSS/pages)	web
-f1404307e	todo		none	script check: 48 of 75 added lines are still in master; 2 of 5 files gone	move DNS API -- #945	5.0	api	Network, Apache & security	web
+f1404307e	todo		none	read 2026-11-03: GET/POST /api/network/dns (moved from fppjson.php) is still there; network-update-saves-dns.spec.ts, network-dns-no-reboot.spec.ts and network-dns-hostname-refused.spec.ts exercise it. Likely covered: check one fails without the endpoint and mark	move DNS API -- #945	5.0	api	Network, Apache & security	web
 732622afb	todo		none	script check: 1 of 9 added lines are still in master; 1 of 4 files gone	UI Replace getFPPStatus calls -- #945	5.0	js	Web UI (shared JS/CSS/pages)	web
 08c8dd19d	todo		none	script check: 94 of 273 added lines are still in master; 2 of 6 files gone	/api/system/status -- #945	5.0	api	Web API	web
 93555273f	todo		none	script check: 11 of 83 added lines are still in master; 4 of 7 files gone	Added temperature, status, version to header bar for large screens	5.0	css	Web UI (shared JS/CSS/pages)	web
@@ -6701,7 +6701,7 @@ f9558fcdb	todo		none	auto: not examined yet	Delete .env	5.0	www	Web UI (shared J
 f446aee6a	todo		none	script check: 47 of 93 added lines are still in master; 1 of 8 files gone	status page responsive updates	5.0	css	Web UI (shared JS/CSS/pages)	web
 6e043d610	todo		none	script check: 49 of 106 added lines are still in master; 4 of 8 files gone	New ChannelOutput API -- #945	5.0	api	Web API	web
 3a447dc9e	todo		none	script check: 13 of 74 added lines are still in master; 2 of 5 files gone	Move ChannelOutput API -- #945	5.0	api	Web API	web
-03a07a89d	todo		none	script check: 3 of 23 added lines are still in master	SSID list via REST API Fixes #960	5.0	api	Network, Apache & security	web
+03a07a89d	superseded		none	the wifi scan parse (first-BSS guard) was rewritten into network_parse_iw_scan() (master network.php:101-117, "only entries that yielded at least an SSID or BSSID are kept"), and the SSID datalist is now from that API; covered by wifi-scan-cache.spec.ts	SSID list via REST API Fixes #960	5.0	api	Network, Apache & security	web
 b3e5941cb	superseded		none	script check: every file this commit changed has since been removed from master	Remove Event API -- #944	5.0	www	Web UI (shared JS/CSS/pages)	web
 f40335980	todo		none	script check: 2 of 12 added lines are still in master	Status page - responsive grid applied to top status and bottom scheduler status	5.0	css	Web UI (shared JS/CSS/pages)	web
 1b3404d6d	todo		none	script check: 1 of 3 added lines are still in master	Reintroduced 2 column view for about page, responsive on smaller screens	5.0	www	Web UI (shared JS/CSS/pages)	web
@@ -6795,7 +6795,7 @@ efdc52f5e	todo		none	script check: 20 of 88 added lines are still in master; 2 o
 d8bfe10ec	superseded		none	script check: only 2 of the 23 lines this commit added are still in master; the rest were rewritten	Fix PUT /api/settings - #944	5.0	api	Settings & config	web
 ba0e6f02b	todo		none	script check: 27 of 81 added lines are still in master; 4 of 9 files gone	header updates	5.0	css	Web UI (shared JS/CSS/pages)	web
 5b3762eea	superseded		none	script check: only 7 of the 3400 lines this commit added are still in master; the rest were rewritten	Playlist screen styling	5.0	common	Web UI (shared JS/CSS/pages)	web
-f8ee7ad00	todo		none	script check: 84 of 450 added lines are still in master; 4 of 21 files gone	implement selector on playlists screen	5.0	common	Network, Apache & security	web
+f8ee7ad00	untestable		none	the redesign's playlists-screen selector and button styling (SCSS, CSS, footer button classes, gulpfile); look only, and mostly restyled again since	implement selector on playlists screen	5.0	common	Network, Apache & security	web
 f237f75c0	superseded		none	script check: only 2 of the 23 lines this commit added are still in master; the rest were rewritten	Add Deprecated option to endpoints.json	5.0	api	Web API	web
 e53523564	todo		none	script check: 23 of 49 added lines are still in master; 1 of 3 files gone	New Wifi Network discovery	5.0	api	Web API	web
 b450264aa	todo		none	script check: 4 of 20 added lines are still in master; 2 of 5 files gone	Git Reset moved - #944	5.0	api	Web API	web
@@ -6824,7 +6824,7 @@ cfbe62ab1	todo		none	script check: 6 of 56 added lines are still in master; 1 of
 a80d7fdad	todo		none	script check: 29 of 43 added lines are still in master	Allow Plugins to provide their own settings.json file	5.0	www	Web UI (shared JS/CSS/pages)	web
 f5b956921	todo		none	script check: 0 of 4 added lines are still in master	Remove leading slash from jquery links	5.0	www	MultiSync & remotes	web
 8de019232	todo		none	script check: 6 of 12 added lines are still in master	Disable MQTT retain flag by default	5.0	src	fppd core & utilities	docker
-c70698771	todo		none	script check: 0 of 0 added lines are still in master	Fix one more include issue after 86b40f8a5f	5.0	commands	Commands & presets	docker
+c70698771	untestable		none	drops an unused #include; build only	Fix one more include issue after 86b40f8a5f	5.0	commands	Commands & presets	docker
 7a3497146	todo		none	auto: not examined yet	Remove unneeded files after 86b40f8a5f7c	5.0	playlist	Playlists, schedule & sequences	docker,web
 86b40f8a5	todo		none	script check: 235 of 457 added lines are still in master	Convert Events to (FPP) Command Presets	5.0	channeloutput	Playlists, schedule & sequences	device,docker,web
 1769b45fb	todo		none	script check: 14 of 25 added lines are still in master; 2 of 5 files gone	move GitStatus -- #944	5.0	api	Web API	web
@@ -6840,7 +6840,7 @@ c6a72df73	todo		none	script check: 0 of 3 added lines are still in master	Fix Ja
 731906784	todo		none	script check: 14 of 28 added lines are still in master; 1 of 6 files gone	move Reboot API - #944	5.0	api	Web API	web
 196be1d86	todo		none	script check: 1 of 3 added lines are still in master	Little extra Debug logging for MQTT	5.0	playlist	Playlists, schedule & sequences	docker
 7fcdcf79a	todo		none	script check: 0 of 1 added lines are still in master	Include TotalSeconds in status endpoint with #945	5.0	src	fppd core & utilities	docker
-c54a627f7	todo		none	script check: 15 of 34 added lines are still in master; 2 of 5 files gone	Move PersistentNetNames endpoint - #945	5.0	api	Network, Apache & security	web
+c54a627f7	todo		none	read 2026-11-03: the persistent net names API (POST/DELETE /api/network/presisentNames, misspelt route kept) writes/removes /etc/systemd/network/5?-fpp-*.link. docker/web: with sudo stubbed in the container, DELETE removes a planted 50-fpp-eth0.link and POST writes one per interface with its MAC; nothing tests it	Move PersistentNetNames endpoint - #945	5.0	api	Network, Apache & security	web
 ef47216b9	superseded		none	script check: every file this commit changed has since been removed from master	fixed formatting on endpoints.json	5.0	api	Web API	web
 d910a50ab	todo		none	script check: 7 of 37 added lines are still in master; 2 of 4 files gone	move getFPPDUptime #945	5.0	api	Web UI (shared JS/CSS/pages)	docker,web
 983a036be	todo		none	script check: 8 of 25 added lines are still in master	Smarter populateCCACHE() - close #953	5.0	scripts	fppd core & utilities	docker
@@ -6853,7 +6853,7 @@ dd801b564	todo		none	script check: 2 of 4 added lines are still in master	Fix mu
 3c8174903	todo		none	script check: 13 of 15 added lines are still in master	Fix incorrect 'Not Found' error when sequence metadata can't be queried	5.0	api	Web API	web
 4a9786965	todo		none	script check: 6 of 9 added lines are still in master	Fix a couple JavaScript errors	5.0	js	Web UI (shared JS/CSS/pages)	web
 7957d54f5	todo		none	script check: 0 of 1 added lines are still in master	Change label on Run button to 'Run Now'	5.0	www	Playlists, schedule & sequences	web
-4e988e2e8	todo		none	script check: 1 of 1 added lines are still in master	Fix popup Command Editor loading by using PopulateExistingCommand()	5.0	www	Commands & presets	web
+4e988e2e8	todo		none	read 2026-11-03: the popup Command Editor fills an existing command's args through PopulateExistingCommand(). web: open a playlist command entry (or a GPIO command) with saved args, assert the popup shows them, checkbox args included; command-editor.spec.ts and gpio-edit-dialog.spec.ts may already -- check and mark	Fix popup Command Editor loading by using PopulateExistingCommand()	5.0	www	Commands & presets	web
 c28be2385	todo		none	script check: 4 of 37 added lines are still in master	Hook up wled palettes, speed, intensity, brightness	5.0	overlays	Pixel overlays	docker
 838d011ae	todo		none	script check: 10 of 17 added lines are still in master	Remember the last command used in the 'Run FPP Command' button.	5.0	js	Web UI (shared JS/CSS/pages)	web
 fae0844b8	todo		none	auto: not examined yet	Create fpp.xd	5.0	fpp.xd	Other	docker
@@ -6874,7 +6874,7 @@ de75fe746	todo		none	script check: 0 of 1 added lines are still in master	Fix MQ
 802efb2bf	todo		none	script check: 29 of 30 added lines are still in master	Allow Next and Prev while in LeadIn/LeadOut	5.0	playlist	Playlists, schedule & sequences	docker
 b4381ac38	todo		none	script check: 18 of 20 added lines are still in master	Display currently playing scheduled playlist in schedule preview	5.0	src	Playlists, schedule & sequences	docker
 1612da39e	todo		none	script check: 2 of 3 added lines are still in master	Schedule preview fixes	5.0	js	Web UI (shared JS/CSS/pages)	web
-42bd6f095	todo		none	script check: 0 of 1 added lines are still in master	Fix order of function arguments after 1fae361cbb4	5.0	src	Commands & presets	docker
+42bd6f095	superseded		none	src/command.c (the old text command socket) is gone from master; StartPlaylist's arguments are passed elsewhere now	Fix order of function arguments after 1fae361cbb4	5.0	src	Commands & presets	docker
 3ef65f983	todo		none	script check: 70 of 71 added lines are still in master	Add Note field to all other PlaylistEntry* types.	5.0	playlist	Playlists, schedule & sequences	docker,web
 c84f28647	todo		none	script check: 0 of 4 added lines are still in master	Move MultiSync Auto Refresh setting to top of systems table	5.0	www	MultiSync & remotes	web
 225aa3994	todo		none	script check: 5 of 5 added lines are still in master	Add a Note field to PlaylistEntryURL	5.0	www	Playlists, schedule & sequences	web
@@ -6957,7 +6957,7 @@ dbb2a4352	todo		none	script check: 1 of 2 added lines are still in master	Don't 
 a2632a92d	todo		none	script check: 0 of 1 added lines are still in master	Update tablesorter after refreshing status so sorting works correctly	4.6	www	MultiSync & remotes	web
 0e13adeaf	todo		none	script check: 2 of 2 added lines are still in master	Fix Division by zero	4.6	www	Web UI (shared JS/CSS/pages)	web
 f9d225def	todo		none	script check: 1 of 8 added lines are still in master	Refresh mode as well when auto refresh is turned on.	4.6	js	MultiSync & remotes	web
-7939fd15b	todo		none	script check: 0 of 1 added lines are still in master	Improve icons for wifi	4.6	css	Network, Apache & security	web
+7939fd15b	superseded		none	the wifi.png sprite and its .wifi-weak offset are gone; the redesign uses SVG wifi icons	Improve icons for wifi	4.6	css	Network, Apache & security	web
 2a939b4a6	todo		none	script check: 0 of 1 added lines are still in master	Give a little bit more delay till refreshing version info after upgrade	4.6	www	MultiSync & remotes	web
 b156c94a7	todo		none	script check: 0 of 3 added lines are still in master	Sort by Hostname by default, another status update fix	4.6	www	MultiSync & remotes	web
 3f0cf53f6	todo		none	script check: 0 of 2 added lines are still in master	Put the WiFi strength image after the IP on WiFi	4.6	www	MultiSync & remotes	web
@@ -6975,7 +6975,7 @@ d82dadb38	todo		none	script check: 0 of 0 added lines are still in master	If a g
 035af5919	todo		none	script check: 1 of 1 added lines are still in master	Only log to stdout when using gdb shell script wrapper	4.6	src	fppd core & utilities	docker
 04f57c74d	todo		none	script check: 0 of 4 added lines are still in master	Handle scheduled repeats that cross weekend boundary.	4.6	src	fppd core & utilities	docker
 4861efc5c	todo		none	script check: 0 of 1 added lines are still in master	Update menu.inc	4.6	www	Web UI (shared JS/CSS/pages)	web
-5138b0c02	todo		none	script check: 3 of 9 added lines are still in master	Add an "Effects Stop" FPP Command to stop all commands	4.6	commands	Commands & presets	docker
+5138b0c02	todo		none	read 2026-11-03: the Effects Stop command (StopAllEffectsCommand) is exercised by test_effects.py::test_stop_by_pattern_and_list (asserts nothing runs after it); only the red check (revert to a no-op) and the hash in its docstring are left [docker]	Add an "Effects Stop" FPP Command to stop all commands	4.6	commands	Commands & presets	docker
 ced1cf5ab	todo		none	script check: 14 of 17 added lines are still in master	Add Advanced level setting to disable fake listeners	4.6	src	Settings & config	docker,web
 07ff84ffb	todo		none	script check: 103 of 237 added lines are still in master	Enhanced LOR Support	4.6	channeloutput	Other channel outputs	device,docker,web
 83b7612b9	todo		none	script check: 0 of 4 added lines are still in master	Make sure strings in the MultiSync packet are null terminated.	4.6	src	MultiSync & remotes	docker
@@ -7034,9 +7034,9 @@ ffa069aff	todo		none	script check: 0 of 2 added lines are still in master	Bug: R
 dab8029cc	todo		none	script check: 0 of 0 added lines are still in master	Removed old debuging code that shouldn't have been commited	4.6	js	Web UI (shared JS/CSS/pages)	web
 edcf012de	superseded		none	script check: none of the 14 lines this commit added are in master any more	Move Unicast Sync checkbox to beside IP address	4.6	www	MultiSync & remotes	web
 a5d7e05cf	todo		none	script check: 0 of 4 added lines are still in master	Position of wifi icon	4.6	css	Web UI (shared JS/CSS/pages)	web
-dc1705afc	todo		none	script check: 6 of 6 added lines are still in master	Strip hostname off F16v2* and F16v4 version strings during discovery	4.6	src	Network, Apache & security	docker
-6d41d08bd	todo		none	script check: 7 of 65 added lines are still in master; 1 of 5 files gone	Wifi strength to head of UI (#877)	4.6	api	Network, Apache & security	web
-a0d5597ca	todo		none	script check: 4 of 4 added lines are still in master	Fix MultiSync controller detection for F16v2R and F4v2	4.6	src	Network, Apache & security	docker
+dc1705afc	todo		none	read 2026-11-03: NetworkController.cpp still strips the hostname off a Falcon F16v2*/F16v4 "SW Version" during HTTP discovery. docker: a fake controller answering /status.xml-style Falcon HTML with Name "F16" and SW Version "F16 - 2.01", discovered by IP, shows version "2.01" in multiSyncSystems; needs a Falcon-page fixture (scenarios have none)	Strip hostname off F16v2* and F16v4 version strings during discovery	4.6	src	Network, Apache & security	docker
+6d41d08bd	superseded		none	the /proc/net/wireless parsing of network_wifi_strength() was replaced by f4970efd6 (iw dev X link per phy80211 interface); the header wifi icon was redone with SVGs	Wifi strength to head of UI (#877)	4.6	api	Network, Apache & security	web
+a0d5597ca	todo		none	read 2026-11-03: HTTP discovery of Falcon F16v2R/F4v2 (typeId cases in NetworkController.cpp) still reads the hostname from the Name: cell. docker: same fake-Falcon fixture as dc1705afc with an F16v2R type id, assert the hostname is the page's Name. Needs a Falcon-page fixture	Fix MultiSync controller detection for F16v2R and F4v2	4.6	src	Network, Apache & security	docker
 3bef57187	todo		none	script check: 0 of 1 added lines are still in master	Encode text setting value in URI when saving setting.	4.5.1	www	Web UI (shared JS/CSS/pages)	web
 234cd3a6a	todo		none	script check: 144 of 232 added lines are still in master	Add a new X11PanelMatrix Channel Output for developer testing.	4.6	channeloutput	LED panels	docker,web
 27f26c3cb	todo		none	script check: 3 of 4 added lines are still in master	Fix new bug in scheduler date picker UI.	4.5.1	www	Playlists, schedule & sequences	web
@@ -7071,11 +7071,11 @@ c9274dfa9	todo		none	script check: 18 of 32 added lines are still in master	Upda
 d40f443bb	todo		none	script check: 0 of 0 added lines are still in master	BBB48String - occasionally needs a bit more	4.5	pru	BB pixel strings & PRU	device:bb
 5ad674974	todo		none	script check: 0 of 0 added lines are still in master	BBB48String - Adjust timing between bits to allow longer DDR access times	4.5	pru	BB pixel strings & PRU	device:bb
 8a772119f	todo		none	script check: 0 of 0 added lines are still in master	Remove printf that was causing issues in some scripts	4.5	src	fppd core & utilities	docker
-14c4f30f8	todo		none	script check: 1 of 8 added lines are still in master; 1 of 2 files gone	Change the clock used for audio on BBB capes	4.5	drivers	Upgrade, backup & files	device:bb,docker
+14c4f30f8	untestable		none	BBB audio cape (PCM5012A) device-tree clock; only the cape's audio shows it	Change the clock used for audio on BBB capes	4.5	drivers	Upgrade, backup & files	device:bb,docker
 9ea72241a	todo		none	script check: 2 of 2 added lines are still in master	Fix documentation for compression level	4.5	fseq	Playlists, schedule & sequences	docker
 04b482f5e	todo		none	auto: not examined yet	Remove some unused stuff	4.5	external	fppd core & utilities	docker
 3cff417db	superseded		none	script check: every file this commit changed has since been removed from master	spixels also needs update for latest Pi4's	4.5	external	Pi outputs (DPI/spixels)	docker
-46790f579	todo		none	script check: 9 of 11 added lines are still in master	Update git_pull script to handle updating the externals from the source FPP instance as well	4.5	scripts	Upgrade, backup & files	docker
+46790f579	todo		none	read 2026-11-03: git_pull still points the externals' submodule URLs at the source FPP (http://SOURCEIP/git/modules/external/...) when pulling from another FPP. docker: with a SOURCEIP that is not github.com and git stubbed (as test_git_pull_submodules.py does), assert the submodule.<name>.url configs are set to that host; test_git_pull_submodules.py covers the Pi/non-Pi split only	Update git_pull script to handle updating the externals from the source FPP instance as well	4.5	scripts	Upgrade, backup & files	docker
 36a910c6d	todo		none	script check: 1 of 1 added lines are still in master	Fix some flashing on some ports of BBB capes if a serial output is enabled	4.5	pru	BB pixel strings & PRU	device:bb
 26240d303	superseded		none	script check: every file this commit changed has since been removed from master	 Update to grab latest hardware ID's	4.5	external	Pi outputs (DPI/spixels)	docker
 5ced9d8ad	todo		none	script check: 0 of 0 added lines are still in master	Allow a little longer on gpio0 high time	4.4	pru	BB pixel strings & PRU	device:bb
@@ -7085,11 +7085,11 @@ f86789e34	todo		none	script check: 57 of 87 added lines are still in master	Add 
 83db9583b	todo		none	script check: 4 of 4 added lines are still in master	Add some set's to 0 at the start of the bbb gpio0 loops to try and wake it up.	4.4	pru	BB pixel strings & PRU	device:bb
 31dfbe06a	todo		none	script check: 0 of 3 added lines are still in master	Also add the force_hdmi for the second hdmi port on the Pi4	4.4	common	Settings & config	web
 426326fc5	todo		none	script check: 1 of 2 added lines are still in master	Reduce some log levels Fixes #854	4.4	mediaoutput	Playlists, schedule & sequences	docker
-4ba500ff0	todo		none	script check: 0 of 1 added lines are still in master	Account for long names of SSIDs	4.4	www	Network, Apache & security	web
+4ba500ff0	superseded		none	connmanctl is gone (systemd-networkd/wpa_supplicant); the SSID list comes from the iw scan API now	Account for long names of SSIDs	4.4	www	Network, Apache & security	web
 915810ac0	todo		none	script check: 0 of 1 added lines are still in master	Update menu.inc	4.4	www	Web UI (shared JS/CSS/pages)	web
 4fa3d65c5	superseded		none	script check: only 17 of the 230 lines this commit added are still in master; the rest were rewritten	Add ability to force an HDMI resoution	4.4	common	Settings & config	docker,web
 b68f75489	untestable		none	BBB-grow_partition.sh no longer waits for ssh keys; a BeagleBone partition grow only	Don't need the ssh key check	4.4	SD	Boot, OS image & install	os-image
-6986279d0	todo		none	script check: 5 of 19 added lines are still in master	Hide the WIFI password and tether password	4.4	www	Network, Apache & security	web
+6986279d0	todo		none	read 2026-11-03: common.php's PrintSettingPasswordSaved still adds a Show/Hide button (<setting>_showHidePassword). web: on the tethering or wifi settings, a password field is type=password, Show makes it text and the button say Hide, Hide turns it back	Hide the WIFI password and tether password	4.4	www	Network, Apache & security	web
 c00f92ea5	todo		none	script check: 0 of 2 added lines are still in master	Adjust how the "next playlist" is displayed in some cases	4.4	src	Playlists, schedule & sequences	docker
 fa2256839	todo		none	script check: 0 of 2 added lines are still in master	Also fix the stop gracefully's not stopping	4.4	commands	Playlists, schedule & sequences	docker
 a2ea05c2c	todo		none	script check: 0 of 1 added lines are still in master	Make sure the status on the UI doesn't prematurely jump to the playlist that will play next	4.4	src	Playlists, schedule & sequences	docker
@@ -7114,7 +7114,7 @@ e07cf88cb	todo		none	script check: 16 of 46 added lines are still in master	More
 89e44a62e	superseded		none	script check: every file this commit changed has since been removed from master	Added entry for Midi devices	4.3.1	www	Commands & presets	web
 7464c3896	superseded		none	script check: every file this commit changed has since been removed from master	Fix 843: Add video debug info	4.3.1	www	Commands & presets	web
 92910665a	todo		none	script check: 15 of 35 added lines are still in master	Add optional "If Not Running" flag to all the start playlist commands Fixes #842	4.3.1	commands	Playlists, schedule & sequences	docker,web
-3389177eb	todo		none	auto: not examined yet	Fix execute bit	4.3.1	upgrade	Upgrade, backup & files	docker
+3389177eb	untestable		none	execute bit on upgrade/63/upgrade.sh; mode change only	Fix execute bit	4.3.1	upgrade	Upgrade, backup & files	docker
 4e72b6960	todo		none	script check: 27 of 86 added lines are still in master; 2 of 9 files gone	All complete replacement of eeprom if cape ID's don't match Use upgrade dialog for cape eeprom update instead of separate php page Keep ForceHDMI setting across fppos update Fix ForceHDMI setting not working	4.4	common	Web UI (shared JS/CSS/pages)	os-image,docker,web
 9ce650bc2	untestable		none	auto: changes no runtime file (.github)	Typo in issue template	4.3.1	.github	Other	none
 e956cfd8e	todo		none	script check: 3 of 6 added lines are still in master	Fixes #840 - special characters in passwords	4.4	common	Settings & config	web
@@ -7128,7 +7128,7 @@ f24a7c44a	todo		none	script check: 0 of 0 added lines are still in master	Fix PR
 9aea9e4b4	superseded		none	script check: only 1 of the 10 lines this commit added are still in master; the rest were rewritten	Handle lots of unicast remotes a bit better	4.3	src	MultiSync & remotes	docker
 8851f5e9a	superseded		none	script check: only 2 of the 226 lines this commit added are still in master; the rest were rewritten	Allow multiple VirtualMatrices onto framebuffer if scaling is none	4.3	channeloutput	LED panels	device,web
 343678e83	todo		none	script check: 1 of 1 added lines are still in master	Typo fix #828	4.3	www	Settings & config	web
-bb3937ee3	todo		none	script check: 5 of 20 added lines are still in master	Don't ignore http discovery on local subnet... multicast might not be working	4.3	src	Network, Apache & security	docker
+bb3937ee3	superseded		none	HTTP discovery on the local subnet was rewritten async by ecc7fa3df (test_multisync_startup.py): the isLocalSubnet path and its already-found-by-multicast check are gone	Don't ignore http discovery on local subnet... multicast might not be working	4.3	src	Network, Apache & security	docker
 5a51b5107	todo		none	script check: 6 of 43 added lines are still in master	Add some optimizations for the http discovery	4.3	makefiles	MultiSync & remotes	docker
 a9b73eb4e	superseded		none	script check: only 5 of the 75 lines this commit added are still in master; the rest were rewritten	Add None and Software scaling to FBMatrix Fixes #748	4.3	channeloutput	LED panels	device,web
 50f300b02	todo		none	script check: 2 of 2 added lines are still in master	Possible fix for LOR box off by one in #820	4.3	channeloutput	Other channel outputs	device
@@ -7201,7 +7201,7 @@ a03a7b73b	superseded		none	script check: none of the 6 lines this commit added a
 31adee76a	superseded		none	script check: every file this commit changed has since been removed from master	Apache default is setup as part of FPP_Install	4.2	scripts	Boot, OS image & install	docker
 90fb9e326	todo		none	script check: 0 of 3 added lines are still in master	Store the temperature unit as a setting. Fixes #757	4.2	js	Web UI (shared JS/CSS/pages)	web
 9ae557a3f	todo		none	script check: 0 of 1 added lines are still in master	Fix some issues with LED panel channel count not displaying correctly Fixes #761	4.2	www	LED panels	web
-e1067303c	todo		none	script check: 0 of 0 added lines are still in master	REmove some duplicate key/value pairs	4.2	www	Network, Apache & security	web
+e1067303c	untestable		none	removes duplicate keys (same values) from the wifi regulatory-domain array; the rendered list is the same	REmove some duplicate key/value pairs	4.2	www	Network, Apache & security	web
 96b88e986	superseded		none	script check: only 1 of the 33 lines this commit added are still in master; the rest were rewritten	Add the "Clustered Zig/Zag" option for the BBB panel output	4.2	channeloutput	LED panels	device:bb,web
 f3e4caae8	todo		none	script check: 6 of 12 added lines are still in master	Fix initial crash by making sure remoteproc is up and running before using it	4.2	util	fppd core & utilities	device:bb
 c618412e8	superseded		none	script check: none of the 108 lines this commit added are in master any more	Add ability to set wifi regulatory domain, sometimes needed for 5ghz	4.2	scripts	Network, Apache & security	docker,web
@@ -7231,7 +7231,7 @@ dd72c4c7b	superseded		none	script check: none of the 6 lines this commit added a
 e0ed9d8df	untestable		none	FPP_Install.sh's --img / desktop install mode and the matching fpp_boot/init_pre_network tweaks; image/desktop install only, and both scripts are gone from master (fppinit replaced them)	UPdates for installing FPP onto a desktop and not take over the  entire system	4.1	SD	Boot, OS image & install	os-image,docker
 c39fde6ab	superseded		none	script check: every file this commit changed has since been removed from master	Fix some boot issues on desktop debian, set hostname in settings if it doesn't exist	4.1	scripts	Capes & EEPROM	docker
 8746a748b	todo		none	script check: 10 of 26 added lines are still in master	Allow adding/configuring the X11 Virtual Matrix	4.1	channeloutput	Other channel outputs	docker,web
-4bf4c4f53	todo		none	script check: 24 of 125 added lines are still in master; 3 of 10 files gone	Add "Play Media" FPP Command Add "Toggle Playlist" FPP Command Add "-C FPPCommand arg1 arg2 .." flags to fpp command line to send FPP commands for fppd Fix FPP Command samples in apihelp	4.1	commands	Commands & presets	docker,web
+4bf4c4f53	todo		none	read 2026-11-03: Toggle Playlist and Play Media are well exercised (test_playlist_commands.py::test_toggle_playlist, test_audio_meters.py and others); the VLC-based Play Media was rewritten after VLC was dropped (e8279e3cc). Left: fpp -C "Command" args (src/fpp.cpp:378) sends an FPP command -- docker: run fpp -C "Volume Set" 40 against a running fppd and assert the volume changes; then mark the command halves covered	Add "Play Media" FPP Command Add "Toggle Playlist" FPP Command Add "-C FPPCommand arg1 arg2 .." flags to fpp command line to send FPP commands for fppd Fix FPP Command samples in apihelp	4.1	commands	Commands & presets	docker,web
 53ad3e8e2	todo		none	script check: 35 of 70 added lines are still in master	Add ability to modify channel data prior to overlays, allow overlay effects to auto-enable in transparent mode	4.1	overlays	Pixel overlays	docker,web
 f3666ce4f	todo		none	script check: 12 of 25 added lines are still in master	Some error checking on startup, attempt to connect to xserver	4.1	channeloutput	LED panels	docker
 a855e2fd7	todo		none	script check: 10 of 23 added lines are still in master	Fix some memory leaks	4.1	channeloutput	BB pixel strings & PRU	device,docker
