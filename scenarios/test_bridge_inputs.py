@@ -161,6 +161,7 @@ def play_solid_sequence(fppd, value):
 
 
 def test_a_playing_sequence_wins_by_default(fppd):
+    # Also guards 0d7a6e5d4: with no setting, fppd takes settings.json's default.
     """By default (bridgeDataPriority "Warn If Sequence Running") bridged
     input does not reach the output while a sequence plays, and fppd raises
     a warning that it is arriving.
