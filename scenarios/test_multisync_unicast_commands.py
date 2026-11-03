@@ -62,6 +62,7 @@ def test_a_master_with_remotes_does_not_also_multicast(fppd):
 
 
 def test_a_command_runs_where_any_name_in_its_host_list_matches(fppd):
+    # Also guards 4290756c7: a host named by its address, as this system knows it.
     """A MultiSync command's host list runs it on a system named anywhere in
     the list, by host name or by address, and nowhere else.
 
