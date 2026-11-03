@@ -12,6 +12,7 @@ import time
 import pytest
 
 from fake_devices import drop, fake_devices, page, requests_seen
+from test_multisync_systems import interface
 
 FPP = {
     "/": page("<html><title>Falcon Player - FPP</title></html>"),
@@ -598,11 +599,14 @@ def test_the_local_system_lists_its_host_description(fppd):
     the local system, so the multisync page and API clients had no
     description for this player."""
     fppd.settings(HostDescription="fpp-tests desk player")
-    fppd.start()
     local = []
 
     def have():
         local[:] = [s for s in fppd.get("/fppd/multiSyncSystems")["systems"] if s.get("local")]
         return bool(local)
-    fppd.wait_for(have, timeout=20, interval=0.5, what="the local system to be listed")
+    # The local system is listed under its address: run-local.sh's network
+    # namespace has only lo, so give fppd one.
+    with interface("10.77.0.1"):
+        fppd.start()
+        fppd.wait_for(have, timeout=20, interval=0.5, what="the local system to be listed")
     assert local[0].get("HostDescription") == "fpp-tests desk player", local[0]
