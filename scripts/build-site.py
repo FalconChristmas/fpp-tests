@@ -155,9 +155,8 @@ if covered:
     top = min(100, max(v for v in vals + fvals if v is not None) + 10)
     charts.append("<section><h2>Coverage over time</h2>" + chart(
         [("lines", "--c1", vals), ("functions", "--c2", fvals)], 0, top, "%") + "</section>")
-# The scenario flavors only: the web suite's few dozen tests would sit flat on
-# the floor of an axis sized for the scenarios. Its count is in its card and in
-# the table of runs.
+# The scenario flavors only: the web suite gets a chart of its own below, so
+# its count doesn't set the scale for these.
 SCENARIO_FLAVORS = [fl for fl in FLAVORS if fl != "web"]
 counts = {fl: [(h["flavors"].get(fl) or {}).get("tests") for h in history] for fl in SCENARIO_FLAVORS}
 allc = [v for vs in counts.values() for v in vs if v]
@@ -165,6 +164,16 @@ if allc:
     charts.append("<section><h2>Scenarios per run</h2>" + chart(
         [(LABEL[fl], f"--c{i + 1}", counts[fl]) for i, fl in enumerate(SCENARIO_FLAVORS) if any(counts[fl])],
         0, max(allc) * 1.15, "") + "</section>")
+
+# The web suite on a scale of its own: tests in the run and how
+# many of them passed, so a gap between the lines is a failure.
+web = [h["flavors"].get("web") for h in history]
+wtests = [w["tests"] if w else None for w in web]
+if any(wtests):
+    wpassed = [w["passed"] if w else None for w in web]
+    charts.append("<section><h2>Web UI tests per run</h2>" + chart(
+        [("tests", "--c1", wtests), ("passed", "--c2", wpassed)],
+        0, max(v for v in wtests if v) * 1.15, "") + "</section>")
 
 tables = []
 if covered:
