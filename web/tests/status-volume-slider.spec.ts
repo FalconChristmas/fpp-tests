@@ -45,6 +45,7 @@ test('moving the mouse over the slider sets nothing', async ({ page, request }) 
 });
 
 test('dragging the slider leaves fppd at the volume it shows', async ({ page, request }) => {
+  // Also guards 50b6b4139, which added GET/POST /api/system/volume.
   // Regression: effd594e1.  The slider sent the volume on its mousemove
   // as well as on each change, and with no limit on requests in flight;
   // fppd ends at the value the slider was let go at.
