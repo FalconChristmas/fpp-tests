@@ -580,6 +580,29 @@ def test_an_unsigned_cape_may_only_add_overlays_to_the_boot_config(fppinit):
     assert "kernel=evil.img" not in cfg and "cmdline=evil.txt" not in cfg, cfg
 
 
+
+@pytest.mark.skipif(not on_pi(), reason="bootConfig edits config.txt, on a Pi")
+def test_a_boot_config_edit_writes_back_only_what_config_txt_held(fppinit):
+    """config.txt rewritten for a cape's bootConfig holds its own lines and
+    the appended one, and nothing else. The file is 24 bytes, which exactly
+    fills the smallest 64-bit malloc chunk: with no terminator after it, a
+    copy taken as a C string runs into the next chunk's size field (never a
+    zero low byte).
+
+    Regression: c5a3d7500 ("Make sure uEnv and config.txt are loaded with null
+    termination to avoid extraneous charcters in files"). The file was read
+    into a buffer with no terminator and copied as a C string, so whatever
+    followed it in memory was written into config.txt with it.
+    """
+    original = "dtparam=audio=on\n#fpp24\n"
+    assert len(original) == 24
+    cfg = boot_config_after(fppinit, original, {"append": ["dtoverlay=fpp-test-overlay"]})
+    assert cfg.startswith(original), repr(cfg)
+    assert "dtoverlay=fpp-test-overlay" in cfg, repr(cfg)
+    extra = [l for l in cfg.splitlines() if l not in ("dtparam=audio=on", "#fpp24", "dtoverlay=fpp-test-overlay", "[all]",
+                                               "dtoverlay=fpp-cape-overlay", "")]
+    assert not extra, f"config.txt picked up lines it did not have: {extra!r}\n{cfg!r}"
+
 def boot_config_after(sb, original, bootConfig):
     with open(os.path.join(sb.boot, "config.txt"), "w") as f:
         f.write(original)
