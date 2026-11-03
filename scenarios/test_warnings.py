@@ -64,9 +64,12 @@ def test_setting_the_log_level_through_the_api_updates_its_warning(fppd):
              ("info", set())]
     for level, want in steps:
         fppd.post(f"/fppd/log/level/{level}")
-        fppd.wait_for(lambda: log_level_warnings(fppd) == want, timeout=10,
-                      what=f"the warnings to be {sorted(want)} after level {level} "
-                           f"(have {sorted(log_level_warnings(fppd))})")
+        try:
+            fppd.wait_for(lambda: log_level_warnings(fppd) == want, timeout=10,
+                          what=f"the warnings to be {sorted(want)} after level {level}")
+        except TimeoutError as e:
+            # What is up when the wait gave up, not when it began.
+            raise TimeoutError(f"{e} (have {sorted(log_level_warnings(fppd))})") from None
 
 
 def test_lowering_a_debug_level_set_at_startup_clears_its_warning(fppd):
