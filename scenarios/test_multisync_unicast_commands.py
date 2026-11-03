@@ -4,10 +4,10 @@ and by multicast only when no other method is set up."""
 import time
 
 from capture import UdpCapture
-from multisync import PORT
+from multisync import PORT, fpp_command_packet
 from show import CHANNELS, ddp_output
 from test_multisync import parse_fpp_command
-from test_multisync_systems import interface
+from test_multisync_systems import interface, send
 
 FIRST = "127.0.0.2"
 SECOND = "127.0.0.3"
@@ -58,3 +58,29 @@ def test_a_master_with_remotes_does_not_also_multicast(fppd):
         by_unicast, by_multicast = commands(unicast), commands(multicast)
     assert ("", "Set Variable", ARGS) in by_unicast, by_unicast
     assert not by_multicast, f"the command was also multicast: {by_multicast}"
+
+
+def test_a_command_runs_where_any_name_in_its_host_list_matches(fppd):
+    """A MultiSync command's host list runs it on a system named anywhere in
+    the list, by host name or by address, and nowhere else.
+
+    Regression: dd801b564. Only the host name, as the whole list, matched."""
+    def sent(host, value):
+        send(fpp_command_packet("Set Variable", ["V", "Value", value, "1", "0", "100", ""], host=host))
+
+    def value():
+        return (fppd.get("/variables") or {}).get("V", {}).get("value")
+
+    fppd.settings(HostName="stage")
+    with interface("10.77.0.1"):
+        fppd.start()
+        fppd.wait_for(lambda: any(s.get("local") and s["address"] == "10.77.0.1"
+                                  for s in fppd.get("/fppd/multiSyncSystems")["systems"]),
+                      timeout=10, what="this system's address to be known")
+        sent("other,stage", "named")
+        fppd.wait_for(lambda: value() == "named", timeout=5, what="the command for its name, second in the list")
+        sent("other,10.77.0.1", "addressed")
+        fppd.wait_for(lambda: value() == "addressed", timeout=5, what="the command for its address")
+        sent("other,another", "nobody")
+        sent("other,stage", "last")
+        fppd.wait_for(lambda: value() == "last", timeout=5, what="the command after the one for nobody")
