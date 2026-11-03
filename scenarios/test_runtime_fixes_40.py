@@ -51,3 +51,36 @@ def test_fppd_uptime_grows(fppd):
     b = fppd.get("/fppd/status", timeout=5)
     assert b["uptimeTotalSeconds"] >= a["uptimeTotalSeconds"] + 2, (a, b)
 
+
+
+def test_threaded_udp_output_delivers_every_target_every_frame(fppd):
+    """A UDP output set to multi-threaded sending, with two targets, delivers
+    the whole frame to both of them: the receiver sees complete frames made of
+    the two halves.
+
+    Feature: 2e6475431 (the per-address send queues)."""
+    from ddp import DdpReceiver
+    from fseq import unique_frames
+    from show import install
+    frames = unique_frames(40, 120)
+    install(fppd, frames)
+    out = {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 120, "threaded": 1,
+        "universes": [
+            {"active": 1, "description": "a", "id": 64001, "startChannel": 1, "channelCount": 60,
+             "type": 5, "address": "127.0.0.1", "priority": 0, "monitor": 0, "deDuplicate": 0},
+            {"active": 1, "description": "b", "id": 64002, "startChannel": 61, "channelCount": 60,
+             "type": 5, "address": "127.0.0.2", "priority": 0, "monitor": 0, "deDuplicate": 0}]}]}
+    fppd.write("config/co-universes.json", out)
+    first = {f[:60]: i for i, f in enumerate(frames)}
+    second = {f[60:]: i for i, f in enumerate(frames)}
+    with DdpReceiver(120) as rx:
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "false", "false")
+        wait_idle(fppd, timeout=20)
+        snap = rx.snapshot()
+    # each target's half is a frame of its own to the receiver (both push)
+    a = {first[f[:60]] for _, f in snap if f[:60] in first and not any(f[60:])}
+    # (type 5 counts from the target's own first channel, so the second half arrives at 0)
+    b = {second[f[:60]] for _, f in snap if f[:60] in second and f[:60] not in first and not any(f[60:])}
+    assert len(a) >= 30 and len(b) >= 30, f"halves received: {len(a)} and {len(b)} of 40"
