@@ -172,3 +172,26 @@ def test_an_iio_adc_with_no_channels_warns_and_its_sensors_read_zero(fppd):
     fppd.check_alive()
     assert reported(fppd).get("P0", 0) == 0, reported(fppd)
     fppd.check_alive()
+
+
+def test_an_iio_source_told_not_to_use_buffers_reads_the_raw_files(fppd):
+    """An IIO ADC that has a buffer (buffer/enable and /dev/iio:device0
+    both there), configured with useBuffers false: fppd reads the sysfs raw
+    value and never switches the buffer on.
+
+    Regression: 9322e13e7 ("Allow optionally configuring iio sensor to use
+    buffers or not"). Buffers were used whenever the device had them, so an
+    ADC whose buffered reads are no good could not be read any other way.
+    Here the buffer has nothing in it, so read through it the sensor is 0.
+    """
+    env, raw = fake_iio(fppd)
+    fppd.write("fakeiio/sys/buffer/enable", "0\n")
+    fppd.write("fakeiio/sys/buffer/length", "0\n")
+    fppd.write("fakeiio/sys/scan_elements/in_voltage0_en", "1\n")
+    enable = os.path.join(fppd.media, "fakeiio", "sys", "buffer", "enable")
+    cape_sensors(fppd, [iio_source()], [sensor("IIO", "iio", 0)])
+    fppd.start(preload=[shims.build("fakeadc.c")], extra_env=env)
+    for _ in range(3):
+        assert reported(fppd) == {"IIO": 1234.0}
+    with open(enable) as f:
+        assert f.read().strip() == "0", "the buffer was switched on"
