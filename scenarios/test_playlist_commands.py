@@ -304,6 +304,27 @@ def test_next_item_walks_from_the_lead_in_to_the_lead_out(fppd):
     wait_idle(fppd)
 
 
+def test_stop_gracefully_takes_its_after_loop_flag(fppd):
+    """Stop Gracefully with "true" as its argument stops after the loop, the
+    Stop After Loop button's call; with none it stops gracefully.
+
+    Regression: f362b6ffc. The flag was ignored."""
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(30)], repeat=1))
+    fppd.start()
+    start(fppd, "P", repeat=True)
+    wait_in_pause(fppd, "1")
+    fppd.command("Stop Gracefully", "true")
+    assert status_name(fppd) == "stopping gracefully after loop"
+    fppd.command("Stop Now")
+    wait_idle(fppd)
+    start(fppd, "P", repeat=True)
+    wait_in_pause(fppd, "1")
+    fppd.command("Stop Gracefully")
+    assert status_name(fppd) == "stopping gracefully"
+    fppd.command("Stop Now")
+    wait_idle(fppd)
+
+
 def test_toggle_playlist(fppd):
     """Toggle Playlist starts the playlist when it isn't running and stops
     it when it is."""
