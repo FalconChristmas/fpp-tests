@@ -84,3 +84,41 @@ def test_resuming_a_paused_playlist_publishes_its_name_again(fppd):
             except TimeoutError:
                 raise AssertionError(f"no playlist/name/status after the resume: {s.got}") from None
         fppd.command("Stop Now")
+
+
+def test_an_inserted_playlist_ending_does_not_publish_idle(fppd):
+    """A playlist inserted with Insert Playlist Immediate plays and ends, and
+    the playlist it interrupted plays on: no "idle" status is published when
+    the inserted one ends, only when the parent itself ends.
+
+    Regression: 3decdef36. SetIdle() published idle (status "idle", an empty
+    playlist name and section) for every playlist that went idle, so the end
+    of an inserted child told subscribers the player had stopped while its
+    parent was still playing.
+    """
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(8), step(2)]))
+    fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                    "mainPlaylist": [step(7)], "leadOut": []})
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    with broker():
+        fppd.start()
+        _connected(fppd)
+        fppd.command("Start Playlist", "P", "false", "false")
+        fppd.wait_for(lambda: trace(fppd) == "1", what="P to start")
+        with _Subscriber("status") as s:
+            fppd.wait_for(lambda: "status playing" in s.got, what="the retained playing status")
+            fppd.command("Insert Playlist Immediate", "Q", "0", "0", "false")
+            fppd.wait_for(lambda: trace(fppd) == "17", timeout=5, what="the inserted playlist")
+            # Q has ended and handed back to P, which is back on its pause.
+            fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("playlist") == "P",
+                          timeout=5, what="P to be the playing playlist again")
+            time.sleep(1.5)
+            assert status(fppd).get("status_name") == "playing"
+            during = list(s.got)
+            # The control: the parent's own end does publish idle.
+            fppd.wait_for(lambda: trace(fppd) == "172" and
+                          status(fppd).get("status_name") == "idle", timeout=15,
+                          what="P to finish")
+            fppd.wait_for(lambda: "status idle" in s.got[len(during):], timeout=5,
+                          what="idle to be published at the end of P; got " + str(s.got))
+    assert "status idle" not in during, f"idle published while P played on: {during}"
