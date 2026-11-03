@@ -883,3 +883,20 @@ def test_a_capes_renamed_codec_module_is_loaded_by_its_new_name(fppinit, kernel_
     loads = [c for c in fppinit.calls() if c.startswith("modprobe ") and " -n " not in c + " "]
     assert f"modprobe {loaded}" in loads, (loads, out[-3000:])
     assert all(c == f"modprobe {loaded}" for c in loads), (loads, out[-3000:])
+
+
+def test_a_display_on_the_bus_with_no_eeprom_is_not_a_cape(fppinit):
+    """Nothing answers at 0x50 and there is no virtual EEPROM, but an OLED
+    display answers at 0x3c: no cape is detected, and nothing is published
+    as one.
+
+    Regression: c14f3c161 ("Remove oled check for cape detection"). A display
+    at 0x3c was taken as "some sort of cape" and the Unknown-eeprom image
+    installed as its EEPROM, so a Pi with just an OLED wired to it came up
+    with an unknown cape.
+    """
+    fppinit.stub_output("i2cdetect", "0x3C", "30: 3c\n")
+    out = detect(fppinit)
+    assert "Could not detect any cape" in out, out[-3000:]
+    assert not fppinit.media_exists("tmp/cape-info.json"), \
+        f"a cape was published: {fppinit.media_file('tmp/cape-info.json')}\n{out[-3000:]}"

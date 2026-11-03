@@ -12,9 +12,13 @@ overlay handling is PLATFORM_BB64's), skipped elsewhere; the rest
 wherever the tree under test has fppcapedetect, a container included.
 """
 
+import glob
 import json
 import os
+import pwd
 import subprocess
+import threading
+import time
 
 import pytest
 
@@ -254,7 +258,9 @@ def test_a_chip_is_read_from_a_copy_and_let_go(fppinit):
     reported) in place: the eeprom sysfs file stayed writable for the
     whole uptime.
 
-    Also 8589afa84 (the EEPROM location and its validity in cape-info).
+    Also 8589afa84 (the EEPROM location and its validity in cape-info), and
+    121a2107f: the copy is the fpp user's, not root's (fppcapedetect runs as
+    root), so the web UI, as fpp, can read and replace it.
     """
     img = ee.image(ee.cape_info())
     data = img + b"\xff" * (32768 - len(img))  # an erased 24c256 past the image
@@ -273,5 +279,64 @@ def test_a_chip_is_read_from_a_copy_and_let_go(fppinit):
     with open(os.path.join(fppinit.media, "tmp/eeprom.bin"), "rb") as f:
         got = f.read()
     assert got[:len(img)] == img, f"tmp/eeprom.bin is not the chip's ({len(got)} bytes)"
+    st = os.stat(os.path.join(fppinit.media, "tmp/eeprom.bin"))
+    fpp = pwd.getpwnam("fpp")
+    assert (st.st_uid, st.st_gid) == (fpp.pw_uid, fpp.pw_gid), \
+        f"tmp/eeprom.bin is owned by {st.st_uid}:{st.st_gid}, not fpp ({fpp.pw_uid}:{fpp.pw_gid})"
     assert fppinit.faked("/sys/bus/i2c/devices", f"i2c-{bus}/delete_device").startswith("0x50"), \
         f"the chip on bus {bus} was left instantiated\n{out}"
+
+
+def test_an_eeprom_the_kernel_is_slow_to_present_is_still_read(fppinit):
+    """The EEPROM chip answers at 0x50 but its sysfs eeprom file only
+    appears three seconds after "24c256 0x50" is written to the bus's
+    new_device, as on an older armv6 Pi: detection waits for it, copies it
+    and finds the cape.
+
+    Regression: ce47f6e81 ("Older armv6 Pi's can take about 8-10 s to prepare
+    the eeprom for reading, give it more time"). The wait was 50 x 10ms, and
+    as long again after writing new_device a second time: a chip a Pi Zero
+    took longer over was given up on ("Couldn't get eeprom") and the cape
+    came up as no cape.
+    """
+    img = ee.image(ee.cape_info())
+    data = img + b"\xff" * (32768 - len(img))
+    devs = {}
+    for b in (0, 1, 2):
+        devs.update({f"i2c-{b}/new_device": "", f"i2c-{b}/delete_device": ""})
+    fppinit.fake_path("/sys/bus/i2c/devices", devs)
+    idx = list(fppinit.fakes).index("/sys/bus/i2c/devices")
+    seen = {}
+    stop = threading.Event()
+
+    def kernel():
+        # The run's copy of the fake directory is made when it starts.
+        while not stop.is_set():
+            for nd in glob.glob(os.path.join(fppinit.dir, "run-*", f"fake-{idx}", "i2c-*", "new_device")):
+                with open(nd) as f:
+                    if "24c256 0x50" in f.read():
+                        seen["at"] = time.monotonic()
+                        bus = os.path.basename(os.path.dirname(nd)).split("-")[1]
+                        if stop.wait(3):
+                            return
+                        chip = os.path.join(os.path.dirname(os.path.dirname(nd)), f"{bus}-0050")
+                        os.makedirs(chip, exist_ok=True)
+                        with open(os.path.join(chip, "eeprom"), "wb") as e:
+                            e.write(data)
+                        seen["bus"] = bus
+                        return
+            time.sleep(0.02)
+
+    t = threading.Thread(target=kernel, daemon=True)
+    t.start()
+    try:
+        out = detect_with_chip(fppinit)
+    finally:
+        stop.set()
+        t.join(5)
+    assert "at" in seen, f"new_device was never written for the chip\n{out[-3000:]}"
+    assert "bus" in seen, f"detection was over before the eeprom file appeared\n{out[-3000:]}"
+    assert "Couldn't get eeprom" not in out, out[-3000:]
+    assert cape_info(fppinit)["id"] == "TestCape", out[-3000:]
+    with open(os.path.join(fppinit.media, "tmp/eeprom.bin"), "rb") as f:
+        assert f.read()[:len(img)] == img
