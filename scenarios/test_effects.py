@@ -54,6 +54,7 @@ def dark_outside(frame, keep):
 
 
 def test_effect_draws_its_model_and_clears_when_stopped(fppd):
+    # Also guards 71e42b825: GET /api/fppd/effects lists what is running.
     """A looping ESEQ effect with nothing else playing drives exactly its
     model's channels, frame after frame from the file, and stopping it
     leaves those channels dark rather than frozen on its last frame
