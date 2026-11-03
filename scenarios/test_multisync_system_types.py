@@ -99,6 +99,27 @@ def test_a_compute_module_5_is_listed_as_a_pi_5(fppd, model):
     assert s["type"] == "Raspberry Pi 5", s
 
 
+def test_a_compute_module_4_is_listed_as_a_pi_4(fppd):
+    """On a Compute Module 4 (device-tree model "Raspberry Pi Compute Module
+    4 Rev 1.0") the local system is a Raspberry Pi 4 -- the type it then
+    announces in its pings -- not FPP on unknown hardware.
+
+    Regression: 98ccc9405 ("Add Compute module mapping to Pi4"). Only
+    "Raspberry Pi 4" models were matched.
+    """
+    model = "Raspberry Pi Compute Module 4 Rev 1.0"
+    tree = os.path.join(fppd.media, "fakesys", "devicetree")
+    fppd.write("fakesys/devicetree/model", model + "\0")
+    with interface("10.77.0.1"):
+        fppd.start(preload=[shims.build("fakesys.c")],
+                   extra_env={"FAKESYS": f"/sys/firmware/devicetree/base={tree}"})
+        s = fppd.wait_for(lambda: next((s for s in fppd.get("/fppd/multiSyncSystems")["systems"]
+                                        if s.get("local") and s["address"] == "10.77.0.1"), None),
+                          timeout=10, what="the local system to be listed")
+    assert s["model"] == model, s
+    assert s["type"] == "Raspberry Pi 4", s
+
+
 def test_genius_pro_and_generic_genius_ping_ids_are_named(fppd):
     """Pings with type ids 0xa3, 0xa4 and 0xaf are listed as the Genius PRO
     16, the Genius PRO 32 and a Genius Controller.
