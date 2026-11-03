@@ -243,6 +243,41 @@ def test_pacing_thread_runs_realtime(fppd, audio):
     assert "pacing thread raised to SCHED_FIFO 80" in fppd.log()
 
 
+def test_a_source_that_keeps_gapping_does_not_flood_the_log(fppd, audio):
+    """The source stops 30 times: the first 20 of each per-gap line (the
+    source probe's gap, the drift loop's gap, the silence filled) are logged
+    in full, and the rest are summarised, not logged one by one.
+
+    Regression: 16f3bf132. A PocketBeagle 2 starved of CPU gapped on nearly
+    every buffer, ~85 lines a second: a 260 MB fppd.log in a day, written by
+    the box that was short of CPU to begin with."""
+    start_sender(fppd, audio)
+    time.sleep(2)
+    mark = len(fppd.log())
+    for _ in range(30):
+        link(audio, NODE, connect=False)
+        time.sleep(0.15)
+        link(audio, NODE)
+        time.sleep(0.25)
+    summaries = (r"AES67 source \[1\]: \d+ more gaps",
+                 r"AES67 drift \[1\]: \d+ more source gaps",
+                 r"AES67 drift \[1\]: filled \d+ more source gaps")
+
+    def counts():
+        log = fppd.log()[mark:]
+        return {"source gap": len(re.findall(r"AES67 source \[1\]: gap [+-]", log)),
+                "drift gap": len(re.findall(r"AES67 drift \[1\]: source gap [+-]", log)),
+                "fill": len(re.findall(r"AES67 drift \[1\]: filled [0-9.]+ ms of source gap", log)),
+                "summaries": [s for s in summaries if re.search(s, log)]}
+    try:
+        fppd.wait_for(lambda: len(counts()["summaries"]) == len(summaries), timeout=20,
+                      what="the held-back gaps to be summarised")
+    finally:
+        print(counts())
+    full = counts()
+    assert all(full[k] <= 20 for k in ("source gap", "drift gap", "fill")), full
+
+
 def test_track_changes_do_not_discard_audio(fppd, audio):
     """A playlist of three tones back to back, played into the graph that
     feeds the sender: the tones reach the stream, and no track change makes a
