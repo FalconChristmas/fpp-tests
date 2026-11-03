@@ -189,6 +189,28 @@ def test_deduplicate_resends_only_changes_and_keepalives(fppd):
     assert 1 <= still <= 6, f"the static universe was sent {still} times in 2 s (want a keepalive every 11 frames)"
 
 
+def test_deduplicate_compares_a_universes_own_channels(fppd):
+    """A static universe that doesn't start at channel 1 is still resent only
+    as a keepalive, though the channels before it change every frame.
+
+    Regression: 6299ef980. The de-duplication offsets were wrong, so a
+    universe past channel 1 was compared with the wrong channels."""
+    # universe 1: channels 1-200, changes; universe 2: 201-400, never changes
+    frames = [f + bytes([0x40]) * 200 for f in unique_frames(80, 200)]
+    with Listener(E131_PORT) as rx:
+        play(fppd, frames, [
+            output(1, 1, 1, 200, deDuplicate=1), output(1, 2, 201, 200, deDuplicate=1)])
+        time.sleep(1)
+        start = time.monotonic()
+        time.sleep(2)
+        with rx.lock:
+            recent = [parse_e131(p) for t, p in rx.packets if t >= start]
+    moving = sum(1 for e in recent if e["universe"] == 1)
+    still = sum(1 for e in recent if e["universe"] == 2)
+    assert moving >= 30, f"the changing universe was sent only {moving} times in 2 s"
+    assert 1 <= still <= 6, f"the static universe was sent {still} times in 2 s (want a keepalive every 11 frames)"
+
+
 def test_artnet_deduplicate_keeps_working(fppd):
     """With deDuplicate on, an ArtNet universe that doesn't change is resent
     only as a keepalive (every 11th frame) for the whole run.
