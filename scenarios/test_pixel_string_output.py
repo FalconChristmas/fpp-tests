@@ -49,6 +49,7 @@ def start(fppd, port):
 
 
 def test_the_string_testers_leave_null_pixels_dark(fppd):
+    # Also guards 29809ca92: end nulls come after the pixels and stay dark.
     """A port of 10 pixels after 2 null pixels, with 1 more at the end: the
     port number, pixel count and fade string tests each light the 10 real
     pixels and leave the 3 nulls at zero.
