@@ -284,3 +284,14 @@ def test_the_dns_check_asks_getent(tmp_path):
     out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_DNS", NODNS="1")
     assert "Unable to query github.com via DNS" in out, out[-2000:]
     assert not (tmp_path / "calls").exists(), (tmp_path / "calls").read_text()
+
+
+def test_the_same_default_gateway_listed_twice_is_one_gateway(tmp_path):
+    """netstat listing one default route twice is a single gateway, not the
+    "multiple gateways" failure.
+
+    Regression: bfb1e20b2."""
+    route = "0.0.0.0         10.0.0.1        0.0.0.0         UG        0 0          0 eth0\n"
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_CheckGateways",
+                     routes=ROUTE_HEADER + route + route)
+    assert "A single gateway was found." in out, out[-2000:]
