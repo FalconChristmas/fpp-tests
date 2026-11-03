@@ -4,6 +4,7 @@ rename, and how it exits."""
 
 import datetime
 import os
+import re
 import stat
 import time
 
@@ -292,3 +293,14 @@ def test_log_level_option_sets_named_loggers(fppd):
     log = fppd.get("/fppd/log")["log"]
     assert log["Schedule"] == "debug" and log["Playlist"] == "debug" and log["MediaOut"] == "warn", log
     assert log["ChannelOut"] == "info", log
+
+
+def test_a_log_line_names_its_logger_before_the_source_file(fppd):
+    """An fppd.log line reads "<date> <time> fppd(<thread>) [<logger>] <file>:<line>: <message>".
+
+    Regression: 174070fad, which moved the logger in front of the file."""
+    fppd.start()
+    lines = [l for l in fppd.log().splitlines() if "fppd(" in l]
+    assert lines, fppd.log()[-2000:]
+    shape = re.compile(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} fppd\(\d+\) \[\w+\] [\w./]+:\d+: ")
+    assert all(shape.match(l) for l in lines), [l for l in lines if not shape.match(l)][:5]
