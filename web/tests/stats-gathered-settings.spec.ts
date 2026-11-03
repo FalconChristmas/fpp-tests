@@ -9,6 +9,7 @@ import { keepingSettings, setSettingInFile } from './privacy-helpers';
 test.skip(!container, 'writes the settings file inside the run-web.sh container');
 
 test('the DHCP server, IP forwarding and UI display settings are collected', async ({ request }) => {
+  // Also guards 5eb3e6277, which moved the stats to /api/statistics/usage.
   // Feature: 4831578b5 ("Collect stats on a few additional settings").
   const wanted: Record<string, string> = {
     dhcpServer: '1', dhcpOffset: '100', dhcpPoolSize: '50', ipForwarding: '2',
