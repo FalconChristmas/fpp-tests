@@ -39,6 +39,28 @@ def test_a_playlist_ended_early_is_not_restarted_by_the_schedule(fppd, stop_type
         "the scheduler started the playlist again after it was ended early"
 
 
+def stop_inside_the_window(fppd, *command):
+    scheduled_show(fppd, -60, 300)
+    fppd.settings(LogLevel_Schedule="debug")
+    fppd.start()
+    fppd.wait_for(lambda: playing(fppd), timeout=30, interval=0.5, what="the scheduled playlist")
+    assert starts(fppd) == 1, "the log never shows the scheduler starting the playlist: the check below is blind"
+    fppd.command(*command)
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle" or starts(fppd) > 1,
+                  timeout=20, interval=0.1, what="the playlist to stop")
+    time.sleep(4)
+    assert starts(fppd) == 1 and status(fppd).get("status_name") == "idle", \
+        "the scheduler started the playlist again after the command stopped it"
+
+
+def test_stop_now_of_a_scheduled_playlist_keeps_it_stopped(fppd):
+    """Stop Now of a scheduled playlist inside its window stops it for good:
+    the scheduler doesn't start it again.
+
+    Regression: f1b7f893d."""
+    stop_inside_the_window(fppd, "Stop Now")
+
+
 def test_reloading_the_schedule_does_not_restart_an_extended_playlist(fppd):
     """Moving the end of a running scheduled playlist (Extend Schedule) and
     then reloading the schedule leaves it playing: the scheduler recognises
