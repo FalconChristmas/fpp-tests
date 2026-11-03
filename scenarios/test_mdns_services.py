@@ -232,7 +232,10 @@ def test_avahi_is_driven_from_the_main_loop(mdns_box, avahi, fppd):
                   timeout=20, interval=0.25, what="the other box to hear fppd's service")
     pid = fppd.proc.pid
     sockets = _socket_fds(pid)
-    bus = {sockets[i] for i in _system_bus_peers() if i in sockets}
+    peers = _system_bus_peers()
+    if peers == {0}:
+        pytest.skip("ss reports no unix socket peers here (a kernel without UNIX_DIAG)")
+    bus = {sockets[i] for i in peers if i in sockets}
     assert bus, f"precondition: fppd has a connection to the system bus: {sockets}"
     multisync = {sockets[i] for i in _multisync_inodes() if i in sockets}
     assert multisync, "precondition: fppd holds MultiSync's port"
