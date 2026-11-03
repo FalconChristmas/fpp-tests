@@ -2,6 +2,9 @@
  * phc_index 0, /dev/ptp0 opens (as /dev/null), and clock_gettime() on the
  * dynamic clock of that fd reads CLOCK_REALTIME plus FAKEPHC_OFFSET_S
  * seconds (default 100) -- a PHC nothing disciplines, on its own timeline.
+ * FAKEPHC_PPM (default 0) makes that PHC run that many parts per million
+ * fast against the system clock, from its first read: a crystal that is not
+ * the sound card's.
  * Every other clock and file is untouched. Calls before the constructor
  * (ASan's own start-up among them) go straight to the kernel, without
  * dlsym. */
@@ -21,6 +24,9 @@
 
 static int phc_fd = -1;
 static long offset_s = 100;
+static long skew_ppm = 0;
+static struct timespec skew_t0;
+static int skew_t0_set;
 static int (*real_ioctl)(int, unsigned long, ...);
 static int (*real_open)(const char*, int, ...);
 static int (*real_open64)(const char*, int, ...);
@@ -29,6 +35,8 @@ static int (*real_clock_gettime)(clockid_t, struct timespec*);
 __attribute__((constructor)) static void init(void) {
     const char* off = getenv("FAKEPHC_OFFSET_S");
     if (off) offset_s = atol(off);
+    const char* ppm = getenv("FAKEPHC_PPM");
+    if (ppm) skew_ppm = atol(ppm);
     real_ioctl = dlsym(RTLD_NEXT, "ioctl");
     real_open = dlsym(RTLD_NEXT, "open");
     real_open64 = dlsym(RTLD_NEXT, "open64");
@@ -87,6 +95,20 @@ int open64(const char* path, int flags, ...) {
 int clock_gettime(clockid_t id, struct timespec* ts) {
     if (phc_fd >= 0 && id == (clockid_t)((((unsigned int)~phc_fd) << 3) | 3)) {
         int r = (int)syscall(SYS_clock_gettime, CLOCK_REALTIME, ts);
+        if (skew_ppm) {
+            if (!__atomic_load_n(&skew_t0_set, __ATOMIC_ACQUIRE)) {
+                static struct timespec first;
+                first = *ts;
+                skew_t0 = first;
+                __atomic_store_n(&skew_t0_set, 1, __ATOMIC_RELEASE);
+            }
+            long long dt_ns = (long long)(ts->tv_sec - skew_t0.tv_sec) * 1000000000LL + (ts->tv_nsec - skew_t0.tv_nsec);
+            long long add = dt_ns / 1000000 * skew_ppm + (dt_ns % 1000000) * skew_ppm / 1000000;
+            long long ns = ts->tv_nsec + add;
+            ts->tv_sec += ns / 1000000000LL;
+            ts->tv_nsec = ns % 1000000000LL;
+            if (ts->tv_nsec < 0) { ts->tv_nsec += 1000000000LL; ts->tv_sec--; }
+        }
         ts->tv_sec += offset_s;
         return r;
     }

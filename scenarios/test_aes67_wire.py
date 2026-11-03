@@ -450,3 +450,39 @@ def test_rebuilds_free_the_media_clock(fppd, audio):
         ptp.cleanup()
     assert "media clock: using PHC /dev/ptp0" in fppd.log(), "precondition: the PHC wasn't the media clock"
     assert after <= before, f"open /dev/ptp0 (here /dev/null) descriptors: {before} before four rebuilds, {after} after"
+
+
+def test_a_card_far_off_the_media_clock_is_followed_not_clamped(fppd, audio):
+    """The media clock (the NIC's PHC, disciplined by ptp4l) runs 1100 ppm
+    fast against the sound card's clock, as a fixed-clock cape's card, which
+    is +435 ppm off its nominal rate, does against PTP. The drift trim reaches
+    the +1100 ppm it needs, the offset stays at the few ms the loop settles
+    to, and the timeline is never re-anchored.
+
+    Regression: 0c514ed07. The trim was clamped to +/-300 ppm, so it pinned,
+    the offset grew 0.8 ms a second, and at 50 ms the loop absorbed it as a
+    gap and re-anchored the RTP timeline: a glitch about every minute here
+    (every four on the real card)."""
+    import shims
+    from ptp_standin import ptp_standins
+    ptp = ptp_standins(fppd)
+    try:
+        ptp.keep_name()
+        ptp.answer(port_state="LISTENING", gm_present="false")
+        with RtpCapture(5004):
+            start_sender(fppd, audio, preload=[shims.build("fakephc.c")],
+                         env={"FAKEPHC_OFFSET_S": "0", "FAKEPHC_PPM": "1100", **ptp.env()})
+            assert "media clock: using PHC /dev/ptp0" in fppd.log(), "precondition: the PHC wasn't the media clock"
+
+            def summaries():
+                return re.findall(r"AES67 drift \[1\]: trim ([+-][0-9.]+) ppm, .* offset ([+-][0-9.]+) ms", fppd.log())
+
+            fppd.wait_for(lambda: "gap absorbed" in fppd.log() or len(summaries()) >= 3,
+                          timeout=240, interval=2, what="three drift summaries, or an absorbed gap")
+    finally:
+        ptp.cleanup()
+    log = fppd.log()
+    assert "gap absorbed" not in log, "\n".join(l for l in log.splitlines() if "AES67 drift" in l)[-2500:]
+    trim, offset = summaries()[-1]
+    assert abs(float(offset)) < 10, f"offset {offset} ms, trim {trim} ppm"
+    assert float(trim) > 600, f"trim {trim} ppm: never reached the 1100 ppm the clock needs"
