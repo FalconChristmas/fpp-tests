@@ -279,6 +279,7 @@ def test_dynamic_entry_with_a_missing_file(fppd):
 
 
 def test_dynamic_entry_from_a_url(fppd):
+    # Also guards 6dcc31fed: the url subType reads its own field.
     """A dynamic entry of subType url fetches its entries over HTTP.
 
     Also 817081728: CurlManager::add deleted the request's private data in
