@@ -50,7 +50,7 @@ test('a theme script tag is closed, so the markup after it is not swallowed', as
   // Regression: themeJS was emitted as <script src=... />.  HTML never treats
   // a self-closing script as closed, so the tag ran on, as script text, over
   // whatever followed it up to the next </script>: a second theme script was
-  // not an element and the head after it was lost.
+  // not an element and the head after it was lost.  Fixed by 4ebbe20d0.
   writeFile(`${PLUGIN}/theme.inc.php`, `<?php
 $themeInfo["themeJS"] = array("plugin.php?theme=first.js", "plugin.php?theme=second.js");
 `);
