@@ -7,7 +7,7 @@ test('an error dialog\'s details are built for arguments that carry no responseT
   // Regression: a stray console.log(arg) after the forEach, where arg is out of
   // scope, threw a ReferenceError for any failure whose first argument has no
   // responseText (a network abort, a bare string), so the dialog lost its
-  // details.
+  // details.  Fixed by 3cc1677fa.
   await page.goto('/index.php');
   await page.waitForFunction(() => typeof (window as any).show_details === 'function');
   const out = await page.evaluate(() => {
