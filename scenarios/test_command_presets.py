@@ -174,3 +174,17 @@ def test_one_preset_is_fetched_by_name(fppd):
     with pytest.raises(urllib.error.HTTPError) as e:
         fppd.get("/commandPresets/Gamma")
     assert e.value.code == 404, (e.value.code, e.value.body)
+
+
+def test_preset_names_fill_the_trigger_commands_list(fppd):
+    """GET /api/commandPresets?names=true lists the presets' names, in file
+    order; it is what the Trigger Command Preset command offers to choose
+    from, and that command says so.
+
+    Regression: 05a68e1ed, which added the list and pointed the command's
+    argument at it."""
+    two_presets(fppd)
+    fppd.start()
+    assert fppd.get("/commandPresets?names=true") == ["Alpha", "Beta"]
+    arg = fppd.get("/commands/Trigger%20Command%20Preset")["args"][0]
+    assert arg.get("contentListUrl") == "api/commandPresets?names=true", arg
