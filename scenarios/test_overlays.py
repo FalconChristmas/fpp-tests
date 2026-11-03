@@ -1740,3 +1740,18 @@ def test_a_3d_custom_model_stacks_its_layers(fppd):
     fppd.start()
     model = fppd.get("/overlays/models")[0]
     assert (model["width"], model["height"]) == (2, 4), model
+
+
+def test_overlay_model_state_takes_a_list_of_models(fppd):
+    """The Overlay Model State command applies to every model in its comma-
+    separated list.
+
+    Regression: bd223f8b4, which made the argument a list."""
+    setup(fppd, [matrix(name="A", start=1), matrix(name="B", start=151), matrix(name="C", start=301)], channels=450)
+    fppd.start()
+    fppd.command("Overlay Model State", "A,B", "Enabled")
+
+    def active():
+        return {m["Name"]: m.get("isActive") for m in fppd.get("/overlays/models")}
+    fppd.wait_for(lambda: active()["A"] and active()["B"], timeout=5, what=f"A and B to be enabled: {active()}")
+    assert not active()["C"], active()
