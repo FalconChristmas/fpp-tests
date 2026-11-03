@@ -32,7 +32,8 @@ test('choosing a Multisync host reloads the playlist list from that host', async
   // The request must go to the page's own origin, port included (the suite's
   // player is published on a port other than 80, and the page's CSP refuses
   // any other origin); the request the page makes is what is checked, not an
-  // answer to it.
+  // answer to it.  Fixed by 6931d749a: the request went to http://host, no
+  // port, and the CSP blocked it.
   const asked: string[] = [];
   const origins: string[] = [];
   page.on('request', (r) => {
