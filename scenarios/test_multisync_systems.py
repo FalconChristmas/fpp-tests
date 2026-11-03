@@ -542,3 +542,15 @@ def test_a_host_name_too_long_for_a_ping_is_cut_and_terminated(fppd):
         reply = next(p for _, _, _, p in cap.snapshot() if p[4:5] == b"\x04")
     assert reply[19:84] == b"h" * 64 + b"\0", reply[19:84]
     assert reply[84:125].split(b"\0")[0], reply[84:125]
+
+
+def test_local_only_lists_just_this_system(fppd):
+    """multiSyncSystems marks this system "local", and ?localOnly=1 leaves out
+    the others it knows of.
+
+    Regression: f70c1e82e, which added both."""
+    fppd.start()
+    send(ping_packet("10.88.0.2", "some-remote"))
+    wait_listed(fppd, "10.88.0.2")
+    only = fppd.get("/fppd/multiSyncSystems?localOnly=1")["systems"]
+    assert only and all(s.get("local") for s in only), only
