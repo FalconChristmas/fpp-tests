@@ -169,3 +169,29 @@ def test_a_pocketbeagle2_is_listed_as_one_not_as_a_pocketbeagle(fppd, model):
                           timeout=10, what="the local system to be listed")
     assert s["model"] == model, s
     assert s["type"] == "PocketBeagle2", s
+
+
+@pytest.mark.parametrize("model, want", [
+    ("Raspberry Pi Model A", "Raspberry Pi A"),
+    ("Raspberry Pi Model B", "Raspberry Pi B"),
+    ("Raspberry Pi Model A+", "Raspberry Pi A Plus"),
+    ("Raspberry Pi Model B+", "Raspberry Pi B+"),
+    ("Raspberry Pi 3 Model B", "Raspberry Pi 3 B"),
+    ("Raspberry Pi 3 Model B+", "Raspberry Pi 3 B+"),
+    ("Raspberry Pi 3 Model A+", "Raspberry Pi 3 A+"),
+], ids=["a", "b", "a-plus", "b-plus", "3b", "3b-plus", "3a-plus"])
+def test_a_pi_model_name_with_no_revision_is_mapped(fppd, model, want):
+    """A Pi model named without its revision ("Raspberry Pi 3 Model B") is the
+    same type as the full device-tree name ("... Rev 1.2").
+
+    Regression: 5aee0e240. Only the "Rev" and spelled-out "Plus" forms were
+    matched."""
+    tree = os.path.join(fppd.media, "fakesys", "devicetree")
+    fppd.write("fakesys/devicetree/model", model + "\0")
+    with interface("10.77.0.1"):
+        fppd.start(preload=[shims.build("fakesys.c")],
+                   extra_env={"FAKESYS": f"/sys/firmware/devicetree/base={tree}"})
+        s = fppd.wait_for(lambda: next((s for s in fppd.get("/fppd/multiSyncSystems")["systems"]
+                                        if s.get("local") and s["address"] == "10.77.0.1"), None),
+                          timeout=10, what="the local system to be listed")
+    assert s["type"] == want, s
