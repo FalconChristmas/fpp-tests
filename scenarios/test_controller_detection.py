@@ -610,3 +610,16 @@ def test_the_local_system_lists_its_host_description(fppd):
         fppd.start()
         fppd.wait_for(have, timeout=20, interval=0.5, what="the local system to be listed")
     assert local[0].get("HostDescription") == "fpp-tests desk player", local[0]
+
+
+def test_a_diyledexpress_bridge_is_recognised(fppd):
+    """A DIYLEDExpress E1.31 Bridge is told by its configuration page, which
+    also gives its firmware version.
+
+    Regression: fe304edf5, which added the detection."""
+    devs = {"10.88.0.9": {"/": page("<html><h1>DIYLEDExpress E1.31 Bridge Configuration Page</h1>"
+                                    "Firmware Rev: 4.02</html>")}}
+    with fake_devices(devs):
+        got = discover(fppd, devs)
+    assert got["10.88.0.9"]["type"] == "DIYLEDExpress", got["10.88.0.9"]
+    assert got["10.88.0.9"]["version"] == "4.02", got["10.88.0.9"]
