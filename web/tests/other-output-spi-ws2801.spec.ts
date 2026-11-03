@@ -8,7 +8,8 @@ import { container, inPlayer } from './container';
 // are (name, friendly name, max channels, fixed start, fixed channels,
 // devices, config): the list landed in "fixed channels" (so the channel
 // count was locked) and the PI36 default in "devices" (so the device select
-// offered nothing, and PI36 was not a field of the saved row).
+// offered nothing, and PI36 was not a field of the saved row).  Fixed by
+// 65ab5b503.
 
 test.skip(!container, 'adds a device node, the platform file and changes the output config inside the run-web.sh container');
 
