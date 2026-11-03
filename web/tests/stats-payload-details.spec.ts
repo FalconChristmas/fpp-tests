@@ -47,6 +47,7 @@ test('each interface is reported with the link state the kernel gives it', async
 });
 
 test('the memory block carries what /proc/meminfo says', async ({ request }) => {
+  // Also guards 1777f1a48: the usage stats' memory section.
   // Feature: 14363cfb6 (stats_memory() learned memory_pressure for macOS; the
   // /proc/meminfo branch it kept is what a Linux player runs).
   const json = await payload(request);
