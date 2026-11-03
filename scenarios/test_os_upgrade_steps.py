@@ -262,3 +262,34 @@ def test_the_root_rsync_keeps_the_php_sessions(tmp_path):
     assert (root / "var" / "new").exists(), "the rsync copied nothing"
     assert not (root / "var" / "stale").exists(), "the rsync deleted nothing (the control)"
     assert (root / "var" / "lib" / "php" / "sessions" / "sess_fpptests").read_text() == "login|b:1;\n"
+
+
+def part1():
+    with open(os.path.join(TREE, "SD", "upgradeOS-part1.sh")) as f:
+        return f.read()
+
+
+def test_an_upgrade_hands_over_to_the_images_part2_not_the_running_systems(tmp_path):
+    """part1 chroots into the new image (at /mnt, the running root bound at
+    /mnt/mnt) and runs the image's own part2: the copy that does the upgrade
+    is the one that came with the .fppos, not the one in the system it is
+    replacing.
+
+    Regression: 0aa900da4 ("Call the "part2" on from the fppos, not the local
+    one."). The chroot ran /mnt/opt/fpp/SD/upgradeOS-part2.sh, the running
+    system's copy seen through the bind."""
+    src = part1()
+    i, j = src.find("PART2RC=0"), src.find('echo "----------"')
+    assert i >= 0 and j > i, "upgradeOS-part1.sh has no hand-over to part2"
+    image = tmp_path / "image"
+    write(str(image / "opt" / "fpp" / "SD" / "upgradeOS-part2.sh"), "echo part2 from the image\n")
+    write(str(image / "mnt" / "opt" / "fpp" / "SD" / "upgradeOS-part2.sh"), "echo part2 from the running system\n")
+    block = src[i:j].replace("/home/fpp/media/tmp/", f"{tmp_path}/media-tmp/")
+    prelude = (
+        "BOOTMOUNT=\n"
+        'stdbuf() { while [ "${1#--}" != "$1" ]; do shift; done; "$@"; }\n'
+        f'chroot() {{ local r="$1"; shift; r="{image}${{r#/mnt}}"; bash "$r$1"; }}\n'
+    )
+    out = bash(prelude + block, tmp_path)
+    assert "part2 from the image" in out, out
+    assert "running system" not in out, out
