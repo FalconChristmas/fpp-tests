@@ -29,6 +29,7 @@ function system(address: string, hostname: string, typeId: number, extra: Record
 }
 
 test('a Falcon V3 and a V4 are polled by the player and show what they reported', async ({ page }) => {
+  // Also guards cedca80f7: a Falcon V4 is told from a V3.
   const v3 = StandIn.sibling('falcon-v3', {
     '/status.xml': { body: '<?xml version="1.0"?><response><u>3 days fv3up</u><v1>12.1</v1><v2>5.2</v2></response>', contentType: 'text/xml' },
   });
