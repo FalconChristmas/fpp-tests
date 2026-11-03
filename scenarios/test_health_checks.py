@@ -335,3 +335,22 @@ def test_the_hostname_check_warns_about_more_than_one_fpp(tmp_path, hostnames, s
                      f'getSetting() {{ echo "{setting}"; }}; HC_HostName',
                      APIJSON=fpp_systems(*hostnames))
     assert want in out, out[-2000:]
+
+
+@pytest.mark.parametrize("mounted", [False, True], ids=["not-a-mount", "a-mount"])
+def test_the_media_free_space_item_needs_media_to_be_a_mount(tmp_path, mounted):
+    """/home/fpp/media free space is only listed when media is a filesystem of
+    its own.
+
+    Regression: 1f9696199. It was listed always."""
+    bindir = tmp_path / "bin"  # run_checks puts this first on PATH
+    bindir.mkdir()
+    line = "/dev/sda2 on /home/fpp/media type ext4 (rw)\n" if mounted else "/dev/sda1 on / type ext4 (rw)\n"
+    (bindir / "mount").write_text(f"#!/bin/sh\nprintf '{line}'\n")
+    (bindir / "df").write_text("#!/bin/sh\necho Filesystem; echo '/dev/sda2 100 42 58 42% /home/fpp/media'\n")
+    (bindir / "mount").chmod(0o755)
+    (bindir / "df").chmod(0o755)
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_MediaDisk")
+    assert ("media free space" in out) == mounted, out[-2000:]
+    if mounted:
+        assert "only 42% used" in out, out[-2000:]
