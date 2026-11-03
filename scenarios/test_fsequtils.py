@@ -136,6 +136,7 @@ def src(tmp_path):
 
 
 def test_json_describes_every_version_and_compression(tmp_path):
+    # Also guards b178259bf: CompressionType in the JSON.
     """-j reports what the file's header says, for v1 and for v2 in each
     compression, with its variable headers and sparse ranges."""
     frames = unique_frames(FRAMES, CHANNELS)
