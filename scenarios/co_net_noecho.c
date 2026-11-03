@@ -3,6 +3,9 @@
  * thread named FPP-PingThread drops (reads and discards, then reports
  * EAGAIN) every packet from $CO_NOECHO_ADDR, so fppd's pings to it all time
  * out, as they do to a powered-off controller.
+ *
+ * CO_NOECHO_WHILE=<file>: only while <file> exists, so a test can bring the
+ * controller back by removing it.
  */
 #define _GNU_SOURCE
 #include <arpa/inet.h>
@@ -13,6 +16,7 @@
 #include <string.h>
 #include <sys/prctl.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 ssize_t recvfrom(int fd, void* buf, size_t len, int flags, struct sockaddr* from, socklen_t* fromlen) {
     static ssize_t (*real)(int, void*, size_t, int, struct sockaddr*, socklen_t*);
@@ -21,7 +25,8 @@ ssize_t recvfrom(int fd, void* buf, size_t len, int flags, struct sockaddr* from
     }
     ssize_t r = real(fd, buf, len, flags, from, fromlen);
     const char* addr = getenv("CO_NOECHO_ADDR");
-    if (r >= 0 && addr && from && from->sa_family == AF_INET) {
+    const char* gate = getenv("CO_NOECHO_WHILE");
+    if (r >= 0 && addr && from && from->sa_family == AF_INET && (!gate || access(gate, F_OK) == 0)) {
         char name[17] = { 0 };
         prctl(PR_GET_NAME, name);
         struct in_addr want;

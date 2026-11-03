@@ -365,6 +365,55 @@ def test_a_controller_that_stops_answering_loses_all_its_universes(fppd):
             f"universes {universes(to_dead, since)} still sent to the dropped controller"
 
 
+
+def test_a_controller_that_answers_again_is_re_added_and_says_so(fppd):
+    """A controller dropped for not answering its pings is put back once it
+    answers again: fppd logs "Could ping host <address>, re-adding to
+    outputs", takes its unreachable-controller warning (27) down, and sends
+    it data again.
+
+    Regression: 62e834402 ("minor fixes to last commit"). The re-adding
+    warning's format had two %s for its one argument, so the line logged
+    whatever the second read off the stack (or crashed fppd) instead of
+    naming just the host.
+    """
+    from packets import E131_PORT, parse_e131
+
+    dead = "127.0.0.7"
+    gate = os.path.join(fppd.media, "noecho-on")
+    with open(gate, "w"):
+        pass
+    fppd.write("config/co-universes.json", {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 510,
+        "universes": [{"active": 1, "description": "comes back", "id": 1, "startChannel": 1,
+                       "channelCount": 510, "type": 1, "address": dead, "priority": 0,
+                       "monitor": 1, "deDuplicate": 0}],
+    }]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+
+    def warned():
+        return [w for w in fppd.get("/fppd/status").get("warningInfo", []) if w.get("id") == 27]
+
+    with Listener(E131_PORT, host=dead) as rx:
+        fppd.start(preload=[shims.build("co_net_noecho.c")],
+                   extra_env={"CO_NOECHO_ADDR": dead, "CO_NOECHO_WHILE": gate})
+        fppd.command("Test Start", "100", "RGB Cycle", "1-510", "R-G-B")
+        fppd.wait_for(lambda: "removing from output" in fppd.log(), timeout=60, interval=0.5,
+                      what="fppd to drop the controller")
+        fppd.wait_for(warned, timeout=10, interval=0.5, what="the unreachable-controller warning")
+        os.remove(gate)
+        fppd.wait_for(lambda: "re-adding to outputs" in fppd.log(), timeout=60, interval=0.5,
+                      what="fppd to re-add the controller")
+        lines = [l for l in fppd.log().splitlines() if "re-adding to outputs" in l]
+        assert lines[0].rstrip().endswith(f"Could ping host {dead}, re-adding to outputs"), lines
+        fppd.wait_for(lambda: not warned(), timeout=10, interval=0.5, what="the warning to come down")
+        time.sleep(1)
+        since = time.monotonic()
+        time.sleep(2)
+        with rx.lock:
+            got = [parse_e131(p) for t, p in rx.packets if t >= since]
+        assert any(p and p["universe"] == 1 for p in got), "nothing sent to the re-added controller"
+
 def test_running_out_of_sockets_does_not_end_fppd(fppd):
     """When fppd can't open a socket for an output (out of descriptors:
     co_net_failsock.so fails the output thread's UDP socket() calls with
