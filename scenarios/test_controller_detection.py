@@ -71,6 +71,7 @@ def discover(fppd, devices, subnets=None, timeout=30, want=None):
 
 
 def test_each_vendor_is_recognised(fppd):
+    # Also guards acd3b3b99: a WLED is listed as one.
     # Also guards 6baab0bf7: an FPP on another subnet is found by its front page.
     """One device of each vendor is listed with its name, type, version and
     identity: an FPP's own UUID, a Falcon's and a WLED's MAC from their APIs
