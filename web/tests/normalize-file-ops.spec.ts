@@ -51,6 +51,9 @@ test('a renamed song keeps its normalization', async ({ request }) => {
   const g = gains();
   expect(g[`${P}-a2.mp3`]?.gainDb, 'the new name has the entry').toBe(-1);
   expect(g[`${P}-a.mp3`], 'the old name has none').toBeUndefined();
+  // The file itself moved (5ba617231 added the rename route).
+  expect((await request.get(`/api/file/music/${P}-a2.mp3`)).ok(), 'the new name is there').toBe(true);
+  expect((await request.get(`/api/file/music/${P}-a.mp3`)).status(), 'the old name is gone').toBe(404);
 });
 
 test('a renamed video keeps its normalization', async ({ request }) => {
@@ -66,6 +69,9 @@ test('a copy of a song is normalized like the original', async ({ request }) => 
   const g = gains();
   expect(g[`${P}-b.mp3`]?.gainDb).toBe(-2);
   expect(g[`${P}-b2.mp3`]?.gainDb).toBe(-2);
+  // Both files are there (0a164c511 added the copy route).
+  expect((await request.get(`/api/file/music/${P}-b.mp3`)).ok(), 'the original is there').toBe(true);
+  expect((await request.get(`/api/file/music/${P}-b2.mp3`)).ok(), 'the copy is there').toBe(true);
 });
 
 test("renaming over a normalized song doesn't leave its entry on the new file", async ({ request }) => {
