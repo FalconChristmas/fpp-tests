@@ -120,6 +120,19 @@ def test_a_compute_module_4_is_listed_as_a_pi_4(fppd):
     assert s["type"] == "Raspberry Pi 4", s
 
 
+def test_an_armbian_ping_id_is_named(fppd):
+    """A ping with type id 0x60, which FPP on an Armbian board sends, is
+    listed as Armbian.
+
+    Regression: 320e9f15d ("Add system type for Armbian"). There was no
+    0x60: an Armbian player was "Unknown System Type". (The other half, an
+    Armbian build announcing itself as 0x60, is chosen at build time with
+    PLATFORM_ARMBIAN.)
+    """
+    fppd.start()
+    assert listed_type(fppd, "10.20.31.96", 0x60, "armbian-player") == (0x60, "Armbian")
+
+
 def test_genius_pro_and_generic_genius_ping_ids_are_named(fppd):
     """Pings with type ids 0xa3, 0xa4 and 0xaf are listed as the Genius PRO
     16, the Genius PRO 32 and a Genius Controller.
