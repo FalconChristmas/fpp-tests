@@ -384,3 +384,15 @@ def test_command_line_errors(src, tmp_path):
     # An input that does not exist writes nothing (it exits 0 all the same).
     rc, out, err = fsequtils("-o", str(tmp_path / "y.fseq"), str(tmp_path / "missing.fseq"))
     assert not os.path.exists(tmp_path / "y.fseq"), out + err
+
+
+def test_its_log_goes_to_stderr_not_into_its_json(tmp_path):
+    """fsequtils logs to stderr, so what a caller parses from stdout has no
+    log lines in it.
+
+    Regression: 686a9cc3d."""
+    path = tmp_path / "bad.fseq"
+    path.write_bytes(b"NOPE" + bytes(64))
+    _, out, err = fsequtils("-j", str(path))
+    assert "invalid identifier" in err, (out, err)
+    assert "invalid identifier" not in out, out
