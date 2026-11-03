@@ -59,6 +59,29 @@ def test_every_palette(fppd):
         fppd.check_alive()
 
 
+def test_the_chosen_palette_colours_the_effect(fppd):
+    """A palette-driven effect draws in the palette asked for: mostly green
+    for Forest, and hardly any for Red & Blue.
+
+    Regression: c28be2385, which hooked the Palette argument up."""
+    w, h = 32, 16
+    channels = w * h * 3
+
+    def drawn(rx, palette):
+        effect(fppd, "M", "WLED - Palette", palette=palette)
+        time.sleep(1.5)
+        last = rx.last()
+        return sum(last[0::3]), sum(last[1::3]), sum(last[2::3])
+
+    with DdpReceiver(channels) as rx:
+        setup(fppd, [matrix("M", width=w, height=h)], channels=channels)
+        fppd.start()
+        r, g, b = drawn(rx, "Forest")
+        assert g > r and g > b, ("Forest", r, g, b)
+        r, g, b = drawn(rx, "Red & Blue")
+        assert g * 2 < r + b, ("Red & Blue", r, g, b)
+
+
 @pytest.mark.parametrize("level", [0, 255])
 def test_every_wled_effect_with_its_sliders_at_the_ends(fppd, level):
     """Every effect again with every slider (speed, intensity, the custom
