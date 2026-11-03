@@ -57,3 +57,22 @@ def test_quick_restart_removes_fpp_info(fppd):
         assert not os.path.samefile(path, keep), \
             "fpp-info.json is the same file as before the restart: it was never removed"
         assert "10.77.0.1" in open(path).read(), open(path).read()
+
+
+def test_unknown_mode_is_named_unknown(fppd):
+    """A MultiSync ping from a system announcing a mode fppd does not know
+    (0x55) lists that system with fppModeString "unknown", and fppd keeps
+    answering.
+
+    Regression: 8ac7da9e8. modeToString() returned NULL for any mode but the
+    known ones and UNKNOWN_MODE, and its callers use what it returns: the
+    MultiSync system list built a JSON string from the NULL, which today's
+    jsoncpp throws on ("Null Value Passed to Value Constructor"), so
+    /fppd/multiSyncSystems answered 500 for as long as that system was
+    listed (a crash where the NULL was dereferenced)."""
+    fppd.start()
+    send(ping_packet("10.20.30.85", "odd-mode", version=3, mode=0x55))
+    s = wait_listed(fppd, "10.20.30.85")
+    assert s["fppMode"] == 0x55, s
+    assert s["fppModeString"] == "unknown", s
+    assert fppd.get("/fppd/status").get("mode_name") == "player"
