@@ -1678,3 +1678,18 @@ def test_a_model_of_zero_channels_per_node_is_one_channel_a_node(fppd):
     models = {m["Name"]: m for m in fppd.get("/overlays/models")}
     assert "Zero" in models, f"the model was refused: {list(models)}"
     assert models["Zero"].get("width") == 30 and models["Zero"].get("height") == 1, models["Zero"]
+
+
+def test_a_slash_in_a_model_name_becomes_an_underscore(fppd):
+    """A model named with a "/" gets its memory, and answers, under the name
+    with "_" in its place: the name makes a file under /dev/shm, where a "/"
+    is a directory that isn't there.
+
+    Regression: 18481b971 (#860). A "/" crashed fppd."""
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [{
+        "Name": "Roof/Left", "Type": "Channel", "StartChannel": 1, "ChannelCount": 30,
+        "ChannelCountPerNode": 3, "Orientation": "horizontal", "StartCorner": "TL",
+        "StringCount": 1, "StrandsPerString": 1}]})
+    fppd.start()
+    model = fppd.get("/overlays/model/Roof_Left")
+    assert model and model["StartChannel"] == 1, model
