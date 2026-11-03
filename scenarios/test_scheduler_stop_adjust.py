@@ -61,6 +61,14 @@ def test_stop_now_of_a_scheduled_playlist_keeps_it_stopped(fppd):
     stop_inside_the_window(fppd, "Stop Now")
 
 
+def test_stop_gracefully_of_a_scheduled_playlist_keeps_it_stopped(fppd):
+    """Stop Gracefully of a scheduled playlist inside its window stops it for
+    good: the scheduler doesn't start it again.
+
+    Regression: fa2256839."""
+    stop_inside_the_window(fppd, "Stop Gracefully")
+
+
 def test_reloading_the_schedule_does_not_restart_an_extended_playlist(fppd):
     """Moving the end of a running scheduled playlist (Extend Schedule) and
     then reloading the schedule leaves it playing: the scheduler recognises
