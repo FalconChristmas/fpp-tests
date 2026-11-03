@@ -16,7 +16,9 @@ def test_scheduler_status_shows_the_current_time(fppd):
     current time as a string that agrees with its number.
 
     Regression: 801405240. currentTimeStr was formatted from a variable still
-    holding 0, so it read 1970-01-01 next to a correct currentTime."""
+    holding 0, so it read 1970-01-01 next to a correct currentTime.  The
+    string follows DateFormat and TimeFormat (2e1bd4aaf; it was a fixed
+    "%a @ %H:%M:%S")."""
     install(fppd, solid_frames(40, CHANNELS, 55))
     start, end = window(-60, 600)
     fppd.write("config/schedule.json", [schedule_entry("Show", start, end)])
