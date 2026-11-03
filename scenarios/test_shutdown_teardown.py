@@ -82,3 +82,12 @@ def test_plugin_descriptors_withdrawn_after_the_epoll_set_is_closed(fppd):
     assert "Main Loop complete" in log, "the debug log of the shutdown is missing, so this proves nothing"
     assert "Failed to remove descriptor" not in log, \
         "\n".join(l for l in log.splitlines() if "descriptor" in l)
+
+
+def test_fppd_shuts_down_cleanly_without_mqtt(fppd):
+    """With no MQTT host set, fppd exits 0 on SIGTERM. The fppd fixture's
+    teardown makes that assertion; this test exists to have it hold on a run
+    that has done nothing else.
+
+    Regression: 9c0b15454. Shutdown called through the null MQTT client."""
+    fppd.start()
