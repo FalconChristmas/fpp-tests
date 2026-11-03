@@ -155,15 +155,20 @@ if covered:
     top = min(100, max(v for v in vals + fvals if v is not None) + 10)
     charts.append("<section><h2>Coverage over time</h2>" + chart(
         [("lines", "--c1", vals), ("functions", "--c2", fvals)], 0, top, "%") + "</section>")
-# The scenario flavors only: the web suite gets a chart of its own below, so
-# its count doesn't set the scale for these.
-SCENARIO_FLAVORS = [fl for fl in FLAVORS if fl != "web"]
-counts = {fl: [(h["flavors"].get(fl) or {}).get("tests") for h in history] for fl in SCENARIO_FLAVORS}
-allc = [v for vs in counts.values() for v in vs if v]
-if allc:
-    charts.append("<section><h2>Scenarios per run</h2>" + chart(
-        [(LABEL[fl], f"--c{i + 1}", counts[fl]) for i, fl in enumerate(SCENARIO_FLAVORS) if any(counts[fl])],
-        0, max(allc) * 1.15, "") + "</section>")
+# Three scales: the scenarios on the build flavors, the device runs (a hundred
+# or so each, which would sit on the floor of the scenarios' axis), and the web
+# suite.
+def count_chart(title, flavors):
+    counts = {fl: [(h["flavors"].get(fl) or {}).get("tests") for h in history] for fl in flavors}
+    allc = [v for vs in counts.values() for v in vs if v]
+    if allc:
+        charts.append(f"<section><h2>{title}</h2>" + chart(
+            [(LABEL[fl], f"--c{i + 1}", counts[fl]) for i, fl in enumerate(flavors) if any(counts[fl])],
+            0, max(allc) * 1.15, "") + "</section>")
+
+
+count_chart("Scenarios per run", ["asan", "tsan", "coverage"])
+count_chart("Device scenarios per run", ["pi5", "am62x", "am335x-bbb", "am335x-pb1"])
 
 # The web suite on a scale of its own: tests in the run and how
 # many of them passed, so a gap between the lines is a failure.
@@ -261,7 +266,7 @@ a {{ color:var(--c1); }} code {{ font-size:.88em; }}
 .card p {{ margin:4px 0 0; color:var(--muted); font-size:.85rem; }}
 .big {{ font-size:1.8rem; font-weight:650; }} .big small {{ font-size:.9rem; font-weight:400; color:var(--muted); }}
 section {{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin:16px 0; }}
-.charts {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:0 16px; }}
+.charts {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr)); gap:0 16px; }}
 .chart {{ width:100%; height:auto; }} .grid {{ stroke:var(--line); }}
 .axis {{ fill:var(--muted); font-size:11px; }}
 .legend {{ display:flex; gap:14px; font-size:.85rem; color:var(--muted); }}
