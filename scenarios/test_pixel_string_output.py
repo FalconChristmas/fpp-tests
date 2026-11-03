@@ -56,6 +56,9 @@ def test_the_string_testers_leave_null_pixels_dark(fppd):
     Regression: 3b5a24b8c. The testers ignored the null nodes and wrote
     their pattern from the first byte, so the nulls were lit and every real
     pixel's test value landed 2 pixels late.
+
+    The port's 13 pixels (39 bytes) also guard 956ef09d0: the channel count
+    added the start nulls a second time in place of the end nulls.
     """
     start(fppd, port_config(fppd, 10, nulls=2, end_nulls=1))
     for test in ("1", "2", "7"):  # port number, pixel count by port, fade white
