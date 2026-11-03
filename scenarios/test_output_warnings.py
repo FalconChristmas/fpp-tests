@@ -191,3 +191,21 @@ def test_an_inactive_udp_output_host_is_not_looked_up(fppd, active):
         assert lookups and resolve, f"lookups={len(lookups)} warnings={resolve}"
     else:
         assert not lookups and not resolve, f"lookups={len(lookups)} warnings={resolve}"
+
+
+@pytest.mark.parametrize("universe_type", [1, 3, 5], ids=["e131", "artnet", "ddp"])
+def test_an_inactive_universe_with_a_bad_host_raises_no_warning(fppd, universe_type):
+    """An output universe that is switched off raises no "could not resolve"
+    warning for its host name, whatever its protocol.
+
+    Regression: 5019197db."""
+    fppd.write("config/co-universes.json", {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 510,
+        "universes": [{"active": 0, "description": "", "id": 1, "startChannel": 1,
+                       "size": 510, "type": universe_type, "address": GONE, "priority": 0,
+                       "monitor": 0, "deDuplicate": 0, "channelCount": 510}]}]})
+    fppd.start()
+    # The outputs load before fppd's API answers; give any warning time to show.
+    time.sleep(1)
+    warnings = fppd.get("/fppd/status").get("warnings", [])
+    assert not any(GONE in w for w in warnings), warnings
