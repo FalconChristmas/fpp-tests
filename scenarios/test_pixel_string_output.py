@@ -239,6 +239,10 @@ def test_an_empty_middle_smart_receiver_leaves_the_output_enabled_and_gets_no_mo
     disable the whole output ("channels ... outside 1-8388608").
 
     Regression: the auto-model pass created a model for the placeholder.
+    Fixed by c579b82b4.  Since the overlay model refuses a model past the
+    last channel, the output stays enabled without the fix, but fppd still
+    makes the placeholder's model and logs it as not usable, so the check is
+    that it no longer tries.
     """
     throw_plugin.install(fppd, source="pixelstringdump.cpp", name="PixelStringDump")
     p = port_config(fppd, 2, differentialType=6)
@@ -254,3 +258,5 @@ def test_an_empty_middle_smart_receiver_leaves_the_output_enabled_and_gets_no_mo
     fppd.wait_for(lambda: {"first", "third"} <= set(models(fppd)), what="the auto-created models")
     time.sleep(1)
     assert sorted(models(fppd)) == ["first", "third"], sorted(models(fppd))
+    refused = [l for l in fppd.log().splitlines() if "is not usable" in l or "was not created" in l]
+    assert not refused, "fppd made a model for the placeholder: " + " | ".join(refused)
