@@ -1728,3 +1728,15 @@ def test_models_are_listed_in_the_order_they_were_configured(fppd):
     setup(fppd, [matrix(name="Z", start=1), matrix(name="A", start=151), matrix(name="M", start=301)], channels=450)
     fppd.start()
     assert [m["Name"] for m in fppd.get("/overlays/models")] == ["Z", "A", "M"]
+
+
+def test_a_3d_custom_model_stacks_its_layers(fppd):
+    """A custom model's data keeps layers apart with "|": each layer's rows
+    follow the last's, so two layers of two rows are four rows high.
+
+    Regression: 4abe8f273. The "|" wasn't split on."""
+    setup(fppd, [dict(matrix(name="Cube"), Orientation="custom", data="1,2;3,4|5,6;7,8",
+                      ChannelCount=24)])
+    fppd.start()
+    model = fppd.get("/overlays/models")[0]
+    assert (model["width"], model["height"]) == (2, 4), model
