@@ -4,13 +4,14 @@ One row per fpp commit, saying whether the suite covers it and how that was
 established. A commit is listed whether or not it got a test, so a row is the
 record that it was examined.
 
-`fpp-since-5.0.tsv` covers every non-merge fpp commit on master since 5.0
+`fpp-since-4.0.tsv` covers every non-merge fpp commit on master since 4.0
 (tab-separated, newest first). It replaces `fpp-since-5.0.tsv`, which had
-replaced `fpp-since-8.5.1.tsv` and `fpp-10.0-10.2.tsv`; every row of those is
-carried over, with the work done on them. The 5.0..7.0 commits were added as
-`todo` rows and then triaged: the ones master has replaced are `superseded`,
-and changes with nothing to assert (hardware-only, packaging, cosmetic) are
-`untestable`, with the reason in the note.
+replaced `fpp-since-7.0.tsv`, `fpp-since-8.5.1.tsv` and `fpp-10.0-10.2.tsv`;
+every row of those is carried over, with the work done on them. The 5.0..7.0
+commits, and then the 4.0..5.0 ones, were added as `todo` rows and triaged:
+the ones master has replaced are `superseded`, and changes with nothing to
+assert (hardware-only, packaging, cosmetic) are `untestable`, with the reason
+in the note.
 
 | column  | meaning |
 |---------|---------|
@@ -27,7 +28,7 @@ and changes with nothing to assert (hardware-only, packaging, cosmetic) are
 
 ## Keeping it current
 
-    python3 scripts/ledger-update.py ledger/fpp-since-5.0.tsv
+    python3 scripts/ledger-update.py ledger/fpp-since-4.0.tsv
 
 adds a row for each new fpp commit (from `../fpp`'s `origin/master`; fetch it
 first) and refreshes the rows it filled in itself, whose note starts with
@@ -39,8 +40,8 @@ rows in place and change the note; never regenerate the file over them.
 Pick rows by `release`, `feature` or `where`, e.g. every Docker row of 10.0 still
 to do, or the open rows of each feature, most first:
 
-    awk -F'\t' '$2=="todo" && $7=="10.0" && $10 ~ /docker/' ledger/fpp-since-5.0.tsv
-    awk -F'\t' '$2=="todo" || $2=="named" {print $9}' ledger/fpp-since-5.0.tsv | sort | uniq -c | sort -rn
+    awk -F'\t' '$2=="todo" && $7=="10.0" && $10 ~ /docker/' ledger/fpp-since-4.0.tsv
+    awk -F'\t' '$2=="todo" || $2=="named" {print $9}' ledger/fpp-since-4.0.tsv | sort | uniq -c | sort -rn
 
 For each: write a test that fails without the commit and passes with it
 (`scripts/verify-fix.sh`), name the commit in the test, and set the row's
@@ -51,7 +52,7 @@ packaging change that only an image build exercises.
 
 ## Clearing what master has replaced
 
-    python3 scripts/ledger-supersede.py --rows-from OTHER.tsv ledger/fpp-since-5.0.tsv
+    python3 scripts/ledger-supersede.py --rows-from OTHER.tsv ledger/fpp-since-4.0.tsv
 
 looks at each `todo` row of the ledger that is not in OTHER (a ledger of rows
 already examined) and marks it `superseded` when every file it changed is gone from master, none of
