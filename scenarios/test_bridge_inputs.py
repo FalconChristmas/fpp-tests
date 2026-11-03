@@ -208,6 +208,7 @@ def test_prioritize_sequence_drops_bridged_data_without_a_warning(fppd):
 
 
 def test_bridged_data_over_a_playing_sequence(fppd):
+    # Also guards 2e5d2cdd1: input replaces its own channels of a playing sequence.
     """With bridgeDataPriority "Prioritize Bridge", bridged input overrides
     a playing sequence on its channels only, and the sequence shows there
     again once the input stops."""
