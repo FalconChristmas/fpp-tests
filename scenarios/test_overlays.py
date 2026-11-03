@@ -1662,3 +1662,19 @@ def test_wled_effects_take_their_defaults_from_the_effects_own_settings(fppd):
     aurora, fire = defaults("WLED - Aurora"), defaults("WLED - Fire 2012")
     assert (aurora["Speed"], aurora["palette"]) == ("24", "Aurora"), aurora
     assert (fire["Cooling"], fire["palette"]) == ("64", "Fire"), fire
+
+
+def test_a_model_of_zero_channels_per_node_is_one_channel_a_node(fppd):
+    """A model with "ChannelCountPerNode": 0 is taken as one channel a node:
+    its width is its channel count, and it can be used.
+
+    Regression: dd26bf1de. Zero went on to be divided by, which crashed fppd;
+    master's own range check would now refuse the model instead."""
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [{
+        "Name": "Zero", "Type": "Channel", "StartChannel": 1, "ChannelCount": 30,
+        "ChannelCountPerNode": 0, "Orientation": "horizontal", "StartCorner": "TL",
+        "StringCount": 1, "StrandsPerString": 1}]})
+    fppd.start()
+    models = {m["Name"]: m for m in fppd.get("/overlays/models")}
+    assert "Zero" in models, f"the model was refused: {list(models)}"
+    assert models["Zero"].get("width") == 30 and models["Zero"].get("height") == 1, models["Zero"]
