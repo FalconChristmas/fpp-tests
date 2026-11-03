@@ -128,6 +128,7 @@ def test_a_reply_of_the_wrong_shape_still_finishes_the_probe(fppd, kind):
 
 
 def test_odd_devices_do_not_stop_discovery_of_the_rest(fppd):
+    # Also guards 8f11b7dd0: a [from-to] range in the discovery subnets.
     """Fifty devices with a malformed reply ahead of a real one in a subnet
     scan: the real one is still found.
 
