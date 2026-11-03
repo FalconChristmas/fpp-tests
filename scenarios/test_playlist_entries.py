@@ -160,6 +160,7 @@ def test_time_branch(fppd, now, expect):
 
 @pytest.mark.parametrize("mode", [1, 2, "1", "2", True], ids=["1", "2", "str1", "str2", "true"])
 def test_random_order(fppd, mode):
+    # Also guards 0d1261fdc: random 2 reshuffles the main section on every repeat.
     """random 1 shuffles the main section once, at load; random 2 shuffles it
     again for every pass. Either way every entry runs exactly once a pass.
     (Five entries, three passes: the trace is a double, exact to 15 digits.)
