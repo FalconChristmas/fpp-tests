@@ -1755,3 +1755,21 @@ def test_overlay_model_state_takes_a_list_of_models(fppd):
         return {m["Name"]: m.get("isActive") for m in fppd.get("/overlays/models")}
     fppd.wait_for(lambda: active()["A"] and active()["B"], timeout=5, what=f"A and B to be enabled: {active()}")
     assert not active()["C"], active()
+
+
+def test_an_effect_on_a_disabled_model_enables_it_for_its_run(fppd):
+    """An effect started with an auto-enable state puts a disabled model in
+    that state while it runs, and disables it again after.
+
+    Regression: 53ad3e8e2."""
+    setup(fppd, [matrix()])
+    fppd.start()
+    desc = fppd.get("/overlays/effects/" + urllib.parse.quote("Color Fade"))
+    args = {"fadeIn": "1000", "fadeOut": "1000"}
+    fppd.command("Overlay Model Effect", "M", "Transparent", "Color Fade",
+                 *[args.get(a["name"], a.get("default", "")) for a in desc["args"]])
+
+    def state():
+        return next(m.get("isActive") for m in fppd.get("/overlays/models") if m["Name"] == "M")
+    fppd.wait_for(lambda: state() == 2, timeout=5, interval=0.05, what="the model to go Transparent")
+    fppd.wait_for(lambda: state() == 0, timeout=20, interval=0.2, what="the model to be disabled again")
