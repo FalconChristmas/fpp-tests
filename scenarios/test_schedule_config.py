@@ -419,3 +419,15 @@ def test_a_scheduled_sequence_is_looked_for_among_the_sequences(fppd):
     assert not any("There.fseq" in w for w in warnings(fppd)), warnings(fppd)
     fppd.wait_for(lambda: status(fppd).get("current_sequence") == "There.fseq", timeout=30, interval=0.5,
                   what="the scheduled sequence to play")
+
+
+def test_a_sun_based_end_takes_its_own_offset(fppd):
+    """A sun-based end time moves by the end's offset, not the start's: an
+    hour before and an hour after the same sunset are two hours apart.
+
+    Regression: 2097874bb. The end took startTimeOffset."""
+    fppd.settings(Latitude="40.0", Longitude="-75.0")
+    got = items(fppd, [entry(7, "SunSet", "SunSet", startTimeOffset=-60, endTimeOffset=60)],
+                f"{YEAR}-06-10 12:00:00")
+    assert got, "nothing scheduled"
+    assert got[0]["endTime"] - got[0]["startTime"] == 2 * 3600, got[0]
