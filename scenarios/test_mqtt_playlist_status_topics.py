@@ -122,3 +122,33 @@ def test_an_inserted_playlist_ending_does_not_publish_idle(fppd):
             fppd.wait_for(lambda: "status idle" in s.got[len(during):], timeout=5,
                           what="idle to be published at the end of P; got " + str(s.got))
     assert "status idle" not in during, f"idle published while P played on: {during}"
+
+
+def test_a_playing_sequence_publishes_its_length(fppd):
+    """Playing a 4 s sequence publishes playlist/sequence/secondsTotal 4
+    alongside playlist/sequence/status, and an empty secondsTotal once the
+    sequence has ended.
+
+    Regression: 4cb7b1f68. There was no secondsTotal topic: a subscriber
+    learnt which sequence was playing but not how long it was.
+    """
+    install(fppd, solid_frames(80, CHANNELS, 50))  # 80 x 50 ms = 4 s
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    with broker():
+        fppd.start()
+        _connected(fppd)
+        with _Subscriber("playlist/sequence/status", "playlist/sequence/secondsTotal") as s:
+            fppd.command("Start Playlist", "Show", "false", "false")
+            fppd.wait_for(lambda: "playlist/sequence/status Show.fseq" in s.got, timeout=10,
+                          what="the sequence to start; got " + str(s.got))
+            try:
+                fppd.wait_for(lambda: "playlist/sequence/secondsTotal 4" in s.got, timeout=5,
+                              what="secondsTotal")
+            except TimeoutError:
+                raise AssertionError(f"no playlist/sequence/secondsTotal 4: {s.got}") from None
+            playing = s.got.index("playlist/sequence/secondsTotal 4")
+            fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=15,
+                          what="the sequence to end")
+            fppd.wait_for(lambda: any(l.rstrip() == "playlist/sequence/secondsTotal"
+                                      for l in s.got[playing:]), timeout=5,
+                          what="secondsTotal to be emptied at the end; got " + str(s.got))
