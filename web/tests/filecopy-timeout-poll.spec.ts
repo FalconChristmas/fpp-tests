@@ -14,6 +14,7 @@ test('the fallback poll of a File Copy treats a feed that is gone as the copy fi
   // exist." answer to the missing feed as the end of the copy.  The file API
   // now answers a missing file with a 404 and its full path, which the poll
   // did not handle, so a dialog that fell back to polling never finished.
+  // Fixed by 4833998cf.
   await page.goto('/backup.php');
   await page.waitForFunction(() => typeof (window as any).fppFileCopy !== 'undefined');
   await page.evaluate(() => {
