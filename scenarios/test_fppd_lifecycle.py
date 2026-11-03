@@ -279,3 +279,15 @@ def test_media_stopped_just_before_shutdown_keeps_its_files_until_exit(fppd, aud
     assert rc == 0, f"fppd exited with {describe_rc(rc)} on SIGTERM\n{fppd.tail()}"
     reports = fppd.sanitizer_reports()
     assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
+
+
+def test_log_level_option_sets_named_loggers(fppd):
+    """fppd --log-level "LEVEL:logger,logger;LEVEL:logger" sets those loggers,
+    each to its level, and leaves the others.
+
+    Regression: 3f089b74d, which added the form."""
+    fppd.start(argv=[os.path.join(fppd.tree, "src", "fppd"), "-f",
+                     "--log-level", "debug:Schedule,Playlist;warn:MediaOut"])
+    log = fppd.get("/fppd/log")["log"]
+    assert log["Schedule"] == "debug" and log["Playlist"] == "debug" and log["MediaOut"] == "warn", log
+    assert log["ChannelOut"] == "info", log
