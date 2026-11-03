@@ -45,3 +45,13 @@ def test_fpp_info_follows_a_change_of_the_outputs(fppd):
         fppd.write("config/co-universes.json", universes(1001, 100))
         fppd.wait_for(lambda: info(fppd).get("channelRanges") == "1000-1099", timeout=10, interval=0.2,
                       what=f"fpp-info.json to carry the new ranges: {info(fppd)}")
+
+
+def test_no_outputs_means_a_range_of_eight_channels(fppd):
+    """With no output enabled, the channels this box says it needs are 0-7, so
+    a sparse sequence made from its ranges stays small.
+
+    Regression: 1d26c631e. No outputs meant every channel, all 8M of them."""
+    fppd.start()
+    local = next(s for s in fppd.get("/fppd/multiSyncSystems")["systems"] if s["local"])
+    assert local["channelRanges"] == "0-7", local
