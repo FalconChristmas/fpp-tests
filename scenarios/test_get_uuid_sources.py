@@ -12,7 +12,7 @@ import pytest
 TREE = os.environ.get("FPP_TREE", "")
 
 
-def get_uuid(tmp_path, eeprom=None, dt_serial=None, dmi_serial=None, machine_id=None):
+def get_uuid(tmp_path, eeprom=None, dt_serial=None, dmi_serial=None, machine_id=None, settings=None):
     """Run the tree's get_uuid with the given stand-ins (None: absent) and
     no CPU serial, as on a BeagleBone; its output."""
     if not TREE:
@@ -24,7 +24,7 @@ def get_uuid(tmp_path, eeprom=None, dt_serial=None, dmi_serial=None, machine_id=
                  "/etc/machine-id"):
         assert path in src, f"get_uuid no longer reads {path}, so this test needs a rewrite"
     (tmp_path / "cpuinfo").write_text("processor\t: 0\n")
-    files = {"eeprom": eeprom, "serial-number": dt_serial, "machine-id": machine_id}
+    files = {"eeprom": eeprom, "serial-number": dt_serial, "machine-id": machine_id, "settings": settings}
     for name, content in files.items():
         if content is not None:
             (tmp_path / name).write_bytes(content)
@@ -34,6 +34,7 @@ def get_uuid(tmp_path, eeprom=None, dt_serial=None, dmi_serial=None, machine_id=
         dmi.chmod(0o755)
     script = tmp_path / "get_uuid"
     script.write_text(src.replace("/proc/cpuinfo", str(tmp_path / "cpuinfo"))
+                         .replace("/home/fpp/media/settings", str(tmp_path / "settings"))
                          .replace("/proc/device-tree/serial-number", str(tmp_path / "serial-number"))
                          .replace("/sys/bus/i2c/devices/0-0050/eeprom", str(tmp_path / "eeprom"))
                          .replace("/etc/machine-id", str(tmp_path / "machine-id"))
@@ -104,6 +105,7 @@ def test_get_uuid_does_not_run_dmidecode_where_it_is_not_installed(tmp_path):
     (bindir / "sudo").chmod(0o755)
     script = tmp_path / "get_uuid"
     script.write_text(src.replace("/proc/cpuinfo", str(tmp_path / "cpuinfo"))
+                         .replace("/home/fpp/media/settings", str(tmp_path / "settings"))
                          .replace("/proc/device-tree/serial-number", str(tmp_path / "serial-number"))
                          .replace("/sys/bus/i2c/devices/0-0050/eeprom", str(tmp_path / "eeprom"))
                          .replace("/etc/machine-id", str(tmp_path / "machine-id"))
@@ -117,3 +119,15 @@ def test_get_uuid_does_not_run_dmidecode_where_it_is_not_installed(tmp_path):
                             FPP_UUIDMEDIAFILE=str(tmp_path / "media-fpp_uuid")))
     calls = log.read_text().splitlines() if log.exists() else []
     assert not [c for c in calls if c.startswith("dmidecode")], f"sudo was asked for dmidecode: {calls}"
+
+
+def test_get_uuid_takes_the_developer_fpp_uuid_setting_first(tmp_path):
+    """A developer's FPP_UUID setting is the UUID, ahead of what the hardware
+    says, stripped of the setting file's quoting; settings without it leave
+    the hardware's.
+
+    Regression: 24e59c2c9, which added the setting."""
+    out, err = get_uuid(tmp_path, dt_serial=b"FPPDT0012345\x00", settings=b'FPP_UUID = "TEST-1234"\n')
+    assert out == "TEST-1234", f"get_uuid gave {out!r}\n{err[-2000:]}"
+    out, err = get_uuid(tmp_path, dt_serial=b"FPPDT0012345\x00", settings=b'HostName = "x"\n')
+    assert out == "M3-FPPDT0012345", f"get_uuid gave {out!r}\n{err[-2000:]}"
