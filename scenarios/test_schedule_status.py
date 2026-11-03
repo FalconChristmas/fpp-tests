@@ -32,6 +32,7 @@ def test_scheduler_status_shows_the_current_time(fppd):
 
 
 def test_missing_playlist_warning_names_it_and_comes_down(fppd):
+    # Also guards e71042ee7: an entry for a missing playlist is skipped with a warning.
     """A scheduled playlist deleted while the schedule loads gets the warning
     "Scheduled Playlist '<name>' does not exist", and the warning comes down
     once the playlist is back and the schedule reloaded.
