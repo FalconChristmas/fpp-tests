@@ -78,6 +78,23 @@ def test_media_file_name_with_a_quote_plays(fppd, audio):
     assert heard >= 1.6, f"heard {heard:.2f} s of a 2 s file"
 
 
+def test_a_sequences_windows_path_to_its_media_still_finds_it(fppd, audio):
+    """An fseq made on Windows names its media with a full backslashed path;
+    the file of that name in the music folder plays.
+
+    Regression: bda093b8f."""
+    write_fseq(os.path.join(fppd.media, "sequences", "Win.fseq"), unique_frames(60, CHANNELS),
+               media="C:\\Users\\x\\Audio\\Song.wav")
+    write_tone_wav(os.path.join(fppd.media, "music", "Song.wav"), 2)
+    fppd.start()
+    rec = audio.record()
+    fppd.command("Start Playlist", "Win.fseq", "false", "false")
+    time.sleep(3.5)
+    samples = rec.stop()
+    heard = sounding_seconds(samples)
+    assert heard >= 1.6, f"heard {heard:.2f} s of a 2 s file"
+
+
 def test_media_commands_from_many_clients_at_once(fppd, audio):
     """Play, stop and slot commands for several slots, from four clients at
     once for 20 s, leave fppd answering and able to play again.
