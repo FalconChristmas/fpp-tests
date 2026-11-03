@@ -554,3 +554,16 @@ def test_local_only_lists_just_this_system(fppd):
     wait_listed(fppd, "10.88.0.2")
     only = fppd.get("/fppd/multiSyncSystems?localOnly=1")["systems"]
     assert only and all(s.get("local") for s in only), only
+
+
+@pytest.mark.skipif(not os.path.exists("/etc/fpp/container"), reason="only a container reads this setting")
+def test_a_containers_external_address_is_listed_as_its_own(fppd):
+    """In a container, whose own address means nothing to the network, the
+    address in MultiSyncExternalIPAddress is listed as this system's.
+
+    Regression: 3a8c1016c."""
+    fppd.settings(MultiSyncExternalIPAddress="10.9.9.9")
+    fppd.start()
+    fppd.wait_for(lambda: any(s.get("local") and s["address"] == "10.9.9.9"
+                              for s in fppd.get("/fppd/multiSyncSystems")["systems"]),
+                  timeout=10, what="the external address to be listed")
