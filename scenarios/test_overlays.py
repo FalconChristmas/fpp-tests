@@ -1719,3 +1719,12 @@ def test_model_data_in_rle_form(fppd):
     assert rle["rle"] is True, rle
     assert rle["data"] == [WIDTH * HEIGHT, 10, 20, 30], rle
     assert rle_decode(rle["data"], 3) == plain["data"]
+
+
+def test_models_are_listed_in_the_order_they_were_configured(fppd):
+    """GET /api/overlays/models keeps the configured order, not an alphabetical one.
+
+    Regression: b2d49612c."""
+    setup(fppd, [matrix(name="Z", start=1), matrix(name="A", start=151), matrix(name="M", start=301)], channels=450)
+    fppd.start()
+    assert [m["Name"] for m in fppd.get("/overlays/models")] == ["Z", "A", "M"]
