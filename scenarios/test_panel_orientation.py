@@ -26,6 +26,7 @@ def x11_frame(path):
 
 
 def test_an_upside_down_panel_is_drawn_upside_down(fppd):
+    # Also guards 234cd3a6a: the X11PanelMatrix output comes up and draws.
     """One 32x16 X11 panel configured with orientation "U": the matrix's
     first pixel (channels 1-3) is drawn at the panel's far corner.
 
