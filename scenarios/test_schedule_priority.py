@@ -59,6 +59,7 @@ def segments(rx, lookup):
 
 
 def test_pre_emption_lets_a_graceful_entry_finish_its_sequence(fppd):
+    # Also guards ed7fabc74: the lower entry stops with its own stop type.
     """A higher-priority entry coming due while a graceful, looping
     lower-priority one plays waits for the running sequence to end: the
     low show's last frame before the high one is its final frame.
@@ -79,7 +80,7 @@ def test_pre_emption_lets_a_graceful_entry_finish_its_sequence(fppd):
 
 
 def test_pre_empted_entry_resumes_once(fppd):
-    # # Also guards 16f85dcd5: the non-repeating high entry still starts once the low one has stopped.
+    # Also guards 16f85dcd5: the non-repeating high entry still starts once the low one has stopped.
     """A non-repeating low-priority entry pre-empted by a higher-priority
     show plays again once that show ends, and then stays stopped.
 
