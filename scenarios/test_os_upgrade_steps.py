@@ -238,3 +238,27 @@ def test_the_root_rsync_keeps_roots_ssh_keys(tmp_path):
     assert (root / "etc" / "new").exists(), "the rsync copied nothing"
     assert not (root / "root" / "stale").exists(), "the rsync deleted nothing (the control)"
     assert (root / "root" / ".ssh" / "authorized_keys").read_text() == "ssh-ed25519 AAAA key\n"
+
+
+def test_the_root_rsync_keeps_the_php_sessions(tmp_path):
+    """part2's root rsync leaves the running system's PHP sessions alone,
+    though the image has none: whoever is logged in to the UI running the
+    upgrade is still logged in when it comes back.
+
+    Regression: 6d17dd317 ("Don't delete wifi connection or php sessions
+    during fppos upgrade"). The rsync deleted /var/lib/php/sessions with the
+    rest of what the image lacks. (Its connman half went with connman.)"""
+    line = next((l for l in part2().splitlines() if l.startswith("stdbuf") and " rsync " in l and " /mnt " in l), None)
+    assert line, "no root rsync in upgradeOS-part2.sh"
+    image, root = tmp_path / "image", tmp_path / "root"
+    for d in ("bin", "etc", "lib", "opt", "root", "sbin", "usr"):
+        (image / d).mkdir(parents=True)
+    write(str(image / "var" / "lib" / "php" / "sessions" / ".keep"), "")
+    write(str(image / "var" / "new"), "image\n")
+    write(str(root / "var" / "lib" / "php" / "sessions" / "sess_fpptests"), "login|b:1;\n")
+    write(str(root / "var" / "stale"), "gone\n")
+    cmd = line.replace(" /mnt ", f" {root} ").replace("${SKIPFPP}", "").replace("-aAXxv", "-av")
+    bash(f"cd {image} && {cmd}", image)
+    assert (root / "var" / "new").exists(), "the rsync copied nothing"
+    assert not (root / "var" / "stale").exists(), "the rsync deleted nothing (the control)"
+    assert (root / "var" / "lib" / "php" / "sessions" / "sess_fpptests").read_text() == "login|b:1;\n"
