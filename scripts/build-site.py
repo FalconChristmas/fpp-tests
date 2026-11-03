@@ -20,6 +20,12 @@ import sys
 import ci_results
 
 results, site, history_file, run_url = sys.argv[1:5]
+# Re-render the page from its history without adding this run to it, after
+# changing the page's layout: --no-entry, and --drop-run ID to take out the
+# entries a run made that should not have been added (a manual dashboard run
+# for the same results).
+no_entry = "--no-entry" in sys.argv[5:]
+drop_runs = [a for i, a in enumerate(sys.argv[5:]) if i and sys.argv[5:][i - 1] == "--drop-run"]
 FLAVORS = ["asan", "tsan", "coverage", "pi5", "am62x", "am335x-bbb", "am335x-pb1", "web"]
 LABEL = {"asan": "ASan", "tsan": "TSan", "coverage": "coverage build", "pi5": "Pi 5",
          "am62x": "AM62x Beagle",
@@ -33,7 +39,8 @@ try:
         history = json.load(f)
 except (OSError, ValueError):
     history = []
-history = [h for h in history if h.get("flavors")]
+history = [h for h in history if h.get("flavors")
+           and not any(h.get("run", "").rstrip("/").endswith("/" + r) for r in drop_runs)]
 
 # This run.
 entry = {"date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
@@ -53,7 +60,8 @@ for art in sorted(d for d, _, files in os.walk(results) if "meta.json" in files)
         cov = c
         entry["coverage"] = {k: c[k] for k in ("lines", "lines_hit", "functions", "functions_hit",
                                                "files", "files_unreached", "areas")}
-history.append(entry)
+if not no_entry:
+    history.append(entry)
 os.makedirs(site, exist_ok=True)
 with open(os.path.join(site, "history.json"), "w") as f:
     json.dump(history, f, separators=(",", ":"))

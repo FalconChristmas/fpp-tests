@@ -21,6 +21,13 @@ on:
       web_run:
         description: Scenarios run with the web UI results (results-web)
         default: ""
+      rerender:
+        description: Show the page again from its history without adding an entry (after a layout change); needs only coverage_run
+        type: boolean
+        default: false
+      drop_run:
+        description: Take out the history entries made by this Dashboard run (a duplicate of a nightly's results)
+        default: ""
 
 permissions:
   contents: read
@@ -66,11 +73,14 @@ jobs:
           ls results
 
       - name: Build the dashboard
+        env:
+          RERENDER_ARGS: ${{ github.event.inputs.rerender == 'true' && '--no-entry' || '' }} ${{ github.event.inputs.drop_run != '' && format('--drop-run {0}', github.event.inputs.drop_run) || '' }}
         run: |
           curl -fsSL "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/history.json" \
             -o history.json || echo "no published history yet"
           python3 scripts/build-site.py results site history.json \
-            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            $RERENDER_ARGS
           rm -f site/coverage/coverage.json
 
       - name: Upload the site
