@@ -12,6 +12,7 @@ from test_scheduler import reload_schedule, schedule_entry, window
 
 
 def test_scheduler_status_shows_the_current_time(fppd):
+    # Also guards b4381ac38: the scheduler's status describes the scheduled playlist playing.
     """While a scheduled playlist plays, the scheduler's status gives the
     current time as a string that agrees with its number.
 
