@@ -189,6 +189,24 @@ def test_an_unsigned_cape_keeps_its_provides_list(fppinit):
     assert info.get("provides") == ["strings", "panels"], info
 
 
+
+def test_an_unsigned_cape_keeps_its_vendor_block(fppinit):
+    """An unsigned image's vendor (name, url, logo) is published in
+    cape-info.json, where the About page shows it.
+
+    Regression: 09bc69f31 ("Allow vendor information on non-signed eeproms
+    for the About page"). The vendor block was removed with the members that
+    need a signature, so an unsigned cape showed no maker on the About page.
+    """
+    vendor = {"name": "fpp-tests vendor", "url": "https://vendor.example.com/",
+              "image": "https://vendor.example.com/logo.png"}
+    fppinit.write_bytes(EEPROM, ee.image(ee.cape_info(vendor=vendor)))
+    out = detect(fppinit)
+    info = cape_info(fppinit)
+    assert info["capeStatus"] == "UNSIGNED", info
+    assert info.get("vendor", {}).get("name") == vendor["name"], f"{info}\n{out[-2000:]}"
+    assert info["vendor"].get("url") == vendor["url"], info
+
 def test_repeated_extras_of_an_unsigned_cape_become_an_array(fppinit):
     """Type-97 extra records add keys to the cape info: one record for a key
     is a string, several for the same key are an array in file order, and
