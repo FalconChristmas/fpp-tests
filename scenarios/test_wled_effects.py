@@ -174,6 +174,7 @@ def test_effects_on_two_differently_shaped_models(fppd):
 
 @pytest.mark.parametrize("name", ["Shimmer", "Color Clouds", "PacMan", "Slow Transition"])
 def test_the_ported_fx_effects_are_offered_and_draw(fppd, name):
+    # Also guards 653a9af32: the WLED port's effects are offered and draw.
     """Shimmer, Color Clouds, PacMan and Slow Transition, ported from
     newer WLED, are offered with the other WLED effects and light a model.
 
