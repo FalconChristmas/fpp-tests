@@ -369,3 +369,15 @@ def test_the_ntp_item_fails_a_large_offset_of_either_sign(tmp_path, offset, want
     out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_NTPOffset", NTPSYNC="yes",
                      CHRONY_OFFSET=offset)
     assert want in out, out[-2000:]
+
+
+def test_two_different_default_gateways_are_reported(tmp_path):
+    """The text health check's Gateway Check fails with two different default
+    routes.
+
+    Regression: 55ea7403c, which added the check."""
+    routes = (ROUTE_HEADER
+              + "0.0.0.0         10.0.0.1        0.0.0.0         UG        0 0          0 eth0\n"
+              + "0.0.0.0         10.0.0.2        0.0.0.0         UG        0 0          0 wlan0\n")
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_CheckGateways", routes=routes)
+    assert "Fail - Multiple default gateways were found!" in out, out[-2000:]
