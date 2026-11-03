@@ -149,6 +149,7 @@ def test_the_boot_directory_is_where_the_boot_config_is(fppinit):
 
 
 def test_a_podman_container_is_a_container_without_dockerenv(fppinit):
+    # Also guards e852aa743: the container's description starts Docker ID.
     """/etc/fpp/container marks a container, whatever runs it: with it, and
     no /.dockerenv, boot names the host after the container (HostDescription
     "Docker ID: ...") instead of managing the hostname itself.
