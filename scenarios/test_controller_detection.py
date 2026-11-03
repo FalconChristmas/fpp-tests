@@ -678,3 +678,19 @@ def test_a_device_named_by_hostname_is_listed_at_its_address(fppd):
         got = discover(fppd, devs, subnets=name)
     assert got["10.88.0.9"]["hostname"] == "fake-falcon", got
     assert name not in got, got
+
+
+def test_a_device_named_and_addressed_in_the_scan_is_listed_once(fppd):
+    """A device in MultiSyncHTTPSubnets by both its name and its address is
+    one row, at its address.
+
+    Regression: aee003c51."""
+    name = "twice-listed.fpptest"
+    with open("/etc/hosts", "a") as h:
+        h.write(f"10.88.0.9 {name}\n")
+    devs = {"10.88.0.9": FALCON}
+    with fake_devices(devs):
+        discover(fppd, devs, subnets=f"{name},10.88.0.9")
+        time.sleep(3)
+        rows = [s for s in fppd.get("/fppd/multiSyncSystems")["systems"] if not s.get("local")]
+    assert [s["address"] for s in rows] == ["10.88.0.9"], rows
