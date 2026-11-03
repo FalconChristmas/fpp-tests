@@ -431,3 +431,18 @@ def test_a_sun_based_end_takes_its_own_offset(fppd):
                 f"{YEAR}-06-10 12:00:00")
     assert got, "nothing scheduled"
     assert got[0]["endTime"] - got[0]["startTime"] == 2 * 3600, got[0]
+
+
+def test_the_schedule_is_worked_out_again_when_the_clock_goes_back(fppd):
+    """A clock stepped back more than 5 seconds makes the scheduler work its
+    schedule out again: today's entry, past before the step, is next again.
+
+    Regression: 06a8b35b5. Only a step forward did."""
+    def next_start():
+        return status(fppd)["scheduler"]["nextPlaylist"]["scheduledStartTime"]
+
+    items(fppd, [entry(7, "11:40:00", "11:50:00")], f"{YEAR}-06-10 12:00:00")
+    tomorrow = next_start()
+    fppd.set_clock(f"{YEAR}-06-10 11:00:00")
+    fppd.wait_for(lambda: next_start() == tomorrow - 86400, timeout=15, interval=0.5,
+                  what="today's entry to be next again")
