@@ -32,6 +32,7 @@ test.afterEach(() => {
 });
 
 test('the logs zip leaves out the logs fppd.log replaced and keeps the others', async ({ request }) => {
+  // Also guards 6fb60b72d, which added GET /api/files/zip/:DirNames.
   // Regression: 45e01fec8.  git_branch.log, git_checkout_version.log and
   // git_fetch.log (no longer generated, but left behind by older versions)
   // went into every logs zip.  The control: any other log still does.

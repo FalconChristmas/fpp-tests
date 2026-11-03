@@ -6756,7 +6756,7 @@ ae92d33c9	untestable		none	playlist editor styles	More playlist editor styles	5.
 ac659b056	untestable		none	removes a wifi call no longer needed	Remove wifi call that is no longer needed	5.0	js	Web UI (shared JS/CSS/pages)	web
 629c59c0e	untestable		none	network config page styles	a few styles for network config page	5.0	css	Web UI (shared JS/CSS/pages)	web
 d16cfe971	todo		none	read 2026-11-03: playlist editor fixes (fpp.js/playlistEditor.php). Covered by the playlist editor specs as a whole; mark after a check	fix strange behaviors in playlist editor	5.0	css	Web UI (shared JS/CSS/pages)	web
-6fb60b72d	todo		none	read 2026-11-03: GET /api/files/zip/:DirNames zips a directory (logs, config); files-zip-config-presets.spec.ts, logs-zip-contents.spec.ts and file-zip-names.spec.ts cover it -- likely covered, check and mark	/files/zip/:DirName -- #944	5.0	api	Web API	web
+6fb60b72d	covered-marked	web/tests/logs-zip-contents.spec.ts::the logs zip leaves out the logs fppd.log replaced and keeps the others	red-green-revert	verify-fix.sh on Docker, --base master with the /files/zip/:DirNames route removed (api/index.php): GET /api/files/zip/Logs not ok; green on master (9a1ebb7d8)	/files/zip/:DirName -- #944	5.0	api	Web API	web
 4c94e892c	untestable		none	schedule extend display on the status page; layout	fix display of schedule extend on status page	5.0	css	Web UI (shared JS/CSS/pages)	web
 84c5d2c50	untestable		none	removes unused resource tags	remove unused resource tags	5.0	common	Web UI (shared JS/CSS/pages)	web
 b666a9d28	untestable		none	scrollIntoView console error on the playlist page	Fix scrollIntoView console error on Playlist page	5.0	js	Web UI (shared JS/CSS/pages)	web
