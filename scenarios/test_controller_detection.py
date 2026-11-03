@@ -624,3 +624,27 @@ def test_a_diyledexpress_bridge_is_recognised(fppd):
         got = discover(fppd, devs)
     assert got["10.88.0.9"]["type"] == "DIYLEDExpress", got["10.88.0.9"]
     assert got["10.88.0.9"]["version"] == "4.02", got["10.88.0.9"]
+
+
+def older_falcon(type_digit):
+    """An older Falcon: its status.xml gives only the type, and the name and
+    version are on the front page's table."""
+    return {
+        "/": page('<html><script src="/f16v2.js"></script><table>'
+                  '<tr><td>Name:</td><td class="v">old-falcon</td></tr>'
+                  '<tr><td>SW Version:</td><td class="v">old-falcon - 2.01</td></tr>'
+                  "</table></html>"),
+        "/status.xml": page(f"<status><p>{type_digit}</p><fv>9.9</fv></status>", ctype="text/xml"),
+    }
+
+
+@pytest.mark.parametrize("type_digit, type_name", [(3, "Falcon F16v2R"), (4, "Falcon F4v2")])
+def test_an_older_falcon_takes_its_name_from_its_front_page(fppd, type_digit, type_name):
+    """An F16v2R or F4v2 is told by its status.xml, and takes its hostname
+    from the front page, which is the only place it gives one.
+
+    Regression: a0d5597ca."""
+    devs = {"10.88.0.9": older_falcon(type_digit)}
+    with fake_devices(devs):
+        got = discover(fppd, devs)["10.88.0.9"]
+    assert (got["type"], got["hostname"]) == (type_name, "old-falcon"), got
