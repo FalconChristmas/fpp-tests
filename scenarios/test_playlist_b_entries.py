@@ -35,6 +35,7 @@ def silent_server():
 
 
 def test_a_url_step_to_a_host_that_never_answers_moves_on(fppd):
+    # Also guards eb5720f06: the playlist moves on from a URL step, whatever the host does.
     """A URL step to a host that takes the connection and never answers:
     the playlist moves on to the next entry at once, and status keeps
     answering promptly while the request is outstanding.
