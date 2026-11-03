@@ -204,6 +204,7 @@ test.describe('media entries', () => {
   });
 
   test('the editor marks the entries whose files are missing', async ({ page, request }) => {
+    // Also guards 6addf4c9c: the playlist validation names a missing sequence.
     // Feature: 3aa0ad4f1.  The playlist cards flagged a playlist with a
     // missing sequence or media file; the drill-in editor showed its rows as
     // if nothing were wrong.
