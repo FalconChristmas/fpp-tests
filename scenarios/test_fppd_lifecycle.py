@@ -12,6 +12,7 @@ from test_schedule_calendar import YEAR, ZONE, entry
 
 
 def test_status_uptime_is_whole_days_hours_minutes_and_seconds(fppd):
+    # Also guards 7fcdcf79a: uptimeTotalSeconds in the status.
     """/api/fppd/status gives fppd's uptime as whole days, hours, minutes and
     seconds that add up to uptimeTotalSeconds, the same in uptimeStr, and the
     system's own uptime next to it, as the kernel reports it.
