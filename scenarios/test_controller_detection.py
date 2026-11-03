@@ -648,3 +648,14 @@ def test_an_older_falcon_takes_its_name_from_its_front_page(fppd, type_digit, ty
     with fake_devices(devs):
         got = discover(fppd, devs)["10.88.0.9"]
     assert (got["type"], got["hostname"]) == (type_name, "old-falcon"), got
+
+
+def test_an_older_falcons_version_loses_the_name_in_front_of_it(fppd):
+    """An older Falcon's page puts its own name in front of the software
+    version; only the version is listed.
+
+    Regression: dc1705afc."""
+    devs = {"10.88.0.9": older_falcon(3)}
+    with fake_devices(devs):
+        got = discover(fppd, devs)["10.88.0.9"]
+    assert got["version"] == "2.01", got
