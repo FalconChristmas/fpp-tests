@@ -35,11 +35,26 @@ DAEMON=$!
 n=0; until (echo > /dev/tcp/127.0.0.1/873) 2>/dev/null; do n=$((n+1)); [ $n -lt 50 ] || exit 3; sleep 0.1; done
 mkdir -p /home/fpp/media
 mount --bind "$LOCAL" /home/fpp/media
+if [ -n "$STORE" ]; then
+    # The other player's USB device, where its mount API puts it (on a
+    # private /mnt), and that API answering that it mounted it.
+    mount -t tmpfs tmpfs /mnt
+    mkdir /mnt/remote_filecopy
+    mount --bind "$STORE" /mnt/remote_filecopy
+    python3 -c 'import http.server as h
+class R(h.BaseHTTPRequestHandler):
+    def do_POST(self):
+        self.send_response(200); self.end_headers()
+        self.wfile.write(b"{\"Status\": \"OK\", \"Message\": \"mounted\"}")
+h.HTTPServer(("127.0.0.1", 80), R).serve_forever()' > /dev/null 2>&1 &
+    SERVER=$!
+    n=0; until (echo > /dev/tcp/127.0.0.1/80) 2>/dev/null; do n=$((n+1)); [ $n -lt 50 ] || exit 4; sleep 0.1; done
+fi
 cd /tmp
 set +e
-bash "$TREE/scripts/copy_settings_to_storage.sh" 127.0.0.1 fpp-test "$DIRECTION" none no no "$@"
+bash "$TREE/scripts/copy_settings_to_storage.sh" 127.0.0.1 fpp-test "$DIRECTION" "${RSTORAGE:-none}" no no "$@"
 echo "SCRIPT-RC=$?"
-kill $DAEMON
+kill $DAEMON ${SERVER:-}
 """
 
 EEPROM = b"FPP02fpp-tests remote eeprom" + bytes(100)
@@ -79,11 +94,11 @@ def players(tmp_path):
         shutil.rmtree(remote_dir, ignore_errors=True)
 
 
-def copy(players, direction, *flags):
+def copy(players, direction, *flags, env=None):
     local, remote = players
     r = subprocess.run(["unshare", "--mount", "--net", "--propagation", "private", "bash", "-c", RUN,
                         "bash", os.environ["FPP_TREE"], str(local), str(remote), direction, *flags],
-                       capture_output=True, text=True, timeout=180)
+                       capture_output=True, text=True, timeout=180, env=dict(os.environ, **(env or {})))
     out = r.stdout + r.stderr
     assert "SCRIPT-RC=" in out, out[-3000:]
     return out
@@ -107,6 +122,32 @@ def test_a_backup_to_remote_puts_the_cape_eeprom_in_the_backups_config_folder(pl
     eeprom = remote_eeprom(players)
     assert eeprom.is_file(), f"no {eeprom}:\n{out[-3000:]}"
     assert eeprom.read_bytes() == EEPROM
+
+
+def test_a_backup_to_the_other_players_usb_device_lands_on_it(players):
+    """A Backup to Remote naming one of the other player's storage devices
+    has that player mount it at /mnt/remote_filecopy and rsyncs to its
+    [remote_filecopy] module: the backup is on the device, not in the
+    other player's media/backups.
+
+    Regression: 3011c43ef ("Updated \\etc\\rsync.conf template"). The
+    template had no [remote_filecopy] module, so a player installed from it
+    refused the copy (unknown module) and nothing reached the device.
+    """
+    store = Path(tempfile.mkdtemp(prefix="fpp-tests-usb-", dir="/tmp"))
+    try:
+        fpp = pwd.getpwnam("fpp")
+        os.chmod(store, 0o755)
+        os.chown(store, fpp.pw_uid, fpp.pw_gid)
+        out = copy(players, "TOREMOTE", "Configuration", "EEPROM",
+                   env={"STORE": str(store), "RSTORAGE": "sda1"})
+        eeprom = store / "fpp-test" / "config" / "cape-eeprom.bin"
+        assert eeprom.is_file(), f"no {eeprom}:\n{out[-3000:]}"
+        assert eeprom.read_bytes() == EEPROM
+        assert "SCRIPT-RC=0" in out, out[-3000:]
+        assert not remote_eeprom(players).exists(), "the backup went to media/backups, not the device"
+    finally:
+        shutil.rmtree(store, ignore_errors=True)
 
 
 def test_a_backup_to_remote_of_the_eeprom_alone_puts_it_in_the_config_folder(players):
