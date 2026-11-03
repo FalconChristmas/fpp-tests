@@ -29,8 +29,9 @@ STUBS = {
     "netstat": 'cat "$ROUTES"\n',
     "timedatectl": 'echo "$NTPSYNC"\n',
     "pgrep": 'case "$*" in *chronyd*) [ -n "$CHRONYD" ] && { echo 4242; exit 0; }; exit 1 ;; esac\nexit 1\n',
-    "chronyc": 'echo "Last offset     : +0.000012345 seconds"\n',
-    "curl": 'printf "curl %s\\n" "$*" >> "$CALLS"\nexit 7\n',
+    "chronyc": 'echo "Last offset     : ${CHRONY_OFFSET:-+0.000012345} seconds"\n',
+    # $APIJSON, when set, is what the API answers
+    "curl": 'printf "curl %s\\n" "$*" >> "$CALLS"\n[ -n "$APIJSON" ] && { printf "%s" "$APIJSON"; exit 0; }\nexit 7\n',
     # answers unless $NODNS is set
     "getent": '[ -n "$NODNS" ] && exit 2\necho "140.82.112.3    github.com"\n',
 }
@@ -310,3 +311,27 @@ def test_only_the_first_of_two_default_gateways_is_pinged(tmp_path):
     assert "Default Gateway (10.0.0.1)" in out, out[-2000:]
     pings = (tmp_path / "calls").read_text()
     assert "10.0.0.1" in pings and "10.0.0.2" not in pings, pings
+
+
+def fpp_systems(*hostnames):
+    """/api/fppd/multiSyncSystems as fppd answers it: one line, keys in order,
+    objects nested in each system."""
+    return '{"Status":"OK","systems":[' + ",".join(
+        '{"address":"10.0.0.%d","capeInfo":{"present":false},"fppMode":2,"hostname":"%s","local":0}' % (i, h)
+        for i, h in enumerate(hostnames)) + "]}"
+
+
+@pytest.mark.parametrize("hostnames, setting, want", [
+    (("FPP", "fpp", "stage"), "stage", "Warning - There may be more than one host"),
+    (("FPP", "stage"), "stage", "Pass - Hostname is set to other than the default"),
+    (("FPP",), "FPP", "Warning - Hostname is set to the default"),
+], ids=["two-called-fpp", "one-called-fpp", "still-the-default"])
+def test_the_hostname_check_warns_about_more_than_one_fpp(tmp_path, hostnames, setting, want):
+    """HostName is unique warns when two systems on the network are called
+    FPP, whatever the case, and when this one still has the default name.
+
+    Regression: c9de7a118, which added the check."""
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN,
+                     f'getSetting() {{ echo "{setting}"; }}; HC_HostName',
+                     APIJSON=fpp_systems(*hostnames))
+    assert want in out, out[-2000:]
