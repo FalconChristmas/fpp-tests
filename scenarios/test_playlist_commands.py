@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from test_playlist_entries import pause, playlist, status, step, trace
+from test_playlist_entries import TRACE, pause, playlist, status, step, trace
 
 
 def start(fppd, name, repeat=False):
@@ -321,6 +321,26 @@ def test_stop_gracefully_takes_its_after_loop_flag(fppd):
     wait_in_pause(fppd, "1")
     fppd.command("Stop Gracefully")
     assert status_name(fppd) == "stopping gracefully"
+    fppd.command("Stop Now")
+    wait_idle(fppd)
+
+
+def test_start_playlist_if_not_running_leaves_a_running_one_alone(fppd):
+    """Start Playlist with "If Not Running" doesn't restart the playlist that
+    is already playing; without it, the playlist starts over.
+
+    Regression: 92910665a (#842), which added the option."""
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(30)]))
+    fppd.start()
+    start(fppd, "P")
+    wait_in_pause(fppd, "1")
+    # A restart resets the trace and runs step 1 again, so mark it.
+    fppd.command("Set Variable", TRACE, "Value", "7")
+    fppd.command("Start Playlist", "P", "false", "true")
+    time.sleep(1)
+    assert trace(fppd) == "7", "If Not Running restarted the playlist"
+    fppd.command("Start Playlist", "P", "false", "false")
+    wait_in_pause(fppd, "1")
     fppd.command("Stop Now")
     wait_idle(fppd)
 
