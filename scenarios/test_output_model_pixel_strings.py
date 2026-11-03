@@ -469,3 +469,26 @@ def test_a_string_wider_than_the_model_is_refused(fppd):
     row = WIDTH * 3
     assert got[:30] == [0x40] * 30, f"row 0 did not draw the 10-pixel string: {got[:row]}"
     assert not any(got[30:]), "the refused string drew into the model: " + " ".join(f"{v:02x}" for v in got[30:row * 2])
+
+
+def test_channelout_debug_logging_names_each_virtual_strings_description(fppd):
+    """With ChannelOut logging at debug, the config dump an output writes as
+    it starts lists each virtual string's description with its start channel
+    and pixel count, so a log says which string is which.
+
+    Regression: a2ab54f42 ("Add string description to debug logging"). The
+    dump gave each string only a number.
+    """
+    model(fppd)
+    fppd.write("config/co-other.json", mps([vstring(description="porch left"),
+                                            vstring(start=30, description="porch right")]))
+    fppd.settings(DisableFakeNetworkBridges="1", LogLevel_ChannelOut="debug")
+    fppd.start()
+    # ModelPixelStringsOutput::DumpConfig dumps each port's strings, then
+    # ends with the base class's line
+    fppd.wait_for(lambda: "ChannelOutput::DumpConfig()" in fppd.log(), timeout=15,
+                  what="the output's config dump in fppd.log")
+    assert "port number      : 1" in fppd.log(), "the control: both ports were dumped"
+    log = fppd.log()
+    for name in ("porch left", "porch right"):
+        assert f"description   : {name}" in log, log[-3000:]
