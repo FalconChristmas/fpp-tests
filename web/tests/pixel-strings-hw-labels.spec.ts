@@ -127,3 +127,23 @@ test('Clone String steps over the divider between two receivers\' rows', async (
   await expect(next.locator('input.vsPixelCount'), `the clone was made past the divider (alerts: ${alerts.join(' | ')})`).toHaveValue('10');
   expect(errors).toEqual([]);
 });
+
+test('a smart receiver group wider than the cape\'s outputs still draws, its last ports labelled by number', async ({ page }) => {
+  // Regression: cbe1d74da ("DPIPixels - don't crash if there are more
+  // strings configured than outputs defined in the string config").  A
+  // receiver's four ports are drawn though the cape lists fewer outputs, and
+  // GetStringHWLabel read the label of an output past the end of the list:
+  // it threw, and the tab drew no strings.
+  writeFile(CAPE_FILE, JSON.stringify({
+    ...CAPE, outputs: CAPE.outputs.slice(0, 2), groups: [{ start: 1, count: 4, type: 'differential' }],
+  }));
+  const config = stringsConfig(2);
+  config.channelOutputs[0].outputCount = 2;
+  config.channelOutputs[0].outputs = config.channelOutputs[0].outputs.slice(0, 2);
+  writeFile(CONFIG, JSON.stringify(config));
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await openStrings(page);
+  await expect.poll(() => labels(page)).toEqual(['1A)', '2A)', '3A)', '4A)']);
+  expect(errors).toEqual([]);
+});
