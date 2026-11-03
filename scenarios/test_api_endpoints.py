@@ -138,3 +138,23 @@ def test_a_trailing_slash_reaches_the_same_endpoint(fppd):
     code, body = call(fppd, "DELETE", "/fppd/e131stats/")
     assert code == 200, body
     assert body.get("Message") == "Stats Cleared", body
+
+
+def test_the_player_endpoint_reports_the_playlist(fppd):
+    """GET /api/player and /api/player/status describe the player, the
+    playlist that is playing included; /api/player/current is that playlist
+    alone; anything else under /api/player is a 404.
+
+    Regression: 76a9100ac, which added the endpoint."""
+    fppd.write("playlists/P.json", {"name": "P", "repeat": 0, "loopCount": 0, "leadIn": [], "leadOut": [],
+                                    "mainPlaylist": [{"type": "pause", "enabled": 1, "playOnce": 0, "duration": 30}]})
+    fppd.start()
+    fppd.command("Start Playlist", "P", "false", "false")
+    fppd.wait_for(lambda: fppd.get("/fppd/status").get("status_name") == "playing", timeout=10,
+                  what="the playlist to play")
+    for path in ("/player", "/player/status"):
+        playlists = fppd.get(path).get("playlists")
+        assert playlists and playlists[0]["details"]["name"] == "P", (path, playlists)
+    assert fppd.get("/player/current")["playlist"]["name"] == "P"
+    code, _ = call(fppd, "GET", "/player/nothing")
+    assert code == 404
