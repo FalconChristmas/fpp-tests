@@ -128,6 +128,7 @@ def test_playlist_that_includes_itself(fppd):
 
 
 def test_loop_branch_picks_iterations(fppd):
+    # Also guards 7a8fe03c1: the Loop test; the Playlist destination is test_branch_to_another_playlist_runs_it_then_continues.
     """A Loop branch with iterationStart 2 and iterationCount 2 is true on
     the 2nd and 4th pass: there it skips the next entry (an Offset of 2
     rows), elsewhere it falls through."""
