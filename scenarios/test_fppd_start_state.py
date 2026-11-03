@@ -29,3 +29,31 @@ def test_default_log_level_is_info(fppd):
     assert levels and set(levels.values()) == {"info"}, levels
     fppd.wait_for(lambda: INFO_LINE in fppd.log(), timeout=10,
                   what=f"the Info line {INFO_LINE!r} in fppd.log")
+
+
+def test_quick_restart_removes_fpp_info(fppd):
+    """A quick restart (the "restart" the UI's /api/system/fppd/restart?quick=1
+    sends fppd) removes fpp-info.json before fppd re-executes itself, and the
+    restarted fppd writes a new one: the UI can tell the restart is done by
+    the file coming back.
+
+    The old file is kept by a second hard link, so the removal shows however
+    quickly the new fppd writes its file: a new file is a different inode;
+    the old file rewritten in place is the same one.
+
+    Regression: 999596473. The file was left in place across the restart,
+    so it was there all along and the UI had nothing to wait on."""
+    path = os.path.join(fppd.media, "fpp-info.json")
+    keep = os.path.join(fppd.media, "tmp", "fpp-info.keep")
+    with interface("10.77.0.1"):
+        fppd.start()
+        fppd.wait_for(lambda: os.path.exists(path), timeout=10, what="fpp-info.json to be written")
+        os.link(path, keep)
+        command("restart", reply=False)
+        fppd.wait_for(lambda: fppd.log().count(LOOP_LINE) >= 2, timeout=60, interval=0.25,
+                      what="the restarted fppd to reach its main loop")
+        fppd.wait_for(lambda: os.path.exists(path), timeout=10,
+                      what="the restarted fppd to write fpp-info.json")
+        assert not os.path.samefile(path, keep), \
+            "fpp-info.json is the same file as before the restart: it was never removed"
+        assert "10.77.0.1" in open(path).read(), open(path).read()
