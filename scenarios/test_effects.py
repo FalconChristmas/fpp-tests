@@ -229,6 +229,7 @@ def test_most_recently_started_effect_wins(fppd):
 
 
 def test_stop_by_pattern_and_list(fppd):
+    # Also guards 5138b0c02: the Effects Stop command stops everything.
     """Effect Stop takes a shell pattern or a comma-separated list of names
     (e6ed9c001), and stops only what matches."""
     for name in ("snow_a", "snow_b", "star"):
