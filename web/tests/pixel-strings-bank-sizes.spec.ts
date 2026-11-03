@@ -11,6 +11,7 @@ test.skip(!container, 'changes the platform and config inside the run-web.sh con
 const PLATFORM = '/etc/fpp/platform';
 const MEDIA = '/home/fpp/media';
 const CAPE_FILE = `${MEDIA}/tmp/strings/FppTestsBanks.json`;
+const PLAIN_FILE = `${MEDIA}/tmp/strings/FppTestsPlain.json`;
 const CAPE_INFO = `${MEDIA}/tmp/cape-info.json`;
 const CONFIG = `${MEDIA}/config/co-bbbStrings.json`;
 const SETTINGS = `${MEDIA}/settings`;
@@ -63,7 +64,7 @@ function setting(name: string): string | null {
 let saved: Record<string, string | null> = {};
 test.beforeEach(() => {
   saved = {};
-  for (const p of [PLATFORM, CAPE_FILE, CAPE_INFO, CONFIG, SETTINGS]) saved[p] = readFile(p);
+  for (const p of [PLATFORM, CAPE_FILE, PLAIN_FILE, CAPE_INFO, CONFIG, SETTINGS]) saved[p] = readFile(p);
   writeFile(PLATFORM, 'BeagleBone Black');
   writeFile(CAPE_FILE, JSON.stringify(CAPE));
   writeFile(CAPE_INFO, JSON.stringify(CAPE_INFO_JSON));
@@ -108,4 +109,21 @@ test('moving the bank slider saves the new sizes', async ({ page }) => {
   for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
   await expect.poll(() => setting('bank1Size'), { timeout: 10_000 }).toBe('15');
   expect(setting('bank2Size')).toBe('85');
+});
+
+test('switching to a cape type without banks hides the bank slider', async ({ page }) => {
+  // Regression: c354b82c5 ("Hide banks slider when switching to a config
+  // that does not use it").  setupPixelLimits only ever showed the slider,
+  // so after a switch from a banked cape it stayed, splitting a limit the
+  // new cape doesn't have.
+  writeFile(PLAIN_FILE, JSON.stringify({
+    name: 'FppTestsPlain', longName: 'fpp-tests plain cape', numSerial: 0,
+    outputs: CAPE.outputs, groups: CAPE.groups,
+  }));
+  await openStrings(page);
+  await page.locator('#PixelStringSubType').selectOption('FppTestsPlain');
+  await expect(page.locator('#PixelStringSubType')).toHaveValue('FppTestsPlain');
+  // the table was drawn again for the new type before the slider is checked
+  await expect(page.locator('#PixelString tbody tr').first()).toBeVisible();
+  await expect(page.locator('#bankSliderDiv')).toBeHidden({ timeout: 5_000 });
 });
