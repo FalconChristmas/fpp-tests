@@ -291,6 +291,7 @@ def test_merge_ignores_zeros_and_copy_zero_does_not(tmp_path):
 
 
 def test_merge_range_limits_what_is_merged(tmp_path):
+    # Also guards be0618ae4: -r after -m applies to the merged file; -m and -M are test_merge_ignores_zeros_and_copy_zero_does_not.
     """-r after -m limits the merge to that range of the merged sequence:
     the rest of the base is untouched, even where the overlay is lit."""
     a, b, base, over = merge_inputs(tmp_path)
