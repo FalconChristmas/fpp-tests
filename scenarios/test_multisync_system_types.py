@@ -195,3 +195,11 @@ def test_a_pi_model_name_with_no_revision_is_mapped(fppd, model, want):
                                         if s.get("local") and s["address"] == "10.77.0.1"), None),
                           timeout=10, what="the local system to be listed")
     assert s["type"] == want, s
+
+
+def test_an_esp32_pixel_stick_ping_id_is_named(fppd):
+    """Type 0xC3 in a ping is an ESPixelStick on an ESP32.
+
+    Regression: 356c9aa1a, which assigned the id."""
+    fppd.start()
+    assert listed_type(fppd, "10.20.33.20", 0xC3, "stick") == (0xC3, "ESPixelStick-ESP32")
