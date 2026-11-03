@@ -39,12 +39,16 @@ def test_a_string_saved_reverse_is_drawn_reversed_and_a_null_direction_forward(f
     for ch in range(1, last + 1):
         set_range(fppd, ch, ch, ch)
 
+    # The output thread copies each frame into the model as this reads it
+    # back, so one read can catch row 0 still holding the last frame while
+    # row 1 holds this one.  Wait for every pixel of both rows to be lit.
     def settled():
         d = fppd.get(f"/overlays/model/{MODEL}/data").get("data") or []
-        return d if last in d else None
+        if len(d) != WIDTH * HEIGHT * 3:
+            return None
+        return d if all(d[(r * WIDTH + p) * 3] for r in (0, 1) for p in range(PIXELS)) else None
 
-    got = fppd.wait_for(settled, timeout=10, what="the last channel set to reach the model")
-    assert len(got) == WIDTH * HEIGHT * 3, f"read back {len(got)} bytes"
+    got = fppd.wait_for(settled, timeout=10, what="every pixel of both strings to reach the model")
 
     def row(r):
         """The 1-based input channel of the R of each of the row's first pixels."""
