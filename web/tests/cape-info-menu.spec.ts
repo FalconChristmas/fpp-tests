@@ -12,6 +12,7 @@ test.skip(!container, 'seeds files inside the run-web.sh container');
 const MEDIA = '/home/fpp/media';
 const CAPE_INFO = `${MEDIA}/tmp/cape-info.json`;
 const EEPROM = `${MEDIA}/tmp/eeprom.bin`;
+const VIRTUAL = `${MEDIA}/config/cape-eeprom.bin`;
 
 function writeCape(extra: Record<string, unknown> = {}) {
   const info = { id: 'FppTestsCape', name: 'fpp-tests menu cape', version: '1.0', serialNumber: 'SN0001', ...extra };
@@ -19,7 +20,7 @@ function writeCape(extra: Record<string, unknown> = {}) {
 }
 
 test.afterEach(() => {
-  inPlayer('rm', '-f', CAPE_INFO, EEPROM);
+  inPlayer('rm', '-f', CAPE_INFO, EEPROM, VIRTUAL);
 });
 
 test('the Help menu lists Cape Info only when the cape has an EEPROM image, and it opens the cape page', async ({ page }) => {
@@ -39,6 +40,22 @@ test('the Help menu lists Cape Info only when the cape has an EEPROM image, and 
   await entry.click();
   await expect(page).toHaveURL(/cape-info\.php$/);
   await expect(page.locator('body')).toContainText('fpp-tests menu cape');
+});
+
+test('the Help menu lists Cape Info for a virtual EEPROM in config when there is no detected image', async ({ page }) => {
+  // Regression: 80097664d.  The menu looked at config/cape-eeprom.bin only
+  // in an else of the BeagleBone branch, so a BeagleBone with no EEPROM image
+  // never listed its virtual one.  The fallback now applies on any platform
+  // whenever tmp/eeprom.bin is missing; this guards that fallback.
+  const entry = page.locator('.navbar .dropdown-menu a[href="cape-info.php"]');
+  inPlayer('rm', '-f', EEPROM, VIRTUAL);
+  writeCape();
+  await page.goto('/index.php');
+  await expect(entry, 'the control: listed with no image anywhere').toHaveCount(0);
+
+  inPlayer('sh', '-c', `: > ${VIRTUAL}`);
+  await page.goto('/index.php?virtual=1');
+  await expect(entry, 'listed for the virtual EEPROM').toHaveCount(1);
 });
 
 test('System Upgrade asks for donations unless the cape is signed by the project', async ({ page }) => {
