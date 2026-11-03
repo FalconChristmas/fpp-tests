@@ -6186,7 +6186,7 @@ cdaac72b9	new-test	web/tests/setting-default-vendor-serial.spec.ts::a never-set 
 f93a7987f	untestable		none	triaged 2026-11-02: Makefile flag name fix (CFLAGS->CXXFLAGS) and nRF24 default speed constant; no radio hardware, nothing observable.	Fix NFR output and flags for fppcapedetect	5.0.1	channeloutput	Capes & EEPROM	device,docker
 35b4f7052	untestable		none	re-read 2026-11-02: Removes VLC ifdefs from fpp_so.mk and mediaoutput.cpp (VLC always built); no behaviour change.	VLC is required, remove the ifdefs	5.0.1	makefiles	Media: audio & video	docker
 f7cb8de75	untestable		none	image/installer build: SD/ scripts, README or package lists, run when an image is made; nothing fppd or the UI runs	Update some stuff to match what was used to create 5.0 images	5.0.1	SD	Boot, OS image & install	os-image
-a1413ba70	todo		none	script check: 0 of 2 added lines are still in master	Prep for 5.0 builds	5.0	SD	Boot, OS image & install	os-image
+a1413ba70	untestable		none	version strings in FPP_Install.sh and the base-image names in the SD READMEs for the 5.0 images; nothing fppd or the UI runs	Prep for 5.0 builds	5.0	SD	Boot, OS image & install	os-image
 ae10a0b6f	todo		none	script check: 7563 of 12108 added lines are still in master; 27 of 278 files gone	Just cleanup whitespace/formatting/etc... of CPP/H files, renames some c->cpp to make vscode happy	5.0	channeloutput	Playlists, schedule & sequences	device:bb,device:pi,device,docker
 2097874bb	todo		none	script check: 0 of 3 added lines are still in master	Fix endTimeOffset not being used	5.0	src	fppd core & utilities	docker
 b328bf5b5	todo		none	script check: 224 of 372 added lines are still in master	Fix some issues with sunset calclations on Sundays and SunRise "end" times.	5.0	.vscode	Other	docker
@@ -6265,9 +6265,9 @@ a9e91e3eb	todo		none	script check: 9 of 13 added lines are still in master	Fix p
 91b1ce092	todo		none	script check: 7 of 35 added lines are still in master	Added WLED Wifi and Uptime to Multisync Page	5.0	www	MultiSync & remotes	web
 5f11c525a	todo		none	script check: 0 of 2 added lines are still in master	Check for eeprom on i2c1 for about page as well	5.0	www	Web UI (shared JS/CSS/pages)	web
 556223f42	superseded		none	script check: every file this commit changed has since been removed from master	Update fppcapedetect to configure i2c pins on i2c1 to look for eeprom on i2c1	5.0	src	Capes & EEPROM	docker
-f4729df2e	todo		none	script check: 0 of 2 added lines are still in master	Enable the deflate when going back to the browser. FPP_Install will include the changes so set to the new version	5.0	SD	Boot, OS image & install	os-image,docker
+f4729df2e	superseded		none	the unconditional INFLATE;DEFLATE proxy filter was replaced by b2b19166f (re-compression scoped to the clients that need it); the FPPCFGVER line has moved on too	Enable the deflate when going back to the browser. FPP_Install will include the changes so set to the new version	5.0	SD	Boot, OS image & install	os-image,docker
 12ebe78f2	todo		none	script check: 1 of 7 added lines are still in master; 1 of 2 files gone	Fix for issue 1031	5.0	etc	Network, Apache & security	docker
-c2517366e	todo		none	script check: 17 of 24 added lines are still in master; 1 of 3 files gone	Don't announce the USB tether IP addresses over audio, changing audio settings mostly requires reboots, not restarts	5.0	.vscode	Boot, OS image & install	docker,web
+c2517366e	todo		none	read 2026-11-03: the boot IP announcement skipping the USB-tether addresses lives on in src/boot/FPPINIT_Network.cpp (192.168.6.2/7.2/8.1 filtered); test_fppinit_tethering_boot.py's announcing() harness could add usb0 with 192.168.7.2 next to eth0 and assert the flite text names 10.99.0.2 but not 192.168.7.2 [docker]. The AudioOutput reboot flag (settings.json "reboot": 1) is still there too (web: changing Audio Output raises the reboot banner, not restart). The .vscode launch config is dev-only	Don't announce the USB tether IP addresses over audio, changing audio settings mostly requires reboots, not restarts	5.0	.vscode	Boot, OS image & install	docker,web
 5f20a60a1	todo		none	script check: 3 of 20 added lines are still in master; 2 of 3 files gone	Adjust the dmix buffer/period sizes to reduce latency	5.0	mediaoutput	Media: audio & video	docker
 acd3b3b99	todo		none	script check: 14 of 33 added lines are still in master	Added WLED to Multisync Discovery	5.0	docs	MultiSync & remotes	docker
 97b992f52	todo		none	script check: 1 of 2 added lines are still in master	Fix some issues with old BBB boards that have an OLED but no eeprom	5.0	www	BB pixel strings & PRU	web
@@ -6350,7 +6350,7 @@ af8cee229	todo		none	script check: 0 of 3 added lines are still in master	Bump p
 431bac9eb	todo		none	script check: 6 of 9 added lines are still in master; 3 of 5 files gone	Update to latest rpi_ws2811, rpi-rgb-led-matrix, spixels	5.0	channeloutput	LED panels	device,docker
 79f3874c4	todo		none	script check: 19 of 81 added lines are still in master	First pass at implementing ArtNet timecode sync as an artnet remote	5.0	src	Other channel outputs	docker,web
 91262a422	superseded		none	script check: only 1 of the 11 lines this commit added are still in master; the rest were rewritten	Updates to be able to build docker images	5.0	Docker	Boot, OS image & install	os-image
-394bdbd95	todo		none	script check: 4 of 16 added lines are still in master; 1 of 3 files gone	Updated BBB bootloader	5.0	bin.bbb	Boot, OS image & install	device:bb,docker
+394bdbd95	untestable		none	BBB bootloader binaries and an install.sh that dd's MLO/u-boot onto /dev/mmcblk*; only a BeagleBone's boot shows it	Updated BBB bootloader	5.0	bin.bbb	Boot, OS image & install	device:bb,docker
 998e81670	untestable		none	auto: changes no runtime file (SECURITY.md)	Create Security policy file	5.0	SECURITY.md	Other	none
 29809ca92	todo		none	script check: 25 of 47 added lines are still in master	Update pixel strings to allow end nulls in addition to start nulls	5.0	channeloutput	BB pixel strings & PRU	docker,web
 5c28df837	todo		none	script check: 3 of 4 added lines are still in master	Fix Undefined index of currentHeaderSensor in menu.inc Only happens if a default value is not rpesent in settings. If settings is empty, assume sensor 1. Undefined index: currentHeaderSensor in /opt/fpp/www/menu.inc on line 91, referer: http://fppdev/	5.0	www	Web UI (shared JS/CSS/pages)	web
@@ -6363,7 +6363,7 @@ fa68c163b	todo		none	script check: 2 of 12 added lines are still in master; 1 of
 f3a56c4f0	todo		none	script check: 0 of 4 added lines are still in master	playlist/validate: Add support for validate images	5.0	api	Playlists, schedule & sequences	web
 0fd2098fc	todo		none	script check: 2 of 4 added lines are still in master	Fix file chooser	5.0	www	Web UI (shared JS/CSS/pages)	web
 aeea6993c	todo		none	script check: 2 of 6 added lines are still in master	Sequence validator should check videos too	5.0	api	Playlists, schedule & sequences	web
-02124b4f4	todo		none	script check: 0 of 1 added lines are still in master	config version is actuall at 66 after FPP_Install now	5.0	SD	Boot, OS image & install	os-image
+02124b4f4	superseded		none	FPPCFGVER in FPP_Install.sh has been bumped many times since; the line is gone	config version is actuall at 66 after FPP_Install now	5.0	SD	Boot, OS image & install	os-image
 1d3277194	todo		none	script check: 0 of 2 added lines are still in master; 1 of 3 files gone	Use dmix in asoundrc by default	5.0	etc	Media: audio & video	docker
 7f4073d3e	todo		none	script check: 0 of 0 added lines are still in master	Back out earlier change from another branch that has not yet been accepted and should not exist in this branch	5.0	commands	Commands & presets	docker
 657dfc520	todo		none	script check: 2 of 15 added lines are still in master	Add Remote Start Playlist command	5.0	commands	Commands & presets	docker
@@ -6387,8 +6387,8 @@ b23678241	todo		none	script check: 0 of 1 added lines are still in master	Saniti
 7c4653703	todo		none	script check: 2 of 2 added lines are still in master	Incorrect netmask for 172.16 private IP space Fixes #995	5.0	www	Settings & config	web
 8d69be318	todo		none	script check: 1 of 1 added lines are still in master	Minior XSS - If playlist has < or > may cause issues, but should't have those characters in a playlist https://huntr.dev/bounties/2-other-FalconChristmas/fpp/	5.0	www	Playlists, schedule & sequences	web
 30a2d62c3	todo		none	script check: 1 of 1 added lines are still in master	Escape $_GET['playlist'] to prevent XSS	5.0	www	Playlists, schedule & sequences	web
-1842a105e	todo		none	script check: 0 of 4 added lines are still in master	Sanitize $_GET['os'] and $baseFile to prevent XSS and OS command injection	5.0	www	Boot, OS image & install	web
-21d45ca6c	todo		none	script check: 0 of 3 added lines are still in master	Fix Cross-site Scripting (XSS) https://huntr.dev/bounties/13-other-FalconChristmas/fpp/	5.0	www	Boot, OS image & install	web
+1842a105e	superseded		none	upgradeOS.php's 'os' escaping was rewritten by e402d6c68 (basename, URL validation, htmlspecialchars with ENT_QUOTES), covered by shell-input-refused.spec.ts; none of these lines remain	Sanitize $_GET['os'] and $baseFile to prevent XSS and OS command injection	5.0	www	Boot, OS image & install	web
+21d45ca6c	superseded		none	upgradeOS.php's 'os' escaping was rewritten by e402d6c68 (basename, URL validation, htmlspecialchars with ENT_QUOTES), covered by shell-input-refused.spec.ts; none of these lines remain	Fix Cross-site Scripting (XSS) https://huntr.dev/bounties/13-other-FalconChristmas/fpp/	5.0	www	Boot, OS image & install	web
 b6782642b	todo		none	script check: 0 of 1 added lines are still in master	Escaping $command to prevent XSS	5.0	www	Web UI (shared JS/CSS/pages)	web
 1dd755bb7	todo		none	script check: 0 of 1 added lines are still in master	Escape `version` variable	5.0	www	Upgrade, backup & files	web
 704aaa75d	superseded		none	script check: every file this commit changed has since been removed from master	Escape $ip before passing it to system	5.0	www	MultiSync & remotes	web
@@ -6397,7 +6397,7 @@ b6782642b	todo		none	script check: 0 of 1 added lines are still in master	Escapi
 b9ea65731	todo		none	script check: 0 of 1 added lines are still in master	Escaping arguments that will be passed to system to prevent OS command injections	5.0	www	Web UI (shared JS/CSS/pages)	web
 02948843f	todo		none	script check: 0 of 1 added lines are still in master	Escape $_GET['version'] before passing it to system();	5.0	www	Web UI (shared JS/CSS/pages)	web
 696f0ced6	todo		none	script check: 0 of 1 added lines are still in master	Escape $_GET['branch'] before passing it to system();	5.0	www	Web UI (shared JS/CSS/pages)	web
-b8b156f93	todo		none	script check: 0 of 1 added lines are still in master	Escape $_GET['os'] before passing it to system();	5.0	www	Boot, OS image & install	web
+b8b156f93	superseded		none	upgradeOS.php's 'os' escaping was rewritten by e402d6c68 (basename, URL validation), covered by shell-input-refused.spec.ts; the escapeshellcmd line is gone	Escape $_GET['os'] before passing it to system();	5.0	www	Boot, OS image & install	web
 f032d800a	todo		none	script check: 0 of 3 added lines are still in master	Escape script arguments https://huntr.dev/bounties/7-other-FalconChristmas/fpp/	5.0	www	Web UI (shared JS/CSS/pages)	web
 40a636c6e	todo		none	script check: 0 of 2 added lines are still in master	Sanitize IP address https://huntr.dev/bounties/10-other-FalconChristmas/fpp/	5.0	www	MultiSync & remotes	web
 530161d8e	todo		none	script check: 0 of 1 added lines are still in master	Update menu.inc	5.0	www	Web UI (shared JS/CSS/pages)	web
@@ -6419,9 +6419,9 @@ c60734ab3	todo		none	script check: 26 of 40 added lines are still in master	Add 
 ce2732bb0	todo		none	script check: 0 of 1 added lines are still in master	Typo on previous commit - Fix #988	5.0	www	Network, Apache & security	web
 1d1f85be8	todo		none	script check: 0 of 2 added lines are still in master	Don't uuencode Wifi Post msg -#988	5.0	www	Network, Apache & security	web
 cb0038c1d	superseded		none	script check: none of the 5 lines this commit added are in master any more	More additions and notes to user oriented docker compose file	5.0	Docker	Boot, OS image & install	os-image
-0081d4be6	todo		none	auto: not examined yet	Move user oriented docker compose file into Docker subdir	5.0	Docker	Boot, OS image & install	os-image
-2c9795357	todo		none	script check: 0 of 0 added lines are still in master	Update notes in renamed file.	5.0	Docker	Boot, OS image & install	os-image
-9448d8289	todo		none	auto: not examined yet	Rename docker compose file since it is more oriented towards developers	5.0	Docker	Boot, OS image & install	os-image
+0081d4be6	untestable		none	moves a developer docker-compose sample from docs/ to Docker/; nothing at runtime	Move user oriented docker compose file into Docker subdir	5.0	Docker	Boot, OS image & install	os-image
+2c9795357	untestable		none	comments in Docker/docker-compose-dev.yml only	Update notes in renamed file.	5.0	Docker	Boot, OS image & install	os-image
+9448d8289	untestable		none	renames the developer docker-compose file; nothing at runtime	Rename docker compose file since it is more oriented towards developers	5.0	Docker	Boot, OS image & install	os-image
 8ac7da9e8	todo		none	script check: 1 of 1 added lines are still in master	Always return a pointer since callers expect something.	5.0	src	Settings & config	docker
 ceee43699	todo		none	script check: 3 of 11 added lines are still in master	A few small fixes; plugin filtering, modal widths, and button styles	5.0	css	Web UI (shared JS/CSS/pages)	web
 5be81790f	todo		none	script check: 4 of 11 added lines are still in master	Update button placement & heading on initial setup	5.0	www	Web UI (shared JS/CSS/pages)	web
@@ -6500,7 +6500,7 @@ ecac02a03	todo		none	script check: 48 of 78 added lines are still in master; 2 o
 483b6a1cb	todo		none	script check: 3 of 14 added lines are still in master	Oled us new settings API - #945	5.0	oled	OLED, GPIO & sensors	device
 21a18d29d	todo		none	script check: 0 of 0 added lines are still in master	Remove dead code for logMast	5.0	www	Settings & config	web
 1f2e37f11	todo		none	script check: 2 of 2 added lines are still in master	Fix Post/Put helper return values	5.0	js	Web UI (shared JS/CSS/pages)	web
-c6c82c7e5	todo		none	script check: 0 of 1 added lines are still in master; 1 of 3 files gone	Add comments to associate the places where PHP options are set	5.0	common	Boot, OS image & install	docker,web
+c6c82c7e5	untestable		none	comments only (and a comment line in www/.user.ini); no behaviour change	Add comments to associate the places where PHP options are set	5.0	common	Boot, OS image & install	docker,web
 1e39e1496	superseded		none	script check: only 1 of the 10 lines this commit added are still in master; the rest were rewritten	Fix issue loading UI under php-fpm.	5.0	common	Settings & config	docker,web
 1dace2a00	todo		none	script check: 3 of 5 added lines are still in master	Include hostname in page title if screen really small	5.0	css	Web UI (shared JS/CSS/pages)	web
 b49a53f45	todo		none	script check: 0 of 0 added lines are still in master	Remove debugging code from the wifi issue on multisync	5.0	www	MultiSync & remotes	web
@@ -6509,7 +6509,7 @@ db4a89d17	todo		none	script check: 269 of 269 added lines are still in master	ad
 e863a40d9	todo		none	script check: 63 of 285 added lines are still in master	Scheduler fixes and enhancements	5.0	src	fppd core & utilities	docker
 3553777b8	todo		none	script check: 2 of 2 added lines are still in master	Reload the UI if the date or time format settings are changed.	5.0	www	Settings & config	web
 a3438503f	todo		none	script check: 4 of 6 added lines are still in master	Detect Docker as a Platform	5.0	www	Settings & config	web
-8f3e578c3	todo		none	script check: 3 of 4 added lines are still in master	Use All CPUs for FPP_Install.sh Helps with docker!	5.0	SD	Boot, OS image & install	os-image
+8f3e578c3	untestable		none	make -j CPUS in FPP_Install.sh: build speed of an image/Docker install only	Use All CPUs for FPP_Install.sh Helps with docker!	5.0	SD	Boot, OS image & install	os-image
 e80d29bcc	todo		none	script check: 1 of 1 added lines are still in master	fix ip line break in header on mobile	5.0	css	Web UI (shared JS/CSS/pages)	web
 fcda5d3bd	todo		none	auto: not examined yet	Clean up the Fedora logo some.	5.0	images	Web UI (shared JS/CSS/pages)	web
 78792aaf9	todo		none	script check: 56 of 78 added lines are still in master; 2 of 10 files gone	fix Channel Input selected row bug. Fix wifi icon in multisync	5.0	css	Network, Apache & security	web
@@ -6584,7 +6584,7 @@ d768d1cc5	todo		none	script check: 70 of 380 added lines are still in master; 2 
 c9de7a118	todo		none	script check: 12 of 12 added lines are still in master	Add a health check to see if the hostname is set.	5.0	scripts	fppd core & utilities	docker
 0aba592d6	todo		none	script check: 3 of 6 added lines are still in master	Use HostName and HostDescription settings on network config page	5.0	www	Network, Apache & security	web
 67b16fc6e	todo		none	script check: 117 of 150 added lines are still in master; 1 of 8 files gone	Initial Setup UI and outbound Email config enhancements	5.0	api	Settings & config	web
-9b925df14	todo		none	script check: 0 of 1 added lines are still in master	Set KillMode to process so flite can finish announcing IPs	5.0	systemd	Boot, OS image & install	os-image
+9b925df14	superseded		none	fpp_postnetwork.service's KillMode=process (so flite could finish) went with the boot-script rewrite (ffdf735ff); the announcement now has its own unit (ca64544e2, covered by test_fppinit_tethering_boot.py)	Set KillMode to process so flite can finish announcing IPs	5.0	systemd	Boot, OS image & install	os-image
 994eb19ab	todo		none	script check: 47 of 142 added lines are still in master; 1 of 6 files gone	update ux for playlists	5.0	css	Web UI (shared JS/CSS/pages)	web
 8aa9c3337	todo		none	script check: 0 of 1 added lines are still in master	Stats preview button to initialSetup.php	5.0	www	Web UI (shared JS/CSS/pages)	web
 5b5346046	superseded		none	script check: every file this commit changed has since been removed from master	Remove extra char breaking Pi pixel string outputs UI.	5.0	www	BB pixel strings & PRU	web
@@ -6632,11 +6632,11 @@ f9c22700a	todo		none	script check: 4 of 16 added lines are still in master	imple
 c4983917d	todo		none	script check: 1 of 2 added lines are still in master	fix for StopEffect() bug	5.0	js	Web UI (shared JS/CSS/pages)	web
 8f1e6f895	todo		none	script check: 7 of 33 added lines are still in master; 2 of 5 files gone	fix effects page	5.0	css	Web UI (shared JS/CSS/pages)	web
 6e5ce34a2	todo		none	script check: 4 of 27 added lines are still in master; 2 of 6 files gone	added icons to footer, converted to buttons	5.0	common	Web UI (shared JS/CSS/pages)	web
-f5010e5ec	todo		none	script check: 2 of 5 added lines are still in master	finally fixed docker-compose	5.0	Docker	Boot, OS image & install	os-image
+f5010e5ec	untestable		none	developer docker-compose node/gulp container for SCSS builds; nothing an FPP install runs	finally fixed docker-compose	5.0	Docker	Boot, OS image & install	os-image
 782eaab6e	todo		none	script check: 27 of 116 added lines are still in master; 3 of 5 files gone	added settings-all.php	5.0	css	Web UI (shared JS/CSS/pages)	web
 8707fbbf6	todo		none	script check: 3 of 3 added lines are still in master	Remove XD file and fix js fix for empty playlist on status page	5.0	js	Web UI (shared JS/CSS/pages)	docker,web
 f39d2e295	todo		none	script check: 3 of 15 added lines are still in master	Minor layout updatest to about page to not cut off the text	5.0	css	Web UI (shared JS/CSS/pages)	web
-8b0a5557b	todo		none	script check: 3 of 7 added lines are still in master	fixed 'Node Sass does not yet support your current environment'. in docker containers	5.0	Docker	Boot, OS image & install	os-image
+8b0a5557b	untestable		none	developer docker-compose node/gulp container for SCSS builds; nothing an FPP install runs	fixed 'Node Sass does not yet support your current environment'. in docker containers	5.0	Docker	Boot, OS image & install	os-image
 bba273671	todo		none	script check: 41 of 102 added lines are still in master; 2 of 5 files gone	scheduler status and responsive status page styles	5.0	css	Web UI (shared JS/CSS/pages)	web
 14d580e54	todo		none	script check: 0 of 1 added lines are still in master	Change label on default value for Header Background Color setting	5.0	www	Settings & config	web
 fa6ab3859	todo		none	script check: 0 of 1 added lines are still in master	Add icon for Virtual Display menu item.	5.0	www	Web UI (shared JS/CSS/pages)	web
@@ -6675,10 +6675,10 @@ e9ed20cf0	superseded		none	script check: none of the 7 lines this commit added a
 16ef782c0	todo		none	script check: 0 of 1 added lines are still in master	removed colon from descriptions	5.0	www	Web UI (shared JS/CSS/pages)	web
 c72fe5e33	todo		none	script check: 4 of 5 added lines are still in master	fixes for navigation buttons	5.0	css	Web UI (shared JS/CSS/pages)	web
 8324b959f	superseded		none	script check: none of the 17 lines this commit added are in master any more	Squish the 'Settings' user-interface a smidgen.	5.0	css	Web UI (shared JS/CSS/pages)	web
-8af61baa2	todo		none	script check: 0 of 4 added lines are still in master	speed-up node container building	5.0	Docker	Boot, OS image & install	os-image
-ab35af471	todo		none	script check: 1 of 7 added lines are still in master	fix docker-compose.yml - install modules and rebuild node-sass	5.0	Docker	Boot, OS image & install	os-image
-434bc6e96	todo		none	script check: 3 of 7 added lines are still in master	Add node container for processing scss files.	5.0	Docker	Boot, OS image & install	os-image
-4180ea73c	todo		none	script check: 7 of 10 added lines are still in master	Add docker-compose.yml for easy local development.	5.0	Docker	Boot, OS image & install	os-image
+8af61baa2	untestable		none	developer docker-compose node/gulp container for SCSS builds; nothing an FPP install runs	speed-up node container building	5.0	Docker	Boot, OS image & install	os-image
+ab35af471	untestable		none	developer docker-compose node/gulp container for SCSS builds; nothing an FPP install runs	fix docker-compose.yml - install modules and rebuild node-sass	5.0	Docker	Boot, OS image & install	os-image
+434bc6e96	untestable		none	developer docker-compose node/gulp container for SCSS builds; nothing an FPP install runs	Add node container for processing scss files.	5.0	Docker	Boot, OS image & install	os-image
+4180ea73c	untestable		none	adds a developer docker-compose.yml; nothing an FPP install runs	Add docker-compose.yml for easy local development.	5.0	Docker	Boot, OS image & install	os-image
 b2c9b3afa	todo		none	script check: 40 of 90 added lines are still in master	Using the new system status API to refresh header info and status page info. Still a work in progress.	5.0	js	Web UI (shared JS/CSS/pages)	web
 47775721f	todo		none	script check: 0 of 2 added lines are still in master	Don't overwrite known UUID	5.0	src	MultiSync & remotes	docker
 31cab49dc	todo		none	script check: 0 of 1 added lines are still in master	Another fix for UUID not on mulisync discovery	5.0	src	MultiSync & remotes	docker
@@ -6912,7 +6912,7 @@ d0e6bcade	todo		none	script check: 3 of 27 added lines are still in master	Add s
 4dbfbe25e	todo		none	script check: 7 of 8 added lines are still in master	Add an asoundrc for dmix plugin	5.0	etc	Media: audio & video	docker
 2f5806b33	superseded		none	script check: every file this commit changed has since been removed from master	Fixed descrption on wifi API	5.0	api	Web API	web
 58c0e9448	superseded		none	script check: every file this commit changed has since been removed from master	Attempt to detect if we're going to output sound to the dummy device and add a warning about it.	5.0	mediaoutput	Media: audio & video	docker
-c34363417	todo		none	script check: 1 of 1 added lines are still in master	Need to quote platform vars since Raspberry Pi contains a space	5.0	SD	Boot, OS image & install	os-image
+c34363417	untestable		none	quotes the platform names in upgradeOS-part1.sh's same-platform check ("Raspberry Pi" has a space); only a real fppos upgrade runs it (test_os_upgrade_steps.py stubs around part1's mount of a real image)	Need to quote platform vars since Raspberry Pi contains a space	5.0	SD	Boot, OS image & install	os-image
 39eb30e2d	todo		none	script check: 1 of 1 added lines are still in master	Fix crash in PlaylistEntryBranch type Playlist	5.0	playlist	Playlists, schedule & sequences	docker
 9f1f66e37	todo		none	script check: 8 of 16 added lines are still in master	Create/destroy notify thread in fppd.c main()	5.0	src	fppd core & utilities	docker
 b6ab31a17	todo		none	script check: 2 of 2 added lines are still in master	Fix typos in a couple log messages	5.0	src	fppd core & utilities	docker
@@ -6934,8 +6934,8 @@ e96f9d89f	todo		none	script check: 15 of 28 added lines are still in master; 1 o
 f8cd7f76f	superseded		none	script check: every file this commit changed has since been removed from master	make some tweaks to the video sync timing to help minimize the chances of video freeze-ups	4.6.1	mediaoutput	Media: audio & video	docker
 f76ff7110	todo		none	script check: 1 of 2 added lines are still in master	Close #912: Add documenation has hover over on page.	5.0	www	Playlists, schedule & sequences	web
 d7d806796	superseded		none	script check: every file this commit changed has since been removed from master	Bump status fetch timeout to 3 seconds	4.6.1	www	Web UI (shared JS/CSS/pages)	web
-550e5a7bd	todo		none	script check: 3 of 10 added lines are still in master; 1 of 2 files gone	Make sure dnsmasq doesn't wipe out the resolve.conf that connman creates	4.6.1	SD	Boot, OS image & install	os-image,docker
-c53ba07b7	todo		none	script check: 1 of 1 added lines are still in master; 2 of 3 files gone	Remove "Restart DNS" button as it doesn't actually do anything at all.	4.6.1	scripts	Boot, OS image & install	docker,web
+550e5a7bd	superseded		none	dnsmasq IGNORE_RESOLVCONF for connman: connman was replaced by systemd-networkd and upgrade/66 is not on master; the FPP_Install.sh lines that survive are image-build only	Make sure dnsmasq doesn't wipe out the resolve.conf that connman creates	4.6.1	SD	Boot, OS image & install	os-image,docker
+c53ba07b7	untestable		none	removes a "Restart DNS" button and scripts/config_dns, which did nothing; nothing left to assert but the absence (master's www/help/networkconfig.php still describes a Restart DNS button -- a stale help line)	Remove "Restart DNS" button as it doesn't actually do anything at all.	4.6.1	scripts	Boot, OS image & install	docker,web
 449c538eb	todo		none	script check: 0 of 2 added lines are still in master	Don't trigger table update if any action logs are visible	4.6.1	www	MultiSync & remotes	web
 b5f24ac4c	todo		none	script check: 0 of 0 added lines are still in master	Fix MAX_CHANNELS settings on other tab	4.6.1	www	Other channel outputs	web
 ade48685f	todo		none	script check: 14 of 22 added lines are still in master	Add an Advanced level setting to disable the scheduler.	5.0	src	Playlists, schedule & sequences	docker,web
@@ -6970,7 +6970,7 @@ df1dc0f5e	todo		none	script check: 7 of 15 added lines are still in master	Add a
 e08f08bfe	todo		none	script check: 8 of 24 added lines are still in master	Some header mods to make UI a little more mobile friendly	4.6	css	Web UI (shared JS/CSS/pages)	web
 d82dadb38	todo		none	script check: 0 of 0 added lines are still in master	If a gateway is not set on the interface, don't set it.	4.6	scripts	fppd core & utilities	docker
 1c00ba23c	todo		none	script check: 6 of 13 added lines are still in master	Use api to start/stop playlists from OLED Setup htaccess to allow access from any local instead of only 127.0.0.1	4.6	oled	OLED, GPIO & sensors	device,web
-6b4388b85	todo		none	script check: 27 of 59 added lines are still in master	Add button to enbable/disable kiosk mode	4.6	SD	Boot, OS image & install	os-image,web
+6b4388b85	untestable		none	Kiosk enable/disable buttons: installKiosk.php apt-installs X and a browser and disableKiosk.php edits .bashrc and removes packages, so only an image with a display exercises them	Add button to enbable/disable kiosk mode	4.6	SD	Boot, OS image & install	os-image,web
 3df8159ab	todo		none	script check: 13 of 43 added lines are still in master; 1 of 4 files gone	Add a method to retrieve model data encoded in simple RLE format	4.6	overlays	Pixel overlays	docker,web
 035af5919	todo		none	script check: 1 of 1 added lines are still in master	Only log to stdout when using gdb shell script wrapper	4.6	src	fppd core & utilities	docker
 04f57c74d	todo		none	script check: 0 of 4 added lines are still in master	Handle scheduled repeats that cross weekend boundary.	4.6	src	fppd core & utilities	docker
@@ -7088,7 +7088,7 @@ f86789e34	todo		none	script check: 57 of 87 added lines are still in master	Add 
 4ba500ff0	todo		none	script check: 0 of 1 added lines are still in master	Account for long names of SSIDs	4.4	www	Network, Apache & security	web
 915810ac0	todo		none	script check: 0 of 1 added lines are still in master	Update menu.inc	4.4	www	Web UI (shared JS/CSS/pages)	web
 4fa3d65c5	superseded		none	script check: only 17 of the 230 lines this commit added are still in master; the rest were rewritten	Add ability to force an HDMI resoution	4.4	common	Settings & config	docker,web
-b68f75489	todo		none	script check: 0 of 0 added lines are still in master	Don't need the ssh key check	4.4	SD	Boot, OS image & install	os-image
+b68f75489	untestable		none	BBB-grow_partition.sh no longer waits for ssh keys; a BeagleBone partition grow only	Don't need the ssh key check	4.4	SD	Boot, OS image & install	os-image
 6986279d0	todo		none	script check: 5 of 19 added lines are still in master	Hide the WIFI password and tether password	4.4	www	Network, Apache & security	web
 c00f92ea5	todo		none	script check: 0 of 2 added lines are still in master	Adjust how the "next playlist" is displayed in some cases	4.4	src	Playlists, schedule & sequences	docker
 fa2256839	todo		none	script check: 0 of 2 added lines are still in master	Also fix the stop gracefully's not stopping	4.4	commands	Playlists, schedule & sequences	docker
@@ -7108,9 +7108,9 @@ c4e99dd6d	todo		none	script check: 4 of 16 added lines are still in master	Minor
 e07cf88cb	todo		none	script check: 16 of 46 added lines are still in master	More BBBMatrix optimizations	4.4	channeloutput	LED panels	device:bb
 10c102d93	superseded		none	script check: every file this commit changed has since been removed from master	Wrong spelling	4.4	upgrade	Upgrade, backup & files	docker
 93282dc38	todo		none	script check: 8 of 31 added lines are still in master; 2 of 4 files gone	Some BBB matrix optimizations, beagle reserved memory caching	4.4	drivers	LED panels	device:bb,docker
-2b128beae	todo		none	script check: 1 of 3 added lines are still in master; 1 of 2 files gone	Minor image creation updates	4.4	SD	Boot, OS image & install	os-image
+2b128beae	untestable		none	image-build cleanup (BBB-FlashMMC.sh deletes bash histories) and the kiosk startx flags; image only	Minor image creation updates	4.4	SD	Boot, OS image & install	os-image
 7bf544ee4	todo		none	script check: 0 of 0 added lines are still in master	fix 1 based DDP output	4.3.1	channeloutput	Other channel outputs	docker
-8eee8802a	todo		none	auto: not examined yet	Fix FPP_Install execute bit	4.3.1	SD	Boot, OS image & install	os-image
+8eee8802a	untestable		none	execute bit on SD/FPP_Install.sh; mode change only	Fix FPP_Install execute bit	4.3.1	SD	Boot, OS image & install	os-image
 89e44a62e	superseded		none	script check: every file this commit changed has since been removed from master	Added entry for Midi devices	4.3.1	www	Commands & presets	web
 7464c3896	superseded		none	script check: every file this commit changed has since been removed from master	Fix 843: Add video debug info	4.3.1	www	Commands & presets	web
 92910665a	todo		none	script check: 15 of 35 added lines are still in master	Add optional "If Not Running" flag to all the start playlist commands Fixes #842	4.3.1	commands	Playlists, schedule & sequences	docker,web
@@ -7164,22 +7164,22 @@ cdb2c5e58	todo		none	script check: 2 of 3 added lines are still in master	Detect
 05d290be9	todo		none	script check: 1 of 4 added lines are still in master	Fix metadata for media not working if media has spaces in the filename	4.3	common	Web UI (shared JS/CSS/pages)	web
 b178259bf	todo		none	script check: 1 of 1 added lines are still in master	Add compression type to fseq meta json	4.3	fseq	Playlists, schedule & sequences	docker
 0a6a48c99	todo		none	script check: 14 of 24 added lines are still in master	Unsubscribe to mqtt topics early in shutdown to avoid receiving messages that could cause issues during shutdown.	4.3	src	fppd core & utilities	docker
-a4d325c61	todo		none	script check: 0 of 1 added lines are still in master	Make sure the persistent net names are not wiped out with fppos updates	4.3	SD	Boot, OS image & install	os-image
+a4d325c61	untestable		none	upgradeOS-part2.sh's rsync keeping /etc/systemd/network/*-fpp-*: only a real fppos upgrade runs part2; master's part2 rewrote its exclude list (BOOT_KEEP etc.)	Make sure the persistent net names are not wiped out with fppos updates	4.3	SD	Boot, OS image & install	os-image
 d01585ddd	superseded		none	script check: every file this commit changed has since been removed from master	If there is only a single bbb string type variant, use text instead of a select since there isn't really anything to selectwq	4.2	www	BB pixel strings & PRU	web
 0343cf7db	superseded		none	script check: every file this commit changed has since been removed from master	Fix some signature handling	4.2	src	Capes & EEPROM	docker
 4015b998c	todo		none	script check: 0 of 2 added lines are still in master	added ttys1 for pocketbeagle	4.2	util	BB pixel strings & PRU	device:bb
 be0618ae4	todo		none	script check: 26 of 41 added lines are still in master	Updates for extra functionality in fsequtils Fixes #792: -r after -m applies to the -m file Fixes #791: -r is now 1 based Fixes #789: -m ignores 0's, -M copies 0's	4.2	fseq	Playlists, schedule & sequences	docker
 6dbd6707b	superseded		none	script check: every file this commit changed has since been removed from master	BBG Gateway has a built in rtc	4.2	scripts	fppd core & utilities	docker
 e95522baa	superseded		none	script check: none of the 7 lines this commit added are in master any more	Fix PRU settings with latest beagle images	4.2	SD	Boot, OS image & install	os-image
-8e17eee18	todo		none	script check: 1 of 1 added lines are still in master	Update path for FPP_Install.sh	4.2	SD	Boot, OS image & install	os-image
-a481f55df	todo		none	script check: 26 of 26 added lines are still in master	Add file	4.2	patches	Boot, OS image & install	os-image
+8e17eee18	untestable		none	adds /usr/sbin:/sbin to PATH in FPP_Install.sh; image build only	Update path for FPP_Install.sh	4.2	SD	Boot, OS image & install	os-image
+a481f55df	untestable		none	rtl8814au driver patch used by the image's wifi-driver build; image only	Add file	4.2	patches	Boot, OS image & install	os-image
 158c2bade	superseded		none	script check: every file this commit changed has since been removed from master	Fix 8814au wifi driver build	4.2	SD	Boot, OS image & install	os-image
 6b7f57dce	todo		none	script check: 0 of 3 added lines are still in master	Don't need  pcm521x drivers	4.2	drivers	Capes & EEPROM	device:bb
 26edccf66	untestable		none	auto: changes no runtime file (docs)	Match the docs for the type id's with what is in the code	4.2	docs	Other	none
 0db81feb6	superseded		none	script check: none of the 9 lines this commit added are in master any more	Start preparing for 4.2 images	4.2	SD	Boot, OS image & install	os-image,docker
-2767e9d19	todo		none	script check: 0 of 1 added lines are still in master	Latest bootloader needed for BBGG	4.2	bin.bbb	Boot, OS image & install	device:bb
+2767e9d19	untestable		none	BBB bootloader binaries (BBGG); only a BeagleBone's boot shows it	Latest bootloader needed for BBGG	4.2	bin.bbb	Boot, OS image & install	device:bb
 c98e1737c	todo		none	script check: 24 of 42 added lines are still in master	Add ability for non-C++ plugins to create FPP Commands that trigger scripts	4.2	src	Plugins	docker
-90427b5e4	todo		none	script check: 0 of 3 added lines are still in master	Blacklist bluetooth on BBGG	4.2	SD	Boot, OS image & install	os-image
+90427b5e4	untestable		none	the BBG Gateway bluetooth blacklist (still in master's FPP_Install.sh and build-image-bbb.sh); image build only	Blacklist bluetooth on BBGG	4.2	SD	Boot, OS image & install	os-image
 b6dacdb50	superseded		none	script check: every file this commit changed has since been removed from master	Mime type for m4a is still audio/mp4	4.2	www	Web UI (shared JS/CSS/pages)	web
 f3deb9823	todo		none	script check: 5 of 8 added lines are still in master	Changed m_seqRefreshRate and associated usage from an int to a float. This handles when a sequence file has an uncommon Step Time. This causes the result of "1000 / Step Time" to not be an integer. Discovered with a Step Time of 17ms which caused the audio and lights to not stay in sync. At the end of the audio, the lights continued for several seconds before completing.	4.2	channeloutput	Playlists, schedule & sequences	docker
 356c9aa1a	todo		none	script check: 5 of 8 added lines are still in master	Update docs with ids, assign id for ESP32 based pixel sticks	4.2	docs	MultiSync & remotes	docker
@@ -7206,7 +7206,7 @@ e1067303c	todo		none	script check: 0 of 0 added lines are still in master	REmove
 f3e4caae8	todo		none	script check: 6 of 12 added lines are still in master	Fix initial crash by making sure remoteproc is up and running before using it	4.2	util	fppd core & utilities	device:bb
 c618412e8	superseded		none	script check: none of the 108 lines this commit added are in master any more	Add ability to set wifi regulatory domain, sometimes needed for 5ghz	4.2	scripts	Network, Apache & security	docker,web
 69845c26e	superseded		none	script check: every file this commit changed has since been removed from master	More packages needed for VLC	4.2	SD	Boot, OS image & install	os-image
-1289ee137	todo		none	script check: 0 of 4 added lines are still in master; 1 of 3 files gone	Make sure packages needed for VLC are installed	4.2	Docker	Boot, OS image & install	os-image
+1289ee137	superseded		none	packages for the VLC build: VLC output was removed (e8279e3cc) and SD/buildVLC.sh is gone	Make sure packages needed for VLC are installed	4.2	Docker	Boot, OS image & install	os-image
 dde76bab5	untestable		none	auto: changes no runtime file (docs)	fix: incorrect variable code in FSEQ format docs	4.2	docs	Playlists, schedule & sequences	none
 ae6f06fe1	todo		none	script check: 0 of 2 added lines are still in master	VLC required now #763	4.2	makefiles	Build & makefiles	docker
 6d4b65bc4	superseded		none	script check: every file this commit changed has since been removed from master	Fix test buttons on API help page when accessed via Help menu.	4.2	api	Web API	web
@@ -7216,7 +7216,7 @@ a2799d0b9	todo		none	script check: 10 of 18 added lines are still in master	Fix 
 8e93e3169	superseded		none	script check: every file this commit changed has since been removed from master	Fix VLC crashes if debug logs are on, allow desktop FPPD to display videos	4.1	mediaoutput	Media: audio & video	os-image,docker
 9ddef8c44	todo		none	script check: 0 of 3 added lines are still in master; 1 of 2 files gone	Allow "HDMI" setting in addition to "--HDMI--"	4.1	mediaoutput	Media: audio & video	docker
 37e987710	todo		none	script check: 0 of 0 added lines are still in master	More ws2811 and ws2813 timing adjustments	4.1	pru	BB pixel strings & PRU	device:bb
-a9a378931	todo		none	script check: 0 of 2 added lines are still in master	Remove omxplayer build as it doesn't work anyway	4.1	SD	Boot, OS image & install	os-image
+a9a378931	untestable		none	SD/README.RaspberryPi instructions only	Remove omxplayer build as it doesn't work anyway	4.1	SD	Boot, OS image & install	os-image
 76bfea73d	todo		none	script check: 5 of 16 added lines are still in master; 2 of 5 files gone	Add a pixel timing setting to BBB48String to allow using a slower pixel (1903)	4.1	channeloutput	BB pixel strings & PRU	device:bb,web
 4abe8f273	todo		none	script check: 4 of 6 added lines are still in master	Fix parsing of model data for 3d models	4.1	overlays	Pixel overlays	docker
 f4c9e9729	todo		none	script check: 11 of 12 added lines are still in master	Hopefully fix crash	4.1	mediaoutput	Media: audio & video	docker
@@ -7224,11 +7224,11 @@ bda093b8f	todo		none	script check: 26 of 41 added lines are still in master	Call
 64136f3d8	todo		none	script check: 12 of 49 added lines are still in master	Fix some issues with newer gcc and 64bit builds	4.1	channeloutput	Other channel outputs	docker
 2916daf80	todo		none	script check: 5 of 9 added lines are still in master	If in standalone or master mode, yet not running a playlist, but also outputting, blank the data Fix text effect duration not working	4.1	overlays	Playlists, schedule & sequences	docker
 b2d49612c	todo		none	script check: 6 of 17 added lines are still in master	Return overlay models in the order the user set them, don't display protocols for X11 Pixel Strings	4.1	channeloutput	BB pixel strings & PRU	docker,web
-0e2b4ef8e	todo		none	script check: 1 of 1 added lines are still in master	Don't stick suid bit on media dir	4.1	SD	Boot, OS image & install	os-image
-964253eb5	todo		none	script check: 1 of 1 added lines are still in master	For right now, need to use master branch for install	4.1	SD	Boot, OS image & install	os-image
+0e2b4ef8e	untestable		none	FPP_Install.sh's mode for /home/fpp/media (775, no setgid); image build only	Don't stick suid bit on media dir	4.1	SD	Boot, OS image & install	os-image
+964253eb5	untestable		none	FPP_Install.sh's default branch; image build only	For right now, need to use master branch for install	4.1	SD	Boot, OS image & install	os-image
 dd72c4c7b	superseded		none	script check: none of the 6 lines this commit added are in master any more	Don't allow configuring network on "desktop" fpp	4.1	www	Web UI (shared JS/CSS/pages)	web
-4c26f8819	todo		none	script check: 0 of 3 added lines are still in master	Support php 7.4, don't configure fpm as we cannot use it	4.1	SD	Boot, OS image & install	os-image
-e0ed9d8df	todo		none	script check: 107 of 219 added lines are still in master; 2 of 5 files gone	UPdates for installing FPP onto a desktop and not take over the  entire system	4.1	SD	Boot, OS image & install	os-image,docker
+4c26f8819	untestable		none	FPP_Install.sh's PHP directory and php.ini edits for PHP 7.4; image build only, long since moved to newer PHP	Support php 7.4, don't configure fpm as we cannot use it	4.1	SD	Boot, OS image & install	os-image
+e0ed9d8df	untestable		none	FPP_Install.sh's --img / desktop install mode and the matching fpp_boot/init_pre_network tweaks; image/desktop install only, and both scripts are gone from master (fppinit replaced them)	UPdates for installing FPP onto a desktop and not take over the  entire system	4.1	SD	Boot, OS image & install	os-image,docker
 c39fde6ab	superseded		none	script check: every file this commit changed has since been removed from master	Fix some boot issues on desktop debian, set hostname in settings if it doesn't exist	4.1	scripts	Capes & EEPROM	docker
 8746a748b	todo		none	script check: 10 of 26 added lines are still in master	Allow adding/configuring the X11 Virtual Matrix	4.1	channeloutput	Other channel outputs	docker,web
 4bf4c4f53	todo		none	script check: 24 of 125 added lines are still in master; 3 of 10 files gone	Add "Play Media" FPP Command Add "Toggle Playlist" FPP Command Add "-C FPPCommand arg1 arg2 .." flags to fpp command line to send FPP commands for fppd Fix FPP Command samples in apihelp	4.1	commands	Commands & presets	docker,web
