@@ -144,3 +144,24 @@ test('the Pi models with a "+" are given logo files that exist', async ({ reques
     expect(r.headers()['content-type'], model).toContain('image/svg+xml');
   }
 });
+
+test('an Armbian or OrangePi board is named from its device tree model and given that maker\'s logo', async ({ request }) => {
+  // Regression: 80f2af7d0 ("Unify all the armbian devices").  Armbian had no
+  // case of its own: an Armbian board got no SubPlatform and no logo, and an
+  // OrangePi one the Orange Pi logo whatever its model said.
+  const cases: [string, string, string][] = [
+    ['Armbian', 'Pine64 RockPro64 v2.1', 'pine64_logo.png'],
+    ['Armbian', 'Hardkernel ODROID-C4', 'odroid_logo.gif'],
+    ['Armbian', 'Xunlong Orange Pi Zero', 'orangepi_logo.png'],
+    ['OrangePi', 'Xunlong Orange Pi PC', 'orangepi_logo.png'],
+  ];
+  for (const [platform, model, logo] of cases) {
+    const b = board({ platform: platform + '\n', dtmodel: model + '\0' });
+    expect(b.Platform, model).toBe(platform);
+    expect(b.SubPlatform, model).toBe(model);
+    expect(b.Variant, model).toBe(model);
+    expect(b.Logo, model).toBe(logo);
+    expect(b.warnings, model).toEqual([]);
+    expect((await request.get(`/images/${b.Logo}`)).status(), `images/${b.Logo}`).toBe(200);
+  }
+});
