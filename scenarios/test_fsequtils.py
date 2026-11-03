@@ -16,7 +16,7 @@ import zlib
 
 import pytest
 
-from fseq import unique_frames, write_fseq
+from fseq import unique_frames, write_fseq, write_fseq_reference
 
 try:
     import zstandard
@@ -398,3 +398,19 @@ def test_its_log_goes_to_stderr_not_into_its_json(tmp_path):
     _, out, err = fsequtils("-j", str(path))
     assert "invalid identifier" in err, (out, err)
     assert "invalid identifier" not in out, out
+
+
+@pytest.mark.skipif(zstandard is None, reason="the zstandard module is not installed")
+def test_a_file_of_more_than_255_blocks_reads_whole(tmp_path):
+    """A v2 file's block count has 12 bits, the upper four in the top of byte
+    20: a file of 300 compression blocks converts back frame for frame.
+
+    Regression: c9274dfa9, which took the count past 255."""
+    frames = unique_frames(300, CHANNELS)
+    src, out = str(tmp_path / "many.fseq"), str(tmp_path / "out.fseq")
+    write_fseq_reference(src, frames, step_ms=40, compression="zstd", blocks=300)
+    rc, stdout, err = fsequtils("-c", "none", "-o", out, src)
+    assert rc == 0, stdout + err
+    _, got = read_fseq(out)
+    bad = [i for i in range(len(frames)) if got[i] != frames[i]]
+    assert not bad, f"frames {bad[:20]} wrong of {len(frames)}"
