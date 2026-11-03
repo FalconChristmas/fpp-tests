@@ -11,6 +11,7 @@ one from the media directory instead.
 import json
 import math
 import os
+import time
 
 import shims
 from i2cbus import Bus
@@ -219,3 +220,54 @@ def test_the_range_limit_test_drives_the_chosen_servo_to_its_end_and_the_others_
         raise AssertionError(f"port 1 at {servo_value(bus, PCA, 0)}, the minimum is {lo}")
     assert abs(servo_value(bus, PCA, 1) - mid) <= 4, (servo_value(bus, PCA, 1), mid)
     fppd.command("Test Stop")
+
+
+def test_an_output_specific_test_for_the_servos_leaves_a_panel_beside_them_alone(fppd):
+    """A PCA9685 servo board and a ColorLight panel on one player: the
+    Servos tab's test (Output Specific for "PCA9685 PWM") drives the servo
+    and draws nothing on the panel, and the LED Panels test ("ColorLight
+    Panels") lights the panel -- the control that the capture sees it.
+
+    Regression: 20e1bab66 ("For capes/hats that have multiple output types
+    ... make sure the per output testing is only testing that output"). The
+    pages tested --ALL--, so a test from one tab drew on every output that
+    has one; for that each output type is named, PCA9685 as "PCA9685 PWM"
+    (red with the name taken away: the servo test then reaches no output).
+    """
+    from test_colorlight_output import captured, panel, panels_output
+
+    bus = Bus(fppd, [PCA])
+    capes = os.path.join(fppd.media, "fakecape")
+    fppd.write("fakecape/TestServos.json", {"driver": "PCA9685", "name": "TestServos",
+                                            "address": PCA, "bus": "i2c-1"})
+    port = {"type": "Servo", "min": 1000, "max": 2000, "is16bit": 0, "reverse": 0, "zero": "Hold",
+            "dataType": "Scaled"}
+    outputs = [dict(port, startChannel=2000, description="a"), dict(port, startChannel=2001, description="b")]
+    fppd.write("config/co-pwm.json", {"channelOutputs": [{
+        "type": "PCA9685", "subType": "TestServos", "enabled": 1, "startChannel": 2000,
+        "channelCount": -1, "frequency": "50hz", "outputs": outputs}]})
+    w, h = 32, 16
+    with captured() as cap:
+        fppd.write("config/channeloutputs.json", panels_output([panel(0, 0, 0, 0)], channels=w * h * 3))
+        fppd.settings(DisableFakeNetworkBridges="1")
+        fppd.start(preload=[shims.build("fakei2c.c"), shims.build("fakepwmcape.cpp", libs=(
+            "-ldl", "-I/usr/include/jsoncpp", "-ljsoncpp"))],
+            extra_env=dict(bus.env, FAKEPWMCAPE_DIR=capes))
+        hi = rnd(ticks(2000))
+
+        cfg = {"outputs": outputs, "manipulation": {"port": 0, "value": 0, "isMin": False}}
+        fppd.command("Test Start", "500", "Output Specific", "PCA9685 PWM", "1", json.dumps(cfg))
+        try:
+            fppd.wait_for(lambda: servo_value(bus, PCA, 0) >= hi - 2, timeout=8, what="the servo at its maximum")
+        except TimeoutError:
+            raise AssertionError(f"the servo test did not reach the servo: port 1 at {servo_value(bus, PCA, 0)}")
+        time.sleep(1)
+        frames = cap.frames()[-5:]
+        assert frames, "no frames captured from the panel output"
+        assert not any(any(r) for _, rows in frames for r in rows.values()), \
+            "the servo test drew on the panel"
+        fppd.command("Test Stop")
+        fppd.command("Test Start", "500", "Output Specific", "ColorLight Panels", "1")
+        fppd.wait_for(lambda: any(any(r) for _, rows in cap.frames()[-3:] for r in rows.values()),
+                      timeout=10, interval=0.2, what="the panel test to light the panel (the control)")
+        fppd.command("Test Stop")
