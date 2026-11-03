@@ -16,6 +16,8 @@ environment names in FPP_TESTS_PTP_DIR:
            (ptp4l.argv, one per line), the config it was given (ptp4l.conf)
            and its pid (ptp4l.pid), and stays up -- as "sleep", or, after
            keep_name(), as "ptp4l", which fppd before pidfds checked for.
+           After software_only() it exits at once on a config asking for
+           hardware timestamping, as on a NIC without a PHC.
   pmc      prints the file named after the TLV it is asked for
            (TIME_STATUS_NP, PORT_DATA_SET), or nothing; its argv goes to
            pmc.argv.
@@ -39,6 +41,10 @@ for a in "$@"; do
 done
 case " $* " in
 *" -i "*)
+    if [ -f "$d/software-only" ] && grep -q "^time_stamping[[:space:]]*hardware" "$conf"; then
+        echo "interface '$iface' does not support requested timestamping mode"
+        exit 255
+    fi
     printf '%s\\n' "$@" > "$d/ptp4l.argv"
     cp "$conf" "$d/ptp4l.conf.new" && mv "$d/ptp4l.conf.new" "$d/ptp4l.conf"
     echo $$ > "$d/ptp4l.pid"
@@ -130,6 +136,11 @@ class Ptp:
         rather than exec'ing sleep: fppd before 1b6dc7564 took a ptp4l of
         any other name for one that had died."""
         open(os.path.join(self.dir, "keep-name"), "w").close()
+
+    def software_only(self):
+        """Make the ptp4l daemon refuse hardware timestamping, as on a NIC
+        with no PHC (a USB adapter): fppd then falls back to software."""
+        open(os.path.join(self.dir, "software-only"), "w").close()
 
     def unknown_option(self, key):
         """Make the ptp4l probe reject a config key, as an older linuxptp does."""

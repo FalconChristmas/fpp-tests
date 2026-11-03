@@ -25,6 +25,9 @@ from ptp_standin import ptp_standins
 NO_LOCK = ("AES67: PTP did not reach a usable lock before the streams started — "
            "audio may be mistimed until the clock settles")
 NOT_INSTALLED = "AES67: ptp4l not found — install the linuxptp package"
+FREE_RUNNING = ("AES67: the PTP interface has no hardware clock, so this player is not synced "
+                "to the PTP grandmaster (following it would reset the system clock) — "
+                "streams are timed from NTP instead")
 CONFIG = "config/pipewire-aes67-instances.json"
 
 
@@ -253,6 +256,49 @@ def test_slave_with_a_small_offset_is_a_lock(fppd, ptp):
     assert st["isGrandmaster"] is False, st
     sdp = fppd.get("/aes67/sdp")["streams"][0]["sdp"]
     assert "a=ts-refclk:ptp=IEEE1588-2008:AA-BB-CC-FF-FE-DD-EE-FF:0" in sdp, sdp
+    # Hardware timestamping: ptp4l disciplines the PHC, so it is left to.
+    assert "free_running" not in ptp.conf(), ptp.conf()
+    assert FREE_RUNNING not in warnings(fppd)
+
+
+def test_software_timestamping_never_sets_the_system_clock(fppd, ptp):
+    """A NIC with no PHC (ptp4l refuses hardware timestamping) following a
+    grandmaster on an arbitrary epoch, as a Q-SYS Core distributes: ptp4l is
+    started free_running, so it never steps CLOCK_REALTIME; the lock wait
+    does not wait for a lock that cannot come; the status does not call it
+    synced, and a warning says why. When this box becomes the grandmaster
+    the warning comes down.
+
+    Regression: 2a3e2a7c9. With software timestamping ptp4l's clock is
+    CLOCK_REALTIME, and as a follower it stepped it to the grandmaster's
+    time: a K32-Max on a USB adapter went to January 1970 every few minutes,
+    and back each time chrony stepped it forward."""
+    ptp.software_only()
+    ptp.answer(port_state="SLAVE", gm_present="true", gm_identity="001b21.fffe.dca1ef",
+               master_offset=-1791295094000000000)
+    write_config(fppd, ptpLockWaitMs=3000)
+    start(fppd, ptp)
+    conf = ptp.conf()
+    st = ptp_status(fppd)
+    w = warnings(fppd)
+    problems = []
+    if conf.get("time_stamping") != "software":
+        problems.append(f"time_stamping {conf.get('time_stamping')!r}")
+    if conf.get("free_running") != "1":
+        problems.append(f"free_running {conf.get('free_running')!r}, not '1'")
+    if NO_LOCK in w:
+        problems.append("no-lock warning: waited for a lock that cannot come")
+    if FREE_RUNNING not in w:
+        problems.append("no free-running warning")
+    if st.get("synced") is not False or st.get("freeRunning") is not True:
+        problems.append(f"status synced {st.get('synced')!r} freeRunning {st.get('freeRunning')!r}")
+    if st.get("grandmasterId") != "00-1B-21-FF-FE-DC-A1-EF":
+        problems.append(f"grandmasterId {st.get('grandmasterId')!r}")
+    assert not problems, "\n".join(problems) + f"\n{conf}\n{st}\n{w}"
+
+    ptp.answer(port_state="MASTER", gm_present="false")
+    fppd.wait_for(lambda: FREE_RUNNING not in warnings(fppd), timeout=75, interval=1,
+                  what="the free-running warning to come down")
 
 
 def test_lock_wait_outcomes(fppd, ptp):
