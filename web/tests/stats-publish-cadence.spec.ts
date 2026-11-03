@@ -22,6 +22,7 @@ async function publish(request: APIRequestContext) {
 }
 
 test('statistics are uploaded when the configuration changed or a week has passed, not on every ask', async ({ request }) => {
+  // Also guards 1f510a2ba, which added POST /api/statistics/usage.
   // Regression: c82217bf4.  Every ask uploaded, so the stored statistics were
   //   mostly a timestamped record of each restart.
   // Feature: dbeaed7e3.  An unchanged device still checks in once the weekly
