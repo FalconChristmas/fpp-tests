@@ -5,9 +5,13 @@ values, and the setting reads and writes fppd makes on its own (its
 command-line options, the excess-level read log) work at all."""
 
 import os
+import threading
 import time
 
+import shims
+
 from show import status
+from test_warnings import DEBUG_WARNING, EXCESSIVE_WARNING, log_level_warnings
 
 
 def append_settings(fppd, **kv):
@@ -102,3 +106,47 @@ def test_fppd_starts_with_its_numeric_command_line_options(fppd):
     so fppd -f died before it could start."""
     s = fppd.start(argv=[os.path.join(fppd.tree, "src", "fppd"), "-f", "-P", "0"])
     assert s.get("fppd") == "running", s
+
+
+def test_a_log_level_set_through_the_api_is_not_put_back_by_a_reload(fppd):
+    """Flipped between Excessive and Debug through the API while the
+    settings file keeps being reloaded, the log-level warning follows every
+    change.
+
+    Regression: b2d7ee816. The API saves each LogLevel_* key with its own
+    write. setSetting(persist) updates memory first and the file second,
+    and LoadSettings didn't take persistMutex. So a reload in that gap read
+    the key's old level back and re-applied it, and the API's one recompute
+    could put up that old level's warning; a reload never recomputed it,
+    so the stale banner stayed up. Seen once in a nightly ASan run, where
+    the gap is wide by itself. Here each save's write is slowed (as on a
+    busy SD card) to open the gap, and another writer closing the file over
+    and over (as the PHP side saving does) keeps a reload landing in it."""
+    arm = os.path.join(fppd.media, "tmp", "slowsettings-armed")
+    fppd.start(preload=[shims.build("slowsettings.c")],
+               extra_env={"SLOWSET_ARM": arm, "SLOWSET_MS": "20"})
+    path = os.path.join(fppd.media, "settings")
+    stop = threading.Event()
+
+    def touch():
+        # Opened for append and closed, unchanged: a reload with nothing new.
+        while not stop.is_set():
+            with open(path, "a"):
+                pass
+            time.sleep(0.002)
+
+    open(arm, "w").close()
+    toucher = threading.Thread(target=touch, daemon=True)
+    toucher.start()
+    try:
+        for n in range(40):
+            level, want = ("excess", EXCESSIVE_WARNING) if n % 2 == 0 else ("debug", DEBUG_WARNING)
+            fppd.post(f"/fppd/log/level/{level}", timeout=30)
+            try:
+                fppd.wait_for(lambda: log_level_warnings(fppd) == {want}, timeout=3,
+                              what=f"round {n}: only {want!r} after level {level}")
+            except TimeoutError as e:
+                raise TimeoutError(f"{e} (have {sorted(log_level_warnings(fppd))})") from None
+    finally:
+        stop.set()
+        toucher.join()
