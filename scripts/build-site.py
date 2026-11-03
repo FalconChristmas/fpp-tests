@@ -166,8 +166,8 @@ if covered:
 # Three scales: the scenarios on the build flavors, the device runs (a hundred
 # or so each, which would sit on the floor of the scenarios' axis), and the web
 # suite.
-def count_chart(title, flavors):
-    counts = {fl: [(h["flavors"].get(fl) or {}).get("tests") for h in history] for fl in flavors}
+def count_chart(title, flavors, count=lambda r: r.get("tests")):
+    counts = {fl: [count(h["flavors"].get(fl) or {}) for h in history] for fl in flavors}
     allc = [v for vs in counts.values() for v in vs if v]
     if allc:
         charts.append(f"<section><h2>{title}</h2>" + chart(
@@ -176,7 +176,10 @@ def count_chart(title, flavors):
 
 
 count_chart("Scenarios per run", ["asan", "tsan", "coverage"])
-count_chart("Device scenarios per run", ["pi5", "am62x", "am335x-bbb", "am335x-pb1"])
+# Every device run collects the same scenarios and skips the ones its board
+# can't run, so what it ran (passed + failed) is what tells the boards apart.
+count_chart("Device scenarios run", ["pi5", "am62x", "am335x-bbb", "am335x-pb1"],
+            lambda r: (r.get("passed", 0) + r.get("failed", 0)) if r else None)
 
 # The web suite on a scale of its own: tests in the run and how
 # many of them passed, so a gap between the lines is a failure.
