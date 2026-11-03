@@ -451,3 +451,26 @@ def test_output_wider_than_a_sparse_sequence_is_logged(fppd):
         "no log line for the channels the file doesn't have"
     want = {f[:75] for f in frames}
     assert len(want & set(got)) >= 36, f"{len(want & set(got))} of 40 frames' stored channels seen"
+
+
+def fsequtils_json(fppd, path):
+    r = subprocess.run([os.path.join(fppd.tree, "src", "fsequtils"), "-j", path],
+                       capture_output=True, text=True, timeout=60,
+                       env=dict(os.environ, LD_LIBRARY_PATH=os.path.join(fppd.tree, "src")))
+    return r.stdout + r.stderr
+
+
+def test_a_string_header_is_checked_for_its_nul_on_its_own_last_byte(fppd, tmp_path):
+    """The not-NUL-terminated complaint looks at the last byte of a string
+    header's own data: a terminated one followed by another header draws
+    none, an unterminated one does.
+
+    Regression: b238358ec. It looked one byte on, at the next header."""
+    path = tmp_path / "s.fseq"
+    frames = unique_frames(5, CHANNELS)
+    path.write_bytes(v2(frames, vheaders=vheader("mf", b"song.mp3\0") + vheader("sp", b"tool\0")))
+    out = fsequtils_json(fppd, str(path))
+    assert "NULL terminated" not in out, out
+    path.write_bytes(v2(frames, vheaders=vheader("mf", b"song.mp3") + vheader("sp", b"tool\0")))
+    out = fsequtils_json(fppd, str(path))
+    assert "VariableHeader mf data is not NULL terminated" in out, out
