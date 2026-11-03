@@ -10,6 +10,7 @@ Device only: run-local.sh on a Pi or Beagle (fppoled isn't built in a
 container).
 """
 
+import os
 import time
 
 import pytest
@@ -81,3 +82,41 @@ def test_an_sh1107_panel_is_sent_16_pages_from_column_0(oled_media, screen):
     pages, _ = oled.decode_stream(ops)
     assert sorted(pages) == list(range(16)), sorted(pages)
     assert sum(1 for x in pages[0] if x) > 0
+
+
+@pytest.mark.parametrize("display_type", [14, 15], ids=["16x2", "20x4"])
+def test_a_pcf8574_lcd_is_looked_for_and_registered_at_0x27(oled_media, screen, tmp_path, display_type):
+    """LEDDisplayType 14 and 15 (PCF8574 16x2 / 20x4 LCD, I2C 0x27): fppoled
+    probes bus 1 for 0x27 and, finding it, registers a pcf8574 there
+    (new_device "pcf8574 0x27"), whose lines it then drives the LCD with.
+
+    Regression: 6b4c865d3 ("Add support for PCF8574 (non-A) to fix #1269").
+    Only the PCF8574A's 0x3F was known: an LCD on a plain PCF8574, at 0x27,
+    was never found.
+
+    i2cdetect is a stand-in that answers only for 0x27 and logs each probe;
+    fakesys.c serves /sys/bus/i2c/devices from a scratch directory, so the
+    kernel's real new_device is not written.
+    """
+    import shims
+    bindir, devices = tmp_path / "bin", tmp_path / "i2c-devices"
+    bindir.mkdir()
+    (devices / "i2c-1").mkdir(parents=True)
+    (devices / "i2c-1" / "new_device").write_text("")
+    probes = tmp_path / "probes.txt"
+    stub = bindir / "i2cdetect"
+    stub.write_text(f'#!/bin/sh\necho "$*" >> {probes}\n'
+                    'if [ "$4" = 0x27 ]; then echo "20:                      27"; '
+                    'else echo "20:                      --"; fi\n')
+    stub.chmod(0o755)
+    oled_media.settings(LEDDisplayType=display_type)
+    screen.start(preload=[shims.build("fakesys.c")],
+                 extra_env={"PATH": f"{bindir}:{os.environ['PATH']}",
+                            "FAKESYS": f"/sys/bus/i2c/devices={devices}"})
+    new_device = devices / "i2c-1" / "new_device"
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline and not new_device.read_text():
+        time.sleep(0.2)
+    seen = probes.read_text() if probes.exists() else ""
+    assert new_device.read_text() == "pcf8574 0x27", f"probes:\n{seen}\n{screen.log()}"
+    assert "-y -r 1 0x27 0x27" in seen, seen
