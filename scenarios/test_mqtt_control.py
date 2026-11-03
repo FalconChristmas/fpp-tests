@@ -381,6 +381,39 @@ def test_legacy_position_topics_while_a_playlist_advances(fppd):
         fppd.command("Stop Now")
 
 
+def test_the_section_position_topic_sets_the_playlists_position(fppd):
+    """playlist/sectionPosition/set sets the playing playlist's start
+    position, which fppd confirms on playlist/position/status.
+
+    Regression: de75fe746. The topic was subscribed as selectionPosition, so
+    a sectionPosition/set (the name the docs and status topics use) did
+    nothing."""
+    from test_playlist_entries import pause, playlist, step
+    if not shutil.which("mosquitto_sub"):
+        pytest.skip("mosquitto_sub is not installed")
+    import threading
+    fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(30), step(2), step(3)]))
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    got = []
+    with broker():
+        fppd.start()
+        fppd.command("Start Playlist", "P", "false", "false")
+        sub = subprocess.Popen(["mosquitto_sub", "-h", "127.0.0.1", "-p", PORT,
+                                "-t", f"falcon/player/{HOST}/playlist/position/status"],
+                               stdout=subprocess.PIPE, text=True)
+        threading.Thread(target=lambda: got.extend(l.strip() for l in sub.stdout), daemon=True).start()
+        try:
+            def heard():
+                # fppd subscribes once it has connected; publish until it answers
+                publish("playlist/sectionPosition/set", "3")
+                return "3" in got
+            fppd.wait_for(heard, timeout=30, interval=1, what="fppd to confirm position 3")
+        finally:
+            sub.terminate()
+            sub.wait()
+        fppd.command("Stop Now")
+
+
 class RefusingBroker:
     """A minimal MQTT 3.1.1 broker on its own port that answers every
     CONNECT with CONNACK "not authorised" (5) and closes, until accept() is
