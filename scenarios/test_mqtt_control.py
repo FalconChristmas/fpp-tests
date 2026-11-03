@@ -581,3 +581,30 @@ def test_resuming_a_paused_playlist_publishes_its_status_again(fppd):
             reader.join(5)
         fppd.command("Stop Now")
 
+
+def test_mqtt_stop_afterloop_finishes_the_loop_then_stops(fppd):
+    """Publishing .../stop/afterloop puts a repeating playlist in "stopping
+    gracefully after loop"; it finishes that loop and goes idle.
+
+    Regression: 0de85c73f. The handler stopped gracefully without the
+    after-loop flag."""
+    install(fppd, solid_frames(40, CHANNELS, 50))  # 2 s a loop
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+    with broker():
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "true", "false")
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", timeout=30,
+                      interval=0.2, what="the playlist to start")
+
+        seen = []
+
+        def heard():
+            # fppd subscribes once it has connected; publish until it hears.
+            publish("set/playlist/Show/stop/afterloop")
+            name = status(fppd).get("status_name")
+            seen.append(name)
+            return name != "playing"
+        fppd.wait_for(heard, timeout=30, interval=1, what="fppd to act on the MQTT stop")
+        assert seen[-1] == "stopping gracefully after loop", seen
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=15, interval=0.2,
+                      what="the playlist to end with its loop")
