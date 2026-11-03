@@ -3,8 +3,10 @@ read, holidays and sun times, repeat expansion, warnings that must come down,
 command entries, and a paused scheduled playlist."""
 
 import datetime
+import os
 import time
 
+from fseq import solid_frames, write_fseq
 from show import status
 from test_schedule_calendar import YEAR, ZONE, entry, items
 from test_scheduler import reload_schedule
@@ -397,3 +399,23 @@ def test_schedule_says_when_entries_run_past_its_horizon(fppd):
     reload_schedule(fppd)
     fppd.wait_for(lambda: fppd.get("/fppd/schedule")["schedule"].get("schedulesExtendBeyondDistance")
                   is False, what="the note to clear after the reload")
+
+
+def test_a_scheduled_sequence_is_looked_for_among_the_sequences(fppd):
+    """A schedule entry with "sequence" true names a file in sequences/: one
+    that exists stays in the schedule, with no warning, and plays at its time;
+    one that doesn't is left out and warned about.
+
+    Regression: c24381265. The check looked for <name>.json among the
+    playlists whatever the entry was, so every scheduled sequence was missing."""
+    write_fseq(os.path.join(fppd.media, "sequences", "There.fseq"), solid_frames(100, 8, 1), step_ms=50)
+    start = datetime.datetime(YEAR, 6, 10, 12, 0, 5)
+    window = (start.strftime("%H:%M:%S"), (start + datetime.timedelta(minutes=5)).strftime("%H:%M:%S"))
+    fppd.write("config/schedule.json", [entry(7, *window, playlist="There.fseq", sequence=1),
+                                        entry(7, "20:00:00", "21:00:00", playlist="Gone.fseq", sequence=1)])
+    fppd.start(fake_time=f"{YEAR}-06-10 12:00:00", tz=ZONE)
+    fppd.wait_for(lambda: any("Gone.fseq" in w for w in warnings(fppd)), timeout=10,
+                  what="a warning about the missing sequence")
+    assert not any("There.fseq" in w for w in warnings(fppd)), warnings(fppd)
+    fppd.wait_for(lambda: status(fppd).get("current_sequence") == "There.fseq", timeout=30, interval=0.5,
+                  what="the scheduled sequence to play")
