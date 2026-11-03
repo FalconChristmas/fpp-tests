@@ -25,6 +25,7 @@ function system(address: string, hostname: string, extra: Record<string, unknown
 }
 
 test('a Genius and a WLED show the uptime the player read from the device itself', async ({ page }) => {
+  // Also guards 91b1ce092: WLED rows show the device's uptime.
   // Feature: c500e69c1.  The Genius's uptime was not shown, and the Genius
   // and WLED status were fetched by the browser straight from the device
   // (refused over CORS) instead of through this player.  90061 s is 1d 1h.
