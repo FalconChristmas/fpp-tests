@@ -113,6 +113,7 @@ test('an output config file that does not exist is a 404', async ({ request }) =
 
 // 9fb0681e0: a file with a non-ASCII name can be deleted.
 test('a file with a non-ASCII name is deleted', async ({ request }) => {
+  // Also guards c39ddfa56, which added DELETE /api/file/:DirName/<name>.
   const name = 'fpp-tests-ünï-ファイル.txt';
   seed(`scripts/${name}`);
   try {
