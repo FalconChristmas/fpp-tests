@@ -609,3 +609,30 @@ def test_mqtt_stop_afterloop_finishes_the_loop_then_stops(fppd):
         assert seen[-1] == "stopping gracefully after loop", seen
         fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=15, interval=0.2,
                       what="the playlist to end with its loop")
+
+
+def test_a_branch_follows_an_mqtt_topics_message(fppd):
+    """A Branch entry testing an MQTT topic takes its true side when the last
+    message on the topic is the one it names, its false side otherwise.
+
+    Regression: 50af15534, which added the test."""
+    from test_playlist_entries import branch, playlist, run, step
+    fppd.write("playlists/P.json", playlist("P", main=[
+        branch("MQTT", true_type="Offset", false_type="None", trueNextItem=2,
+               mqttTopic="other/door", mqttMessage="open"),
+        step(1), step(2)]))
+    fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST, MQTTSubscribe="other/door")
+
+    def say(message):
+        def heard():
+            subprocess.run(["mosquitto_pub", "-h", "127.0.0.1", "-p", PORT, "-t", "other/door", "-m", message],
+                           check=True, timeout=10)
+            return "other/door" in str(fppd.get("/fppd/mqtt/cache")) and message in str(fppd.get("/fppd/mqtt/cache"))
+        fppd.wait_for(heard, timeout=15, interval=1, what=f"fppd to hear {message!r}")
+
+    with broker():
+        fppd.start()
+        say("open")
+        assert run(fppd, "P") == "2", "the branch's true side skips step 1"
+        say("shut")
+        assert run(fppd, "P") == "12", "the branch's false side falls through"
