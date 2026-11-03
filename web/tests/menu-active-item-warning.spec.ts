@@ -24,3 +24,17 @@ test('a page that names no active menu draws the menu without a PHP warning', as
   await new Promise((r) => setTimeout(r, 500));
   expect(count() - before, inPlayer('sh', '-c', `grep activeParentMenuItem ${LOG} | tail -3 || true`)).toBe(0);
 });
+
+test('each page highlights the top-level menu it belongs to, and only that one', async ({ page }) => {
+  // Regression: abdf935ad.  The menu bar marked no item active: every page
+  // looked as if it belonged to none of Status/Control, Content Setup or Help.
+  const MENUS = ['Status', 'Content', 'InOut', 'Help'];
+  for (const [path, menu] of [['/backup.php', 'Status'], ['/filemanager.php', 'Content'], ['/about.php', 'Help']]) {
+    await page.goto(path);
+    for (const m of MENUS) {
+      const li = page.locator('li.nav-item', { has: page.locator(`#navbarDropdownMenuLink${m}`) });
+      if (m === menu) await expect(li, `${m} is active on ${path}`).toHaveClass(/\bactive\b/);
+      else await expect(li, `${m} is not active on ${path}`).not.toHaveClass(/\bactive\b/);
+    }
+  }
+});
