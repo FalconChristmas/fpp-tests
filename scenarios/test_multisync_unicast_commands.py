@@ -8,6 +8,7 @@ from multisync import PORT, fpp_command_packet
 from show import CHANNELS, ddp_output
 from test_multisync import parse_fpp_command
 from test_multisync_systems import interface, send
+from test_schedule_calendar import YEAR, ZONE, entry
 
 FIRST = "127.0.0.2"
 SECOND = "127.0.0.3"
@@ -84,3 +85,18 @@ def test_a_command_runs_where_any_name_in_its_host_list_matches(fppd):
         sent("other,another", "nobody")
         sent("other,stage", "last")
         fppd.wait_for(lambda: value() == "last", timeout=5, what="the command after the one for nobody")
+
+
+def test_a_scheduled_command_can_go_to_other_hosts(fppd):
+    """A scheduled FPP command marked multisyncCommand is sent to the hosts it
+    names, when it runs.
+
+    Regression: 7c87d463b, which added that to the schedule."""
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(MultiSyncEnabled="1", MultiSyncRemotes=FIRST, DisableFakeNetworkBridges="1")
+    fppd.write("config/schedule.json", [entry(7, "12:00:05", "12:00:05", playlist="", command="Set Variable",
+                                              args=ARGS, multisyncCommand=1, multisyncHosts=FIRST)])
+    with UdpCapture(PORT, FIRST) as cap:
+        fppd.start(fake_time=f"{YEAR}-06-10 12:00:00", tz=ZONE)
+        fppd.wait_for(lambda: (FIRST, "Set Variable", ARGS) in commands(cap), timeout=20, interval=0.5,
+                      what="the scheduled command to reach the remote")
