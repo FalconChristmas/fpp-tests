@@ -39,6 +39,7 @@ def lit_with(frame, rgb):
 
 
 def test_an_image_the_size_of_the_model_is_drawn(fppd):
+    # Also guards 8f217833b: a bare file name is looked up in images/.
     # Also 368a70804: the entry draws into a pixel overlay model (nothing
     # reaches the wire when the draw is left out).
     setup(fppd, [matrix()])
