@@ -303,6 +303,51 @@ def test_output_specific_test_pattern_cycles(fppd):
             fppd.command("Test Stop")
 
 
+@pytest.mark.parametrize("orientation", ["R", "L"])
+def test_a_rotated_panel_off_channel_one_shows_its_whole_test_border(fppd, orientation):
+    """A 32x16 panel turned on its side (it fills a 16 x 32 matrix), the
+    matrix starting at channel 301: the Output Specific layout pattern's
+    border lights every pixel round the edge of the panel.
+
+    Regression: 906fb2f5b ("LED Panel Test Pattern fixes"). The pattern was
+    drawn in the panel's unrotated width, 32 pixels a row into a 16 pixel
+    wide matrix, so a turned panel showed it jumbled with gaps in its border;
+    and it was drawn from channel 1 instead of the matrix's own start, so a
+    matrix that does not start there showed it in the wrong place.
+    """
+    w, h = 32, 16
+    with captured() as cap:
+        fppd.write("config/channeloutputs.json", panels_output(
+            [panel(0, 0, 0, 0, orientation=orientation)], channels=w * h * 3, startChannel=301))
+        fppd.settings(DisableFakeNetworkBridges="1")
+        fppd.start()
+        fppd.command("Test Start", "100", "Output Specific", "--ALL--", "1")
+
+        def dark_border(rows):
+            px = lambda x, y: rows[y][x * 3:x * 3 + 3]
+            edge = [(x, 0) for x in range(w)] + [(x, h - 1) for x in range(w)] + \
+                   [(0, y) for y in range(h)] + [(w - 1, y) for y in range(h)]
+            return [p for p in edge if px(*p) == b"\x00\x00\x00"]
+
+        def full_frame():
+            fs = cap.frames()
+            if not fs:
+                return None
+            rows = fs[-1][1]
+            if sorted(rows) == list(range(h)) and all(len(rows[r]) == w * 3 for r in rows) \
+                    and any(any(rows[r]) for r in rows):
+                return rows
+            return None
+        try:
+            fppd.wait_for(full_frame, timeout=15, interval=0.2, what="a lit test frame on the wire")
+            time.sleep(0.5)
+            rows = full_frame()
+        finally:
+            fppd.command("Test Stop")
+        dark = dark_border(rows)
+        assert not dark, f"{len(dark)} of the panel's border pixels are dark: {dark[:12]}"
+
+
 @pytest.mark.parametrize("order", ["RGB", "RBG", "GRB", "GBR", "BRG", "BGR"])
 def test_output_specific_colour_fades_follow_the_color_order(fppd, order):
     """The LED Panels page's Red/Green/Blue Fade tests light the colour they
