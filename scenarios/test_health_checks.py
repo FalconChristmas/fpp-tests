@@ -354,3 +354,18 @@ def test_the_media_free_space_item_needs_media_to_be_a_mount(tmp_path, mounted):
     assert ("media free space" in out) == mounted, out[-2000:]
     if mounted:
         assert "only 42% used" in out, out[-2000:]
+
+
+@pytest.mark.parametrize("offset, want", [
+    ("+0.000012345", "Pass - Your time is accurate"),
+    ("-0.250000000", "Fail - Your time may be incorrect"),
+], ids=["small", "large-and-negative"])
+def test_the_ntp_item_fails_a_large_offset_of_either_sign(tmp_path, offset, want):
+    """With NTP synchronized, the offset chrony last reported decides the
+    Network Time Protocol Offset item: past the limit it fails, however it
+    is signed.
+
+    Regression: a85ae2aaf, which added the check."""
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN, "HC_NTPOffset", NTPSYNC="yes",
+                     CHRONY_OFFSET=offset)
+    assert want in out, out[-2000:]
