@@ -256,6 +256,7 @@ KINET_PORT = 6038
 
 @pytest.mark.parametrize("version", [1, 2])
 def test_kinet_packets(fppd, version):
+    # Also guards 6c7d17c01: fails on any wrong KiNet header.
     """KiNet v1 (DMXOUT) and v2 (PORTOUT): every packet carries the KiNet
     magic, version 1 and its message type, the v1 21-byte or v2 24-byte
     header (v2: universe 0xFFFFFFFF and a sequence number counting up per
