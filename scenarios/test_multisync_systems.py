@@ -116,6 +116,29 @@ def interface(address):
         ip("link", "del", "fpptest0")
 
 
+def test_no_127_address_is_listed_as_the_local_system(fppd):
+    """Every 127.* address is loopback, on whatever interface it sits: the
+    local system is listed under the box's real address and never under a
+    127.* one, not only 127.0.0.1 and 127.0.1.1.
+
+    Regression: 3717a92dc ("The Mac uses a bunch of 127.* addresses, don't
+    report those as public addresses for multisync"). Only those two were
+    left out, so a Mac (and any interface holding another 127.* address)
+    advertised itself at addresses no other player can reach.
+    """
+    with interface("10.77.0.1"):
+        r = subprocess.run(["ip", "addr", "add", "127.0.0.5/32", "dev", "fpptest0"],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        fppd.start()
+        fppd.wait_for(lambda: [s for s in fppd.get("/fppd/multiSyncSystems")["systems"]
+                               if s.get("local") and s["address"] == "10.77.0.1"],
+                      timeout=10, what="the local system to be listed at its real address")
+        time.sleep(1)
+        local = [s["address"] for s in fppd.get("/fppd/multiSyncSystems")["systems"] if s.get("local")]
+    assert not [a for a in local if a.startswith("127.")], f"listed at loopback: {local}"
+
+
 def test_discover_ping_is_answered(fppd):
     """A discover ping makes fppd ping back -- to the address it was sent
     from -- describing itself, from one of its own addresses. (Where the
