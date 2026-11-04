@@ -170,3 +170,41 @@ def test_start_next_scheduled_item_starts_it_now(fppd):
     assert fppd.command("Start Next Scheduled Item") == "Next scheduled item started"
     fppd.wait_for(lambda: playing(fppd), timeout=10, interval=0.25, what="the next item to start")
     assert status(fppd)["current_playlist"]["playlist"] == "Show"
+
+
+def test_window_end_hard_stops_a_playlist_inside_an_inserted_one(fppd):
+    """A hard stop at the end of a window stops the scheduled playlist
+    while a playlist inserted into it (Insert Playlist Immediate) is
+    playing: every level stops, and fppd goes idle.
+
+    Regression: b916aa139. The stop ended only the inserted playlist, and
+    the scheduled one it returned to played on after its window had
+    closed. (On master the window's end is checked every second, so such a
+    playlist would be stopped again a second later; the test watches for
+    the outer playlist playing on its own in between.)"""
+    from test_playlist_entries import pause
+    for name in ("Inner", "Outer"):
+        fppd.write(f"playlists/{name}.json", {"name": name, "repeat": 0, "loopCount": 0, "leadIn": [],
+                                               "mainPlaylist": [pause(120)], "leadOut": []})
+    start, end = window(-60, 12)
+    fppd.write("config/schedule.json", [schedule_entry("Outer", start, end, stop_type=STOP_HARD)])
+    fppd.start()
+    fppd.wait_for(lambda: playing(fppd), timeout=30, interval=0.5, what="the scheduled playlist")
+    fppd.command("Insert Playlist Immediate", "Inner", "0", "0", "false")
+    fppd.wait_for(lambda: status(fppd).get("breadcrumbs") == ["Outer"], timeout=10,
+                  interval=0.2, what="Inner to play inside Outer")
+    due = wall_of(end)
+    resumed = []
+    deadline = time.monotonic() + 40
+    while time.monotonic() < deadline:
+        s = status(fppd)
+        if s.get("status_name") == "idle":
+            break
+        if not s.get("breadcrumbs"):
+            resumed.append(round(time.monotonic() - due, 2))
+        time.sleep(0.05)
+    stopped = time.monotonic() - due
+    assert not resumed, f"Outer played on by itself after the window's end, at {resumed[:5]} s"
+    assert -0.5 <= stopped <= 2.0, f"hard stop {stopped:+.2f} s from the window's end"
+    time.sleep(2)
+    assert status(fppd).get("status_name") == "idle", status(fppd)
