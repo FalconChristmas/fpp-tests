@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { container } from './container';
+import { keepingSettings, setSettingInFile } from './privacy-helpers';
 
 // The E1.31 / ArtNet / DDP tab of Channel Outputs (co-universes.php), with
 // the universes given here.  Saving writes co-universes.json, which fppd
@@ -141,4 +142,25 @@ test('choosing DDP on a row with no address shows its IP field', async ({ page, 
   await expect(ip).toBeHidden();
   await row(page, 0).locator('select.universeType').selectOption('4');
   await expect(ip).toBeVisible();
+});
+
+test('the output interface list shows the interface the config was saved with', async ({ page, request }) => {
+  // Regression: 8d82e237a ("Fix UDP output interface setting not populating
+  // the dropdown correctly").  The page set .value on the jQuery object, not
+  // on the select, so the list kept the old E131interface setting's choice
+  // (what the PHP marks selected) instead of the config's interface.
+  await keepingSettings(async () => {
+    // A legacy setting naming another interface: the PHP adds it to the list
+    // and marks it selected.
+    setSettingInFile('E131interface', 'fpp-tests0');
+    await put(request, config([universe(1)]));
+    await openUniverses(page, 1);
+    const select = page.locator('#selE131interfaces');
+    await expect(select.locator('option[value="fpp-tests0"]')).toHaveCount(1);
+    await expect(select).toHaveValue('eth0');
+    // The control: saved with the other one, that one is shown.
+    await put(request, { channelOutputs: [{ ...config([universe(1)]).channelOutputs[0], interface: 'fpp-tests0' }] });
+    await openUniverses(page, 1);
+    await expect(select).toHaveValue('fpp-tests0');
+  });
 });
