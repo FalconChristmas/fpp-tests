@@ -3,8 +3,6 @@
 import os
 import time
 
-import pytest
-
 from ddp import DdpReceiver
 from fseq import unique_frames, write_fseq
 from show import CHANNELS, ddp_output, install
@@ -248,16 +246,13 @@ def test_a_17ms_sequence_goes_out_every_17ms(fppd):
     assert abs(period - 17.0) < 0.08, f"frames went out every {period:.3f} ms ({n} frames), not 17"
 
 
-@pytest.mark.xfail(strict=True, reason="src/effects.cpp truncates 1000 / frameTime to an int")
 def test_a_17ms_fseq_effect_goes_out_every_17ms(fppd):
     """The same for an FSEQ run as an effect with no sequence playing: its
     frames go out at its own 17 ms step time.
 
-    Open bug: StartEffect() (src/effects.cpp) still sets the refresh rate as
-    1000 / frameTime in ints, the truncation f3deb9823 fixed for sequences.
-    Master puts this effect out every 17.23 ms; with 1000.0f / frameTime it
-    is 17.0. Strict, so this turns red when that is fixed: drop the xfail
-    then."""
+    Regression: 409e37eb9. StartEffect() (src/effects.cpp) set the refresh
+    rate as 1000 / frameTime in ints, the truncation f3deb9823 fixed for
+    sequences, so this effect went out every 17.23 ms instead of 17.0."""
     frames = unique_frames(400, CHANNELS)
     write_fseq(os.path.join(fppd.media, "sequences", "Fx.fseq"), frames, step_ms=17)
     fppd.write("config/co-universes.json", ddp_output(CHANNELS))
