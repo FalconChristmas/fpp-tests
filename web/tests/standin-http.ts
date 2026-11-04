@@ -211,6 +211,24 @@ export function release(tag: string, assets: string[], extra: Record<string, unk
   };
 }
 
+// Open the MultiSync page with its scripts loaded. Chrome here runs beside the
+// containers, and a sibling joining the network, or anything else changing the
+// host's networks, can make it drop requests in flight
+// (net::ERR_NETWORK_CHANGED): the page then "loads" without bootstrap or fpp.js
+// and stays on "Loading system list". Load it again until the page has them.
+export async function openMultiSync(page: import('@playwright/test').Page) {
+  for (let attempt = 0; ; attempt++) {
+    await page.goto('/multisync.php');
+    const ready = await page.evaluate(`
+      typeof bootstrap === 'object' && typeof SetupSelectableTableRow === 'function' &&
+      typeof FPP_UPDATE_STATE !== 'undefined' && typeof jQuery.fn.bootstrapTable === 'function' &&
+      typeof jQuery.fn.floatThead === 'function'
+    `);
+    if (ready) return;
+    if (attempt >= 3) throw new Error('the MultiSync page loaded without its scripts four times');
+  }
+}
+
 // Every page's header asks api/system/updateStatus shortly after it loads,
 // and the player answers that from GitHub's releases/latest.  A page test
 // that is not about the update check answers it itself, so the player does

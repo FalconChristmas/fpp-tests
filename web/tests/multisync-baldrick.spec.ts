@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import { container } from './container';
-import { StandIn, answerUpdateCheck } from './standin-http';
+import { StandIn, answerUpdateCheck, openMultiSync } from './standin-http';
 
 // A Baldrick board (type id 0xC4, ILightThat) on the MultiSync page: the page
 // asks this player for its status (/api/system/status?type=Baldrick), the
@@ -50,7 +50,7 @@ test('a Baldrick board\'s state, uptime and firmware come from its /system_state
     ] } }));
     await page.route('**/api/git/branches', (route) => route.fulfill({ json: ['master'] }));
     await page.route('**/api/files/uploads', (route) => route.fulfill({ json: { files: [] } }));
-    await page.goto('/multisync.php');
+    await openMultiSync(page);
     const row = page.locator('#fppSystems tr.systemRow', { hasText: 'fpptests-baldrick' });
     await expect(row).toHaveCount(1, { timeout: 15_000 });
 
