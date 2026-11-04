@@ -216,3 +216,31 @@ def test_a_command_that_cannot_describe_itself_leaves_the_rest_listed(fppd):
     assert "fpp-abi-broken Broken" not in names
     assert str(fppd.command("fpp-abi-broken Ping", "x")) == "pong"
     fppd.check_alive()
+
+
+def test_a_plugin_is_destroyed_while_the_gpio_inputs_are_still_there(fppd):
+    """On shutdown fppd destroys its plugins before it lets go of the GPIO
+    inputs, so a plugin using a pin can still see it as it cleans up.
+
+    Regression: 3b50bc85f. GPIOManager was cleaned up first, and the plugins
+    went when the static PluginManager did, after main()."""
+    import signal
+    import time
+    from native_plugin import install
+    pin = "TF-7"
+    result = os.path.join(fppd.media, "tmp", "gpio-order")
+    fppd.write("config/gpio.json", [{"pin": pin, "enabled": True, "mode": "gpio", "desc": "",
+                                     "rising": [{"command": "Volume Set", "args": ["70"]}], "falling": [],
+                                     "holdTime": 0, "hold": []}])
+    install(fppd, name="fpp-gpioorder", source="gpioorderplugin.cpp",
+            features=(f'GPIO_ORDER_FILE="{result}"', f'GPIO_ORDER_PIN="{pin}"'))
+    fppd.start()
+    time.sleep(2)
+    fppd.proc.send_signal(signal.SIGTERM)
+    rc = fppd.proc.wait(timeout=30)
+    fppd.exit_expected = True
+    assert rc == 0, f"fppd exited {rc}"
+    assert os.path.exists(result), f"the plugin was not destroyed:\n{fppd.log()[-2000:]}"
+    with open(result) as f:
+        said = f.read()
+    assert said == "still there", f"the plugin found the input {said}"
