@@ -277,6 +277,8 @@ def test_lor_sends_channels_that_start_off(fppd):
     Regression: 817463732. The last-sent table started at 0 and only
     changes were sent, so a channel that should be off was never sent, and
     a unit left on (by an earlier run, or by xLights) stayed on.
+
+    Also guards 50f300b02: firstControllerId 1 is unit 1, not unit 2.
     """
     with PtyReader() as pty:
         fppd.write("config/co-other.json", lor_output(pty, 32))
