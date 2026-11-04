@@ -322,3 +322,33 @@ def test_a_sync_for_the_last_sequence_does_not_close_the_next(fppd):
     a.close()
     b.close()
     assert (started, stopped) == (2, 1), f"SEQUENCE_STARTED x{started}, SEQUENCE_STOPPED x{stopped}"
+
+
+def test_a_remote_follows_the_master_jumping_ahead(fppd):
+    """A remote playing along with the master, whose sync packets then jump
+    two seconds ahead (the master seeked, or the remote fell behind), skips
+    forward to the master's frame and plays on from there.
+
+    Regression: e6f2c3c95. The skip deleted the frames it passed over in the
+    cache, the one being shown among them, and the next frame read freed it
+    again: an ASan heap-use-after-free in SetLastFrameData (a segfault on a
+    remote restarted, so joining, while the master played)."""
+    frames = unique_frames(600, CHANNELS)
+    lookup = {f: i for i, f in enumerate(frames)}
+    write_fseq(f"{fppd.media}/sequences/Show.fseq", frames, step_ms=STEP_MS)
+    remote(fppd)
+    m = Master()
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        m.play(2)
+        m.began -= 2.0
+        m.keep_playing(2)
+        at = m.frame()
+        recent = [lookup.get(d) for t, d in rx.snapshot(since=time.monotonic() - 0.3)]
+        recent = [i for i in recent if i is not None]
+        m.send("stop")
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=10,
+                      what="the remote to stop with the master")
+    m.close()
+    assert recent and abs(recent[-1] - at) <= 6, \
+        f"the remote showing frame {recent[-1] if recent else None} with the master at {at}"

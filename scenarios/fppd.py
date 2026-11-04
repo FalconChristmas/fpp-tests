@@ -90,7 +90,7 @@ class Fppd:
 
     # --- lifecycle -------------------------------------------------------
 
-    def start(self, timeout=60, fake_time=None, tz=None, preload=(), extra_env=None, argv=None):
+    def start(self, timeout=60, fake_time=None, tz=None, preload=(), extra_env=None, argv=None, stdin=None):
         """Start fppd and wait until its API answers.
 
         fake_time: "YYYY-MM-DD HH:MM:SS" -- fppd's wall clock starts there
@@ -103,6 +103,8 @@ class Fppd:
         argv:      a command line to run instead of "fppd -f" (in the same
                    directory and environment), for a scenario that needs
                    fppd's own daemonizing. self.proc is then that command.
+        stdin:     what fppd's standard input is (as for subprocess.Popen);
+                   by default it inherits the runner's.
         """
         with open(os.path.join(self.tree, "www", "media_root.txt"), "w") as f:
             f.write(self.media)
@@ -167,7 +169,7 @@ class Fppd:
         self.proc = subprocess.Popen(
             argv or [os.path.join(self.tree, "src", "fppd"), "-f"],
             cwd=os.path.join(self.tree, "src"),
-            stdout=self.out, stderr=subprocess.STDOUT, env=env,
+            stdin=stdin, stdout=self.out, stderr=subprocess.STDOUT, env=env,
             start_new_session=True,
         )
         deadline = time.monotonic() + timeout
