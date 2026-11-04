@@ -27,6 +27,9 @@ fi
 
 status=0
 ./run-local.sh "${opts[@]}" "$@" -m "not host_pru" --junitxml=artifacts/junit-main.xml || status=$?
+# 5: nothing outside the real-PRU scenarios was picked (a board that runs
+# only its own, as the panel test box does)
+[ $status = 5 ] && status=0
 rm -rf artifacts.main
 mv artifacts artifacts.main
 ./run-local.sh "${opts[@]}" --host-pru "$@" -m host_pru --junitxml=artifacts/junit-pru.xml
