@@ -43,3 +43,24 @@ test('the library lists the effects sorted by name, sorts both ways and filters 
   await expect.poll(async () => ((await (await request.get('/api/fppd/effects')).json()).runningEffects ?? [])
     .map((e: any) => e.name), { timeout: 10_000 }).toContain('fpp-tests-fx-b');
 });
+
+test('the Start dialog asks for the start channel it was given', async ({ page, request }) => {
+  // Regression: 66d585d49.  The page took one off what was typed, on top of
+  // the one fppd takes off (StartEffect's startChannel - 1), so the effect ran
+  // a channel early; asked for channel 1 it passed 0, which fppd reads as
+  // "where the effect's file says".
+  await page.goto('/effects.php');
+  const row = page.locator('#tblEffectLibrary tbody tr', { hasText: 'fpp-tests-fx-a' });
+  await row.locator('button', { hasText: 'Start' }).click();
+  await page.locator('#StartEffectDialog #effectStartChannel').fill('10');
+  await page.locator('#StartEffectDialog #loopEffect').check();
+  const posted = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/command' && r.method() === 'POST');
+  await page.locator('#StartEffectDialog button', { hasText: 'Start' }).click();
+  const body = (await posted).postDataJSON();
+  expect(body.command).toBe('Effect Start');
+  expect(body.args[0]).toBe('fpp-tests-fx-a');
+  expect(body.args[1]).toBe(10);
+  // The control: fppd took it and is running that effect.
+  await expect.poll(async () => ((await (await request.get('/api/fppd/effects')).json()).runningEffects ?? [])
+    .map((e: any) => e.name), { timeout: 10_000 }).toContain('fpp-tests-fx-a');
+});
