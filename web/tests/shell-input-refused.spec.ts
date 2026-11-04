@@ -129,6 +129,19 @@ test('a storage location with a space in it stays one argument', async ({ reques
   expect(body).toContain('Invalid remote host: fpp tests');
 });
 
+test("copystorage.php shows the command it runs as text, not markup", async ({ request }) => {
+  // Regression: b6782642b.  The page echoed "Command: <the command>" as it
+  // was, storage location and all, into a page the browser renders: a
+  // location carrying markup ran as part of the page.
+  const r = await request.get('/copystorage.php?wrapped=1&direction=TOREMOTE&path=fpp-tests-remote&flags=Configuration' +
+    `&storageLocation=${encodeURIComponent('<img src=x onerror=alert(1)>')}&remoteStorage=none`, { timeout: 120_000 });
+  const body = await r.text();
+  const command = body.split('\n').find((l) => l.startsWith('Command: ')) ?? '';
+  expect(command, body.slice(0, 400)).toContain('copy_settings_to_storage.sh');
+  expect(command, 'the command was put into the page as markup').not.toContain('<img');
+  expect(command).toContain('&lt;img src=x onerror=alert(1)&gt;');
+});
+
 // Regression: 220b98075 ("block path traversal in script and cape firmware
 // handling", #2920). A script name in /api/scripts/<name> and a firmware file
 // name in upgradeCapeFirmware.php were joined to their directories as given.
