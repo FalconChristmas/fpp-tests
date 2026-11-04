@@ -63,6 +63,9 @@ def test_a_bbb48string_output_starts_on_the_fake_pru(fppd):
     runtime: DISABLE_PIN_INTERRUPTS lost its .endm, and NSPERCLK (used by
     the timeout waits) had no AM335x value; either way the program failed
     to build and the output never started.
+
+    Regression: 61c39e2e0. The firmware sources and compile scripts moved to
+    src/non-gpl/BBB48String; a path left at the old src/pru fails the build.
     """
     pru = FakePruss(fppd)
     pins, _ = string_pins()
@@ -255,6 +258,53 @@ def test_a_falcon_v4_chain_with_the_longest_strings_builds_its_firmware(fppd):
         assert a.read() == b.read()
     assert any("-DFALCONV4" in args for args in pru_builds(fppd, "compileWS2811x.sh")), \
         pru_builds(fppd, "compileWS2811x.sh")
+
+
+def test_the_pixel_timing_setting_builds_the_slow_pixel_firmware(fppd):
+    """"pixelTiming" set on a BBB48String output adds -DPIXELTYPE_SLOW to the
+    firmware build (the 1903-style slow pixel); without it, or at 0, the
+    build is the normal one.
+
+    Regression: 76bfea73d, the setting itself.
+    """
+    pru = FakePruss(fppd)
+    fppd.settings(LogLevel_ChannelOut="debug")
+    fppd.write("config/co-bbbStrings.json", two_port_strings(fppd, pixelTiming=1))
+    pru.start()
+    builds = pru_builds(fppd, "compileWS2811x.sh")
+    assert builds and all("-DPIXELTYPE_SLOW" in args for args in builds), builds
+    fppd.stop()
+    fppd.write("config/co-bbbStrings.json", two_port_strings(fppd, pixelTiming=0))
+    pru = FakePruss(fppd)
+    pru.start()
+    builds = pru_builds(fppd, "compileWS2811x.sh")
+    assert builds and not any("-DPIXELTYPE_SLOW" in args for args in builds[-1:]), builds
+
+
+def test_a_string_output_with_no_pixels_starts_nothing_and_is_not_an_error(fppd):
+    """A BBB48String output whose strings hold no pixels initialises, loads no
+    firmware and starts no PRU, and raises no output warning; fppd keeps
+    running and sends frames through it.
+
+    Regression: 930f80d53. Init gave up on an empty config and failed the
+    output; it now succeeds with nothing to drive, and PrepData, SendData and
+    Close skip the PRU.
+    """
+    pru = FakePruss(fppd)
+    pins, _ = string_pins()
+    write_string_cape("TestEmpty", {"outputs": [{"pin": p} for p in pins[:2]]})
+    fppd.write("config/co-bbbStrings.json", strings_config(
+        "BBB48String", "TestEmpty", [pixel_output(0, 0, 0), pixel_output(1, 0, 0)], channels=30))
+    fppd.settings(LogLevel_ChannelOut="debug")
+    pru.start()
+    fppd.command("Test Start", "1000", "RGB Chase", "*", "FF0000-00FF00-0000FF")
+    time.sleep(2)
+    fppd.check_alive()
+    assert not pru.starts(), pru.events()
+    assert not pru_builds(fppd, "compileWS2811x.sh"), pru_builds(fppd, "compileWS2811x.sh")
+    assert not any("BBB48String" in w for w in warnings_of(fppd)), warnings_of(fppd)
+    assert "No pixels configured in any string" in fppd.log(), fppd.tail()
+    fppd.command("Test Stop")
 
 
 def test_the_gpio0_firmware_writes_no_clock_or_priority_registers(fppd):
@@ -489,6 +539,59 @@ def test_a_gpio_clock_keeps_the_panel_output_on_one_pru(fppd):
     save(fppd, "config/channeloutputs.json", two)
     fppd.wait_for(lambda: len(matrix_builds(fppd)) > n, timeout=60, what="the rebuild")
     assert "-DSPLIT_GPIO" in matrix_builds(fppd)[-1], matrix_builds(fppd)
+
+
+def test_a_panel_pinout_that_says_single_pru_is_not_split_across_the_prus(fppd):
+    """A panel pinout with "singlePRU": true keeps the whole output on one
+    PRU even where its clock (a PRU pin) would otherwise split it: the
+    firmware is built without -DSPLIT_GPIO.
+
+    Regression: 791f7e138, the pinout's singlePRU key. The control is the
+    same pinout without it, which splits.
+    """
+    needs_bbb()
+    pru = FakePruss(fppd)
+    fppd.settings(LogLevel_ChannelOut="debug")
+    p = octoscroller()
+    p["controls"]["clock"] = {"pin": "P8-12", "type": "pruout"}
+    p["controls"]["sel0"] = {"pin": "P9-16", "type": "gpio"}
+    p["singlePRU"] = True
+    write_panel_pinout("Octoscroller", p)
+    two = matrix_config(panels=((0, 0), (1, 0)))
+    fppd.write("config/channeloutputs.json", two)
+    pru.start()
+    builds = matrix_builds(fppd)
+    assert builds and "-DSPLIT_GPIO" not in builds[-1], builds
+    del p["singlePRU"]
+    write_panel_pinout("Octoscroller", p)
+    two["channelOutputs"][0]["brightness"] = 9
+    n = len(builds)
+    save(fppd, "config/channeloutputs.json", two)
+    fppd.wait_for(lambda: len(matrix_builds(fppd)) > n, timeout=60, what="the rebuild")
+    assert "-DSPLIT_GPIO" in matrix_builds(fppd)[-1], matrix_builds(fppd)
+
+
+def test_a_panel_pinouts_data_offset_is_where_the_frames_start(fppd):
+    """"dataOffset" in a panel pinout (in KB) is a floor for where the
+    output's frames sit in the PRU's DDR: 256 puts them at 256 KB or later,
+    and without it they start lower.
+
+    Regression: 791f7e138, the pinout's dataOffset key.
+    """
+    needs_bbb()
+    starts = {}
+    for offset in (None, 256):
+        pru = FakePruss(fppd)
+        fppd.settings(LogLevel_ChannelOut="info")
+        octoscroller(**({"dataOffset": offset} if offset else {}), singlePRU=True)
+        fppd.write("config/channeloutputs.json", matrix_config())
+        pru.start()
+        region = ddr_region(fppd, "BBBMatrix")
+        assert region, fppd.tail()
+        starts[offset] = region[0]
+        if offset is None:
+            fppd.stop()
+    assert starts[256] >= 256 * 1024 and starts[None] < 256 * 1024, {k: hex(v) for k, v in starts.items()}
 
 
 def brightness_args(build):
