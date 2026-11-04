@@ -221,6 +221,13 @@ jobs:
           - device: am62x
             host_pru: true
             timeout: 180
+          # The panel test box (a PocketBeagle2 with a BBShiftPanel cape and
+          # panels): only its own scenarios, test_panelbox_*.py, which skip
+          # everywhere else
+          - device: am62x-panel
+            host_pru: true
+            only: test_panelbox_
+            timeout: 120
     runs-on:
       group: Devices
       labels: [self-hosted, Linux, ARM64, "${{ matrix.device }}"]
@@ -249,6 +256,13 @@ jobs:
           python3 scripts/last-asan-results.py last-asan.xml
           python3 scripts/device-tests.py last-asan.xml > device-tests.txt
           echo "$(wc -l < device-tests.txt) scenarios that ASan run skipped"
+          # a board with its own scenarios runs only those
+          only="${{ matrix.only }}"
+          if [ -n "$only" ]; then
+            grep "$only" device-tests.txt > device-tests.only || true
+            mv device-tests.only device-tests.txt
+            echo "$(wc -l < device-tests.txt) of them for ${{ matrix.device }}"
+          fi
 
       - name: Checkout fpp
         uses: actions/checkout@v6

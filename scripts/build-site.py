@@ -26,9 +26,10 @@ results, site, history_file, run_url = sys.argv[1:5]
 # for the same results).
 no_entry = "--no-entry" in sys.argv[5:]
 drop_runs = [a for i, a in enumerate(sys.argv[5:]) if i and sys.argv[5:][i - 1] == "--drop-run"]
-FLAVORS = ["asan", "tsan", "coverage", "pi5", "am62x", "am335x-bbb", "am335x-pb1", "web"]
+FLAVORS = ["asan", "tsan", "coverage", "pi5", "am62x", "am62x-panel", "am335x-bbb", "am335x-pb1", "web"]
 LABEL = {"asan": "ASan", "tsan": "TSan", "coverage": "coverage build", "pi5": "Pi 5",
          "am62x": "AM62x Beagle",
+         "am62x-panel": "AM62x panel box",
          "am335x-bbb": "BeagleBone Black",
          "am335x-pb1": "PocketBeagle", "web": "web UI"}
 FPP_COMMIT = "https://github.com/FalconChristmas/fpp/commit/"
@@ -178,7 +179,7 @@ def count_chart(title, flavors, count=lambda r: r.get("tests")):
 count_chart("Scenarios per run", ["asan", "tsan", "coverage"])
 # Every device run collects the same scenarios and skips the ones its board
 # can't run, so what it ran (passed + failed) is what tells the boards apart.
-count_chart("Device scenarios run", ["pi5", "am62x", "am335x-bbb", "am335x-pb1"],
+count_chart("Device scenarios run", ["pi5", "am62x", "am62x-panel", "am335x-bbb", "am335x-pb1"],
             lambda r: (r.get("passed", 0) + r.get("failed", 0)) if r else None)
 
 # The web suite on a scale of its own: tests in the run and how

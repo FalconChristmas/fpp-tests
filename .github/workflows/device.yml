@@ -21,7 +21,7 @@ on:
       device:
         description: Which device
         type: choice
-        options: [pi5, am62x, am335x-bbb, am335x-pb1]
+        options: [pi5, am62x, am62x-panel, am335x-bbb, am335x-pb1]
         default: pi5
       tests:
         description: Which scenarios (device = the ones the last Docker nightly skipped)
@@ -112,6 +112,11 @@ jobs:
             exit 0
           fi
           python3 scripts/device-tests.py docker-results/junit.xml > device-tests.txt
+          # the panel test box runs only its own scenarios
+          if [ "$DEVICE" = am62x-panel ]; then
+            grep test_panelbox_ device-tests.txt > device-tests.only || true
+            mv device-tests.only device-tests.txt
+          fi
           echo "$(wc -l < device-tests.txt) scenarios the Docker run skipped"
           # The fpp commit that run built, unless a run by hand names one.
           ref="${{ github.event.inputs.fpp_ref }}"
@@ -162,7 +167,7 @@ jobs:
           PYTEST_ARGS: ${{ github.event.inputs.pytest_args }}
           # On the AM62x board the scenarios that drive the real PRUs take a
           # second pass (scripts/device-scenarios.sh).
-          HOST_PRU: ${{ github.event.inputs.device == 'am62x' && '1' || '' }}
+          HOST_PRU: ${{ startsWith(github.event.inputs.device, 'am62x') && '1' || '' }}
         # HOST_AUDIO and PYTEST_ARGS are left unquoted on purpose, to split
         # into arguments. The node ids go in a file (pytest's @file), one per
         # line, since some carry spaces in their parameters.
