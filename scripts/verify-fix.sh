@@ -22,17 +22,20 @@
 #   scripts/verify-fix.sh 7e171ae48 scenarios/test_command_presets.py -k reload
 #
 # Exits 0 for red then green, 1 when the scenario doesn't show the fix, 2 for
-# bad arguments, and 3 when a side didn't build, so no test ran on it: a
-# parent that doesn't build is not a red (unless --nopch, where it is).
+# bad arguments or a ref the fpp checkout doesn't have (no test could run on
+# it, so its error must not count as a red), and 3 when a side didn't build, so
+# no test ran on it: a parent that doesn't build is not a red (unless --nopch,
+# where it is).
 set -e
 HERE=$(cd "$(dirname "$0")/.." && pwd)
+FPP="$HERE/../fpp"
 FPPARG=""
 BASE=""
 FLAVORARG=""
 ARTIFACTS=""
 while [ $# -gt 0 ]; do
     case "$1" in
-    --fpp) FPPARG="--fpp $2"; shift 2 ;;
+    --fpp) FPP="$2"; FPPARG="--fpp $2"; shift 2 ;;
     --base) BASE="$2"; shift 2 ;;
     --flavor) FLAVORARG="--flavor $2"; shift 2 ;;
     --nopch) export FPP_TESTS_NOPCH=require; shift ;;
@@ -43,6 +46,12 @@ done
 FIX="$1"; shift
 [ -n "$FIX" ] || { echo "usage: $0 [--fpp DIR] [--base REF] [--flavor F] [--nopch] [--artifacts DIR] FIX_SHA [pytest args...]" >&2; exit 2; }
 [ -n "$BASE" ] || BASE="$FIX^"
+for ref in "$FIX" "$BASE"; do
+    git -C "$FPP" rev-parse --verify --quiet "$ref^{commit}" >/dev/null || {
+        echo "ERROR: $FPP has no commit $ref, so no test can run on it" >&2
+        exit 2
+    }
+done
 
 RUNNER="$HERE/run.sh"
 QUIET=-q
