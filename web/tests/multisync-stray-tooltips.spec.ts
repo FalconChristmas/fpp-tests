@@ -28,6 +28,7 @@ const STATUS = {
 };
 
 test('a tooltip left behind by its element is swept away', async ({ page }) => {
+  // Also guards 3fd1a65df: SetupToolTips runs on the page.
   // Feature: 35592d288.  Such a tooltip stayed over the table until the page
   // was reloaded.
   await page.setViewportSize({ width: 1600, height: 1000 });
