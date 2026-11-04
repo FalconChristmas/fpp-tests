@@ -1,6 +1,13 @@
 """Fixes from the 4.x and 5.0 releases that are still reachable in fppd."""
 
+import os
 import time
+
+import pytest
+
+from ddp import DdpReceiver
+from fseq import unique_frames, write_fseq
+from show import CHANNELS, ddp_output, install
 
 from test_playlist_commands import wait_idle
 from test_playlist_entries import pause, playlist, status, step, trace
@@ -168,3 +175,62 @@ def test_threaded_udp_output_sends_from_worker_threads(fppd):
         threaded = workers()
         fppd.command("Stop Now")
     assert threaded, "no FPP-UDPWork thread while playing"
+
+
+def _frame_period_ms(received):
+    """The period frames went out at: the median gap between consecutive
+    frames the receiver identified (a unique_frames() index), per frame
+    index. A median is not moved by the odd frame a loaded sanitizer build
+    sends late, nor by the output thread restarting its cadence after one."""
+    first = {}
+    for t, data in received:
+        n = (data[0] << 16) | (data[1] << 8) | data[2]
+        if n:
+            first.setdefault(n - 1, t)
+    xs = sorted(first)
+    assert len(xs) > 100, f"only {len(xs)} identifiable frames arrived"
+    gaps = sorted((first[b] - first[a]) * 1000.0 / (b - a) for a, b in zip(xs, xs[1:]))
+    return gaps[len(gaps) // 2], len(xs)
+
+
+def test_a_17ms_sequence_goes_out_every_17ms(fppd):
+    """A sequence whose step time does not divide 1000 (17 ms, 58.8 fps)
+    goes out at its own frame time.
+
+    Coverage for f3deb9823, not a regression test: the refresh rate was an
+    int, 1000 / 17 = 58, and the output thread's frame period came from it
+    (1000000 / 58 = 17241 us), so the lights fell 1.4% behind the audio.
+    On master the output thread's cadence holds a sequence to its step time
+    whatever that rate says: with the fix undone by hand this still passes.
+    600 frames of 17 ms; their median gap tells 17.24 ms from 17.00."""
+    frames = unique_frames(600, CHANNELS)
+    with DdpReceiver(CHANNELS) as rx:
+        install(fppd, frames, step_ms=17)
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "false", "false")
+        wait_idle(fppd, timeout=30)
+        period, n = _frame_period_ms(rx.snapshot())
+    assert abs(period - 17.0) < 0.08, f"frames went out every {period:.3f} ms ({n} frames), not 17"
+
+
+@pytest.mark.xfail(strict=True, reason="src/effects.cpp truncates 1000 / frameTime to an int")
+def test_a_17ms_fseq_effect_goes_out_every_17ms(fppd):
+    """The same for an FSEQ run as an effect with no sequence playing: its
+    frames go out at its own 17 ms step time.
+
+    Open bug: StartEffect() (src/effects.cpp) still sets the refresh rate as
+    1000 / frameTime in ints, the truncation f3deb9823 fixed for sequences.
+    Master puts this effect out every 17.23 ms; with 1000.0f / frameTime it
+    is 17.0. Strict, so this turns red when that is fixed: drop the xfail
+    then."""
+    frames = unique_frames(400, CHANNELS)
+    write_fseq(os.path.join(fppd.media, "sequences", "Fx.fseq"), frames, step_ms=17)
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fppd.command("FSEQ Effect Start", "Fx", "false", "false")
+        fppd.wait_for(lambda: not fppd.get("/fppd/effects").get("runningEffects"), timeout=30,
+                      interval=0.25, what="the effect to finish")
+        period, n = _frame_period_ms(rx.snapshot())
+    assert abs(period - 17.0) < 0.08, f"effect frames went out every {period:.3f} ms ({n} frames), not 17"

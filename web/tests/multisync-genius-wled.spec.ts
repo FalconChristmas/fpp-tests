@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import { container } from './container';
-import { StandIn, answerUpdateCheck } from './standin-http';
+import { StandIn, answerUpdateCheck, openMultiSync } from './standin-http';
 
 // A Genius controller (type id 0xA0) and a WLED (0xFB) on the MultiSync page.
 // The page asks this player for their status (/api/system/status?type=Genius
@@ -48,7 +48,7 @@ test('a Genius and a WLED show the uptime the player read from the device itself
     ] } }));
     await page.route('**/api/git/branches', (route) => route.fulfill({ json: ['master'] }));
     await page.route('**/api/files/uploads', (route) => route.fulfill({ json: { files: [] } }));
-    await page.goto('/multisync.php');
+    await openMultiSync(page);
     for (const [name, reads] of [['fpptests-genius', '/api/state'], ['fpptests-wled', '/json/info']]) {
       const row = page.locator('#fppSystems tr.systemRow', { hasText: name });
       await expect(row).toHaveCount(1, { timeout: 15_000 });

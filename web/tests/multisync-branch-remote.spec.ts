@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { container, inPlayer } from './container';
-import { StandIn } from './standin-http';
+import { StandIn, openMultiSync } from './standin-http';
 
 // MultiSync's Change Branch action, at UI level 1 and up: a Remote picker
 // (origin or newfeatures) next to the branch list.  The branch list is this
@@ -51,7 +51,7 @@ async function openMultisync(page: Page, remote: string) {
     advancedView: { Platform: 'Raspberry Pi', Branch: 'master', LocalGitVersion: 'aaa1111', RemoteGitVersion: 'aaa1111', Utilization: { CPU: 1, Memory: 2 } },
   } } }));
   await page.route('**/api/files/uploads', (route) => route.fulfill({ json: { files: [] } }));
-  await page.goto('/multisync.php');
+  await openMultiSync(page);
   await expect(page.locator('#fppSystems tr.systemRow')).toHaveCount(2, { timeout: 15_000 });
   return page.locator('#fppSystems tr.systemRow', { hasText: 'fpptests-remote' });
 }

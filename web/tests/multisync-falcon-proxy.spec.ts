@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import { container } from './container';
-import { StandIn, answerUpdateCheck } from './standin-http';
+import { StandIn, answerUpdateCheck, openMultiSync } from './standin-http';
 
 // A Falcon controller on the MultiSync page: the controller answers no
 // cross-origin request, so the page does not ask it.  It asks this player
@@ -55,7 +55,7 @@ test('a Falcon V3 and a V4 are polled by the player and show what they reported'
     ] } }));
     await page.route('**/api/git/branches', (route) => route.fulfill({ json: ['master'] }));
     await page.route('**/api/files/uploads', (route) => route.fulfill({ json: { files: [] } }));
-    await page.goto('/multisync.php');
+    await openMultiSync(page);
 
     const row3 = page.locator('#fppSystems tr.systemRow', { hasText: 'FPPTESTFV3' });
     const row4 = page.locator('#fppSystems tr.systemRow', { hasText: 'FPPTESTFV4' });
@@ -103,7 +103,7 @@ test("a Falcon's warnings show only for what it reports", async ({ page }) => {
     ] } }));
     await page.route('**/api/git/branches', (route) => route.fulfill({ json: ['master'] }));
     await page.route('**/api/files/uploads', (route) => route.fulfill({ json: { files: [] } }));
-    await page.goto('/multisync.php');
+    await openMultiSync(page);
 
     const warningsOf = async (hostname: string) => {
       const row = page.locator('#fppSystems tr.systemRow', { hasText: hostname });
@@ -120,4 +120,15 @@ test("a Falcon's warnings show only for what it reports", async ({ page }) => {
     testing.stop();
     hot.stop();
   }
+});
+
+test('a MultiSync page that lost its scripts loading is loaded again before it is used', async ({ page }) => {
+  // A full run saw this page "load" with bootstrap and fpp.js dropped
+  // (net::ERR_NETWORK_CHANGED), and it stayed on "Loading system list".
+  let dropped = 0;
+  await answerUpdateCheck(page);
+  await page.route('**/js/bootstrap.bundle.min.js*', (route) => (dropped++ === 0 ? route.abort('internetdisconnected') : route.continue()));
+  await openMultiSync(page);
+  expect(dropped).toBeGreaterThan(1);
+  expect(await page.evaluate('typeof bootstrap')).toBe('object');
 });
