@@ -47,6 +47,12 @@ test('each interface is reported with the link state the kernel gives it', async
   }
 });
 
+test('the usage statistics are pretty-printed', async ({ request }) => {
+  // Feature: 900816242, so a person reading the preview can.
+  const text = await (await request.get('/api/statistics/usage?force=1')).text();
+  expect(text.split('\n').length, text.slice(0, 200)).toBeGreaterThan(20);
+});
+
 test('the network block carries the wifi list', async ({ request }) => {
   // Feature: de95cc088.  Empty on a player with no wifi, but there.
   const json = await payload(request);
