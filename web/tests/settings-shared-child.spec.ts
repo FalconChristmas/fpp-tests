@@ -10,6 +10,10 @@ import { keepingSettings, setSettingInFile } from './privacy-helpers';
 // value didn't match marked the row hidden, and the page-load show pass then
 // never showed it: after a reload Compile Hosts was gone in both modes.  The
 // settings are at the Developer UI level.
+//
+// Also 96ccadf34 ("fix for child setting visibility in settings screen"):
+// the visibility pass run once a settings tab has loaded, without which
+// the hidden child showed after a reload.
 
 test.skip(!container, 'sets the settings file inside the run-web.sh container');
 
