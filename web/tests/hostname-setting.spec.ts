@@ -42,6 +42,8 @@ function calls(): string[] {
   return sh(`cat ${CALLS} 2>/dev/null || true`).split('\n').filter((l) => l !== '');
 }
 
+// Also guards 0aba592d6 (the network page uses the HostName and
+// HostDescription settings): with it undone those fields are not found.
 test('a host name saved on the Network page renames the host, flags a reboot and leaves avahi alone', async ({ page }) => {
   // Regression: 0b77904a7 ("Don't restart avahi on hostname change, just flag
   // the reboot").  The save restarted avahi-daemon twice (its init script and
