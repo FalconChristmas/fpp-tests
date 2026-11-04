@@ -84,3 +84,46 @@ def test_threaded_udp_output_delivers_every_target_every_frame(fppd):
     # (type 5 counts from the target's own first channel, so the second half arrives at 0)
     b = {second[f[:60]] for _, f in snap if f[:60] in second and f[:60] not in first and not any(f[60:])}
     assert len(a) >= 30 and len(b) >= 30, f"halves received: {len(a)} and {len(b)} of 40"
+
+
+def test_url_command_with_an_empty_post_body_sends_a_post(fppd):
+    """The URL command with method POST and no data sends a real POST with an
+    empty body ("Content-Length: 0"), and finishes promptly.
+
+    Feature: 97f6a9ad5. urlHelper always sets the POST fields. Green-only:
+    with that block disabled curl still sends Content-Length: 0 for the
+    method, so this does not tell the fix apart."""
+    import http.server
+    import threading
+    seen = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            seen.append(("POST", self.headers.get("Content-Length")))
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"ok")
+
+        def do_GET(self):
+            seen.append(("GET", None))
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"ok")
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        fppd.start()
+        t0 = time.monotonic()
+        fppd.command("URL", f"http://127.0.0.1:{srv.server_port}/hook", "POST", "", timeout=20)
+        took = time.monotonic() - t0
+    finally:
+        srv.shutdown()
+    assert seen and seen[0][0] == "POST", seen
+    assert seen[0][1] == "0", seen
+    assert took < 10, took
