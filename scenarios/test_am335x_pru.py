@@ -926,3 +926,67 @@ def test_a_matrix_output_creates_its_overlay_model(fppd):
                   what=f"the matrix's model (have {model_names(fppd)})")
     model = [m for m in fppd.get("/models") if m.get("Name") == "Wall"][0]
     assert model.get("ChannelCount") == 64 * 32 * 3, model
+
+
+def test_abc_shift_row_addressing_builds_the_shift_register_firmware(fppd):
+    """A matrix saved with Panel Addressing Type "ABC Shift" (3) builds its
+    firmware with ADDRESSING_ABC_SHIFT and a row chain as long as the
+    panel is tall (a row driver per band of scan rows is clocked one bit
+    per panel row); a Standard matrix builds with neither.
+
+    Regression: 7a3d38c5f. BBBMatrix had no ABC shift register row
+    addressing, so a panel whose row drivers are shift registers (A the
+    clock, C the data) showed the wrong rows.
+    """
+    pru = FakePruss(fppd)
+    fppd.settings(LogLevel_ChannelOut="debug")
+    octoscroller(singlePRU=True)
+    cfg = matrix_config(panelRowAddressType=3)
+    fppd.write("config/channeloutputs.json", cfg)
+    pru.start()
+    builds = matrix_builds(fppd)
+    assert builds and "-DADDRESSING_ABC_SHIFT=1" in builds[-1] and "-DROW_CHAIN=32" in builds[-1], builds
+    # the control: Standard addressing builds without them
+    cfg["channelOutputs"][0]["panelRowAddressType"] = 0
+    n = len(builds)
+    save(fppd, "config/channeloutputs.json", cfg)
+    fppd.wait_for(lambda: len(matrix_builds(fppd)) > n, timeout=60, what="the rebuild")
+    last = matrix_builds(fppd)[-1]
+    assert "-DADDRESSING_ABC_SHIFT=1" not in last and not any(a.startswith("-DROW_CHAIN") for a in last), last
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "master: BBBPru::run() clears the PRU memories before it enables the core, and BBBMatrix "
+    "(unlike BBB48String, 163d57ad4) calls it with the defaults, so with both cores stopped "
+    "the clear faults. With clearMems false on both of its run() calls this passes."))
+def test_a_matrix_starting_with_both_cores_stopped_does_not_touch_pru_memory(fppd):
+    """fppd starting a BBBMatrix output while both PRU cores are stopped
+    (as after an fppd that used them exited) starts it without touching
+    the PRU memories before the core runs: the fake makes that RAM
+    inaccessible while every core is offline, as the PRUSS's can be.
+
+    Regression: ccf8b5b28. Init() wrote the matrix control block and cleared
+    both PRUs' data RAM before either run(); on a PRUSS that was not
+    clocked those writes aborted the process (the BeagleBone crashes of
+    10.1, in memset behind clearPRUMem()).
+
+    Found failing on master: Init()'s own writes are gone, but run() clears
+    the memories before it enables the core (since a later change, so a
+    restart does not see the last run's handshake words), which is the same
+    crash from BBBPru::run() (BBBPruUtils.cpp). BBB48String avoids it by
+    asking run() not to clear (163d57ad4); BBBMatrix, and BBBSerial,
+    do not. Expected to fail until they do; strict, so it says when it is
+    fixed.
+    """
+    pru = FakePruss(fppd, states=("offline", "offline"), offline_fault="all")
+    octoscroller()
+    fppd.write("config/channeloutputs.json", matrix_config())
+    pru.start()
+    fppd.wait_for(lambda: pru.starts(0) or "Crash handler called" in fppd.log(), timeout=60,
+                  what="the matrix's PRU to start")
+    fppd.command("Test Start", "1000", "RGB Chase", "*", "FF0000-00FF00-0000FF")
+    time.sleep(3)
+    assert "Crash handler called" not in fppd.log(), fppd.tail()
+    assert pru.starts(0), pru.events()
+    assert pru.remoteproc_state(0) == "running"
+    fppd.command("Test Stop")
