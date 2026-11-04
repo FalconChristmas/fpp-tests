@@ -58,3 +58,26 @@ test('a Seq+Media entry whose sequence is gone shows no length, and says the seq
   await expect(row).toContainText(`ERROR: Sequence "${SEQ}" Not Found`);
   await expect(row.locator('.humanDuration')).toHaveText('');
 });
+
+test('a sequence entry whose file is gone names the file', async ({ page }) => {
+  // Feature: 5106ac8b7 ("Display errors in playlist UI when a media or
+  // sequence file does not exist").
+  const modal = page.locator('.modal.show');
+  await page.selectOption('#pe_type', 'sequence');
+  await modal.locator('select.arg_sequenceName').selectOption(SEQ);
+  inPlayer('rm', '-f', seqPath);
+  const row = await addEntry(page);
+  await expect(row).toContainText(`ERROR: Sequence "${SEQ}" Not Found`);
+  await expect(row.locator('.humanDuration')).toHaveText('');
+});
+
+test('a media entry whose file is gone names the file', async ({ page }) => {
+  // Feature: 5106ac8b7, as above; the media API answers 404 for the file.
+  const modal = page.locator('.modal.show');
+  await page.selectOption('#pe_type', 'media');
+  await modal.locator('select.arg_mediaName').selectOption(MEDIA);
+  inPlayer('rm', '-f', mediaPath);
+  const row = await addEntry(page);
+  await expect(row).toContainText(`ERROR: Media File "${MEDIA}" Not Found`);
+  await expect(row.locator('.humanDuration')).toHaveText('');
+});
