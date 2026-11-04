@@ -112,6 +112,21 @@ function withDDPReceiver() {
   });
 }
 
+test("the colour sliders show their colour in the fill's colour box", async ({ page }) => {
+  // Regression: 0cd7dc4a4 ("fix rgb sliders on display testing page").  The
+  // sliders handed their values to the colour picker as strings, which it
+  // read as hex digits: R, G, B of 10, 20, 30 drew the box #102030.
+  await openTesting(page);
+  await page.locator('#solid-color-tab').click();
+  for (const [el, value] of [['#testModeColorR', 10], ['#testModeColorG', 20], ['#testModeColorB', 30]] as const) {
+    await page.locator(el).fill(String(value));
+    await page.locator(el).dispatchEvent('input');
+  }
+  await expect(page.locator('#testModeColorRText')).toHaveText('10');
+  await expect(page.locator('#testModeColorBText')).toHaveText('30');
+  await expect(page.locator('.color-box').first()).toHaveCSS('background-color', 'rgb(10, 20, 30)');
+});
+
 test.describe('the Channel Fader', () => {
   withDDPReceiver();
 
