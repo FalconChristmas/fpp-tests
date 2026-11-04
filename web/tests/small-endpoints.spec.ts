@@ -263,6 +263,26 @@ test('Restart FPPD on a remote says which mode it set, and the remote takes it',
   expect.soft(verdict.ok, verdict.detail).toBe(true);
 });
 
+test('Shutdown on a remote asks that remote to shut down', async ({ request }) => {
+  // Feature: f86789e34 ("Add mode setting and shutdown/reboot actions to
+  // multisync"): shutdownRemoteFPP.php, which the MultiSync page's Shutdown
+  // action streams.  The remote is a stand-in on a host of its own that
+  // records what it is sent.
+  test.setTimeout(120_000);
+  const remote = StandIn.sibling('shutdown', { '/api/system/shutdown': { json: { status: 'OK' } } });
+  try {
+    remote.start();
+    const r = await request.post(`/shutdownRemoteFPP.php?ip=${remote.address}`, { timeout: 60_000 });
+    expect(r.status()).toBe(200);
+    const body = await r.text();
+    expect(body).toContain(`Shutting down FPP system @ ${remote.address}`);
+    const asked = remote.requests().filter((q) => q.path.split('?')[0] === '/api/system/shutdown');
+    expect(asked.map((q) => q.method), 'what the remote was asked').toEqual(['POST']);
+  } finally {
+    remote.stop();
+  }
+});
+
 test('a branch change asked for by a script or a remote gets no page script in its output', async ({ request }) => {
   // Regression: a1ddad2da ("suppress script output when calling change branch
   // from remote system").  changebranch.php put a <script> after every line
