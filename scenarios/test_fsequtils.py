@@ -414,3 +414,32 @@ def test_a_file_of_more_than_255_blocks_reads_whole(tmp_path):
     _, got = read_fseq(out)
     bad = [i for i in range(len(frames)) if got[i] != frames[i]]
     assert not bad, f"frames {bad[:20]} wrong of {len(frames)}"
+
+
+@pytest.mark.skipif(zstandard is None, reason="the zstandard module is not installed")
+def test_only_a_v2_1_file_is_written_with_more_than_255_blocks(tmp_path):
+    """A sequence big enough for 500 blocks: asked for v2.1, it gets more than
+    255; asked for v2.0, whose readers take the byte for the whole count, it
+    keeps to 255. Both read back frame for frame.
+
+    Regression: 6a32eeb8d (the extended block count made a minor version
+    feature, the file saying 2.1)."""
+    channels, count = 64 * 1024, 1000
+    frames = [bytes([i & 0xFF, i >> 8]) * (channels // 2) for i in range(count)]
+    src = str(tmp_path / "big.fseq")
+    write_fseq_reference(src, frames, step_ms=25)
+    for fmt, minor in (("2.1", 1), ("2", 0)):
+        out = str(tmp_path / f"out-{fmt}.fseq")
+        rc, stdout, err = fsequtils("-f", fmt, "-c", "zstd", "-o", out, src)
+        assert rc == 0, stdout + err
+        with open(out, "rb") as f:
+            head = f.read(32)
+        blocks = ((head[20] >> 4) << 8) | head[21]
+        if minor:
+            assert blocks > 255, f"-f {fmt}: {blocks} blocks"
+        else:
+            assert blocks <= 255, f"-f {fmt}: {blocks} blocks"
+        hdr, got = read_fseq(out)
+        assert hdr["minor"] == minor, hdr
+        bad = [i for i in range(count) if got[i] != frames[i]]
+        assert not bad, f"-f {fmt}: frames {bad[:20]} wrong of {count}"
