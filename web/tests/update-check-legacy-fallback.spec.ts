@@ -7,6 +7,7 @@ import { test, expect } from './fixtures';
 // the page is told it is on one (FPP_BRANCH, which the fallback compares).
 
 test('the fallback update check offers a newer release branch of the installed version', async ({ page, request }) => {
+  // Also guards 3d0e21993: every page's JS has FPP_MAJOR_VERSION.
   // Regression: b0cea2da9 ("Fix error on console related to version function
   // not available").  The fallback compared each branch with
   // getFPPVersionFloat(), a PHP function no script defines: a ReferenceError
