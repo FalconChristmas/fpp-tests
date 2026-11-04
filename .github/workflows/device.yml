@@ -112,9 +112,9 @@ jobs:
             exit 0
           fi
           python3 scripts/device-tests.py docker-results/junit.xml > device-tests.txt
-          # the panel test box runs only its own scenarios
+          # the panel test box runs only the scenarios that need a panel cape
           if [ "$DEVICE" = am62x-panel ]; then
-            grep test_panelbox_ device-tests.txt > device-tests.only || true
+            grep 'test_panelbox_\|test_am62x_panels\|test_am62x_shift_panel_single_pru\|test_am62x_ledscape_matrix' device-tests.txt > device-tests.only || true
             mv device-tests.only device-tests.txt
           fi
           echo "$(wc -l < device-tests.txt) scenarios the Docker run skipped"

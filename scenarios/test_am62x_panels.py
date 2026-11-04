@@ -8,6 +8,7 @@ other cape. The GPIO lines are the real ones, so stop the device's own fppd
 first. Skipped elsewhere.
 """
 
+import json
 import os
 import time
 
@@ -51,6 +52,20 @@ def needs_panel_config(fppd):
     is refused before it reaches what these scenarios test."""
     if "Could not read panel pin configuration for PocketScroller" in fppd.log():
         pytest.skip("the cape has no PocketScroller panel config (not a panel cape)")
+
+
+def needs_16_outputs(fppd):
+    """Skip on a panel cape with fewer than 16 outputs (the 8-output
+    PocketScroller): fppd loads the 8-output images there, which these
+    scenarios' 16-output firmware and refresh expectations don't describe."""
+    path = "/home/fpp/media/tmp/panels/PocketScroller.json"
+    try:
+        with open(path) as f:
+            outputs = len(json.load(f)["outputs"])
+    except (OSError, ValueError, KeyError):
+        return
+    if outputs < 16:
+        pytest.skip(f"the cape has {outputs} panel outputs, not 16")
 
 
 def save_outputs(fppd, cfg):
@@ -171,6 +186,7 @@ def test_a_chain_too_long_for_60hz_is_warned_about(fppd):
         panelColorDepth=12, panels=panels)))
     fppd.start(timeout=60)
     needs_panel_config(fppd)
+    needs_16_outputs(fppd)
     w = [x for x in warnings_of(fppd) if x.startswith("LED panel refresh rate is only ")]
     assert w and int(w[0].split("only ")[1].split("Hz")[0]) < 60, warnings_of(fppd)
 
@@ -299,6 +315,7 @@ def test_the_refresh_estimate_is_the_refresh_the_prus_reach(real_pru, fppd):
         ledPanelsLayout="4x16", panelColorDepth=12, panels=panels)))
     fppd.start(timeout=60)
     needs_panel_config(fppd)
+    needs_16_outputs(fppd)
     est = [l for l in fppd.log().splitlines() if "est refresh" in l]
     assert est, fppd.tail()
     estimate = int(est[-1].split("est refresh ")[1].split(" Hz")[0])
@@ -400,6 +417,7 @@ def test_a_pwm_panel_type_runs_the_pwm_firmware(real_pru, fppd, ptype):
     fppd.write("config/channeloutputs.json", panels_config(matrix(1, (0,), panelType=ptype)))
     fppd.start(timeout=60)
     needs_panel_config(fppd)
+    needs_16_outputs(fppd)
     run_a_test_pattern(fppd, seconds=3)
     assert installed_program(1) == image("BBShiftPanel_pwm_16.out"), "PRU1 is not running the PWM firmware"
     assert installed_program(0) == image("BBShiftPanel_gclk.out"), "PRU0 is not running the GCLK firmware"

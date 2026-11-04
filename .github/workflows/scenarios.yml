@@ -222,11 +222,12 @@ jobs:
             host_pru: true
             timeout: 180
           # The panel test box (a PocketBeagle2 with a BBShiftPanel cape and
-          # panels): only its own scenarios, test_panelbox_*.py, which skip
-          # everywhere else
+          # panels): only the scenarios that need a panel cape, which skip
+          # on the other boards (test_panelbox_*.py and the panel files
+          # named here)
           - device: am62x-panel
             host_pru: true
-            only: test_panelbox_
+            only: 'test_panelbox_\|test_am62x_panels\|test_am62x_shift_panel_single_pru\|test_am62x_ledscape_matrix'
             timeout: 120
     runs-on:
       group: Devices
