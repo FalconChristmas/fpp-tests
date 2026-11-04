@@ -31,6 +31,8 @@ test('a proxy posted is listed, with its description', async ({ request }) => {
 });
 
 test('an entry whose host is not a host is dropped, and a description cannot break a config line', async ({ request }) => {
+  // Regression: d3109b082, on this write path: a line break in a description
+  // ended its "# D:" comment line in Apache's config.
   const r = await request.post('/api/system/proxies', { form: {
     '0[host]': 'bad host\nRewriteRule evil', '0[description]': 'dropped',
     '1[host]': 'good.example', '1[description]': '<b>tag</b>\nRewriteRule evil',
