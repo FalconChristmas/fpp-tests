@@ -62,6 +62,32 @@ test.afterEach(async ({ request }) => {
   await request.delete(`/api/playlist/${NAME}`);
 });
 
+test('choosing a .flac for a sequence and media entry picks the sequence of the same name', async ({ page, request }) => {
+  // Feature: 3db38d7eb.  MediaChanged() strips the media extension to find the
+  // matching sequence, and .flac was not one of those it knew.
+  test.skip(!container, "puts files in the run-web.sh container's media");
+  const base = 'fpp-tests-flac-match';
+  const other = 'fpp-tests-flac-other';
+  const files = [`/home/fpp/media/music/${base}.flac`, `/home/fpp/media/sequences/${base}.fseq`, `/home/fpp/media/sequences/${other}.fseq`];
+  inPlayer('touch', ...files);
+  try {
+    await storePlaylist(request, []);
+    await openEditor(page);
+    await openNewEntry(page);
+    const modal = page.locator('.modal.show');
+    await page.selectOption('#pe_type', 'both');
+    const seq = modal.locator('select.arg_sequenceName');
+    await expect(seq.locator(`option[value="${base}.fseq"]`)).toHaveCount(1);
+    await seq.selectOption(`${other}.fseq`);
+    const media = modal.locator('select.arg_mediaName');
+    await expect(media.locator(`option[value="${base}.flac"]`)).toHaveCount(1);
+    await media.selectOption(`${base}.flac`);
+    await expect(seq).toHaveValue(`${base}.fseq`);
+  } finally {
+    inPlayer('rm', '-f', ...files);
+  }
+});
+
 test('a Command entry for a command with no arguments edits and saves', async ({ page, request }) => {
   // Regression: 4a0b596f1.  api/commands has no "args" key for a command
   // with none (All Lights Off), and ComputeArgGroupBoundaries() threw on it:
