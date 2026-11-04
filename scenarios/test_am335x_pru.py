@@ -362,9 +362,19 @@ def octoscroller(**over):
     return p
 
 
-def needs_bbb():
+def clock_on_a_pru_pin(p):
+    """Move the pinout's clock to a PRU output pin, which splits the GPIO
+    banks across the PRUs, and return the pin's pinctrl name. The BBB's
+    pinout has the clock on a GPIO and PRU pins elsewhere, so the clock
+    moves to P8-12 (r30 bit 14) with sel0 to a GPIO; the PocketBeagle's
+    swaps its clock with its latch, which is the PRU pin."""
+    c = p["controls"]
     if pocketbeagle():
-        pytest.skip("uses the BeagleBone Black's Octoscroller pinout")
+        c["clock"], c["latch"] = c["latch"], c["clock"]
+        return c["clock"]["pin"].replace("-", "_")
+    c["clock"] = {"pin": "P8-12", "type": "pruout"}
+    c["sel0"] = {"pin": "P9-16", "type": "gpio"}
+    return "P8_12"
 
 
 def matrix_builds(fppd):
@@ -379,14 +389,13 @@ def test_a_matrix_config_warning_comes_down_when_the_config_is_fixed(fppd):
     Regression: 46da36631. BBBMatrix raised its Init() failures with a plain
     AddWarning(), which an output reload never retracts.
     """
-    needs_bbb()
     pru = FakePruss(fppd)
-    octoscroller()
+    name = octoscroller()["name"]
     fppd.write("config/channeloutputs.json", matrix_config(wiringPinout="v3"))
     pru.start()
 
     def missing():
-        return [w for w in warnings_of(fppd) if "no output pin configuration for Octoscroller-v3" in w]
+        return [w for w in warnings_of(fppd) if f"no output pin configuration for {name}-v3" in w]
 
     assert missing(), warnings_of(fppd)
     save(fppd, "config/channeloutputs.json", matrix_config())
@@ -408,7 +417,6 @@ def test_a_long_line_in_the_dimming_file_is_read_safely(fppd):
     Also covers e3a1f2558 (its BBBMatrix half): an exit(1) left after the
     firmware build ended fppd before the panel PRU was started.
     """
-    needs_bbb()
     pru = FakePruss(fppd)
     octoscroller()
     with open(DIMMING, "w") as f:
@@ -464,7 +472,6 @@ def test_six_bit_panels_show_the_top_bits_of_each_colour(fppd):
     Regression: f0290cd1a. PrepData took bits 0-5, the low bits, so both
     came out black: an all-zero frame.
     """
-    needs_bbb()
     pru = FakePruss(fppd)
     fppd.settings(LogLevel_ChannelOut="info")
     octoscroller(singlePRU=True)
@@ -495,18 +502,19 @@ def test_a_one_twentieth_scan_panel_drives_the_e_line(fppd):
     Regression: 67470f1dd. The E line was enabled for 1/32 scan only, so
     rows 16-19 were driven as rows 0-3.
     """
-    needs_bbb()
     pru = FakePruss(fppd)
     fppd.settings(LogLevel_ChannelOut="debug")
     p = stock_panel_pinout("Octoscroller")
-    p["controls"]["sel4"] = {"pin": "P9-41", "type": "gpio"}
-    write_panel_pinout("Octoscroller", p)
+    if not pocketbeagle():  # the PocketScroller's pinout has the E line
+        p["controls"]["sel4"] = {"pin": "P9-41", "type": "gpio"}
+    write_panel_pinout(p["name"], p)
+    e_pin = p["controls"]["sel4"]["pin"].replace("-", "_")
     mark = pinctrl_mark()
     fppd.write("config/channeloutputs.json", matrix_config(w=80, h=40, scan=20))
     pru.start()
     builds = matrix_builds(fppd)
     assert builds and "-DE_SCAN_LINE" in builds[-1], builds
-    assert any(c.startswith("-s P9_41 ") for c in pinctrl_calls(mark)), pinctrl_calls(mark)
+    assert any(c.startswith(f"-s {e_pin} ") for c in pinctrl_calls(mark)), pinctrl_calls(mark)
 
 
 def test_a_gpio_clock_keeps_the_panel_output_on_one_pru(fppd):
@@ -521,7 +529,6 @@ def test_a_gpio_clock_keeps_the_panel_output_on_one_pru(fppd):
     Also covers 5816eed4b (the host side of the split): without it the
     PRU-clock pinout is never split either.
     """
-    needs_bbb()
     pru = FakePruss(fppd)
     fppd.settings(LogLevel_ChannelOut="debug")
     p = octoscroller()
@@ -531,9 +538,8 @@ def test_a_gpio_clock_keeps_the_panel_output_on_one_pru(fppd):
     builds = matrix_builds(fppd)
     assert builds and "-DSPLIT_GPIO" not in builds[-1], builds
     # the control: a PRU clock (P8-12 is pr1_pru0_pru_r30_14) splits
-    p["controls"]["clock"] = {"pin": "P8-12", "type": "pruout"}
-    p["controls"]["sel0"] = {"pin": "P9-16", "type": "gpio"}
-    write_panel_pinout("Octoscroller", p)
+    clock_on_a_pru_pin(p)
+    write_panel_pinout(p["name"], p)
     two["channelOutputs"][0]["brightness"] = 9
     n = len(builds)
     save(fppd, "config/channeloutputs.json", two)
@@ -549,21 +555,19 @@ def test_a_panel_pinout_that_says_single_pru_is_not_split_across_the_prus(fppd):
     Regression: 791f7e138, the pinout's singlePRU key. The control is the
     same pinout without it, which splits.
     """
-    needs_bbb()
     pru = FakePruss(fppd)
     fppd.settings(LogLevel_ChannelOut="debug")
     p = octoscroller()
-    p["controls"]["clock"] = {"pin": "P8-12", "type": "pruout"}
-    p["controls"]["sel0"] = {"pin": "P9-16", "type": "gpio"}
+    clock_on_a_pru_pin(p)
     p["singlePRU"] = True
-    write_panel_pinout("Octoscroller", p)
+    write_panel_pinout(p["name"], p)
     two = matrix_config(panels=((0, 0), (1, 0)))
     fppd.write("config/channeloutputs.json", two)
     pru.start()
     builds = matrix_builds(fppd)
     assert builds and "-DSPLIT_GPIO" not in builds[-1], builds
     del p["singlePRU"]
-    write_panel_pinout("Octoscroller", p)
+    write_panel_pinout(p["name"], p)
     two["channelOutputs"][0]["brightness"] = 9
     n = len(builds)
     save(fppd, "config/channeloutputs.json", two)
@@ -578,7 +582,6 @@ def test_a_panel_pinouts_data_offset_is_where_the_frames_start(fppd):
 
     Regression: 791f7e138, the pinout's dataOffset key.
     """
-    needs_bbb()
     starts = {}
     for offset in (None, 256):
         pru = FakePruss(fppd)
@@ -608,12 +611,11 @@ def test_nine_panel_outputs_use_the_last_timing_entry(fppd):
     8 outputs and were indexed with the output count unchecked, so 9 or
     more outputs read past the table.
     """
-    needs_bbb()
     pru = FakePruss(fppd)
     fppd.settings(LogLevel_ChannelOut="debug")
     p = stock_panel_pinout("Octoscroller")
     p["outputs"] = p["outputs"] + p["outputs"]  # 16 outputs
-    write_panel_pinout("Octoscroller", p)
+    write_panel_pinout(p["name"], p)
     # chains of 8: the 8 output entry is above the timing floor (0x4500)
     eight = matrix_config(panels=((0, 0), (7, 7)))
     fppd.write("config/channeloutputs.json", eight)
@@ -638,7 +640,6 @@ def test_the_copy_firmware_is_built_for_the_core_it_runs_on(fppd):
     raised PRU0's event. A static check of the assembled program: the
     fake runs no PRU code.
     """
-    needs_bbb()
     pru = FakePruss(fppd)
     octoscroller()
     fppd.write("config/channeloutputs.json", matrix_config())
@@ -756,7 +757,6 @@ def test_strings_and_panels_get_their_own_ddr_regions(fppd):
     two buffers ran past 64 KB, where the panel cape's dataOffset started
     the panel frames, and each corrupted the other.
     """
-    needs_bbb()
     pru = FakePruss(fppd)
     fppd.settings(LogLevel_ChannelOut="info")
     octoscroller(singlePRU=True, dataOffset=64)
@@ -783,17 +783,15 @@ def test_a_pru_control_pin_is_muxed_with_a_mode_pinctrl_knows(fppd, tmp_path):
     pinctrl, which on the AM335x has no such mode: "Unknown mode", and the
     pin stayed a GPIO.
     """
-    needs_bbb()
     pru = FakePruss(fppd)
     p = stock_panel_pinout("Octoscroller")
-    p["controls"]["clock"] = {"pin": "P8-12", "type": "pruout"}
-    p["controls"]["sel0"] = {"pin": "P9-16", "type": "gpio"}
-    write_panel_pinout("Octoscroller", p)
+    pin = clock_on_a_pru_pin(p)
+    write_panel_pinout(p["name"], p)
     mark = pinctrl_mark()
     fppd.write("config/channeloutputs.json", matrix_config())
     pru.start()
-    calls = [c for c in pinctrl_calls(mark) if c.startswith("-s P8_12 ")]
-    assert calls == ["-s P8_12 pruout"], pinctrl_calls(mark)
+    calls = [c for c in pinctrl_calls(mark) if c.startswith(f"-s {pin} ")]
+    assert calls == [f"-s {pin} pruout"], pinctrl_calls(mark)
     from test_am335x_pinctrl import Pinmux, pinctrl
     r = pinctrl(fppd, Pinmux(tmp_path), *calls[0].split())
     assert r.returncode == 0, r.stdout
@@ -843,7 +841,6 @@ def test_direct_row_select_builds_the_ab_addressing_firmware(fppd):
     took 1 for direct row select, so the page's setting never reached the
     firmware.
     """
-    needs_bbb()
     pru = FakePruss(fppd)
     fppd.settings(LogLevel_ChannelOut="debug")
     octoscroller(singlePRU=True)
@@ -868,7 +865,6 @@ def test_the_matrix_hands_the_pru_each_of_its_frames_in_turn(fppd):
     frame was always 1, so only frames 0 and 1 were used and the one being
     shown could be the one being written: tearing.
     """
-    needs_bbb()
     pru = FakePruss(fppd)
     fppd.settings(LogLevel_ChannelOut="info")
     octoscroller(singlePRU=True)
