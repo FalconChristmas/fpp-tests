@@ -24,6 +24,8 @@ async function openRemote(page: Page) {
   await expect(page.locator('#remoteModeInfo')).toBeVisible({ timeout: 15_000 });
 }
 
+// Also guards 1db6ad0cd (the remote-mode volume slider): with it undone the
+// slider is not shown.
 test('the remote view\'s volume slider sets fppd\'s volume', async ({ page, request }) => {
   // Guards a51936e82 (#1132): the remote slider was wired with the jQuery UI
   // slider's stop callback, which a plain range input never fires, so
