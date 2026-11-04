@@ -154,6 +154,22 @@ test('a media file is served in ranges for playback', async ({ request }) => {
   void bytes;
 });
 
+// 4c8300641: a script is saved and read through /api/scripts/:scriptName.
+test('a script is saved and read back by its name', async ({ request }) => {
+  inPlayer('sh', '-c', `mkdir -p ${MEDIA}/scripts && touch ${MEDIA}/scripts/fpp-tests-save.sh`);
+  try {
+    const saved = await request.post('/api/scripts/fpp-tests-save.sh', {
+      headers: { 'Content-Type': 'application/json' },
+      data: JSON.stringify('#!/bin/sh\necho saved\n'),
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    const read = await request.get('/api/scripts/fpp-tests-save.sh');
+    expect(await read.text()).toContain('echo saved');
+  } finally {
+    remove('scripts/fpp-tests-save.sh');
+  }
+});
+
 // ddbe1524d: the route used to build a URL with the command name 'Run Script' unencoded.
 test('the script run route starts the script through the Run Script command', async ({ request }) => {
   inPlayer('sh', '-c', `mkdir -p ${MEDIA}/scripts ${MEDIA}/tmp && printf '#!/bin/sh\\ntouch ${MEDIA}/tmp/fpp-tests-script-ran\\n' > "${MEDIA}/scripts/fpp-tests-run.sh" && chmod +x "${MEDIA}/scripts/fpp-tests-run.sh" && rm -f ${MEDIA}/tmp/fpp-tests-script-ran`);
