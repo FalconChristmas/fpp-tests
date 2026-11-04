@@ -167,6 +167,30 @@ def test_a_playing_video_reaches_an_overlay_model(fppd, audio):
                   what="the model to be disabled again after the video")
 
 
+def test_the_video_output_hdmi_is_the_display_not_a_model_of_that_name(fppd, audio):
+    """VideoOutput "HDMI" means the display, as "--HDMI--" does: with an overlay
+    model called HDMI configured, a video plays and that model stays off.
+
+    Regression: 9ddef8c44. Only "--HDMI--" was recognised, and anything else
+    was taken for the name of a pixel overlay model. There is no display in
+    Docker, so this shows where the video does not go; the connector it does
+    go to is the --host-audio tests'."""
+    make_video(os.path.join(fppd.media, "videos", "Bars.mkv"), seconds=6)
+    fppd.write("config/co-universes.json", ddp_output(W * H * 3))
+    fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [dict(model(), Name="HDMI")]})
+    fppd.settings(DisableFakeNetworkBridges="1", VideoOutput="HDMI")
+    fppd.start()
+    fppd.command("Play Media", "Bars.mkv", "1", "0", "1", "--Default--")
+    fppd.wait_for(lambda: "GStreamer started playing: Bars.mkv" in fppd.log(), timeout=15,
+                  interval=0.2, what="the video to play")
+    end = time.monotonic() + 4
+    while time.monotonic() < end:
+        assert fppd.get("/overlays/model/HDMI")["isActive"] == 0, "the video went to the model HDMI"
+        assert not any(fppd.get("/overlays/model/HDMI/data")["data"]), "the model HDMI shows the video"
+        time.sleep(0.2)
+    assert "HDMI-A-1 is not connected" in fppd.log(), "it was not taken for the display"
+
+
 def test_a_video_with_no_sound_plays_at_its_own_speed(fppd, audio):
     """A video with no audio track, to a video group with an overlay
     member and no display: it plays for its length, and the model shows it.
