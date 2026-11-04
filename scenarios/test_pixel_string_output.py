@@ -143,6 +143,31 @@ def test_an_auto_created_model_counts_the_pixels_a_group_count_shows(fppd):
     assert m["ChannelCount"] == 30, m
 
 
+def test_a_strings_auto_model_leaves_a_users_model_of_that_name_alone(fppd):
+    """A user's overlay model named like a virtual string is left as the user
+    defined it, and no second model is even tried: nothing is logged about the
+    name being taken.
+
+    Regression: 8536bbe8f. The auto models were created without checking for
+    the name. PixelOverlayManager::addModel() now keeps the first definition of
+    a name, so the user's model survives either way, and the warning is what
+    shows the auto model was attempted."""
+    throw_plugin.install(fppd, source="pixelstringdump.cpp", name="PixelStringDump")
+    fppd.write(fppd.strings_config, outputs(port_config(fppd, 10)))
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": [{
+        "Name": "port1", "Type": "Channel", "StartChannel": 1001, "ChannelCount": 150,
+        "ChannelCountPerNode": 3, "Orientation": "horizontal", "StartCorner": "TL",
+        "StringCount": 1, "StrandsPerString": 1}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    m = fppd.wait_for(lambda: models(fppd).get("port1"), what="the user's model")
+    # The strings are set up after the models load, and only then would the
+    # warning be logged; a frame on the wire shows they have been.
+    fppd.wait_for(lambda: wire(fppd), what="the port's first frame")
+    assert m["StartChannel"] == 1001 and m["ChannelCount"] == 150, m
+    assert "already exists" not in fppd.log(), fppd.tail()
+
+
 def test_unnamed_virtual_strings_get_lettered_model_names(fppd):
     """A port of three unnamed virtual strings gets overlay models named
     String-1A-1, String-1A-2, String-1A-3.
