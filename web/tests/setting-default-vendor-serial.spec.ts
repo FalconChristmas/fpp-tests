@@ -22,3 +22,12 @@ test('a never-set Send Cape Serial Numbers setting reads as on', async ({ reques
   const all = await (await request.get('/api/settings/showAllOptions')).json();
   expect(String(all.value), JSON.stringify(all)).toBe('0');
 });
+
+test('a never-set Fetch cape logos setting reads as on', async ({ request }) => {
+  // Regression: 532fa4c73.  FetchVendorLogos' default in settings.json was
+  // 0, so a player whose settings file never had it showed no cape vendor
+  // images; the commit made the default 1.
+  setSettingInFile('FetchVendorLogos', undefined);
+  const logos = await (await request.get('/api/settings/FetchVendorLogos')).json();
+  expect(String(logos.value), JSON.stringify(logos)).toBe('1');
+});

@@ -58,7 +58,7 @@ test('playlists.php carries ?playlist= into its script as text', async ({ reques
 });
 
 test('backup.php does not copy a non-numeric ?tab= into its script', async ({ request }) => {
-  // 244e8ff55
+  // Regression: 244e8ff55 (a huntr report): ?tab= went into the script as given.
   const r = await request.get(`/backup.php?tab=${encodeURIComponent("1';alert(1)//")}`);
   const body = await r.text();
   expect(body).not.toContain("';alert(1)");
@@ -66,7 +66,7 @@ test('backup.php does not copy a non-numeric ?tab= into its script', async ({ re
 });
 
 test('virtualdisplay.php takes ?width= as a number only', async ({ request }) => {
-  // 6f1032331
+  // Regression: 6f1032331: ?width= was echoed into the page's script as given.
   const r = await request.get(`/virtualdisplay.php?width=${encodeURIComponent('1"><script>alert(1)</script>')}`);
   const body = await r.text();
   expect(body).not.toContain('><script>alert(1)</script>');
