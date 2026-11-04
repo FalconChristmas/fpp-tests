@@ -77,3 +77,47 @@ test('a Falcon V3 and a V4 are polled by the player and show what they reported'
     v4.stop();
   }
 });
+
+test("a Falcon's warnings show only for what it reports", async ({ page }) => {
+  // Regression: 5188f9d34 ("Fix logic").  testmode and overtemp are Boolean
+  // objects, always truthy: "if (testmode)" warned about test mode and high
+  // temperature on every Falcon.  They are compared with true now.
+  const status = (TS: number, T1: number) => ({
+    '/api': { json: { T: 'R', status_name: 'idle', P: { BS: 60, T1, T2: T1, V1: 124, V2: 50, TS, U: 100, BR: 16 } } },
+  });
+  const quiet = StandIn.sibling('falcon-quiet', status(0, 300));
+  const testing = StandIn.sibling('falcon-testing', status(1, 300));
+  const hot = StandIn.sibling('falcon-hot', status(0, 700));
+  try {
+    quiet.start();
+    testing.start();
+    hot.start();
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await answerUpdateCheck(page);
+    await page.route('**/api/proxies', (route) => route.fulfill({ json: [] }));
+    await page.route('**/api/fppd/multiSyncSystems', (route) => route.fulfill({ json: { systems: [
+      system(LOCAL, 'FPPTESTLOCAL', 13, { local: 1, fppMode: 2, fppModeString: 'player', uuid: 'M1-fpptests-local', multiSyncCapable: 1, type: 'Raspberry Pi 4', model: 'Raspberry Pi 4 Model B' }),
+      system(quiet.address, 'FPPTESTQUIET', 0x88),
+      system(testing.address, 'FPPTESTTESTING', 0x88),
+      system(hot.address, 'FPPTESTHOT', 0x88),
+    ] } }));
+    await page.route('**/api/git/branches', (route) => route.fulfill({ json: ['master'] }));
+    await page.route('**/api/files/uploads', (route) => route.fulfill({ json: { files: [] } }));
+    await page.goto('/multisync.php');
+
+    const warningsOf = async (hostname: string) => {
+      const row = page.locator('#fppSystems tr.systemRow', { hasText: hostname });
+      // The status has been applied once the row shows the voltage: the
+      // warnings are set in the same step.
+      await expect(row).toContainText('12.4v', { timeout: 20_000 });
+      return page.locator(`[id="${await row.getAttribute('id')}_warningCell"]`);
+    };
+    await expect(await warningsOf('FPPTESTQUIET')).toHaveText('');
+    await expect(await warningsOf('FPPTESTTESTING')).toHaveText('Controller Test mode is active');
+    await expect(await warningsOf('FPPTESTHOT')).toHaveText('Pixel brightness reduced due to high temperatures');
+  } finally {
+    quiet.stop();
+    testing.stop();
+    hot.stop();
+  }
+});
