@@ -77,6 +77,7 @@ PrintSettingTextSaved('HostName', 0, 0, 32, 32);
   });
 
   test("a setting's change callback is told which setting changed", () => {
+    // Also guards 19ae97bdb: the callback gets the setting's name.
     // Regression: 38dd28b51.  The callback was called with no arguments, so
     // one callback shared by several settings could not tell them apart.
     const out = php(`
