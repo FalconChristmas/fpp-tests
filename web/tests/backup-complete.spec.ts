@@ -22,6 +22,9 @@ import { BACKUPS, readFile, setSettingInFile, snapshotSettings } from './setting
 // e5ccf755a ("Fix 'System Settings' failing & generating HTTP 500", #2163):
 // the email sub-area, which has no file of its own, was dropped only from an
 // "All" backup, so a "settings" backup answered 500.
+//
+// The form test also guards e9fb05077 ("Attempted fix on downloading settings
+// backup as JSON"): config.php's script output ahead of the download.
 
 test.skip(!container, 'needs the player run-web.sh serves (FPP_TESTS_WEB_CONTAINER)');
 
