@@ -28,6 +28,9 @@ test('the grow-partition page runs the BeagleBone grow and then enables the resi
   // Also 2ae382565: the enable command read "systemctl enable enable
   // resize_filesystem.service", which systemd refuses; the recorded call
   // has to be the plain "enable resize_filesystem.service".
+  // Also 7594ad4f0, which brought in the bb-growpart branch: before it a
+  // BeagleBone always ran SD/BBB-grow_partition.sh, which can't grow a
+  // Bullseye image's partition.
   test.skip(present(GROWPART) || present(SYSTEMCTL), 'the player has its own bb-growpart or a systemctl in /usr/local/bin');
   const hadPlatform = present(PLATFORM);
   try {
