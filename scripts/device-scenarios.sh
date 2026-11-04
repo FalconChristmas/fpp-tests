@@ -8,10 +8,9 @@
 # first everything but the ones that drive the real PRUs (marked host_pru:
 # they use the real_pru fixture), then those alone under --host-pru. They
 # can't share one: the FAKE_PRU scenarios need the PRUs hidden, the host_pru
-# ones need them there. On a board with smart receivers attached
-# (FPP_TESTS_V5_PORTS set) the scenarios that need the cape's real signed
-# EEPROM and pinmux too (host_receiver) are a third, under --host-i2c
-# --host-pinctrl. run-local.sh clears artifacts/ as it starts, so the
+# ones need them there. On a board whose cape is signed
+# (FPP_TESTS_REAL_CAPE set) the scenarios that need the cape's real EEPROM and
+# pinmux too (host_cape) are a third, under --host-i2c --host-pinctrl. run-local.sh clears artifacts/ as it starts, so the
 # first pass's is kept aside and the two put back together as one run's.
 set -u
 cd "$(dirname "$0")/.."
@@ -35,17 +34,18 @@ status=0
 [ $status = 5 ] && status=0
 rm -rf artifacts.main
 mv artifacts artifacts.main
-./run-local.sh "${opts[@]}" --host-pru "$@" -m "host_pru and not host_receiver" --junitxml=artifacts/junit-pru.xml
+./run-local.sh "${opts[@]}" --host-pru "$@" -m "host_pru and not host_cape" --junitxml=artifacts/junit-pru.xml
 s=$?
 # 5: none of these scenarios drives the real PRUs
 [ $s = 0 ] || [ $s = 5 ] || status=$s
 results=(artifacts/junit-main.xml)
-if [ -n "${FPP_TESTS_V5_PORTS:-}" ]; then
-    # a board with smart receivers attached: its scenarios need the cape's
-    # real signed EEPROM and pinmux as well, a pass of their own
+if [ -n "${FPP_TESTS_REAL_CAPE:-}" ]; then
+    # a board whose cape is signed (smart receivers, panels beyond the first
+    # output): its scenarios need the cape's real EEPROM and pinmux as well,
+    # a pass of their own
     rm -rf artifacts.pru
     mv artifacts artifacts.pru
-    ./run-local.sh "${opts[@]}" --host-pru --host-i2c --host-pinctrl "$@" -m host_receiver --junitxml=artifacts/junit-receiver.xml
+    ./run-local.sh "${opts[@]}" --host-pru --host-i2c --host-pinctrl "$@" -m host_cape --junitxml=artifacts/junit-receiver.xml
     s=$?
     # 5: none of them was picked
     [ $s = 0 ] || [ $s = 5 ] || status=$s

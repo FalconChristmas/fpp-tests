@@ -23,18 +23,14 @@ import pytest
 
 from bbcape import pixel_output, strings_config
 import pru
-from pru import real_pru  # noqa: F401 (a fixture)
+from pru import real_cape, real_pru  # noqa: F401 (fixtures)
 
 
 @pytest.fixture
-def real_receiver(real_pru):
-    """real_pru, and the cape as it is on the device: its real EEPROM,
-    signed, through the real I2C bus (run-local.sh --host-i2c), and the real
-    pinctrl muxing the listener's pad (--host-pinctrl); with the stub the
-    receivers are never heard. And the receivers' ports, from
+def real_receiver(real_cape):
+    """real_cape (with the stub pinctrl the listener's pad is never muxed
+    and the receivers are never heard), and the receivers' ports, from
     FPP_TESTS_V5_PORTS."""
-    if not (os.environ.get("FPP_TESTS_HOST_I2C") and os.environ.get("FPP_TESTS_HOST_PINCTRL")):
-        pytest.skip("needs run-local.sh --host-i2c --host-pinctrl")
     return receiver_ports()
 
 

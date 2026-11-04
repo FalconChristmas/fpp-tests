@@ -56,9 +56,10 @@ test fppd sees the cape signed, as the device's own does: its licensed outputs, 
 strings, smart-receiver ports and every panel output work. Cape detection then binds and
 unbinds the EEPROM on the real bus, so stop the device's own fppd and fppoled first and use
 it only on a device kept for testing. Add `--host-pinctrl` for what depends on a pad's mux
-(the Falcon V5 receivers' listener, `test_k8max_v5_receiver.py`). The Device runs do this
-as a pass of their own, only on the board with receivers attached
-(`FPP_TESTS_V5_PORTS`, set by the workflow).
+(the Falcon V5 receivers' listener, `test_k8max_v5_receiver.py`). A scenario asks for it
+with the `real_cape` fixture (marker `host_cape`); the Device runs take those in a pass of
+their own, only on the boards whose capes are signed (`FPP_TESTS_REAL_CAPE`, set by the
+workflow; `FPP_TESTS_V5_PORTS` names the receivers' ports on the one that has them).
 
 `--host-audio` instead plays media through the device's own PipeWire and sound card,
 and records the card's sink, so a scenario can measure against the card's real clock

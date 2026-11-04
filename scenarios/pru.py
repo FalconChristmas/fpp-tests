@@ -96,6 +96,18 @@ def real_pru():
 
 
 @pytest.fixture
+def real_cape(real_pru):
+    """real_pru, and the cape as it is on the device: its real EEPROM,
+    signed, through the real I2C bus (run-local.sh --host-i2c), so what an
+    unsigned cape cuts is whole (every output licensed, strings of their
+    full length, smart-receiver ports sending), and the real pinctrl muxing
+    its pads (--host-pinctrl). scripts/device-scenarios.sh runs these as a
+    pass of their own."""
+    if not (os.environ.get("FPP_TESTS_HOST_I2C") and os.environ.get("FPP_TESTS_HOST_PINCTRL")):
+        pytest.skip("needs run-local.sh --host-i2c --host-pinctrl")
+
+
+@pytest.fixture
 def real_pru_am335x():
     """real_pru for an AM335x BeagleBone (a BeagleBone Black or a
     PocketBeagle), whose PRUSS is at 0x4a300000 with 12KB of shared RAM."""

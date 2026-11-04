@@ -168,8 +168,10 @@ jobs:
           # On the AM62x board the scenarios that drive the real PRUs take a
           # second pass (scripts/device-scenarios.sh).
           HOST_PRU: ${{ startsWith(github.event.inputs.device, 'am62x') && '1' || '' }}
-          # the receivers on the K8-Max's ports 9-12 (the am62x board)
+          # the receivers on the K8-Max's ports 9-12 (the am62x board); both
+          # boards' capes are signed, which takes a pass of its own
           V5_PORTS: ${{ github.event.inputs.device == 'am62x' && '9-12' || '' }}
+          REAL_CAPE: ${{ startsWith(github.event.inputs.device, 'am62x') && '1' || '' }}
         # HOST_AUDIO and PYTEST_ARGS are left unquoted on purpose, to split
         # into arguments. The node ids go in a file (pytest's @file), one per
         # line, since some carry spaces in their parameters.
@@ -178,7 +180,7 @@ jobs:
           [ -f device-tests.txt ] && TESTS="@$PWD/device-tests.txt"
           # No bytecode: as root it lands in scenarios/__pycache__, which the
           # runner then cannot remove.
-          sudo env PYTHONDONTWRITEBYTECODE=1 HOST_PRU="$HOST_PRU" FPP_TESTS_V5_PORTS="$V5_PORTS" scripts/device-scenarios.sh --fpp fpp $HOST_AUDIO -v -rA $PYTEST_ARGS ${TESTS:+"$TESTS"}
+          sudo env PYTHONDONTWRITEBYTECODE=1 HOST_PRU="$HOST_PRU" FPP_TESTS_V5_PORTS="$V5_PORTS" FPP_TESTS_REAL_CAPE="$REAL_CAPE" scripts/device-scenarios.sh --fpp fpp $HOST_AUDIO -v -rA $PYTEST_ARGS ${TESTS:+"$TESTS"}
 
       - name: Start them again
         if: always() && env.RESTART_SERVICES != ''
