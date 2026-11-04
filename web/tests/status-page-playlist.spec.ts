@@ -218,8 +218,29 @@ test.describe('while bridging', () => {
 
   test('with nothing to play they stay hidden', async ({ page }) => {
     // The control for the test above.
+    // Regression: ed4687ce6.  A player that was only bridging, with no
+    // playlist or sequence, showed the player controls all the same.
     await bridgingPage(page, {}, []);
     await page.waitForTimeout(4000);
     await expect(page.locator('#playerModeInfo')).toBeHidden();
+  });
+
+  test('in remote mode they stay hidden though there is a playlist', async ({ page }) => {
+    // Regression: f6fc5d6f6 (#1028).  A remote with E1.31 stats on is
+    // bridging too; with a playlist on it the controls were shown by the
+    // bridging check and hidden again by remote mode, every status update.
+    await bridgingPage(page, { mode: 8, mode_name: 'remote' });
+    // Watch for it being shown at all, however briefly, from here on.
+    await page.evaluate(() => {
+      const el = document.getElementById('playerModeInfo')!;
+      (window as any).fppTestsShown = 0;
+      new MutationObserver(() => {
+        if (getComputedStyle(el).display !== 'none') (window as any).fppTestsShown++;
+      }).observe(el, { attributes: true, attributeFilter: ['style', 'class'] });
+    });
+    await expect(page.locator('#playlistSelect option', { hasText: NAME })).toHaveCount(1, { timeout: 15_000 });
+    await page.waitForTimeout(4000);
+    await expect(page.locator('#playerModeInfo')).toBeHidden();
+    expect(await page.evaluate(() => (window as any).fppTestsShown), 'the controls were shown').toBe(0);
   });
 });

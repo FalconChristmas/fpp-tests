@@ -1,4 +1,6 @@
 import { test, expect } from './fixtures';
+import { container, inPlayer } from './container';
+import { putFile } from './settings-file';
 
 // The Model Name list on the Display Testing page (testing.php) sets the
 // start and end channel the test covers.
@@ -43,4 +45,31 @@ test('the whole-range entries of the Model Name list set their channel range', a
   await expect(page.locator('#testModeEndChannel')).toHaveValue(end);
   await expect(page.locator('#channelIncrement')).toHaveValue('3');
   expect(errors).toEqual([]);
+});
+
+// The page's "All Local Channels" entry and its starting range come from the
+// channel ranges fppd wrote to fpp-info.json: the lowest start to the highest
+// end of them, each "<first>-<last>", 0-based.
+test('All Local Channels spans every local channel range, not just the first', async ({ request }) => {
+  // Regression: 9bc483a6e ("Fix channel range on test page to include the
+  // entire range").  Each range was split out of the whole list instead of
+  // itself, so with two ranges the page offered 1-100 for "0-99,200-299".
+  test.skip(!container, 'writes fpp-info.json inside the run-web.sh container');
+  const INFO = '/home/fpp/media/fpp-info.json';
+  const before = inPlayer('sh', '-c', `cat ${INFO} 2>/dev/null || true`);
+  let info: Record<string, unknown> = {};
+  try { info = JSON.parse(before); } catch { /* none yet */ }
+  try {
+    putFile(INFO, JSON.stringify({ ...info, channelRanges: '0-99,200-299' }));
+    const html = await (await request.get('/testing.php')).text();
+    expect(html).toMatch(/<option value='1,300'>-- All Local Channels --/);
+    expect(html).toMatch(/value='1' id='testModeStartChannel'/);
+    expect(html).toMatch(/value='300' id='testModeEndChannel'/);
+    // The control: one range.
+    putFile(INFO, JSON.stringify({ ...info, channelRanges: '10-19' }));
+    expect(await (await request.get('/testing.php')).text()).toMatch(/<option value='1,20'>-- All Local Channels --/);
+  } finally {
+    if (before) putFile(INFO, before);
+    else inPlayer('rm', '-f', INFO);
+  }
 });
