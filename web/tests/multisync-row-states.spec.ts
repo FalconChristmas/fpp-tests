@@ -69,3 +69,16 @@ test('a remote whose status answer is empty is skipped without breaking the tabl
   expect(errors).toEqual([]);
   await expect(page.locator('#fppSystems tr.systemRow')).toHaveCount(2);
 });
+
+test("a remote's mode cell follows its status when it changes between refreshes", async ({ page }) => {
+  // Regression: f9d225def.  A refresh updated the status and versions but
+  // left the mode cell as the discovery list first had it.
+  let mode = 8;
+  const row = await open(page, () => status('idle', { mode, mode_name: mode === 8 ? 'remote' : 'player' }));
+  await expect(row).toContainText('Remote');
+  mode = 2;
+  const polled = page.waitForResponse((r) => r.url().includes('/api/system/status'));
+  await page.locator('#refreshStatsButton').click();
+  await polled;
+  await expect(row).toContainText('Player', { timeout: 15_000 });
+});
