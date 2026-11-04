@@ -20,7 +20,7 @@ const sh = (cmd: string) => inPlayer('sh', '-c', cmd);
 const exists = (p: string) => sh(`test -e "${p}" && echo yes || echo no`).trim() === 'yes';
 
 test.beforeEach(() => { sh(`mkdir -p ${IMAGES}`); putFile(`${IMAGES}/${NAME}`, PNG); sh(`chmod 666 ${IMAGES}/${NAME}`); });
-test.afterEach(() => sh(`rm -f ${IMAGES}/${NAME} ${IMAGES}/${RENAMED}`));
+test.afterEach(() => sh(`rm -f ${IMAGES}/${NAME} ${IMAGES}/${RENAMED} ${IMAGES}/null`));
 
 async function imagesTab(page: Page) {
   await page.goto(`/filemanager.php?fpp-tests=${Date.now()}#tab-images`);
@@ -43,4 +43,22 @@ test('Rename on the Images tab is off with nothing selected and renames the sele
   await rename.click();
   await expect.poll(() => exists(`${IMAGES}/${RENAMED}`)).toBe(true);
   expect(exists(`${IMAGES}/${NAME}`), 'a rename moves the original').toBe(false);
+});
+
+test('cancelling the Rename prompt leaves the image alone', async ({ page }) => {
+  // Regression: 04d541614 ("Don't rename files to "null" if cancel is
+  // pressed").  prompt() answers null, which went into the rename URL.
+  const asked: string[] = [];
+  page.on('request', (r) => { if (r.url().includes('/rename/')) asked.push(r.url()); });
+  const pane = await imagesTab(page);
+  const row = page.locator('#tblImages tbody tr').filter({ has: page.locator('td', { hasText: new RegExp(`^${NAME.replace('.', '\\.')}$`) }) });
+  await row.click();
+  page.once('dialog', (d) => d.dismiss());
+  await pane.locator('input[value="Rename"]').click();
+  // RenameFile posts straight after the prompt returns: give the post, if there
+  // is one, time to be sent and carried out.
+  await page.waitForTimeout(1000);
+  expect(asked, 'no rename was asked for').toEqual([]);
+  expect(exists(`${IMAGES}/${NAME}`), 'the image keeps its name').toBe(true);
+  expect(exists(`${IMAGES}/null`), 'no image called null').toBe(false);
 });
