@@ -379,3 +379,17 @@ def test_git_pull_rebases_a_branch_with_a_stray_second_upstream(fppinit):
         f"the checkout did not move onto origin's v1 (HEAD {branch or 'detached'}):\n{out[-3000:]}"
     assert "make optimized" in made(fppinit) or "make all" in made(fppinit), \
         f"nothing was rebuilt: {made(fppinit)}\n{out[-3000:]}"
+
+
+def test_install_plugin_stops_when_the_clone_fails(fppinit):
+    """A plugin whose repository cannot be fetched: install_plugin says so,
+    exits 1 and leaves no directory for the plugin, rather than carrying on to
+    configure and run the install of a plugin that is not there.
+
+    Regression: 8bfba3c2c, the script half. The web half (the name and URL
+    reaching a shell) is shell-input-refused.spec.ts's."""
+    r, out = plugin_script(fppinit, "install_plugin", "fpp-missing",
+                           f"{MEDIA}/tmp/no-such-plugin.git", "main")
+    assert "Failed to fetch fpp-missing" in out, out[-3000:]
+    assert r.returncode == 1, f"exit {r.returncode}:\n{out[-3000:]}"
+    assert not fppinit.media_exists("plugins/fpp-missing"), out[-3000:]
