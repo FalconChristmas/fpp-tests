@@ -52,6 +52,8 @@ async function openMultisync(page: Page, peer: string) {
 }
 
 test("a proxied remote's host name and Modified links open the remote, through /proxy/", async ({ page }) => {
+  // Also cbf760c31, which first sent a proxied system's links through
+  // /proxy/ (wrapUrlWithProxy).
   // Regression: 4e88d77f2.  The host name linked to http://<address>/
   // directly, and api/proxies' entries ({host, description}) were kept
   // whole, so no address was ever found in the proxy list: a remote only
