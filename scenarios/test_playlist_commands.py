@@ -347,7 +347,10 @@ def test_start_playlist_if_not_running_leaves_a_running_one_alone(fppd):
 
 def test_toggle_playlist(fppd):
     """Toggle Playlist starts the playlist when it isn't running and stops
-    it when it is."""
+    it when it is.
+
+    Feature: 4bf4c4f53, which added the command (shown red against master
+    with it unregistered)."""
     fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(30), step(2)]))
     fppd.start()
     fppd.command("Toggle Playlist", "P", "false", "Now")

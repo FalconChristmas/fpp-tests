@@ -180,7 +180,9 @@ test('with fppd not running, the banner says so with a link to its help', async 
   // Regression: b34efb531.  The "FPPD Daemon is not running" warning was
   // added to the status's warnings but not its warningInfo, which the banner
   // draws from since 10a9b9802: it was left off.  Its definition (id 1)
-  // gained a help page then.  fppd keeps running for the suite, so the page
+  // gained a help page then.  Also 7e766032c ("Warning on status if fppd not
+  // running"), which added the warning: red with it taken out.  fppd keeps
+  // running for the suite, so the page
   // is shown what it would get without it: no socket, and the status PHP
   // gives when fppd does not answer.
   await page.routeWebSocket('**/fppdws', (ws) => ws.close());
