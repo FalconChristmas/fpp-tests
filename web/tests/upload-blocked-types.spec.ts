@@ -38,3 +38,23 @@ test('server-executable upload types are refused', async ({ request }) => {
     inPlayer('rm', '-f', ...['fpp-tests-upload.txt', ...names].map((n) => `${UPLOADS}/${n}`));
   }
 });
+
+test('an uploaded file name loses the characters a shell or a page would act on', async ({ request }) => {
+  // Regression: 1142fc231 (a huntr report).  jqupload.php stored a file
+  // under the name it was sent, "<", "$", "&" and all; it now runs the name
+  // through sanitizeFilename() and answers with the name it stored.  Moving
+  // the upload by the name it was sent still finds it (files.php).
+  const sent = 'fpp-tests<b>$x&y.png';
+  const kept = 'fpp-testsbxy.png';
+  try {
+    expect(JSON.parse(await upload(request, sent))).toEqual([kept]);
+    expect(stored(kept)).toBe(true);
+    expect(stored(sent)).toBe(false);
+    const r = await request.post(`/api/file/move/${encodeURIComponent(sent)}`);
+    expect(await r.json()).toEqual({ status: 'OK' });
+    expect(stored(kept)).toBe(false);
+    expect(inPlayer('sh', '-c', `test -e '/home/fpp/media/images/${kept}' && echo yes || echo no`).trim()).toBe('yes');
+  } finally {
+    inPlayer('sh', '-c', `rm -f '${UPLOADS}/${kept}' '/home/fpp/media/images/${kept}' '${UPLOADS}/${sent}' '/home/fpp/media/images/${sent}'`);
+  }
+});

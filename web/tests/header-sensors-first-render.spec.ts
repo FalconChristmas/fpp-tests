@@ -1,5 +1,7 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
+import { container } from './container';
+import { setSettingInFile, snapshotSettings } from './settings-file';
 
 // The header bar shows one sensor at a time.  The sensors reach the page in
 // fppd's /fppdws snapshots; this player has none, so the test adds three to
@@ -47,5 +49,27 @@ test('with three sensors and the first one chosen, only the first shows when the
     await expect(visible).toContainText('CPU');
   } finally {
     await request.put(key, { data: String(before ?? '0'), headers: { 'Content-Type': 'text/plain' } });
+  }
+});
+
+test('with no header sensor ever chosen, the header starts at sensor 1', async ({ page }) => {
+  // Regression: 5c28df837.  menu.inc read $settings['currentHeaderSensor']
+  // unguarded; on a settings file without it (settings.json has no default)
+  // that was an "Undefined index" warning and an empty data-defaultsensor,
+  // so the header fell back to sensor 0 and saved that.  It now assumes 1.
+  test.skip(!container, 'edits the settings file inside the run-web.sh container');
+  const restore = snapshotSettings();
+  try {
+    setSettingInFile('currentHeaderSensor', undefined);
+    await addSensors(page);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto('/index.php');
+    await expect(page.locator('#header_sensors')).toHaveAttribute('data-defaultsensor', '1');
+    const visible = page.locator('#header_sensors .sensorSpan:visible');
+    await expect(page.locator('#header_sensors .sensorSpan')).toHaveCount(3, { timeout: 15_000 });
+    await expect(visible).toHaveCount(1);
+    await expect(visible).toContainText('Supply');
+  } finally {
+    restore();
   }
 });

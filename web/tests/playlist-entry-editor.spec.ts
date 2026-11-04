@@ -113,6 +113,29 @@ test('a Command entry for a command with no arguments edits and saves', async ({
   expect(mine?.valid, JSON.stringify(mine)).toBe(true);
 });
 
+test('a URL entry has a Note, and the editor keeps it', async ({ page, request }) => {
+  // Feature: 225aa3994 ("Add a Note field to PlaylistEntryURL").  Every
+  // other entry type had a Note; a URL entry's editor had none, so its note
+  // could not be seen or changed, and a save dropped one set by hand.
+  await storePlaylist(request, [{ type: 'url', enabled: 1, playOnce: 0, method: 'GET', url: 'http://127.0.0.1/fpp-tests', data: '',
+    note: 'fpp-tests url note' }]);
+  const errors = pageErrors(page);
+  await openEditor(page);
+  await page.locator('.playlistRowEditButton').first().click();
+  const modal = page.locator('.modal.show');
+  await expect(modal.locator('.modal-title')).toHaveText('Edit Entry');
+  await expect(modal.locator('input.arg_url')).toHaveValue('http://127.0.0.1/fpp-tests');
+  const note = modal.locator('input.arg_note');
+  await expect(note).toHaveValue('fpp-tests url note');
+  await note.fill('fpp-tests url note, edited');
+  await modal.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(modal).toBeHidden();
+  await savePlaylist(page);
+  expect(errors).toEqual([]);
+  const entry = (await storedPlaylist(request)).mainPlaylist[0];
+  expect(entry).toMatchObject({ type: 'url', url: 'http://127.0.0.1/fpp-tests', note: 'fpp-tests url note, edited' });
+});
+
 const MUSIC = '/home/fpp/media/music';
 const MAIN = 'fpp-tests-main.mp3';
 const EXTRA = 'fpp-tests-extra.mp3';
