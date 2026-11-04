@@ -61,3 +61,34 @@ test('an Image entry naming its file by full path is not reported missing', asyn
   await openAndResave(page);
   await expect(row).toContainText('Image File "fpp-tests-no-such-image.png" Not Found');
 });
+
+test("an Image entry's Choose File lists the images, with the entry's own picked, and picks another", async ({ page, request }) => {
+  // Regression: 0fd2098fc ("Fix file chooser").  The chooser read the
+  // listing of api/files/<dir> as an array, but it is {files: [...]}: the
+  // list was always empty, so no file could be chosen.
+  inPlayer('sh', '-c', `mkdir -p ${IMAGES}/fpp-tests-image-path && printf x > ${IMAGES}/fpp-tests-chooser-a.png && printf x > ${IMAGES}/fpp-tests-chooser-b.png`);
+  try {
+    await storePlaylist(request, 'fpp-tests-chooser-a.png');
+    await page.goto('/playlists.php');
+    await page.locator('.playlistCard h3', { hasText: new RegExp(`^${NAME}$`) }).click();
+    await expect(page.locator('#playlistEditor')).toHaveClass(/hasPlaylistDetailsLoaded/);
+    await page.evaluate(() => {
+      (window as any).fppTestsModalShown = false;
+      document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsModalShown = true; }, { once: true });
+    });
+    await page.locator('.playlistRowEditButton').first().click();
+    await page.waitForFunction(() => (window as any).fppTestsModalShown);
+    const modal = page.locator('.modal.show');
+    const field = modal.locator('input.arg_imagePath');
+    await expect(field).toHaveValue('fpp-tests-chooser-a.png');
+    await modal.locator("input[value='Choose File']").click();
+    const select = page.locator('#fileChooserSelect');
+    await expect(select.locator('option', { hasText: 'fpp-tests-chooser-b.png' })).toHaveCount(1, { timeout: 10_000 });
+    await expect(select.locator('option', { hasText: 'fpp-tests-chooser-a.png' })).toHaveCount(1);
+    await expect(select).toHaveValue('fpp-tests-chooser-a.png');
+    await select.selectOption('fpp-tests-chooser-b.png');
+    await expect(field).toHaveValue('fpp-tests-chooser-b.png');
+  } finally {
+    inPlayer('rm', '-f', `${IMAGES}/fpp-tests-chooser-a.png`, `${IMAGES}/fpp-tests-chooser-b.png`);
+  }
+});

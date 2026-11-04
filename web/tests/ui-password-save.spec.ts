@@ -115,3 +115,32 @@ test('Save UI Password writes the password before turning it on, so Apache asks 
     await disablePassword(request);
   }
 });
+
+test('a UI password with spaces, quotes and a dollar sign is the one Apache asks for', async ({ request }) => {
+  // Regression: e956cfd8e ("Fixes #840 - special characters in passwords").
+  // The password went to htpasswd on a shell command line unquoted, so a
+  // space split it, a quote was eaten and $NAME expanded: Apache then wanted
+  // something other than what the user typed.  It is hashed in PHP now.
+  test.setTimeout(90_000);
+  const SPECIAL = `fpp tests "pw" $HOME 'x'`;
+  const put = (name: string, value: string, password = '') => request.put(`/api/settings/${name}`, {
+    data: value, headers: password ? { Authorization: 'Basic ' + Buffer.from(`admin:${password}`).toString('base64') } : {},
+  });
+  try {
+    await keepingSettings(async () => {
+      // The control: a plain password.
+      expect((await put('password', PASSWORD)).ok()).toBe(true);
+      expect((await put('passwordEnable', '1')).ok()).toBe(true);
+      await expect.poll(() => status('/api/fppd/version'), { timeout: 20_000, message: 'no password is asked for' }).toBe(401);
+      expect(await status('/api/fppd/version', PASSWORD), 'Apache refuses the plain password').toBe(200);
+
+      expect((await put('password', SPECIAL, PASSWORD)).ok()).toBe(true);
+      await expect.poll(() => status('/api/fppd/version', SPECIAL), { timeout: 20_000, message: 'Apache refuses the password set' }).toBe(200);
+      expect(await status('/api/fppd/version', PASSWORD), 'the old password still works').toBe(401);
+      expect(await status('/api/fppd/version', 'fpp'), 'the first word of it is taken').toBe(401);
+      expect((await put('passwordEnable', '0', SPECIAL)).ok()).toBe(true);
+    });
+  } finally {
+    await disablePassword(request);
+  }
+});

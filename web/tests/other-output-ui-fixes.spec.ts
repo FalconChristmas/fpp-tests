@@ -106,3 +106,27 @@ test('a PCA9685 port shows and saves its type, brightness and gamma', async ({ p
     inPlayer('rm', '-f', '/dev/i2c-1');
   }
 });
+
+test('a PCA9685 port shows and saves its description', async ({ page, request }) => {
+  // Regression: dae9118a1 ("renamed PCA9685 'name' field to 'description'").
+  // fppd and the other outputs call a port's label "description"; the
+  // PCA9685 page read and wrote "name", so a port's description was not
+  // shown and an edit was saved where nothing reads it.
+  inPlayer('touch', '/dev/i2c-1');
+  try {
+    await put(request, [pca([port({ description: 'fpp-tests port zero' }), port({ description: 'fpp-tests port one' })])]);
+    await open(page, 'PWM');
+    const row = rows(page, 'PWM').first();
+    await expect(row.locator('input.description0')).toHaveValue('fpp-tests port zero');
+    await expect(row.locator('input.description1')).toHaveValue('fpp-tests port one');
+    await row.locator('input.description0').fill('fpp-tests port zero, edited');
+    await page.locator('#tab-other-PWM input[value="Save"]:not(.Zebra_Pin_Clone *)').click();
+    await expect.poll(async () => (await saved(request)).find((o) => o.type === 'PCA9685')?.ports?.[0]?.description,
+      { timeout: 15_000 }).toBe('fpp-tests port zero, edited');
+    const ports = (await saved(request)).find((o) => o.type === 'PCA9685').ports;
+    expect(ports[1].description).toBe('fpp-tests port one');
+    expect(ports[0].name, 'saved under the old key').toBeUndefined();
+  } finally {
+    inPlayer('rm', '-f', '/dev/i2c-1');
+  }
+});

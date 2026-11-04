@@ -56,3 +56,24 @@ test('choosing a Multisync host reloads the playlist list from that host', async
   expect(own, 'the control: the player is not on port 80').toMatch(/:\d+$/);
   expect(origins.every((o) => o === own), `${origins.join(',')} is not ${own}`).toBe(true);
 });
+
+test('a saved command for a Multisync host opens with the lists from that host', async ({ page, request }) => {
+  // Feature: 99f567521 ("On command load, load gpio's and playlists and
+  // such from remote if multisync hosts is set").  Reopened, a command
+  // saved for another player showed this player's lists, so a playlist
+  // only that player has could not be shown as the one chosen.
+  const REMOTE_ONLY = 'fpp-tests-on-the-host-only';
+  await put(request, { command: 'Start Playlist', args: [REMOTE_ONLY, 'false', 'false'], multisyncCommand: true, multisyncHosts: HOST });
+  const asked: string[] = [];
+  await page.route(/\/proxy\/192\.0\.2\.77\//, (route) => {
+    asked.push(new URL(route.request().url()).pathname);
+    return route.fulfill({ json: [REMOTE_ONLY] });
+  });
+  await page.goto('/index.php');
+  await page.locator('button', { hasText: 'Run FPP Command' }).click();
+  const dialog = page.locator('#commandEditorPopup');
+  await expect(dialog.locator('#editorCommand')).toHaveValue('Start Playlist', { timeout: 15_000 });
+  await expect(dialog.locator('#tblCommandEditor_multisync')).toBeChecked();
+  await expect(dialog.locator('#tblCommandEditor_arg_1')).toHaveValue(REMOTE_ONLY);
+  expect(asked).toContain(`/proxy/${HOST}/api/playlists/playable`);
+});
