@@ -141,3 +141,23 @@ test('the page a plugin opens is its status page, read from its menu', async ({ 
   await page.goto(`/${await open.getAttribute('href')}`);
   await expect(page.locator('#fpp-tests-status')).toBeVisible();
 });
+
+test("a plugin's menu entries are items of the menu they name, under a Plugins heading", async ({ page }) => {
+  // Regression: 7eb68f31c ("Menu - fix to allow plugins to show correctly in
+  // the menu").  The menus became Bootstrap dropdowns, which show only their
+  // .dropdown-item links, but a plugin's menu file still printed list items
+  // with plain links in them, so they were drawn as stray, unstyled lines.
+  // The menu now strips the <li>s and makes each link a dropdown item, the
+  // new (menu.inc) and the old (status_menu.inc) way of declaring one alike.
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto('/index.php');
+  const menu = page.locator('[aria-labelledby="navbarDropdownMenuLinkStatus"]');
+  const items = menu.locator(':scope > a.dropdown-item[href*="plugin.php"]');
+  await expect(items.filter({ hasText: 'Status' })).toHaveAttribute('href', new RegExp(`plugin=${WITH_ICON}&page=status\\.php`));
+  await expect(items.filter({ hasText: 'Old Menu' })).toHaveCount(1);
+  await expect(menu.locator('li')).toHaveCount(0);
+  await expect(menu.locator(':scope > h6.dropdown-header', { hasText: 'Plugins' })).toHaveCount(1);
+  // And they show when the menu is opened.
+  await page.locator('#navbarDropdownMenuLinkStatus').click();
+  await expect(items.filter({ hasText: 'Old Menu' })).toBeVisible();
+});
