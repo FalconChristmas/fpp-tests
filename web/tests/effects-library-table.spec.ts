@@ -49,6 +49,8 @@ test('the Start dialog asks for the start channel it was given', async ({ page, 
   // the one fppd takes off (StartEffect's startChannel - 1), so the effect ran
   // a channel early; asked for channel 1 it passed 0, which fppd reads as
   // "where the effect's file says".
+  // Also guards 9d8ebb104 ("Allow eseq to run from UI"): the page compared the
+  // type with 'ESEQ', so an .eseq went out as an FSEQ Effect Start.
   await page.goto('/effects.php');
   const row = page.locator('#tblEffectLibrary tbody tr', { hasText: 'fpp-tests-fx-a' });
   await row.locator('button', { hasText: 'Start' }).click();
