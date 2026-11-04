@@ -188,3 +188,13 @@ def test_preset_names_fill_the_trigger_commands_list(fppd):
     assert fppd.get("/commandPresets?names=true") == ["Alpha", "Beta"]
     arg = fppd.get("/commands/Trigger%20Command%20Preset")["args"][0]
     assert arg.get("contentListUrl") == "api/commandPresets?names=true", arg
+
+
+def test_preset_names_are_an_empty_list_with_no_presets(fppd):
+    """GET /api/commandPresets?names=true answers [] with no presets file.
+
+    Regression: 57aa3326e. The list was a Json::Value left unset, which serializes as
+    null when nothing is appended.
+    """
+    fppd.start()
+    assert fppd.get("/commandPresets?names=true") == []
