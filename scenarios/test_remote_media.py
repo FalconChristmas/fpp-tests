@@ -14,6 +14,7 @@ nothing steady to steer to -- so these run with run-local.sh --host-audio
 first seeks to it, then slews the rest.
 """
 
+import json
 import os
 import re
 import shutil
@@ -223,6 +224,50 @@ def test_a_remote_moves_to_the_masters_next_file_on_a_sync_packet(fppd, audio):
         errors = [w for w in fppd.get("/fppd/status").get("warnings", []) if "starting media" in w]
         assert not errors, errors
         assert "System exception starting media" not in fppd.log()
+        send("stop", "media", 0, 0.0, "B.wav")
+    finally:
+        sock.close()
+
+
+def test_a_remotes_first_media_tells_plugins_a_playlist_started(fppd, audio):
+    """A remote has no playlists, but plugins that only get going when one
+    starts need to work there too: on the first media it plays, a script
+    plugin's playlist callback gets a "start" for a playlist called FPP
+    Remote, and only on the first.
+
+    Regression: f4c9e9729 ("Hopefully fix crash") moved this into the
+    media-open path; the crash it was after is not reproduced here. Runs in
+    Docker against the null sink (the audio fixture)."""
+    from audio import write_tone_wav
+    from test_plugin_scripts import events, plugin
+    for name in ("A.wav", "B.wav"):
+        write_tone_wav(os.path.join(fppd.media, "music", name), 30)
+    d = plugin(fppd)
+    fppd.settings(fppMode="remote")
+    fppd.start()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    send = lambda *a: sock.sendto(sync_packet(*a), ("127.0.0.1", PORT))
+
+    def calls():
+        return [json.loads(line[len("playlist --data "):]) for line in events(d)
+                if line.startswith("playlist --data ")]
+    try:
+        time.sleep(2)
+        assert not calls(), "a playlist start before any media"
+        send("open", "media", 0, 0.0, "A.wav")
+        send("start", "media", 0, 0.0, "A.wav")
+        try:
+            fppd.wait_for(calls, timeout=15, interval=0.25, what="a playlist callback")
+        except TimeoutError as e:
+            raise AssertionError(f"{e}; the plugin got {events(d)}") from None
+        first = calls()[0]
+        assert first.get("Action") == "start" and first.get("name") == "FPP Remote", first
+        send("stop", "media", 0, 0.0, "A.wav")
+        time.sleep(1)
+        send("open", "media", 0, 0.0, "B.wav")
+        send("start", "media", 0, 0.0, "B.wav")
+        time.sleep(3)
+        assert len(calls()) == 1, calls()
         send("stop", "media", 0, 0.0, "B.wav")
     finally:
         sock.close()
