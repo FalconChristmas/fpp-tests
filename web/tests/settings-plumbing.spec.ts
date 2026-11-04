@@ -146,6 +146,11 @@ if ($argv[1] === 'page') {
     echo json_encode(ob_get_clean());
     exit;
 }
+if ($argv[1] === 'plain') {
+    PrintSettingTextSaved('fppTestsTextSetting', 0, 0, 32, 32);
+    echo json_encode(ob_get_clean());
+    exit;
+}
 if ($argv[1] === 'extras') {
     // Two class-identified inputs whose value decides a child row, and one
     // with its own change handler.
@@ -180,6 +185,24 @@ test('a text setting can be rendered identified by class instead of id', async (
     const byId = input('');
     expect(byId).toMatch(/id='fppTestsTextSetting'/);
     expect(byId).not.toMatch(/mw-100 fppTestsTextSetting/);
+  } finally {
+    inPlayer('rm', '-f', DRIVER);
+  }
+});
+
+test('a text setting with & and # in its value is saved whole', async ({ page }) => {
+  // Regression: 3bef57187.  The text box's save put the value in a URL, cut
+  // at its first & or # until it was encoded.
+  putFile(DRIVER, DRIVER_SRC);
+  try {
+    const html = JSON.parse(inPlayer('php', DRIVER, 'plain').trim().split('\n').pop()!) as string;
+    await page.goto('/index.php');
+    await page.waitForFunction(() => typeof (window as any).SetSetting === 'function');
+    await page.evaluate((h) => (window as any).$('<div id="fppTestsHost"></div>').html(h).appendTo('body'), html);
+    const input = page.locator('#fppTestsHost #fppTestsTextSetting');
+    await input.fill('a&b=c#d');
+    await input.dispatchEvent('change');
+    await expect.poll(() => settingInFile('fppTestsTextSetting')).toBe('a&b=c#d');
   } finally {
     inPlayer('rm', '-f', DRIVER);
   }
