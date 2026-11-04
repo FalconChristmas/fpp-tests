@@ -29,6 +29,8 @@ test('the remote view\'s volume slider sets fppd\'s volume', async ({ page, requ
   // slider's stop callback, which a plain range input never fires, so
   // moving it changed nothing in fppd.  Not red on its own revert: the
   // input's oninput (effd594e1) now sends the volume too.
+  // Also 281fd7cbe, which gave the remote view its volume control: red
+  // with the slider taken out.
   const was = await volume(request);
   try {
     await request.post('/api/system/volume', { data: { volume: 50 } });
