@@ -127,3 +127,38 @@ def test_url_command_with_an_empty_post_body_sends_a_post(fppd):
     assert seen and seen[0][0] == "POST", seen
     assert seen[0][1] == "0", seen
     assert took < 10, took
+
+
+def test_the_developer_page_hides_v2_and_v3_branches():
+    """The Developer settings page's branch list (filterBranch() in
+    settings-developer.php) leaves out every v2.x and v3.x branch, which can
+    no longer build, and keeps current ones.
+
+    Regression: 9ba0488b1. Only v2.0-v2.5 were filtered, so v2.6-v2.x and
+    every v3.x were offered. (The same commit's random delay before a
+    discover reply is now a 1-6 ms timer, MultiSyncDiscoverReply, rewritten
+    since.) Run as PHP on its own, the function taken out of the tree's page."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    driver = r"""<?php
+$src = file_get_contents(getenv('FPP_TREE') . '/www/settings-developer.php');
+if (!preg_match('/^function filterBranch\(.*?^}/ms', $src, $m)) { fwrite(STDERR, "no filterBranch\n"); exit(2); }
+eval($m[0]);
+$out = [];
+foreach (array_slice($argv, 1) as $b) { $out[$b] = filterBranch($b); }
+echo json_encode($out);
+"""
+    branches = ["v2.0", "v2.5", "v2.6", "v2.7", "v2.x", "v3.0", "v3.6", "v3.x", "master", "v9.1", "v10.x"]
+    with tempfile.NamedTemporaryFile("w", suffix=".php", delete=False) as f:
+        f.write(driver)
+    try:
+        r = subprocess.run(["php", f.name, *branches], capture_output=True, text=True, timeout=30,
+                           env=dict(os.environ))
+    finally:
+        os.unlink(f.name)
+    assert r.returncode == 0, r.stderr
+    got = json.loads(r.stdout)
+    offered = [b for b in branches if got[b]]
+    assert offered == ["master", "v9.1", "v10.x"], offered
