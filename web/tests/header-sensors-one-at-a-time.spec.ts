@@ -27,6 +27,7 @@ async function addSensors(page: Page) {
 }
 
 test('a wide header shows one sensor at a time and a click rotates to the next', async ({ page }) => {
+  // Also guards a1aadee39: the header shows one sensor; the tooltip half isn't asserted.
   // Regression: 5ba9fafd4.  The rule hiding the inactive sensors only applied
   // below 1360px wide, so on a full-width window every sensor showed at once.
   // Also 7eac62466: the inactive sensors are hidden by a class, not inline
