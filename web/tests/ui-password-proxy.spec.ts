@@ -203,3 +203,24 @@ test('the UI password is stored as a bcrypt hash, and Apache checks it', async (
     await disablePassword(request);
   }
 });
+
+test('with the UI password on, the player itself gets in by any local name', async ({ request }) => {
+  // Regression: 1c00ba23c ("Setup htaccess to allow access from any local
+  // instead of only 127.0.0.1").  The password config skipped the password
+  // only for a request whose Host header was 127.0.0.1, so the player's own
+  // scripts and kiosk asking http://localhost/ were refused.
+  await enablePassword(request);
+  try {
+    expect(statusFromLoopback('/api/fppd/version'), 'http://127.0.0.1').toBe('200');
+    const byName = inPlayer('curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', 'http://localhost/api/fppd/version');
+    expect(byName, 'http://localhost').toBe('200');
+    // A local address with another name in its Host header.
+    const byHost = inPlayer('curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', '-H', 'Host: fpp-tests-player',
+      'http://127.0.0.1/api/fppd/version');
+    expect(byHost, 'Host: fpp-tests-player').toBe('200');
+    // The control: from outside, the password is asked for.
+    expect(await status('/api/fppd/version')).toBe(401);
+  } finally {
+    await disablePassword(request);
+  }
+});
