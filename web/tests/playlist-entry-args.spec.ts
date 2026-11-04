@@ -62,8 +62,9 @@ test.afterEach(async ({ request }) => {
 });
 
 test('a Command entry with markup in an argument keeps it through an edit and save', async ({ page, request }) => {
-  // Regression: a9ab5c0ab.  The editor read the arguments back with .text(),
-  // which decoded entities in them: "a &amp; b" came back as "a & b".
+  // Regression: a9ab5c0ab.  The editor read the arguments back from the
+  // row with .html(), which gives them as markup: "a &amp; b" came back as
+  // "a &amp;amp; b" and "<c>" as "&lt;c&gt;".
   const data = 'a &amp; b <c> "d" & e';
   await storePlaylist(request, [{ type: 'command', enabled: 1, playOnce: 0, command: 'URL',
     args: ['http://127.0.0.1/hook?x=1&y=2', 'POST', data] }]);
