@@ -474,3 +474,16 @@ def test_a_string_header_is_checked_for_its_nul_on_its_own_last_byte(fppd, tmp_p
     path.write_bytes(v2(frames, vheaders=vheader("mf", b"song.mp3") + vheader("sp", b"tool\0")))
     out = fsequtils_json(fppd, str(path))
     assert "VariableHeader mf data is not NULL terminated" in out, out
+
+
+def test_a_variable_header_longer_than_the_header_block(fppd):
+    """A variable header whose length runs past the end of the header block
+    is not read: parsing stops there, and the sequence still plays.
+
+    Regression: eb09a4efa (from xLights' FSEQFile). The length was trusted,
+    so the header's data was copied from past the end of the buffer the
+    header was read into: an ASan heap-buffer-overflow on opening the file."""
+    bad = struct.pack("<H", 4 + 400) + b"zz" + b"x" * 8
+    data = v2(unique_frames(20, CHANNELS), vheaders=bad)
+    play_bad_then_good(fppd, data)
+    assert "out of bounds data length" in fppd.log(), "the bad header was not refused"
