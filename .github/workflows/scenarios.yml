@@ -220,6 +220,9 @@ jobs:
           # pass (scripts/device-scenarios.sh)
           - device: am62x
             host_pru: true
+            # Falcon V5 receivers on these ports: their scenarios take a pass
+            # of their own with the cape's real EEPROM and pinmux
+            v5_ports: "9-12"
             timeout: 180
           # The panel test box (a PocketBeagle2 with a BBShiftPanel cape and
           # panels): only the scenarios that need a panel cape, which skip
@@ -313,6 +316,7 @@ jobs:
       - name: Run the scenarios
         run: |
           sudo env PYTHONDONTWRITEBYTECODE=1 GCOV_PREFIX="$PWD/gcov" HOST_PRU=${{ matrix.host_pru && '1' || '' }} \
+            FPP_TESTS_V5_PORTS="${{ matrix.v5_ports }}" \
             scripts/device-scenarios.sh --fpp fpp --host-audio -v -rA "@$PWD/device-tests.txt"
 
       - name: Start them again

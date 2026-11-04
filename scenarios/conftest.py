@@ -65,14 +65,23 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "host_pru: drives the real PRUs (the real_pru fixture), so it runs only "
         "under run-local.sh --host-pru, which the PRU scenarios that need them hidden can't share")
+    config.addinivalue_line(
+        "markers", "host_receiver: needs the cape's real signed EEPROM and its real pinmux as well "
+        "(the real_receiver fixture), so it runs only under run-local.sh --host-pru --host-i2c "
+        "--host-pinctrl, on a board with receivers attached")
 
 
 def pytest_collection_modifyitems(config, items):
     """Mark what asks for real_pru, so a device run can take those in a pass
-    of their own (-m host_pru) and the rest without them (-m "not host_pru")."""
+    of their own (-m host_pru) and the rest without them (-m "not host_pru").
+    The ones that ask for real_receiver also need the real I2C bus and pinmux
+    (-m host_receiver), a pass of its own again."""
     for item in items:
-        if "real_pru" in getattr(item, "fixturenames", ()):
+        names = getattr(item, "fixturenames", ())
+        if "real_pru" in names:
             item.add_marker(pytest.mark.host_pru)
+        if "real_receiver" in names:
+            item.add_marker(pytest.mark.host_receiver)
 
 
 @pytest.hookimpl(wrapper=True, tryfirst=True)

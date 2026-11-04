@@ -4,7 +4,7 @@
 # exported or built: run `make` (or `make debug`, `make tsan`) in the tree
 # first, then this.
 #
-#   ./run-local.sh [--fpp DIR] [--host-audio] [--host-pinctrl] [--host-modules] [--host-pru] [pytest args...]
+#   ./run-local.sh [--fpp DIR] [--host-audio] [--host-pinctrl] [--host-modules] [--host-pru] [--host-i2c] [pytest args...]
 #
 # --fpp           the fpp tree whose src/fppd to test (default /opt/fpp)
 # --host-audio    media scenarios play through the device's own PipeWire --
@@ -22,6 +22,16 @@
 #                 programs, so stop the device's own fppd first. Without
 #                 --host-pinctrl too, no pad is muxed to a PRU, so nothing a
 #                 PRU drives reaches a pin.
+# --host-i2c      the cape's real EEPROM, read from the real I2C bus, instead of the
+#                 unsigned virtual one: the real /dev/i2c-* and the adapters' sysfs
+#                 directories writable, which cape detection binds the EEPROM
+#                 through (new_device, then delete_device). The cape is then
+#                 as signed as it is on the device, so its licensed outputs, and
+#                 what depends on them (full-length strings, smart receivers,
+#                 every panel output), work. Detection then changes the real
+#                 bus: stop the device's own fppd and fppoled first, and use it
+#                 only on a device kept for testing. An AM335x also needs
+#                 --host-pinctrl (detection muxes the i2c2 pads).
 #
 # The device's own fppd keeps running. Each test fppd runs in private mount,
 # network and PID namespaces, set up below, so that it cannot reach the
@@ -88,6 +98,7 @@ while [ $# -gt 0 ]; do
     --host-pinctrl) export FPP_TESTS_HOST_PINCTRL=1; shift ;;
     --host-modules) export FPP_TESTS_HOST_MODULES=1; shift ;;
     --host-pru) export FPP_TESTS_HOST_PRU=1; shift ;;
+    --host-i2c) export FPP_TESTS_HOST_I2C=1; shift ;;
     *) break ;;
     esac
 done
@@ -182,13 +193,15 @@ exec unshare --mount --net --pid --fork --kill-child --mount-proc sh -c '
         mkdir -p /tmp/overlay-media/upper /tmp/overlay-media/work
         mount -t overlay overlay \
             -o "lowerdir=/home/fpp/media,upperdir=/tmp/overlay-media/upper,workdir=/tmp/overlay-media/work" /home/fpp/media
-        if [ -f /home/fpp/media/tmp/eeprom.bin ] && [ ! -e /home/fpp/media/config/cape-eeprom.bin ]; then
+        if [ -z "$FPP_TESTS_HOST_I2C" ] && [ -f /home/fpp/media/tmp/eeprom.bin ] && [ ! -e /home/fpp/media/config/cape-eeprom.bin ]; then
             cp /home/fpp/media/tmp/eeprom.bin /home/fpp/media/config/cape-eeprom.bin
         fi
     fi
-    for f in /dev/i2c-*; do
-        if [ -e "$f" ]; then mount --bind /dev/null "$f"; fi
-    done
+    if [ -z "$FPP_TESTS_HOST_I2C" ]; then
+        for f in /dev/i2c-*; do
+            if [ -e "$f" ]; then mount --bind /dev/null "$f"; fi
+        done
+    fi
     if [ -d /dev/snd ]; then mount -t tmpfs tmpfs /dev/snd; fi
     for f in /dev/spidev*; do
         if [ -e "$f" ]; then mount --bind /dev/null "$f"; fi
@@ -213,6 +226,14 @@ exec unshare --mount --net --pid --fork --kill-child --mount-proc sh -c '
         # and firmware files
         for r in /sys/class/remoteproc/remoteproc*; do
             d=$(readlink -f "$r")
+            mount --bind "$d" "$d" && mount -o remount,bind,rw "$d"
+        done
+    fi
+    if [ -n "$FPP_TESTS_HOST_I2C" ]; then
+        # the directory of each adapter (new_device, delete_device) writable again,
+        # for the cape detection that binds the EEPROM through it
+        for a in /sys/bus/i2c/devices/i2c-*; do
+            d=$(readlink -f "$a")
             mount --bind "$d" "$d" && mount -o remount,bind,rw "$d"
         done
     fi
