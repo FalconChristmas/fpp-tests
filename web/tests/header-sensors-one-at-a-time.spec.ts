@@ -46,3 +46,19 @@ test('a wide header shows one sensor at a time and a click rotates to the next',
   await expect(visible).toHaveCount(1);
   await expect(visible).not.toHaveText(first);
 });
+
+test('a click on the header sensor saves which one is showing', async ({ page, request }) => {
+  // Feature: 61da0c420, so the next page starts on the same one.
+  await addSensors(page);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto('/index.php');
+  await expect(page.locator('#header_sensors .sensorSpan')).toHaveCount(2, { timeout: 15_000 });
+  try {
+    const saved = page.waitForRequest((r) => r.method() === 'PUT' && r.url().includes('settings/currentHeaderSensor'),
+      { timeout: 10_000 });
+    await page.locator('#header_sensors .sensorSpan:visible').click();
+    await saved;
+  } finally {
+    await request.put('/api/settings/currentHeaderSensor', { data: '0' });
+  }
+});
