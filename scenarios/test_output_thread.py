@@ -604,3 +604,31 @@ def test_the_output_style_sets_threading_and_blocking(fppd, style, threaded, blo
     m = re.search(r"Threaded\s*:\s*(\d)\s.*?Blocking\s*:\s*(\d)", fppd.log(), re.S)
     assert m and (int(m.group(1)), int(m.group(2))) == (threaded, blocking), \
         [l for l in fppd.log().splitlines() if "Threaded" in l or "Blocking" in l]
+
+
+@pytest.mark.parametrize("bridge_ms", [10, 100])
+def test_a_sequence_keeps_its_own_frame_time_over_the_bridging_interval(fppd, bridge_ms):
+    """A 40 fps sequence plays at 40 fps whether E131BridgingInterval is
+    faster or slower than its frame time.
+
+    Regression: 4abb4da89. One delay served both, the shorter of the two
+    winning, so a short bridging interval sped the sequence up. The bridging
+    rate itself, with E1.31 arriving, is not shown here."""
+    from test_command_socket import send
+    frames = unique_frames(400, CHANNELS)  # 10 s at 25 ms
+    lookup = {f: i for i, f in enumerate(frames)}
+    install(fppd, frames, step_ms=25)
+    fppd.settings(E131BridgingInterval=str(bridge_ms))
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        time.sleep(1)
+        send("StartSequence,Show.fseq,0")
+        fppd.wait_for(lambda: status(fppd).get("current_sequence") == "Show.fseq",
+                      timeout=10, what="the sequence to start")
+        time.sleep(0.5)
+        since = time.monotonic()
+        time.sleep(2)
+        played = {f for t, f in rx.snapshot(since) if f in lookup}
+        send("StopSequence")
+    assert 60 <= len(played) <= 100, \
+        f"{len(played)} different frames in 2 s of a 40 fps sequence, bridging at {bridge_ms} ms"
