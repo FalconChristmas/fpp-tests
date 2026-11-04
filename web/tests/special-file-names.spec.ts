@@ -61,6 +61,34 @@ test('a name encoded three times is still found by the upload move', async ({ re
   }
 });
 
+// Some browsers upload a file whose name holds a double quote with the quote
+// sent as %22, so it lands in upload/ under that name; others (Firefox,
+// xLights) keep the quote.
+test('an upload whose name holds a double quote is moved under its real name', async ({ request }) => {
+  // Regression: 446bb3a8d ("moveFile api").  MoveFile() renames
+  // upload/<name with %22> to the name with the quote before it moves it,
+  // so the file the user uploaded reaches music/ by the name it has.
+  const name = 'fpp-tests say "hi".mp3';
+  const sent = name.replace(/"/g, '%22');
+  const sh = (s: string) => inPlayer('sh', '-c', s).trim();
+  const q = (n: string) => `'${n.replace(/'/g, "'\\''")}'`;
+  sh(`mkdir -p ${MEDIA}/upload ${MEDIA}/music`);
+  try {
+    putFile(`${MEDIA}/upload/${sent}`, 'x');
+    const mv = await request.post(`/api/file/move/${encodeURIComponent(name)}`);
+    expect((await mv.json()).status, 'the move').toBe('OK');
+    expect(sh(`test -e ${q(`${MEDIA}/music/${name}`)} && echo there || echo missing`), 'music/ by its real name').toBe('there');
+    expect(sh(`ls ${MEDIA}/upload | grep -c fpp-tests || true`), 'left in upload/').toBe('0');
+    // The control: one uploaded with the quote intact moves too.
+    putFile(`${MEDIA}/upload/${name}`, 'y');
+    sh(`rm -f ${q(`${MEDIA}/music/${name}`)}`);
+    expect((await (await request.post(`/api/file/move/${encodeURIComponent(name)}`)).json()).status).toBe('OK');
+    expect(sh(`cat ${q(`${MEDIA}/music/${name}`)}`)).toBe('y');
+  } finally {
+    sh(`rm -f ${q(`${MEDIA}/upload/${sent}`)} ${q(`${MEDIA}/upload/${name}`)} ${q(`${MEDIA}/music/${name}`)}`);
+  }
+});
+
 // An FSEQ v1 header, as sequence-fps.spec.ts writes them: two channels of
 // one frame at a 50 ms step.
 function tinyFseq(): Buffer {
