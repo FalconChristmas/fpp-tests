@@ -636,3 +636,38 @@ def test_a_branch_follows_an_mqtt_topics_message(fppd):
         assert run(fppd, "P") == "2", "the branch's true side skips step 1"
         say("shut")
         assert run(fppd, "P") == "12", "the branch's false side falls through"
+
+
+def test_fppd_unsubscribes_before_it_shuts_down(fppd, tmp_path):
+    """SIGTERM with a broker up: fppd withdraws its set/# subscription before
+    it goes, as the broker sees it, and exits 0.
+
+    Regression: 0a6a48c99. The subscription stayed until the disconnect at the
+    end of shutdown, so commands published in between arrived as what they
+    ran was being torn down. Shows the unsubscribe, not that such a message
+    would have done harm: that needed it to land in the window."""
+    import signal
+    if not shutil.which("mosquitto"):
+        pytest.skip("mosquitto is not installed")
+    logpath = tmp_path / "broker.log"
+    topic = f"falcon/player/{HOST}/set/#"
+    with open(logpath, "w") as log:
+        proc = subprocess.Popen(["mosquitto", "-v", "-p", PORT], stdout=log, stderr=log)
+        try:
+            time.sleep(0.5)
+            fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+            fppd.start()
+            fppd.wait_for(lambda: topic in logpath.read_text(), timeout=15, interval=0.25,
+                          what="fppd to subscribe")
+            fppd.proc.send_signal(signal.SIGTERM)
+            rc = fppd.proc.wait(timeout=30)
+            fppd.exit_expected = True
+            assert rc == 0, f"fppd exited {rc}"
+            time.sleep(0.5)
+        finally:
+            proc.terminate()
+            proc.wait(timeout=5)
+    text = logpath.read_text()
+    assert "Received UNSUBSCRIBE" in text, f"no unsubscribe reached the broker:\n{text[-2000:]}"
+    after = text[text.index("Received UNSUBSCRIBE"):]
+    assert topic in after, f"{topic} was not what it withdrew:\n{after[:1000]}"
