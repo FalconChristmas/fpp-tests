@@ -47,6 +47,9 @@ def test_play_media_loop_count_plays_every_pass(fppd, audio):
     second deferred delete of it (ASan: heap-use-after-free in
     RemoveRunningMedia's timer). Shown red on master with the once-only check
     taken out.
+
+    Feature: 4bf4c4f53, which added the Play Media command (shown red against
+    master with it unregistered; the VLC player it first drove is gone).
     """
     write_tone_wav(os.path.join(fppd.media, "music", "Loop.wav"), 1)
     fppd.start()
