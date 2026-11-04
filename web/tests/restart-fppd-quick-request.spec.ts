@@ -23,6 +23,8 @@ test('Restart FPPD for a change that needs a quick restart asks for ?quick=1 and
   // Regression: d796f1944.  The page appended "&quick=1" to a URL with no
   // query string yet ("api/system/fppd/restart&quick=1"), a path no route
   // matches, so the restart that was meant to be quick failed.
+  // Also 88bb2b27b ("fppd start/stop/restart api move -- #944"), which
+  // added the endpoint: red with its routes taken out.
   test.setTimeout(120_000);
   await put(page, 'restartFlag', '2');
   await page.setViewportSize({ width: 1600, height: 1000 });
