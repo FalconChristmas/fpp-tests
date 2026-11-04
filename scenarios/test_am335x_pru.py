@@ -955,10 +955,6 @@ def test_abc_shift_row_addressing_builds_the_shift_register_firmware(fppd):
     assert "-DADDRESSING_ABC_SHIFT=1" not in last and not any(a.startswith("-DROW_CHAIN") for a in last), last
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "master: BBBPru::run() clears the PRU memories before it enables the core, and BBBMatrix "
-    "(unlike BBB48String, 163d57ad4) calls it with the defaults, so with both cores stopped "
-    "the clear faults. With clearMems false on both of its run() calls this passes."))
 def test_a_matrix_starting_with_both_cores_stopped_does_not_touch_pru_memory(fppd):
     """fppd starting a BBBMatrix output while both PRU cores are stopped
     (as after an fppd that used them exited) starts it without touching
@@ -970,13 +966,10 @@ def test_a_matrix_starting_with_both_cores_stopped_does_not_touch_pru_memory(fpp
     clocked those writes aborted the process (the BeagleBone crashes of
     10.1, in memset behind clearPRUMem()).
 
-    Found failing on master: Init()'s own writes are gone, but run() clears
-    the memories before it enables the core (since a later change, so a
-    restart does not see the last run's handshake words), which is the same
-    crash from BBBPru::run() (BBBPruUtils.cpp). BBB48String avoids it by
-    asking run() not to clear (163d57ad4); BBBMatrix, and BBBSerial,
-    do not. Expected to fail until they do; strict, so it says when it is
-    fixed.
+    Also: BBBPru::run() cleared the memories before enabling the core (so
+    a restart would not see the last run's handshake words), the same crash
+    from BBBPruUtils.cpp; it no longer does on the AM335x (the AM62x
+    still does, its PRU memory is always accessible).
     """
     pru = FakePruss(fppd, states=("offline", "offline"), offline_fault="all")
     octoscroller()
