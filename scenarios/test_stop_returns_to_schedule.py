@@ -114,3 +114,35 @@ def test_starts_and_stops_from_several_threads_in_a_schedule_window(fppd):
         fppd.command("Stop Now")
         fppd.wait_for(lambda: (lambda c: c == ("playing", "Show") or c[0] == "idle")(current(fppd)),
                       timeout=20, interval=0.5, what="the player to settle after the last stop")
+
+
+def test_stop_now_of_the_scheduled_playlist_keeps_it_stopped(fppd):
+    """Stop Now on the playlist the schedule started, inside a window whose
+    entry repeats: the player stays idle, and the scheduler does not start
+    the entry again over the next several passes.
+
+    Regression: 272a975fb. The main loop asked the scheduler what should be
+    playing after any stop, and a repeating entry still in its window was
+    started again at once, so a user could not stop a scheduled show. The
+    fix passes the stopped entry (CheckIfShouldBePlayingNow's forceStopped)
+    and the scheduler leaves that entry alone. 1fae361cb added a second
+    guard (ShouldStart() skips the item a force stop came from), so on
+    master either one keeps the show stopped: shown red with both undone.
+    A one-second sequence, so a playlist that came back would be seen
+    playing within the wait."""
+    install(fppd, solid_frames(20, CHANNELS, 50))
+    start, end = window(-60, 600)
+    fppd.write("config/schedule.json", [schedule_entry("Show", start, end, repeat=1)])
+    fppd.start()
+    fppd.wait_for(lambda: current(fppd) == ("playing", "Show"), timeout=30, interval=0.5,
+                  what="the scheduled playlist to start")
+    fppd.command("Stop Now")
+    time.sleep(1)  # the stop itself
+    seen = []
+    deadline = time.monotonic() + 8
+    while time.monotonic() < deadline:
+        seen.append(current(fppd))
+        time.sleep(0.2)
+    back = [s for s in seen if s[0] != "idle"]
+    assert not back, (f"the scheduled playlist came back after Stop Now: {len(back)} of "
+                      f"{len(seen)} samples over 8 s were {sorted(set(back))}")
