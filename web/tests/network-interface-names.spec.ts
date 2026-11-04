@@ -20,6 +20,7 @@ function findMark(): string {
 }
 
 test('an interface name is never run as shell text', async ({ request }) => {
+  // Also guards bcd6ce7d9: GET /api/network/interface/:interface answers for a real interface.
   // Regression: bd2199592.  GET /api/network/interface/<name> pasted the name
   // into "ip ... dev <name>" (and iw, networkctl) unquoted, so a name with a
   // ";" ran whatever followed it as the web server's user.
@@ -36,6 +37,7 @@ test('an interface name is never run as shell text', async ({ request }) => {
 });
 
 test('a saved interface name cannot leave the config directory', async ({ request }) => {
+  // Also guards bcd6ce7d9: POST /api/network/interface/:interface reaches the save and its checks.
   // Regression: bd2199592.  POST /api/network/interface/<x> wrote
   // config/interface.<INTERFACE> with INTERFACE unchecked, so a name with
   // "/../" in it wrote wherever it pointed (given a directory named like a
