@@ -164,3 +164,18 @@ test('the output interface list shows the interface the config was saved with', 
     await expect(select).toHaveValue('fpp-tests0');
   });
 });
+
+test('a universes row counts up past 250 universes', async ({ page, request }) => {
+  // Regression: 1988f8aef ("Allow more universes for each line on the
+  // universes table").  The count field's max was 250, so its spinner and
+  // arrow keys stopped there, and the browser held a larger count invalid.
+  await put(request, config([universe(1, { universeCount: 250 })]));
+  await openUniverses(page, 1);
+  const count = row(page, 0).locator('input.numUniverseCount');
+  await expect(count).toHaveValue('250');
+  await count.focus();
+  await count.press('ArrowUp');
+  await expect(count).toHaveValue('251');
+  await count.fill('999');
+  expect(await count.evaluate((i: HTMLInputElement) => i.validity.valid), '999 universes held invalid').toBe(true);
+});
