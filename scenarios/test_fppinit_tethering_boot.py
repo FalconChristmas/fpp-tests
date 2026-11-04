@@ -100,17 +100,18 @@ def test_a_dhcp_interface_does_not_take_its_hostname_from_the_lease(fppinit):
         assert "UseHostname=false" in f.read()
 
 
-def announcing(sb, address_after=None):
+def announcing(sb, address_after=None, also=""):
     """Run announceIP on a box whose eth0 gets 10.99.0.2 `address_after`
     seconds in (None: no address, ever), with stand-ins for flite and
-    pw-play that note what they were given; returns the run."""
+    pw-play that note what they were given; returns the run. `also` is
+    shell, each command ended with &&, to set up other interfaces first."""
     sb.root_file("/usr/bin/flite", f"#!/bin/sh\necho \"flite $*\" >> {MEDIA}/tmp/announced\n")
     sb.root_file("/usr/bin/pw-play", f"#!/bin/sh\necho \"pw-play $*\" >> {MEDIA}/tmp/announced\n")
     sb.root_file("/run/fppd/.keep", "")
     add = "ip addr add 10.99.0.2/24 dev eth0"
     later = f"(sleep {address_after}; {add}) &" if address_after is not None else ""
     return sb._run(["unshare", "--net", "sh", "-c",
-                    "ip link add eth0 type veth peer name eth0p && ip link set eth0 up && " + later +
+                    also + "ip link add eth0 type veth peer name eth0p && ip link set eth0 up && " + later +
                     " exec /opt/fpp/src/fppinit announceIP"], timeout=120, media_home=True)
 
 
@@ -136,3 +137,22 @@ def test_the_ip_announcement_is_its_own_action_and_waits_for_the_address(fppinit
                       "exec /opt/fpp/src/fppinit postNetwork"], timeout=200, media_home=True)
     assert_clean(r)
     assert not fppinit.media_exists("tmp/announced"), "postNetwork announced the address itself"
+
+
+def test_the_ip_announcement_leaves_out_the_tether_addresses(fppinit):
+    """announceIP speaks the address of the real network, and neither the USB
+    gadget's (whatever its address) nor the hotspot's 192.168.8.1 on a wireless
+    interface: nobody on the show's network can reach those, and they are the
+    same on every box.
+
+    Regression: c2517366e. fpp_boot spoke every address but the loopback; it
+    is FPPINIT_Network.cpp's buildIPAnnounceString() now."""
+    tether = ("ip link add usb0 type veth peer name usb0p && ip link set usb0 up && "
+              "ip addr add 10.99.7.7/24 dev usb0 && "
+              "ip link add wlan0 type veth peer name wlan0p && ip link set wlan0 up && "
+              "ip addr add 192.168.8.1/24 dev wlan0 && ")
+    assert_clean(announcing(fppinit, address_after=0, also=tether))
+    said = fppinit.media_file("tmp/announced") if fppinit.media_exists("tmp/announced") else ""
+    assert "10.99.0.2" in said, f"announced: {said!r}"
+    spoken = [a for a in ("10.99.7.7", "192.168.8.1") if a in said]
+    assert not spoken, f"the tether addresses {spoken} were announced: {said!r}"
