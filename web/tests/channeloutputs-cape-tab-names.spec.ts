@@ -25,8 +25,8 @@ test.afterEach(() => {
   inPlayer('rm', '-f', PLATFORM);
 });
 
-async function tabNames(page: import('@playwright/test').Page, provides: string[]) {
-  inPlayer('sh', '-c', `mkdir -p /home/fpp/media/tmp && printf '%s' '${JSON.stringify({ id: 'fpp-tests', name: 'FtCape', provides })}' > ${INFO}`);
+async function tabNames(page: import('@playwright/test').Page, provides: string[], name = 'FtCape') {
+  inPlayer('sh', '-c', `mkdir -p /home/fpp/media/tmp && printf '%s' '${JSON.stringify({ id: 'fpp-tests', name, provides })}' > ${INFO}`);
   await page.goto('/channeloutputs.php?p=' + provides.join('-'));
   await expect(page.locator('#tab-LEDPanels-tab')).toBeAttached();
   return {
@@ -42,4 +42,11 @@ test('a cape that drives strings and panels names both tabs', async ({ page }) =
 test('a cape that drives only one of them names only that tab', async ({ page }) => {
   expect(await tabNames(page, ['strings'])).toEqual({ strings: 'FtCape', panels: 'LED Panel Matrices' });
   expect(await tabNames(page, ['panels'])).toEqual({ strings: 'Pixel Strings', panels: 'FtCape' });
+});
+
+test('a cape named "Unknown" leaves both tabs their generic names', async ({ page }) => {
+  // Regression: 97b992f52.  An old BeagleBone with an OLED but no EEPROM
+  // reports its cape as "Unknown", and the tabs were labelled with that name
+  // ("Unknown Pixel Strings", "Unknown LED Panels").
+  expect(await tabNames(page, ['strings', 'panels'], 'Unknown')).toEqual({ strings: 'Pixel Strings', panels: 'LED Panel Matrices' });
 });
