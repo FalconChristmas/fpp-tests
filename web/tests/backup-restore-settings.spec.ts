@@ -216,3 +216,34 @@ test("another player's backup leaves this player's logins alone", async ({ reque
   expect(line('emailserver')).toBe('emailserver = "mail.example.com"');
   expect(line('emailtoemail'), 'the email area took the other player\'s address').toBe('emailtoemail = "local@example.com"');
 });
+
+// 5c3a875b4: restoring a backup that holds a volume called SetVolume() with
+// no argument (it had read the level from $_GET['volume'] when it was the
+// fppxml.php handler), and the restore died there with a PHP error: the
+// level was written to the settings file but never applied, and nothing
+// after it in the backup was restored.
+test("restoring a backup's volume applies it", async ({ request }) => {
+  const volume = async () => (await (await request.get('/api/system/volume')).json()).volume;
+  const before = await volume();
+  const level = before === 37 ? 38 : 37;
+  try {
+    setLines({ HostDescription: '""' });
+    // The volume first, then a setting after it: the restore must get past it.
+    const r = await request.post('/backup.php', {
+      multipart: {
+        btnRestoreConfig: '1',
+        restorearea: 'settings/system_settings',
+        conffile: { name: 'fpp-tests-settings.json', mimeType: 'application/json',
+          buffer: Buffer.from(JSON.stringify(backupOf({ volume: String(level), HostDescription: 'fpp-tests-after-volume' }))) },
+      },
+    });
+    expect(r.status(), 'the restore failed').toBe(200);
+    expect(await r.text()).not.toMatch(/Fatal error|ArgumentCountError/);
+    expect(line('volume')).toMatch(new RegExp(`^volume = "?${level}"?$`));
+    // fppd was given the level, as the API reports it.
+    await expect.poll(volume, { timeout: 10_000, message: "fppd's volume after the restore" }).toBe(level);
+    expect(line('HostDescription'), 'the restore stopped at the volume').toBe('HostDescription = "fpp-tests-after-volume"');
+  } finally {
+    await request.post('/api/system/volume', { data: { volume: before } });
+  }
+});
