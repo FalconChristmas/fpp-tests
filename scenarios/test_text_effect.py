@@ -364,3 +364,25 @@ def test_scrolling_text_in_colour(fppd):
         assert not green, f"{mode}: colours outside red-to-blue: {green[:8]}"
         assert any(p[0] > p[2] for p in seen) and any(p[2] > p[0] for p in seen), \
             f"{mode}: the scroll did not show both ends of the palette"
+
+
+def test_still_text_that_enabled_the_model_stays_for_its_duration(fppd):
+    """A still (single colour) centred message that auto-enabled a disabled
+    model stays up for its Duration -- seconds -- and then the model is
+    disabled again.
+
+    Regression: 2916daf80 (its Text half). The Duration was handed on as
+    milliseconds: a 3 s message came down 3 ms after it went up."""
+    font = start(fppd)
+    fppd.command("Overlay Model State", "M", "Disabled")
+    began = time.monotonic()
+    text(fppd, font, colors=(WHITE,), duration="3")
+    active = lambda: fppd.get("/overlays/model/M").get("isActive")
+    samples = []
+    while time.monotonic() - began < 2.0:
+        samples.append(bool(active()))
+        time.sleep(0.1)
+    assert samples and all(samples[3:]), f"the model while the message should be up: {samples}"
+    fppd.wait_for(lambda: not active(), timeout=10, what="the model to be disabled after its Duration")
+    took = time.monotonic() - began
+    assert 2.5 <= took <= 6, f"disabled {took:.1f} s after a 3 s message"

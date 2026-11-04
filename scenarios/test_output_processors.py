@@ -517,3 +517,38 @@ def test_most_processors_take_a_model_for_their_channels(fppd, what):
         frames = run(fppd, [make(), proc("Set Value", start=150, count=1, value=7)])
         want = fn(frames[0][:149] + b"\x07" + frames[0][150:])
         wait_processed(fppd, rx, frames, want, what)
+
+
+def test_a_paused_sequence_is_not_dimmed_again_on_every_send(fppd):
+    """A paused sequence's frame goes through a Brightness processor once:
+    held, it stays at half, frame after frame, rather than halving again on
+    each pass of the output loop until it is black.
+
+    Regression: 26454a9f1. A frame the output thread processes again (a
+    paused or held sequence) was processed from the already processed data,
+    so in-place processors and plugins compounded; fppd now starts each pass
+    from the frame as read. (The control-channel half of that commit is gone
+    from master.)"""
+    import os
+    from fseq import write_fseq
+    from show import ddp_output
+    from test_sequence_api import api
+    frame = ramp()
+    write_fseq(os.path.join(fppd.media, "sequences", "Held.fseq"), [frame] * 600, step_ms=50)
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    write_processors(fppd, [proc("Brightness", start=1, count=CHANNELS, brightness=50, gamma=1.0)])
+    want = per_channel(1, CHANNELS, lambda v: int(127.5 * v / 255 + 0.5))(frame)
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        api(fppd, "/sequence/Held/start/0")
+        latest(fppd, rx, lambda f: f == want, what="the dimmed frame")
+        api(fppd, "/sequence/current/togglePause")
+        time.sleep(1.0)
+        since = time.monotonic()
+        assert rx.wait_frames(10, since=since), "no frames while paused"
+        held = {f for _, f in rx.snapshot(since=since)}
+        api(fppd, "/sequence/current/stop")
+    bad = [f for f in held if f != want]
+    assert not bad, ("a paused frame was dimmed again: channel (want, got) "
+                     f"{[(i + 1, want[i], bad[0][i]) for i in range(CHANNELS) if want[i] != bad[0][i]][:8]}")
