@@ -113,6 +113,7 @@ test('the known FPP systems leave out what is not an FPP', () => {
   // what fppd's MultiSync has seen: a WLED or Falcon controller is no place to
   // back up to or upgrade from.  fppd's answer is the test's, through a stand-in
   // for PHP's http:// stream.
+  // Also guards 07a23c353: the function those pages were moved onto.
   const known = JSON.parse(php(`
 class FppTestsHttp {
     public $context;
