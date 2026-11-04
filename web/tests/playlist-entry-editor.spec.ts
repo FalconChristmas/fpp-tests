@@ -252,6 +252,81 @@ test.describe('media entries', () => {
     expect((await storedPlaylist(request)).mainPlaylist[0]).toMatchObject(stored);
   });
 
+  test('saving an entry keeps a video output its list no longer offers', async ({ page, request }) => {
+    // Regression: 765889c55.  .val() on a select without that option selects
+    // nothing, and the empty select saved as the text "null": opening and
+    // saving an entry on a display or model that was gone replaced its output.
+    const stored = { type: 'media', enabled: 1, playOnce: 0, mediaName: MAIN, videoOut: 'fpp-tests-gone-output' };
+    await storePlaylist(request, [stored]);
+    await openEditor(page);
+    await page.locator('.playlistRowEditButton').first().click();
+    const modal = page.locator('.modal.show');
+    await expect(modal.locator('select.arg_videoOut')).toHaveValue(stored.videoOut);
+    await modal.getByRole('button', { name: 'Save', exact: true }).click();
+    await savePlaylist(page);
+    expect((await storedPlaylist(request)).mainPlaylist[0]).toMatchObject(stored);
+  });
+
+  test('saving an entry whose media is gone leaves its sequence alone', async ({ page, request }) => {
+    // Regression: 765889c55.  Keeping a media name the list lacks must not count
+    // as choosing it, which would pick the sequence of the same name.
+    const gone = 'fpp-tests-gone-media', kept = 'fpp-tests-kept.fseq';
+    test.skip(!container, "puts files in the run-web.sh container's media");
+    const files = [`/home/fpp/media/sequences/${gone}.fseq`, `/home/fpp/media/sequences/${kept}`];
+    inPlayer('touch', ...files);
+    try {
+      const stored = { type: 'both', enabled: 1, playOnce: 0, sequenceName: kept, mediaName: `${gone}.mp3` };
+      await storePlaylist(request, [stored]);
+      await openEditor(page);
+      await page.locator('.playlistRowEditButton').first().click();
+      const modal = page.locator('.modal.show');
+      await expect(modal.locator('select.arg_mediaName')).toHaveValue(stored.mediaName);
+      await modal.getByRole('button', { name: 'Save', exact: true }).click();
+      await savePlaylist(page);
+      expect((await storedPlaylist(request)).mainPlaylist[0]).toMatchObject(stored);
+    } finally {
+      inPlayer('rm', '-f', ...files);
+    }
+  });
+
+  test('saving repairs a video output an earlier save left as "null"', async ({ page, request }) => {
+    // Regression: 765889c55.  "null" is what the bug wrote, not a choice: kept,
+    // fppd looks for an overlay model of that name and plays audio only.
+    await storePlaylist(request, [{ type: 'media', enabled: 1, playOnce: 0, mediaName: MAIN, videoOut: 'null' }]);
+    await openEditor(page);
+    await page.locator('.playlistRowEditButton').first().click();
+    const modal = page.locator('.modal.show');
+    await modal.getByRole('button', { name: 'Save', exact: true }).click();
+    await savePlaylist(page);
+    const entry = (await storedPlaylist(request)).mainPlaylist[0];
+    expect(entry.mediaName).toBe(MAIN);
+    expect(entry.videoOut ?? '--Default--').toBe('--Default--');
+  });
+
+  test('a video output list that fails to load neither changes an entry nor saves "null"', async ({ page, request }) => {
+    // Regression: 765889c55.  The same with the list's fetch failing, for the
+    // entry being edited and for a new one.
+    const stored = { type: 'media', enabled: 1, playOnce: 0, mediaName: MAIN, videoOut: 'HDMI-A-1' };
+    await storePlaylist(request, [stored]);
+    await page.route('**/api/options/PlaylistVideoOutput*', (route) => route.abort());
+    await openEditor(page);
+    await page.locator('.playlistRowEditButton').first().click();
+    let modal = page.locator('.modal.show');
+    await modal.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(modal).toHaveCount(0);
+
+    await openNewEntry(page);
+    modal = page.locator('.modal.show');
+    await page.selectOption('#pe_type', 'media');
+    await modal.locator('select.arg_mediaName').selectOption(MAIN);
+    await addEntry(page);
+    await savePlaylist(page);
+    const main = (await storedPlaylist(request)).mainPlaylist;
+    expect(main[0]).toMatchObject(stored);
+    expect(main[1].mediaName).toBe(MAIN);
+    expect(main[1].videoOut ?? '--Default--').toBe('--Default--');
+  });
+
   test('the editor marks the entries whose files are missing', async ({ page, request }) => {
     // Also guards 6addf4c9c: the playlist validation names a missing sequence.
     // Feature: 3aa0ad4f1.  The playlist cards flagged a playlist with a
