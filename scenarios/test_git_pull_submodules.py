@@ -53,3 +53,30 @@ def test_submodules_are_left_alone_off_a_raspberry_pi(fppinit):
     r, out = run_script(fppinit, "git_pull")
     assert "Upgrading config" in out or r.returncode == 0, f"git_pull did not get as far as the pull:\n{out[-3000:]}"
     assert not os.path.exists(os.path.join(fpp, SUB, ".git")), f"the submodule was initialised off a Pi:\n{out[-3000:]}"
+
+
+def test_pulling_from_another_fpp_takes_the_externals_from_it_too(fppinit):
+    """git_pull on a Raspberry Pi whose update source is another FPP points
+    the externals at that FPP, in the checkout's config and in each external's
+    own origin: a box with no way to GitHub cannot fetch them from anywhere
+    else.
+
+    Regression: 46790f579. They kept their GitHub URLs. The branch runs only
+    for /opt/fpp, the tree under test here, so git, make and upgrade_config
+    are stand-ins that touch nothing: this shows what git is asked to do, not
+    that the other FPP serves the externals."""
+    source = "10.99.0.1"
+    fppinit.root_file("/usr/bin/git", f'#!/bin/sh\necho "$PWD: git $*" >> {MEDIA}/tmp/git.log\n')
+    fppinit.root_file("/usr/bin/curl", REACHABLE)
+    fppinit.root_file("/usr/bin/make", "#!/bin/sh\nexit 0\n")
+    fppinit.root_file("/opt/fpp/scripts/upgrade_config", "#!/bin/sh\nexit 0\n")
+    fppinit.root_file("/etc/fpp/platform", "Raspberry Pi\n")
+    fppinit.settings(UpgradeSource=source)
+    r = fppinit._run(["unshare", "--net", "/opt/fpp/scripts/git_pull"], timeout=120, media_home=True)
+    asked = fppinit.media_file("tmp/git.log") if fppinit.media_exists("tmp/git.log") else ""
+    for name in ("spixels", "RF24", "rpi-rgb-led-matrix"):
+        url = f"http://{source}/git/modules/external/{name}"
+        assert f"/opt/fpp: git config submodule.external/{name}.url {url}" in asked, \
+            f"{name}'s submodule URL:\n{asked[-3000:]}\n{(r.stdout + r.stderr)[-2000:]}"
+        assert f"/opt/fpp/external/{name}: git remote set-url origin {url}" in asked, \
+            f"{name}'s origin:\n{asked[-3000:]}"
