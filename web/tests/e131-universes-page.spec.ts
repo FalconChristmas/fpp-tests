@@ -132,3 +132,13 @@ test('saving the universes turns test mode off', async ({ page, request }) => {
   await expect.poll(async () => (await stored(request)).universes[0].description, { timeout: 15_000 }).toBe('fpp-tests test mode');
   await expect.poll(async () => (await (await request.get('/api/testmode')).json()).enabled, { timeout: 10_000 }).toBe(0);
 });
+
+test('choosing DDP on a row with no address shows its IP field', async ({ page, request }) => {
+  // Feature: 4ff9086ba.  A multicast row has no address to show; DDP needs one.
+  await put(request, config([universe(1, { type: 0, address: '' })]));
+  await openUniverses(page, 1);
+  const ip = row(page, 0).locator('input.txtIP');
+  await expect(ip).toBeHidden();
+  await row(page, 0).locator('select.universeType').selectOption('4');
+  await expect(ip).toBeVisible();
+});
