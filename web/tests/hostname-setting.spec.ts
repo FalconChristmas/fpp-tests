@@ -66,6 +66,34 @@ test('a host name saved on the Network page renames the host, flags a reboot and
   });
 });
 
+test('a host name with a character a host name may not have is refused before it is saved', async ({ page }) => {
+  // Regression: df43493ba.  The format check PrintSettingTextSaved writes
+  // for a setting with a regex quoted its arguments wrongly (a quote missing
+  // after the description), so the page's script for the field did not
+  // parse: no check ran, and no host name could be saved from the field.
+  await keepingSettings(async () => {
+    const before = settingInFile('HostName');
+    await page.goto('/networkconfig.php');
+    await page.click('#tab-global-network-tab');
+    const input = page.locator('#HostName');
+    await expect(input).toBeVisible({ timeout: 15_000 });
+    await input.fill('fpp_tests!');
+    await input.press('Enter');
+    const dialog = page.locator('#dialogOKPopup');
+    await expect(dialog).toContainText("'fpp_tests!' does not match proper format: Host names must contain only letters, numbers and hyphens");
+    expect(settingInFile('HostName')).toBe(before);
+    expect(calls()).toEqual([]);
+    // The control: a good name from the same field is saved.
+    await dialog.getByRole('button', { name: 'Close' }).last().click();  // the footer's; the header's × is also "Close"
+    await expect(dialog).toBeHidden();
+    const saved = page.waitForResponse((r) => r.url().endsWith('/api/settings/HostName') && r.request().method() === 'PUT');
+    await input.fill(NAME);
+    await input.press('Enter');
+    expect((await saved).ok()).toBe(true);
+    expect(settingInFile('HostName')).toBe(NAME);
+  });
+});
+
 test('the setup wizard asks for the host name and description, and Finish saves them', async ({ page }) => {
   // Feature: 2e149baac ("Add hostname and description back to initialsetup").
   // The receiving end: the name is applied as the Network page's save is.
