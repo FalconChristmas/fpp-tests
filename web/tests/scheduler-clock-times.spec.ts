@@ -33,6 +33,9 @@ test('opening the scheduler turns on seconds when an entry has seconds', async (
   // Regression: 3e461d672.  ScheduleSeconds, new in 5.0, is set by the page
   // from the entries: any with a non-zero seconds part turns it on.
   const before = await (await request.get('/api/schedule')).json();
+  // Put the setting back too: left at 1, every scheduler spec after this one
+  // in the same worker shows its times with seconds ("12:00:00 Mid").
+  const seconds = (await (await request.get('/api/settings/ScheduleSeconds')).json())?.value ?? '';
   const year = new Date().getFullYear();
   try {
     await request.put('/api/settings/ScheduleSeconds', { data: '' });
@@ -46,5 +49,6 @@ test('opening the scheduler turns on seconds when an entry has seconds', async (
   } finally {
     await request.post('/api/schedule', { data: before });
     await request.post('/api/schedule/reload');
+    await request.put('/api/settings/ScheduleSeconds', { data: String(seconds) });
   }
 });
