@@ -9,6 +9,7 @@ import { MEDIA, settingInFile, snapshotSettings } from './settings-file';
 test.skip(!container, 'reads what was saved inside the run-web.sh container');
 
 const PLUGIN = 'fpp-tests-save-page';
+const VALUE = 'a&b=c#d e+f';
 
 let restoreSettings: () => void;
 test.beforeEach(() => { restoreSettings = snapshotSettings(); });
@@ -28,4 +29,16 @@ test('SetPluginSetting saves a setting of the plugin it names', async ({ page, r
   await page.evaluate((plugin) => (window as any).SetPluginSetting(plugin, 'Colour', 'teal', 0, 0), PLUGIN);
   await expect.poll(async () => (await request.get(`/api/plugin/${PLUGIN}/settings/Colour`)).text(),
     { timeout: 10_000 }).toContain('teal');
+});
+
+test('a value with & and # in it is saved whole, as a setting and as a plugin setting', async ({ page, request }) => {
+  // Regression: 748cc4a68.
+  await openPage(page);
+  await page.evaluate(([plugin, value]) => {
+    (window as any).SetSetting('fppTestsSaveFromPage', value, 0, 0);
+    (window as any).SetPluginSetting(plugin, 'Text', value, 0, 0);
+  }, [PLUGIN, VALUE]);
+  await expect.poll(() => settingInFile('fppTestsSaveFromPage'), { timeout: 10_000 }).toBe(VALUE);
+  await expect.poll(async () => (await request.get(`/api/plugin/${PLUGIN}/settings/Text`)).text(),
+    { timeout: 10_000 }).toContain(VALUE);
 });
