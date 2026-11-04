@@ -100,6 +100,7 @@ test("Docker's bridge and veth interfaces are left out of the header", async ({ 
 });
 
 test('header temperatures follow the Fahrenheit setting', async ({ page }) => {
+  // Also guards 1d6853a1d: the temperatureInF setting shows Fahrenheit.
   // Regression: 944355af8.  The header read the setting through a typo
   // (`typeof setting`), so its temperatures were always in Celsius while
   // the status page's sensor table honoured temperatureInF.
