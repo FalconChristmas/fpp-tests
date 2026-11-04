@@ -11,6 +11,7 @@ test.beforeEach(() => { restoreSettings = snapshotSettings(); });
 test.afterEach(() => restoreSettings());
 
 test('a never-set Send Cape Serial Numbers setting reads as on', async ({ request }) => {
+  // Also guards 392d88b4d: a setting's default comes from settings.json.
   // Regression: cdaac72b9.  SendVendorSerial's default in settings.json was
   // 0; the commit made it 1.
   setSettingInFile('SendVendorSerial', undefined);
