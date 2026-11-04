@@ -303,6 +303,36 @@ test.describe('media entries', () => {
     expect(entry.videoOut ?? '--Default--').toBe('--Default--');
   });
 
+  // A Play Media command in an entry.  Its args go by position: videoOut is the
+  // fifth, the Sync To Show after it the sixth.
+  const playMedia = (videoOut: string) => ({ type: 'command', enabled: 1, playOnce: 0, command: 'Play Media',
+    args: [MAIN, '1', '0', '1', videoOut, 'true'], multisyncCommand: false, multisyncHosts: '' });
+
+  test('saving a command keeps a video output its list no longer offers', async ({ page, request }) => {
+    // Regression: 2388c8d8a.  PopulateExistingCommand() set the value on a select
+    // without that option, which selects nothing, and it saved as null.
+    await storePlaylist(request, [playMedia('fpp-tests-gone-output')]);
+    await openEditor(page);
+    await page.locator('.playlistRowEditButton').first().click();
+    const modal = page.locator('.modal.show');
+    await modal.getByRole('button', { name: 'Save', exact: true }).click();
+    await savePlaylist(page);
+    expect((await storedPlaylist(request)).mainPlaylist[0].args).toEqual(playMedia('').args.with(4, 'fpp-tests-gone-output'));
+  });
+
+  test('a command with nothing selected keeps its later args in their slots', async ({ page, request }) => {
+    // Regression: 2388c8d8a.  CommandToJSON() pushed the empty select's null,
+    // which the row stored as the text "null".  An earlier save's "null" is
+    // repaired the same way, so this is both.
+    await storePlaylist(request, [playMedia('null')]);
+    await openEditor(page);
+    await page.locator('.playlistRowEditButton').first().click();
+    const modal = page.locator('.modal.show');
+    await modal.getByRole('button', { name: 'Save', exact: true }).click();
+    await savePlaylist(page);
+    expect((await storedPlaylist(request)).mainPlaylist[0].args).toEqual(playMedia('').args);
+  });
+
   test('a video output list that fails to load neither changes an entry nor saves "null"', async ({ page, request }) => {
     // Regression: 765889c55.  The same with the list's fetch failing, for the
     // entry being edited and for a new one.
