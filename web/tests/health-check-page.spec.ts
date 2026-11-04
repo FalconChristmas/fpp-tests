@@ -37,9 +37,36 @@ for (const { shift, icon, text } of [
     await expect(status.locator(`i.${icon}`)).toHaveCount(1);
     if (text) await expect(status).toContainText(text);
     // The page's own Restart button comes back when the run is done.
-    await expect(page.locator('#btnStartHealthCheck')).not.toHaveClass(/disabled/, { timeout: 120_000 });
+    await expect(page.locator('#btnStartHealthCheck')).toBeEnabled({ timeout: 120_000 });
   });
 }
+
+test('Restart Health Check clears the results and runs the checks again', async ({ page }) => {
+  // Regression: 811d48417 ("Add a 'Restart Health Check' button.").
+  test.setTimeout(300_000);
+  // The second run waits for this, so the cleared page can be seen.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let runs = 0;
+  await page.route((u) => u.pathname === '/healthCheckHelper.php', async (route) => {
+    if (++runs === 2) await held;
+    await route.continue();
+  });
+  await page.goto('/healthCheck.php');
+  const restart = page.locator('#btnStartHealthCheck');
+  await expect(restart).toBeEnabled({ timeout: 120_000 });
+  const dateChecks = page.locator('#healthCheckOutput .row', { has: page.locator('.description', { hasText: 'FPP Date/Time Alignment to Browser' }) });
+  await expect(dateChecks).toHaveCount(1);
+
+  await restart.click();
+  await expect.poll(() => runs, 'the button started a second run').toBe(2);
+  await expect(dateChecks, 'the old results are cleared').toHaveCount(0);
+  await expect(restart, 'and it cannot be pressed again meanwhile').toBeDisabled();
+
+  release();
+  await expect(restart).toBeEnabled({ timeout: 120_000 });
+  await expect(dateChecks, 'one set of results, not two').toHaveCount(1);
+});
 
 test.describe('with unpartitioned space on the card', () => {
   test.skip(!container, 'sets UnpartitionedSpace in the settings file inside the run-web.sh container');
