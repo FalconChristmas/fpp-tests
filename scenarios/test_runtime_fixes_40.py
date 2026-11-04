@@ -136,6 +136,47 @@ def test_url_command_with_an_empty_post_body_sends_a_post(fppd):
     assert took < 10, took
 
 
+def test_threaded_udp_output_sends_from_worker_threads(fppd):
+    """A UDP output set to multi-threaded sending ("threaded": 1) sends each
+    target's packets from worker threads (FPP-UDPWork), not from the output
+    thread itself.
+
+    Regression: 2e6475431, which added the threaded sending (shown red against
+    master with useThreadedOutput forced off: no worker thread ran). That the
+    frames still arrive whole is test_threaded_udp_output_delivers_every_target_every_frame."""
+    import glob
+    from ddp import DdpReceiver
+    from fseq import unique_frames
+    from show import install
+
+    def workers():
+        names = []
+        for comm in glob.glob(f"/proc/{fppd.proc.pid}/task/*/comm"):
+            try:
+                with open(comm) as f:
+                    names.append(f.read().strip())
+            except OSError:
+                pass
+        return [n for n in names if n == "FPP-UDPWork"]
+
+    install(fppd, unique_frames(200, 120))
+    out = {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 120, "threaded": 1,
+        "universes": [
+            {"active": 1, "description": "a", "id": 64001, "startChannel": 1, "channelCount": 60,
+             "type": 5, "address": "127.0.0.1", "priority": 0, "monitor": 0, "deDuplicate": 0},
+            {"active": 1, "description": "b", "id": 64002, "startChannel": 61, "channelCount": 60,
+             "type": 5, "address": "127.0.0.2", "priority": 0, "monitor": 0, "deDuplicate": 0}]}]}
+    fppd.write("config/co-universes.json", out)
+    with DdpReceiver(120) as rx:
+        fppd.start()
+        fppd.command("Start Playlist", "Show", "false", "false")
+        fppd.wait_for(lambda: len(rx.snapshot()) >= 20, timeout=20, what="frames to arrive")
+        threaded = workers()
+        fppd.command("Stop Now")
+    assert threaded, "no FPP-UDPWork thread while playing"
+
+
 def _frame_period_ms(received):
     """The period frames went out at: the median gap between consecutive
     frames the receiver identified (a unique_frames() index), per frame

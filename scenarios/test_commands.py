@@ -766,6 +766,71 @@ def test_reboot_and_shutdown_commands_need_confirming(fppd, name, path):
     fppd.check_alive()
 
 
+def test_an_empty_post_to_the_web_api_does_not_wait_on_stdin(fppd):
+    """A POST fppd makes of the web API with no body (here the Reboot
+    command's, to a port-80 stand-in) goes out with an empty body and
+    returns at once, even while fppd's standard input is a pipe that never
+    ends.
+
+    Regression: 97f6a9ad5. urlHelper set CURLOPT_POST but only gave curl
+    POSTFIELDS when there was data, so for an empty body curl sent a chunked
+    body read from stdin -- and hung there for as long as stdin stayed open
+    (the command's HTTP request timing out, the thread stuck for curl's
+    30 s). The stand-in reads a request's body to its end before answering
+    (it sends "100 Continue" when asked, as Apache does in front of php-fpm);
+    one that answers at once lets curl give up the upload, and with stdin at
+    /dev/null, as in most runs, curl reads EOF at once."""
+    import http.server
+    import subprocess
+    import threading
+    from shims import build
+    requests = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def do_POST(self):
+            if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
+                body = b""
+                while True:
+                    size = int(self.rfile.readline().split(b";")[0], 16)
+                    body += self.rfile.read(size + 2)[:size]
+                    if size == 0:
+                        break
+                how = "chunked"
+            else:
+                body = self.rfile.read(int(self.headers.get("Content-Length", 0) or 0))
+                how = "Content-Length: " + str(self.headers.get("Content-Length"))
+            requests.append((self.command, self.path, how, body))
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        def log_message(self, *a):
+            pass
+
+    try:
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 80), H)
+    except OSError as e:
+        pytest.skip(f"can't listen on port 80 for the web API stand-in: {e}")
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        fppd.start(preload=[build("nocontainer.c")], stdin=subprocess.PIPE)
+        t0 = time.monotonic()
+        fppd.command("Reboot", "true", timeout=10)
+        took = time.monotonic() - t0
+        fppd.wait_for(lambda: requests, timeout=5, what="the reboot request")
+    finally:
+        if fppd.proc and fppd.proc.stdin:
+            fppd.proc.stdin.close()
+        server.shutdown()
+        server.server_close()
+    assert requests[0] == ("POST", "/api/system/reboot", "Content-Length: 0", b""), requests
+    assert took < 5, f"the command took {took:.1f}s"
+
+
 def test_the_remote_commands_are_gone(fppd):
     """The deprecated Remote ... commands, which posted a command to one
     other player by address, aren't listed; a playlist entry naming one

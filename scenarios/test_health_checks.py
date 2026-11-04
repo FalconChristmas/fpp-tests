@@ -267,7 +267,8 @@ def test_the_text_report_labels_each_status(tmp_path, status, label):
 
     Regression: c9ddc60bf. The Warning label sat inside the Fail branch,
     where a warning's status never reaches, so warnings read "Pass" (since
-    3259a36ac)."""
+    3259a36ac, which added the script and this report: its Pass and Fail
+    cases are red against master without scripts/healthCheck)."""
     out = run_checks(tmp_path, "healthCheck", HC_MAIN,
                      f'PrintItemHead "fpp-tests item"; STATUS={status}; '
                      f'STATUSSTR="fpp-tests status"; PrintItemFoot')
