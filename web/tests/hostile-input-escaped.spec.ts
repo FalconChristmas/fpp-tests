@@ -87,11 +87,10 @@ test('changebranch.php refuses a branch with shell characters', async ({ request
 });
 
 test('a plugin page that includes pluginconfig.php does not print the config path', async ({ page }) => {
-  // 24adba429 left a debug echo of the plugin's config file path at the top of
+  // 24adba429 (fixed in fpp afterwards) left a debug echo of the plugin's config file path at the top of
   // pluginconfig.php, so every plugin page that includes it printed
   // "/home/fpp/media/config/plugin.<name>".
   test.skip(!container, 'writes a plugin into the run-web.sh container');
-  test.fail(true, 'known leftover echo in www/pluginconfig.php: remove this line once the echo is gone');
   const PLUGIN = 'fpp-tests-pluginconfig';
   const DIR = `/home/fpp/media/plugins/${PLUGIN}`;
   inPlayer('mkdir', '-p', DIR);
