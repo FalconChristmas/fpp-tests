@@ -90,6 +90,7 @@ test.describe('cape vendor links', () => {
   });
 
   test('the vendor link carries the serial only when logos and the serial are both allowed', async ({ request }) => {
+    // Also guards e505c69d4: SendVendorSerial keeps the serial off the vendor link.
     // Regression: 9d00d30ad.  Cape Info added the serial to the vendor link
     // on SendVendorSerial alone, though the privacy text says denying the
     // logo denies it too.
