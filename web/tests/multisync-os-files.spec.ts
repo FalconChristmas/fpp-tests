@@ -47,6 +47,7 @@ async function openMultisync(page: Page, remote: string) {
 }
 
 test('a Pi64 image in the uploads is offered for a Raspberry Pi remote and copied to it', async ({ page }) => {
+  // Also guards cacb87bc5: .fppos files can be pushed to remotes.
   // Regression: 468875d87.  Only BBB-, BB64- and Pi- images were recognised;
   // a 64-bit Pi image (Pi64-...) was typed UNKNOWN and never listed, so it
   // could not be copied to a Pi remote from the MultiSync page.
