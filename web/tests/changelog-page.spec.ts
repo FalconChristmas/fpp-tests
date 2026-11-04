@@ -53,3 +53,17 @@ test('the ChangeLog lists the commits, filters them, and keeps its limit sane', 
     await expect(rows, `limit=${limit}`).toHaveCount(3);
   }
 });
+
+test('HTML in a commit message shows as text and does not run', async ({ page }) => {
+  // Regression: 8a8a39b93 ("fixed bug when html tags are in git messages").
+  // The subject went into the page as it was, so a tag in it broke the layout
+  // and a script in it ran.  (git itself strips < and > from author names.)
+  const subject = 'fpp-tests: a <b>bold</b> claim & <img src=x onerror="window.fppTestsRan=1"> too';
+  inPlayer('git', '--git-dir=/opt/fpp/.git', '--work-tree=/tmp', '-c', 'user.name=Alice Example', '-c', 'user.email=t@t',
+    'commit', '-q', '--allow-empty', '-m', subject);
+  await page.goto('/changelog.php');
+  const shown = page.locator('#commitList .fpp-commit').first().locator('.fpp-commit__subject');
+  await expect(shown).toHaveText(subject);
+  await expect(shown.locator('b, img')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).fppTestsRan)).toBeUndefined();
+});
