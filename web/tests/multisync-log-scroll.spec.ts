@@ -77,3 +77,39 @@ test("a streaming log stays at its newest line, and a log scrolled back stays pu
   expect(bottomGap).toBeLessThanOrEqual(2);
   expect(await logs[1].evaluate((t: HTMLTextAreaElement) => t.scrollTop)).toBe(middle);
 });
+
+test('a remote found while a finished log is open waits to be added until the log is closed', async ({ page }) => {
+  // Regression: 1a9db94e0 ("Add missing class needed for 449c538eb4").  A
+  // newly found system rebuilds the table from scratch, which loses an open
+  // log; the rebuild waits while a log row (tr.logRow) is showing, but the
+  // log rows did not carry that class, so a log left open after its action
+  // finished was thrown away as soon as another player came online.
+  const systems = [
+    system('192.168.0.13', 'FPPTESTLOCAL', 'M1-fpptests-local', 1),
+    ...REMOTES.map((ip, i) => system(ip, `fpptests-remote${i + 1}`, `M1-fpptests-remote${i + 1}`)),
+  ];
+  await openMultisync(page);
+  await page.route('**/api/fppd/multiSyncSystems', (route) => route.fulfill({ json: { systems } }));
+  const id = await page.locator('#fppSystems tr.systemRow', { hasText: 'fpptests-remote1' }).getAttribute('id');
+  await page.evaluate((id) => {
+    (window as any).showLogsRow(id);
+    (window as any).appendRowLog(id, 'fpp-tests upgrade log\nDone\n');
+  }, id);
+  const log = page.locator(`#${id}_logText`);
+  await expect(log).toBeVisible();
+
+  // A third player comes online.
+  systems.push(system('192.168.0.23', 'fpptests-remote3', 'M1-fpptests-remote3'));
+  const listed = page.waitForResponse((r) => r.url().includes('/api/fppd/multiSyncSystems'));
+  await page.evaluate(() => (window as any).checkForNewSystems());
+  await listed;
+  await page.waitForTimeout(500);
+  await expect(log, 'the open log was thrown away').toBeVisible();
+  await expect(log).toHaveValue(/fpp-tests upgrade log/);
+  await expect(page.locator('#fppSystems tr.systemRow')).toHaveCount(3);
+
+  // The control: with the log closed, the next check adds it.
+  await page.evaluate((id) => (window as any).$(`#${id}_logs`).hide(), id);
+  await page.evaluate(() => (window as any).checkForNewSystems());
+  await expect(page.locator('#fppSystems tr.systemRow')).toHaveCount(4, { timeout: 10_000 });
+});
