@@ -87,8 +87,9 @@ def test_an_sh1107_panel_is_sent_16_pages_from_column_0(oled_media, screen):
 @pytest.mark.parametrize("display_type", [14, 15], ids=["16x2", "20x4"])
 def test_a_pcf8574_lcd_is_looked_for_and_registered_at_0x27(oled_media, screen, tmp_path, display_type):
     """LEDDisplayType 14 and 15 (PCF8574 16x2 / 20x4 LCD, I2C 0x27): fppoled
-    probes bus 1 for 0x27 and, finding it, registers a pcf8574 there
-    (new_device "pcf8574 0x27"), whose lines it then drives the LCD with.
+    probes its default I2C bus (2 on a BeagleBone, 1 on a Pi, 0 elsewhere)
+    for 0x27 and, finding it, registers a pcf8574 there (new_device
+    "pcf8574 0x27"), whose lines it then drives the LCD with.
 
     Regression: 6b4c865d3 ("Add support for PCF8574 (non-A) to fix #1269").
     Only the PCF8574A's 0x3F was known: an LCD on a plain PCF8574, at 0x27,
@@ -101,8 +102,9 @@ def test_a_pcf8574_lcd_is_looked_for_and_registered_at_0x27(oled_media, screen, 
     import shims
     bindir, devices = tmp_path / "bin", tmp_path / "i2c-devices"
     bindir.mkdir()
-    (devices / "i2c-1").mkdir(parents=True)
-    (devices / "i2c-1" / "new_device").write_text("")
+    for bus in (0, 1, 2):
+        (devices / f"i2c-{bus}").mkdir(parents=True)
+        (devices / f"i2c-{bus}" / "new_device").write_text("")
     probes = tmp_path / "probes.txt"
     stub = bindir / "i2cdetect"
     stub.write_text(f'#!/bin/sh\necho "$*" >> {probes}\n'
@@ -113,10 +115,15 @@ def test_a_pcf8574_lcd_is_looked_for_and_registered_at_0x27(oled_media, screen, 
     screen.start(preload=[shims.build("fakesys.c")],
                  extra_env={"PATH": f"{bindir}:{os.environ['PATH']}",
                             "FAKESYS": f"/sys/bus/i2c/devices={devices}"})
-    new_device = devices / "i2c-1" / "new_device"
+    new_devices = [devices / f"i2c-{bus}" / "new_device" for bus in (0, 1, 2)]
     deadline = time.monotonic() + 15
-    while time.monotonic() < deadline and not new_device.read_text():
+    while time.monotonic() < deadline and not any(d.read_text() for d in new_devices):
         time.sleep(0.2)
     seen = probes.read_text() if probes.exists() else ""
-    assert new_device.read_text() == "pcf8574 0x27", f"probes:\n{seen}\n{screen.log()}"
-    assert "-y -r 1 0x27 0x27" in seen, seen
+    written = {d.parent.name: d.read_text() for d in new_devices if d.read_text()}
+    # the platform's default bus is probed first, and the device is
+    # registered on the bus that answered, and only there
+    assert written and set(written.values()) == {"pcf8574 0x27"} and len(written) == 1, \
+        f"registered: {written}\nprobes:\n{seen}\n{screen.log()}"
+    bus = next(iter(written)).split("-")[1]
+    assert seen.splitlines()[0] == f"-y -r {bus} 0x27 0x27", seen

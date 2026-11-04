@@ -129,9 +129,12 @@ def test_an_entry_type_fpp_no_longer_has_is_skipped(fppd, kind):
         fppd.write("playlists/P.json", bare("P", [mark(port, 1), e, mark(port, 2)]))
         fppd.start()
         start(fppd, "P")
-        fppd.wait_for(lambda: status_name(fppd) == "idle" and "2" in marks(got), timeout=10,
+        # URL entries are dispatched through CurlManager without waiting, so
+        # two in a row can reach the server in either order (TSan's timing
+        # swaps them): the claim is that both arrive, once each.
+        fppd.wait_for(lambda: status_name(fppd) == "idle" and {"1", "2"} <= set(marks(got)), timeout=10,
                       interval=0.2, what="the playlist to play past the entry and end")
-        assert marks(got) == ["1", "2"], marks(got)
+        assert sorted(marks(got)) == ["1", "2"], marks(got)
     assert any(f"Unknown playlist entry type: {kind}" in w for w in warnings(fppd)), \
         warnings(fppd)
 
