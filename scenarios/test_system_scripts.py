@@ -706,3 +706,18 @@ def test_kiosk_starts_chromium_browser_where_there_is_no_chromium(fppinit):
     launches = [c for c in fppinit.calls() if c.startswith(("chromium", "chromium-browser"))]
     assert launches and launches[0].startswith("chromium-browser ") and "--kiosk" in launches[0], \
         f"no chromium-browser kiosk was started: {fppinit.calls()}\n{out[-2000:]}"
+
+
+def test_upgrade_fpp_deletes_the_usage_statistics(fppinit):
+    """upgrade_FPP asks the web UI to delete the collected usage statistics,
+    so the stats next sent describe the version now running.
+
+    Regression: 65f2ae98e, its upgrade_FPP half. Shows the request goes out,
+    with a stand-in for curl: there is no web UI in the sandbox, so not that
+    stats.php then removes the file, nor the same call in manualUpdate.php."""
+    version_switch_checkout(fppinit)
+    fppinit.root_file("/usr/bin/curl", f'#!/bin/sh\necho "$*" >> {MEDIA}/tmp/curl.log\n')
+    r = upgrade_fpp(fppinit, "v2")
+    asked = fppinit.media_file("tmp/curl.log") if fppinit.media_exists("tmp/curl.log") else ""
+    assert "-X DELETE http://localhost/api/statistics/usage" in asked, \
+        f"curl was asked for: {asked!r}\n{(r.stdout + r.stderr)[-3000:]}"
