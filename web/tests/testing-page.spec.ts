@@ -54,6 +54,8 @@ async function openTesting(page: Page) {
   await expect(page.locator('#testModeEnabled')).toBeAttached({ timeout: 15_000 });
 }
 
+// Also guards e868e0ad6 (the Test mode API moved): with it undone the
+// page's test mode is not read back as set.
 test('a colour picked for the custom cycle pattern is added to the pattern fppd runs', async ({ page, request }) => {
   // Feature: c931125c5.  The Custom Pattern of the RGB test patterns gets a
   // colour picker: Add Color appends the picked colour's hex triplet to the
