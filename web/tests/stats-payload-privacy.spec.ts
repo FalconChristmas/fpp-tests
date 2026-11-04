@@ -81,6 +81,7 @@ test('settings marked pii stay out, whatever gatherStats says', async ({ request
 });
 
 test('the cape is reported without its serial, cs or vendor contact details', async ({ request }) => {
+  // Also guards e2c2b4ded: capeInfo carries the cape's designer.
   // Regression: 08fc1175a.  The cape serial and cs -- a per-unit key into the
   // vendor's order records -- were sent, gated on SendVendorSerial, along with
   // the vendor's whole block (e-mail, site).
