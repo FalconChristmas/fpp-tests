@@ -107,6 +107,40 @@ PrintSetting('fppTestsPlain');
   });
 });
 
+test('the known FPP systems leave out what is not an FPP', () => {
+  // Regression: 03f508fd9 (#946).  The backup and About pages' host lists come
+  // from getKnownFPPSystems(), which keeps FPP's own type ids, 1 to 127, of
+  // what fppd's MultiSync has seen: a WLED or Falcon controller is no place to
+  // back up to or upgrade from.  fppd's answer is the test's, through a stand-in
+  // for PHP's http:// stream.
+  const known = JSON.parse(php(`
+class FppTestsHttp {
+    public $context;
+    private $body;
+    private $at = 0;
+    function stream_open($path, $mode, $options, &$opened) {
+        $systems = array();
+        foreach (array(array(0, 'none'), array(1, 'first'), array(13, 'pi'), array(127, 'last'), array(128, 'over'), array(251, 'wled')) as $i => $s) {
+            $systems[] = array('typeId' => $s[0], 'hostname' => 'fpp-tests-' . $s[1], 'address' => '192.168.0.' . (100 + $i));
+        }
+        $this->body = json_encode(array('systems' => $systems));
+        return true;
+    }
+    function stream_read($count) { $r = substr($this->body, $this->at, $count); $this->at += strlen($r); return $r; }
+    function stream_eof() { return $this->at >= strlen($this->body); }
+    function stream_stat() { return array(); }
+}
+stream_wrapper_unregister('http');
+stream_wrapper_register('http', 'FppTestsHttp');
+echo json_encode(array_keys(getKnownFPPSystems()));
+`).trim().split('\n').pop()!) as string[];
+  expect(known.sort()).toEqual([
+    '192.168.0.101 - fpp-tests-first',
+    '192.168.0.102 - fpp-tests-pi',
+    '192.168.0.103 - fpp-tests-last',
+  ]);
+});
+
 test('an expired cached value is served stale while another request is recalculating it', () => {
   // Regression: fc558ffc4.  A request that found the cache expired waited
   // for the lock of the one recalculating it, then recalculated it again
