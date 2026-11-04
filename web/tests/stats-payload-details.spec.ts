@@ -35,6 +35,7 @@ test('only the settings the user changed are reported, not the defaults behind t
 });
 
 test('each interface is reported with the link state the kernel gives it', async ({ request }) => {
+  // Also guards 1f22496aa: the usage statistics API answers.
   // Feature: dd918e3a8.  The network block lists the interfaces with their
   // operstate (and, through the allowlist, their config).
   const json = await payload(request);
