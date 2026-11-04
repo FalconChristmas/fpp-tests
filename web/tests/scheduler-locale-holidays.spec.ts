@@ -36,3 +36,20 @@ for (const [region, holidays] of [
     }
   });
 }
+
+test("the Global locale lists Global.json's holidays", async ({ page, request }) => {
+  // Regression: 116f71da8 ("Fix name of global locale file").  config.php
+  // loaded etc/locale/global.json, but the file is Global.json: on a
+  // case-sensitive file system the Global locale (the default) had no
+  // holidays at all, and every other locale lost the ones it merges in.
+  expect((await request.put('/api/settings/Locale', { data: 'Global' })).ok()).toBe(true);
+  await page.goto('/scheduler.php');
+  const options = await page.evaluate(() => {
+    const holder = document.createElement('div');
+    holder.innerHTML = (window as any).HolidaySelect('', '');
+    return Array.from(holder.querySelectorAll('option')).map((o) => [o.value, o.textContent]);
+  });
+  const listed = Object.fromEntries(options as string[][]);
+  expect(listed.NewYearsDay).toBe("New Year's Day");
+  expect(listed.ChineseNewYear).toBe('Chinese New Year');
+});
