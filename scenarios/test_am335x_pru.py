@@ -883,3 +883,46 @@ def test_the_matrix_hands_the_pru_each_of_its_frames_in_turn(fppd):
     finally:
         fppd.command("Test Stop")
     assert len(seen) == 4, f"frames handed to the PRU: {sorted(hex(a) for a in seen)}"
+
+
+def test_a_missing_pinout_falls_back_to_the_capes_capepanels(fppd):
+    """A matrix whose pinout has no file of its own (the cape's name with
+    the config's wiringPinout) takes tmp/panels/CapePanels.json when the
+    cape ships one, and runs on it.
+
+    Regression: c3107ef75. Only the cape's own named pinout was looked
+    for, so a cape that publishes its pinout as CapePanels.json (whatever
+    the config's wiring is called) left the output with no pin
+    configuration and a warning.
+    """
+    pru = FakePruss(fppd)
+    fppd.settings(LogLevel_ChannelOut="debug")
+    p = stock_panel_pinout("Octoscroller")
+    write_panel_pinout("CapePanels", dict(p, name="CapePanels"))
+    fppd.write("config/channeloutputs.json", matrix_config(wiringPinout="v3"))
+    pru.start()
+    fppd.wait_for(lambda: pru.starts(0), timeout=60, what="the output to start on CapePanels")
+    assert "Using panel pinout from /home/fpp/media/tmp/panels/CapePanels.json" in fppd.log(), fppd.tail()
+    assert not [w for w in warnings_of(fppd) if "no output pin configuration" in w], warnings_of(fppd)
+
+
+def test_a_matrix_output_creates_its_overlay_model(fppd):
+    """With Auto-create Pixel Overlay Models on, a BBBMatrix output makes a
+    model of its panel from its description, over its channels.
+
+    Regression: 6a1adb010. BBBMatrix was one of the panel outputs that made
+    no model (ColorLight, Linsn and RGBMatrix were given theirs in the same
+    commit; test_panel_auto_models.py covers the naming with a ColorLight
+    panel).
+    """
+    from test_panel_auto_models import model_names
+    pru = FakePruss(fppd)
+    octoscroller()
+    fppd.write("config/channeloutputs.json", matrix_config(description="Wall"))
+    fppd.write("config/model-overlays.json", {"autoCreate": True, "models": []})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    pru.start()
+    fppd.wait_for(lambda: model_names(fppd) == ["Wall"], timeout=30,
+                  what=f"the matrix's model (have {model_names(fppd)})")
+    model = [m for m in fppd.get("/models") if m.get("Name") == "Wall"][0]
+    assert model.get("ChannelCount") == 64 * 32 * 3, model
