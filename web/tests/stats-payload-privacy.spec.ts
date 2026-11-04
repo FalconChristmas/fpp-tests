@@ -149,6 +149,7 @@ test('uuidSource is a source, never the identity, and a bad cached identity is n
 });
 
 test('universe outputs are counted by destination without any address', async ({ request }) => {
+  // Also guards 60136e496: the outputs are in the usage stats.
   // Regression: c76c4cffd -- enabled, threaded and type were never emitted
   //   for universe outputs (validateAndAdd was given an index that doesn't
   //   exist there).
