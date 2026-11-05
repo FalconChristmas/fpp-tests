@@ -11,6 +11,12 @@
  * error, EAGAIN, without starting anything; every other thread starts as
  * usual.  Each refusal appends a line to $FSEQ_NOTHREAD_FILE, so a scenario
  * can tell the refusal was reached.
+ *
+ * $FSEQ_NOTHREAD_MATCH, if set, replaces "11prepareRead" as the text the
+ * state's vtable symbol must contain ("P8Sequence" picks Sequence's own
+ * read thread, std::thread(ReadSequenceDataThread, this)), and
+ * $FSEQ_NOTHREAD_LIMIT, if set, refuses only that many starts, so a
+ * scenario can see the one after a refusal succeed.
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -34,7 +40,13 @@ void _ZNSt6thread15_M_start_threadESt10unique_ptrINS_6_StateESt14default_deleteI
     }
     void* obj = state ? *state : NULL;
     Dl_info info;
-    if (obj && dladdr(*(void**)obj, &info) && info.dli_sname && strstr(info.dli_sname, "11prepareRead")) {
+    const char* match = getenv("FSEQ_NOTHREAD_MATCH");
+    const char* limit = getenv("FSEQ_NOTHREAD_LIMIT");
+    static int refused;
+    if (obj && dladdr(*(void**)obj, &info) && info.dli_sname &&
+        strstr(info.dli_sname, match && *match ? match : "11prepareRead") &&
+        !(limit && refused >= atoi(limit))) {
+        refused++;
         const char* file = getenv("FSEQ_NOTHREAD_FILE");
         FILE* f = file ? fopen(file, "a") : NULL;
         if (f) {

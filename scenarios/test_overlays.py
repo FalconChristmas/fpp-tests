@@ -216,6 +216,34 @@ def test_colour_names_are_read_in_any_case(fppd):
                     "the model to fill red")
 
 
+def test_a_wled_effect_given_a_word_for_a_colour_from_a_playlist(fppd):
+    """An Overlay Model Effect playlist entry for a WLED effect with one of
+    its numbers left out, so every later argument moves up a slot and the
+    palette name lands in a colour's, runs on its own and the playlist goes
+    on to its next entry.
+
+    Regression: 919ff8391, with 5504aa6e0 behind it. The colour went to
+    stoul, which threw on the word; on the main loop nothing caught it, and
+    fppd died each time the entry came round, a crash loop on a player."""
+    from test_commands import command_entry, set_variable, variable
+    from show import playlist
+    setup(fppd, [matrix()])
+    shifted = {"command": "Overlay Model Effect",
+               "args": ["M", "Enabled", "WLED - Solid Glitter", "Horizontal", "100", "128",
+                        "* Colors Only", "#f0a400", "#ffffff"]}
+    fppd.write("playlists/Shifted.json", playlist("Shifted", [
+        command_entry(shifted), command_entry(set_variable("After", "yes"))]))
+    fppd.start()
+    # The first entry runs inside this request: an exception out of it is
+    # drogon's 500 here, where the scheduler's start would have been the abort.
+    try:
+        fppd.command("Start Playlist", "Shifted", "false", "false")
+    except urllib.error.HTTPError as e:
+        pytest.fail(f"the WLED effect's entry threw ({e.code}):\n{fppd.log()[-2000:]}")
+    fppd.wait_for(lambda: variable(fppd, "After") == "yes", timeout=10,
+                  what="the entry after the WLED effect to run")
+
+
 def test_bad_model_definitions_do_not_stop_fppd_starting(fppd):
     """fppd starts with a model-overlays.json holding definitions it can't
     represent, drops those, and drives the good model.
