@@ -49,24 +49,73 @@ def pull_checkout(sb):
     return fpp, head(work)
 
 
-def test_a_failed_pull_stops_the_update(fppinit):
-    """git_pull on a checkout whose pull can't be applied (a local edit to a
-    tracked file, as a user's hand fix leaves) exits non-zero and goes no
-    further: the config upgrades and the rebuild are not run, and the
-    checkout stays where it was. manualUpdate.php reports the update failed
-    on that status (manual-update-failed-pull.spec.ts).
+def with_identity(fpp):
+    """The checkout's own commit (checkout_with_src's src) is replayed by
+    the update's rebase, which needs a committer; the sandbox has none."""
+    git("config", "user.name", "fpp-tests", cwd=fpp)
+    git("config", "user.email", "fpp-tests@localhost", cwd=fpp)
 
-    Regression: 5c0b83a10. The script ran on past the failed pull, rebuilt
-    the old code and exited 0, so the update was reported complete."""
+
+def test_a_local_edit_is_set_aside_and_the_update_goes_on(fppinit):
+    """git_pull on a checkout with a local edit to a tracked file (a hand
+    fix, or a plugin's install script writing into FPP's tree) sets the
+    edit aside -- a patch under logs/fpp_tree_patches and a git stash --
+    and goes on: the checkout reaches the new commit without the edit, and
+    FPP is rebuilt.
+
+    Regression: 346fc79c9. The edit made the rebase refuse, so every later
+    update failed until someone undid it by hand."""
     fpp, new = pull_checkout(fppinit)
-    before = head(fpp)
-    with open(os.path.join(fpp, "scripts", "common"), "a") as f:
+    with_identity(fpp)
+    common = os.path.join(fpp, "scripts", "common")
+    with open(common) as f:
+        shipped = f.read()
+    with open(common, "a") as f:
         f.write("# a local edit\n")
     fppinit.root_file("/usr/bin/curl", REACHABLE)
     r, out = run_script(fppinit, "git_pull")
-    assert head(fpp) == before, f"the checkout moved:\n{out[-3000:]}"
-    # The control: the pull was tried and failed for the local edit.
-    assert "unstaged changes" in out or "local changes" in out, out[-3000:]
+    assert subprocess.run(["git", "-c", "safe.directory=*", "-C", fpp, "merge-base", "--is-ancestor", new, "HEAD"]).returncode == 0, \
+        f"the checkout didn't reach the new commit:\n{out[-3000:]}"
+    with open(common) as f:
+        assert f.read() == shipped, f"the local edit is still in the tree:\n{out[-3000:]}"
+    assert "fpp auto-stash before update" in gitout(fpp, "stash", "list"), out[-3000:]
+    patches = os.path.join(fppinit.media, "logs", "fpp_tree_patches")
+    saved = [p for p in os.listdir(patches) if p.endswith("-update-stash.patch")] if os.path.isdir(patches) else []
+    assert len(saved) == 1, f"{saved}\n{out[-3000:]}"
+    with open(os.path.join(patches, saved[0])) as f:
+        assert "+# a local edit" in f.read()
+    assert made(fppinit) != [], f"the update didn't rebuild:\n{out[-3000:]}"
+
+
+def test_a_failed_pull_stops_the_update(fppinit):
+    """git_pull on a checkout whose pull can't be applied (a local commit
+    that conflicts with the new one upstream) exits non-zero and goes no
+    further: the config upgrades and the rebuild are not run, and the
+    checkout is left where it was, on its branch with no rebase under way.
+    manualUpdate.php reports the update failed on that status
+    (manual-update-failed-pull.spec.ts).
+
+    Regression: 5c0b83a10. The script ran on past the failed pull, rebuilt
+    the old code and exited 0, so the update was reported complete. Then
+    the rebase was left stopped at the conflict: the checkout detached,
+    conflict markers in the file, and every later update refused for the
+    rebase already under way."""
+    fpp, new = pull_checkout(fppinit)
+    with_identity(fpp)
+    with open(os.path.join(fpp, "README"), "w") as f:
+        f.write("a local commit\n")
+    git("add", "README", cwd=fpp)
+    git("commit", "-q", "-m", "local", cwd=fpp)
+    before = head(fpp)
+    fppinit.root_file("/usr/bin/curl", REACHABLE)
+    r, out = run_script(fppinit, "git_pull")
+    # The control: the pull was tried and failed on the conflict.
+    assert "CONFLICT" in out or "could not apply" in out, out[-3000:]
+    assert not os.path.exists(os.path.join(fpp, ".git", "rebase-merge")), f"the rebase was left under way:\n{out[-3000:]}"
+    assert head(fpp) == before and gitout(fpp, "rev-parse", "--abbrev-ref", "HEAD") == "v1", \
+        f"the checkout moved: {gitout(fpp, 'status', '--short', '--branch')}\n{out[-3000:]}"
+    with open(os.path.join(fpp, "README")) as f:
+        assert f.read() == "a local commit\n", "conflict markers left in the checkout"
     assert made(fppinit) == [], f"the update went on to rebuild after the failed pull: {made(fppinit)}\n{out[-3000:]}"
     assert "Upgrading config" not in out, f"the config upgrades ran after the failed pull:\n{out[-3000:]}"
     assert r.returncode != 0, f"git_pull exited 0 after a failed pull:\n{out[-3000:]}"

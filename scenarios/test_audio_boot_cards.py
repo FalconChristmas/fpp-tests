@@ -397,26 +397,119 @@ def test_an_eight_channel_i2s_dac_gets_all_its_channels(fppinit):
     assert dac8x_channels(rewritten) == 8, f"a cached 2-channel adapter after a boot:\n{rewritten}\n{out[-3000:]}"
 
 
+# A stand-in for WirePlumber's "default" metadata, as pactl and pw-metadata
+# see it. wp.default is the default in effect, wp.configured the one it has
+# stored; a set-default-sink stores the sink, unless wp.overwrite counts sets
+# still to be lost to WirePlumber's own first pick (made as it starts, it
+# overwrites a set before storing it). pactl's other verbs answer from
+# stub_output() as the plain stub does.
+WP_PACTL = r"""#!/bin/sh
+printf '%s\n' "pactl $*" >> /fppinit-calls.log
+S=/fppinit-state
+case "$1" in
+    get-default-sink) cat "$S/wp.default" 2>/dev/null; exit 0 ;;
+    set-default-sink)
+        n=$(cat "$S/wp.overwrite" 2>/dev/null || echo 0)
+        if [ "$n" -gt 0 ]; then
+            echo $((n - 1)) > "$S/wp.overwrite"
+        else
+            echo "$2" > "$S/wp.default"
+            echo "$2" > "$S/wp.configured"
+        fi
+        exit 0 ;;
+esac
+for a in "$@"; do
+    if [ -f "$S/pactl.$a.out" ]; then cat "$S/pactl.$a.out"; break; fi
+done
+exit 0
+"""
+
+WP_METADATA = r"""#!/bin/sh
+printf '%s\n' "pw-metadata $*" >> /fppinit-calls.log
+S=/fppinit-state
+for a in "$@"; do key="$a"; done
+case "$key" in
+    default.audio.sink) f="$S/wp.default" ;;
+    default.configured.audio.sink) f="$S/wp.configured" ;;
+    *) exit 0 ;;
+esac
+[ -s "$f" ] && printf "update: id:0 key:'%s' value:'{\"name\":\"%s\"}' type:'Spa:String:JSON'\n" "$key" "$(cat "$f")"
+exit 0
+"""
+
+
+def wireplumber(sb, default, configured=None, overwrite=0):
+    """WirePlumber running with `default` in effect, `configured` stored,
+    and the next `overwrite` sets lost to its own pick."""
+    sb.root_file("/usr/bin/pactl", WP_PACTL)
+    sb.root_file("/usr/bin/pw-metadata", WP_METADATA)
+    for name, value in (("wp.default", default), ("wp.configured", configured or ""), ("wp.overwrite", str(overwrite))):
+        with open(os.path.join(sb.state, name), "w") as f:
+            f.write(value + "\n" if value else "")
+
+
+def default_sink_sets(sb):
+    return [c for c in sb.calls() if c.startswith("pactl set-default-sink")]
+
+
 def test_a_boot_points_pipewires_default_sink_at_fppds(fppinit):
     """A boot of a Simple-mode board whose PipeWire default sink is some
     other sink (what WirePlumber remembered, or the first adapter on a
     first boot): setupAudio makes the sink fppd plays to (PipeWireSinkName)
-    the default, through pactl. With that sink not in the graph, the
-    default is left as it is.
+    the default, through pactl, once WirePlumber has published its own,
+    and WirePlumber stores it. A default already set and stored is left
+    alone, and with fppd's sink not in the graph the default is left as it
+    is.
 
     Regression: c7a2fca4a. Only the UI's applies set the default sink, so
     a boot left the remembered or first-come one: a plugin's player, or
     anything else naming no target, played out of another card."""
     maps = no_card_box(fppinit)
     set_setting(fppinit, PipeWireSinkName="fpp_group_default")
-    fppinit.stub_output("pactl", "get-default-sink", "fpp_alsa_other\n")
+    wireplumber(fppinit, "fpp_alsa_other", configured="fpp_alsa_other")
     out, _ = setup_audio(fppinit, maps)
-    sets = [c for c in fppinit.calls() if c.startswith("pactl set-default-sink")]
-    assert sets == ["pactl set-default-sink fpp_group_default"], f"{sets}\n{out[-3000:]}"
+    assert default_sink_sets(fppinit) == ["pactl set-default-sink fpp_group_default"], \
+        f"{default_sink_sets(fppinit)}\n{out[-3000:]}"
+    assert fppinit.written("/fppinit-state/wp.configured") == "fpp_group_default\n", out[-3000:]
+    assert "did not hold" not in out and "published no default sink" not in out, out[-3000:]
+
+    # Already the default, and stored: nothing to set.
+    wireplumber(fppinit, "fpp_group_default", configured="fpp_group_default")
+    set_setting(fppinit, PipeWireSinkName="fpp_group_default")
+    out, _ = setup_audio(fppinit, maps)
+    assert default_sink_sets(fppinit) == [], f"{default_sink_sets(fppinit)}\n{out[-3000:]}"
 
     # The control: fppd's sink isn't in the graph, so the default stays.
+    wireplumber(fppinit, "fpp_alsa_other", configured="fpp_alsa_other")
     fppinit.stub_output("pactl", "list", "1\tfpp_group_other\tPipeWire\ts16le 2ch 48000Hz\tSUSPENDED\n")
     set_setting(fppinit, PipeWireSinkName="fpp_group_default")
     out, _ = setup_audio(fppinit, maps)
-    sets = [c for c in fppinit.calls() if c.startswith("pactl set-default-sink")]
-    assert sets == [], f"{sets}\n{out[-3000:]}"
+    assert default_sink_sets(fppinit) == [], f"{default_sink_sets(fppinit)}\n{out[-3000:]}"
+
+
+def test_a_default_sink_lost_to_wireplumbers_own_pick_is_set_again(fppinit):
+    """A boot that starts PipeWire sets the default sink in the same moment
+    WirePlumber starts, and WirePlumber's own pick overwrites it before it
+    is stored. setupAudio checks the set was stored and sets it again until
+    it is, so the default holds at fppd's sink.
+
+    Regression: 8ac3b7dda (#3063). The set was made once and trusted: the
+    log said fppd's sink was the default, but WirePlumber kept the first
+    card's adapter (the onboard jack, with a USB card selected), and a
+    plugin's player naming no target played out of it."""
+    maps = no_card_box(fppinit)
+    set_setting(fppinit, PipeWireSinkName="fpp_group_default")
+    wireplumber(fppinit, "fpp_alsa_other", overwrite=2)
+    out, _ = setup_audio(fppinit, maps)
+    assert default_sink_sets(fppinit) == ["pactl set-default-sink fpp_group_default"] * 3, \
+        f"{default_sink_sets(fppinit)}\n{out[-3000:]}"
+    assert fppinit.written("/fppinit-state/wp.configured") == "fpp_group_default\n", out[-3000:]
+    assert "did not hold" not in out, out[-3000:]
+
+    # The control: a WirePlumber that never lets it hold is given up on
+    # after a few tries, and the log says so.
+    wireplumber(fppinit, "fpp_alsa_other", overwrite=100)
+    set_setting(fppinit, PipeWireSinkName="fpp_group_default")
+    out, _ = setup_audio(fppinit, maps)
+    assert len(default_sink_sets(fppinit)) == 5, f"{default_sink_sets(fppinit)}\n{out[-3000:]}"
+    assert "did not hold at fpp_group_default (now 'fpp_alsa_other')" in out, out[-3000:]
