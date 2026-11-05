@@ -204,3 +204,52 @@ def test_a_sequence_whose_read_thread_cannot_start_is_not_opened(fppd):
     assert os.path.exists(refused) and len(open(refused).read().splitlines()) == 1, \
         "the read thread's start was never refused"
     assert "Could not start the sequence read thread" in fppd.log()
+
+
+def stack_room(pid, tid):
+    """How far a blocked thread's stack pointer is above the bottom of the
+    mapping it is in: the room its stack has to grow into. (Measured down
+    from the pointer, so a mapping the kernel merged above doesn't count.)"""
+    with open(f"/proc/{pid}/task/{tid}/syscall") as f:
+        fields = f.read().split()
+    sp = int(fields[-2], 16)
+    with open(f"/proc/{pid}/maps") as f:
+        for line in f:
+            lo, hi = (int(x, 16) for x in line.split()[0].split("-"))
+            if lo <= sp < hi:
+                return sp - lo
+    raise AssertionError(f"no mapping holds sp {sp:#x}")
+
+
+def test_a_read_ahead_thread_has_a_small_stack(fppd):
+    """A looping FSEQ effect on a zstd file has a read-ahead thread of its
+    own, and that thread's stack is a few hundred KB, not the 8 MB a thread
+    gets by default.
+
+    Regression: 614451021. The read-ahead thread was a std::thread, with the default
+    stack: 8 MB of address space for each open compressed sequence, and
+    every FSEQ effect is one, which a 32 bit player running dozens of them
+    could not spare."""
+    write_fseq(os.path.join(fppd.media, "sequences", "Loop.fseq"), unique_frames(400, CHANNELS),
+               step_ms=STEP_MS, compression="zstd")
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    fppd.command("FSEQ Effect Start", "Loop", "true", "false", "false", "false")
+    pid = fppd.proc.pid
+
+    def readers():
+        out = []
+        for comm in glob.glob(f"/proc/{pid}/task/*/comm"):
+            try:
+                if open(comm).read().strip() == "FSEQReadThread":
+                    out.append(comm.split("/")[-2])
+            except OSError:
+                pass
+        return out
+
+    fppd.wait_for(lambda: readers(), timeout=5, what="the effect's read-ahead thread")
+    time.sleep(0.5)  # let it settle into its wait
+    room = stack_room(pid, readers()[0])
+    fppd.command("Effects Stop")
+    assert room < 1024 * 1024, f"the read-ahead thread's stack has {room // 1024} KB"
