@@ -172,27 +172,56 @@ def test_start_next_scheduled_item_starts_it_now(fppd):
     assert status(fppd)["current_playlist"]["playlist"] == "Show"
 
 
+def inserted_stack(fppd, schedule):
+    """Outer scheduled (and whatever else `schedule` lists), Inner inserted
+    into it with Insert Playlist Immediate, a plugin listening to both.
+    Returns the plugin's directory."""
+    from test_playlist_entries import pause
+    from test_plugin_scripts import plugin
+    d = plugin(fppd)
+    for name in ("Inner", "Outer", "High"):
+        fppd.write(f"playlists/{name}.json", {"name": name, "repeat": 0, "loopCount": 0, "leadIn": [],
+                                               "mainPlaylist": [pause(120)], "leadOut": []})
+    fppd.write("config/schedule.json", schedule)
+    fppd.start()
+    fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("playlist") == "Outer",
+                  timeout=30, interval=0.5, what="the scheduled playlist")
+    fppd.command("Insert Playlist Immediate", "Inner", "0", "0", "false")
+    fppd.wait_for(lambda: status(fppd).get("breadcrumbs") == ["Outer"], timeout=10,
+                  interval=0.2, what="Inner to play inside Outer")
+    return d
+
+
+def resumed_after_stop(actions):
+    """The plugin events between the first "stop" and the next "start": a
+    stop of every level is only "stop"s, never a "playing" for the playlist
+    the inserted one returned to."""
+    from itertools import takewhile
+    if "stop" not in actions:
+        return None
+    after = actions[actions.index("stop"):]
+    return [a for a in takewhile(lambda a: a != "start", after) if a != "stop"]
+
+
 def test_window_end_hard_stops_a_playlist_inside_an_inserted_one(fppd):
     """A hard stop at the end of a window stops the scheduled playlist
     while a playlist inserted into it (Insert Playlist Immediate) is
-    playing: every level stops, and fppd goes idle.
+    playing: every level stops, and fppd goes idle, without the scheduled
+    playlist resuming on the way.
 
     Regression: b916aa139. The stop ended only the inserted playlist, and
     the scheduled one it returned to played on after its window had
     closed. (On master the window's end is checked every second, so such a
     playlist would be stopped again a second later; the test watches for
-    the outer playlist playing on its own in between.)"""
-    from test_playlist_entries import pause
-    for name in ("Inner", "Outer"):
-        fppd.write(f"playlists/{name}.json", {"name": name, "repeat": 0, "loopCount": 0, "leadIn": [],
-                                               "mainPlaylist": [pause(120)], "leadOut": []})
+    the outer playlist playing on its own in between.)
+
+    Regression: 2ad364a24. The levels were stopped one StopNow() at a time,
+    and each hand-back resumed the parent before the next stopped it:
+    plugins heard "playing" for Outer after Inner's "stop", and a status
+    read could land in between (seen under TSan)."""
+    from test_plugin_scripts import playlist_actions
     start, end = window(-60, 12)
-    fppd.write("config/schedule.json", [schedule_entry("Outer", start, end, stop_type=STOP_HARD)])
-    fppd.start()
-    fppd.wait_for(lambda: playing(fppd), timeout=30, interval=0.5, what="the scheduled playlist")
-    fppd.command("Insert Playlist Immediate", "Inner", "0", "0", "false")
-    fppd.wait_for(lambda: status(fppd).get("breadcrumbs") == ["Outer"], timeout=10,
-                  interval=0.2, what="Inner to play inside Outer")
+    d = inserted_stack(fppd, [schedule_entry("Outer", start, end, stop_type=STOP_HARD)])
     due = wall_of(end)
     resumed = []
     deadline = time.monotonic() + 40
@@ -200,7 +229,7 @@ def test_window_end_hard_stops_a_playlist_inside_an_inserted_one(fppd):
         s = status(fppd)
         if s.get("status_name") == "idle":
             break
-        if not s.get("breadcrumbs"):
+        if s.get("status_name") == "playing" and not s.get("breadcrumbs"):
             resumed.append(round(time.monotonic() - due, 2))
         time.sleep(0.05)
     stopped = time.monotonic() - due
@@ -208,3 +237,49 @@ def test_window_end_hard_stops_a_playlist_inside_an_inserted_one(fppd):
     assert -0.5 <= stopped <= 2.0, f"hard stop {stopped:+.2f} s from the window's end"
     time.sleep(2)
     assert status(fppd).get("status_name") == "idle", status(fppd)
+    assert resumed_after_stop(playlist_actions(d)) == [], playlist_actions(d)
+
+
+def test_a_higher_priority_window_hard_stops_every_level(fppd):
+    """A higher-priority window opening over a lower-priority playlist that
+    ends with a hard stop stops it, and the playlist inserted into it, at
+    once, and starts its own playlist.
+
+    Regression: 2ad364a24. The pre-emption stopped one level: Inner ended,
+    Outer resumed, and played until a later pass stopped it again."""
+    from test_plugin_scripts import playlist_actions
+    s1, e1 = window(-60, 600)
+    s0, e0 = window(10, 600)
+    d = inserted_stack(fppd, [schedule_entry("High", s0, e0),
+                              schedule_entry("Outer", s1, e1, stop_type=STOP_HARD)])
+    fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("playlist") == "High",
+                  timeout=30, interval=0.25, what="the higher-priority playlist")
+    assert status(fppd).get("breadcrumbs") in (None, []), status(fppd)
+    acts = playlist_actions(d)
+    assert resumed_after_stop(acts) == [], acts
+
+
+@pytest.mark.parametrize("how", ["Start Playlist", "Start Next Scheduled Item"])
+def test_starting_another_playlist_stops_an_inserted_one_without_resuming(fppd, how):
+    """Starting another playlist (by hand, or Start Next Scheduled Item)
+    while one is inserted into a running playlist stops both and plays the
+    new one, without the outer playlist resuming in between.
+
+    Regression: 2ad364a24. The stop before the load ended one level at a
+    time, 100 ms apart, and each parent resumed (plugins heard "playing")
+    before the next pass stopped it; the Start Playlist command's and Start
+    Next Scheduled Item's own stops ended only the inserted playlist."""
+    from test_plugin_scripts import playlist_actions
+    s1, e1 = window(-60, 600)
+    s2, e2 = window(300, 600)
+    d = inserted_stack(fppd, [schedule_entry("Outer", s1, e1, stop_type=STOP_HARD),
+                              schedule_entry("High", s2, e2)])
+    if how == "Start Playlist":
+        fppd.command("Start Playlist", "High", "false", "false")
+    else:
+        assert fppd.command("Start Next Scheduled Item") == "Next scheduled item started"
+    fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("playlist") == "High",
+                  timeout=15, interval=0.25, what="the new playlist")
+    assert status(fppd).get("breadcrumbs") in (None, []), status(fppd)
+    acts = playlist_actions(d)
+    assert resumed_after_stop(acts) == [], acts
