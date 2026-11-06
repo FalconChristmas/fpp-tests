@@ -97,3 +97,54 @@ def test_a_falcon_v5_receiver_answers_once_frames_flow(real_receiver, fppd):
             assert r.get("enabled"), f"port {p} dropped out: {r}"
         time.sleep(0.5)
     fppd.command("Test Stop")
+
+
+def test_an_overloaded_receiver_chain_keeps_its_rest_frames(real_receiver, fppd):
+    """Frames offered faster than a receiver chain's strings can clock out
+    leave the share of frames that carry a query where the scheduler puts
+    it, and do not turn every rest frame into another query.
+
+    The scheduler follows a round of queries with a frame that carries none.
+    PrepData asks it for the next packet on every offered frame, but only a
+    frame SendData's back-pressure gate takes moves the packet cursor, so an
+    answer of "none" that landed on a declined frame was asked for again and
+    came back as a query.  Over budget nearly every frame carried one, each
+    about 2.85 ms longer with a receiver answering, which pushed the output
+    further over budget.  One V5 chain on a K8-Max, its head port at 300
+    pixels and frames offered every 5 ms: 45% of frames carry a query under
+    budget, 89% over budget before the fix, 45% after it, and the PRU's own
+    ceiling for that config rose from 87 to 98 fps.
+
+    Regression: 2c34cd2d8.  Red with that put back: about 89%.
+
+    The listen windows are the listener PRU's own count (core 0 data RAM
+    +8), and the frames the string PRU's (core 1, RING_FRAMES), so the share
+    is what went out on the wire, not what fppd meant to send.
+    """
+    ports = real_receiver
+    outs = [pixel_output(n, 50, n * 150) for n in range(24)]
+    head = ports[0] - 1
+    outs[head] = pixel_output(head, 300, 24 * 150)
+    for p in ports:
+        outs[p - 1]["differentialType"] = 10  # one Falcon V5 receiver
+    fppd.settings(E131BridgingInterval="5")  # 200 fps offered, ~100 possible
+    fppd.write("config/co-bbbStrings.json", strings_config("BBShiftString", "K8-Max", outs))
+    fppd.start(timeout=90)
+    fppd.command("Test Start", "25", "RGB Chase", "*", "FF0000-00FF00-0000FF")
+    try:
+        time.sleep(8)  # past the start-up config, number and fuse packets
+        with pru.Pruss() as p:
+            f0, c0, t0 = p.dram(1, pru.RING_FRAMES), p.dram(0, 8), time.monotonic()
+            time.sleep(15)
+            f1, c1, t1 = p.dram(1, pru.RING_FRAMES), p.dram(0, 8), time.monotonic()
+    finally:
+        fppd.command("Test Stop")
+    frames, windows = (f1 - f0) & 0xFFFFFFFF, (c1 - c0) & 0xFFFFFFFF
+    fps = frames / (t1 - t0)
+    assert frames > 0, "the string PRU output no frames\n" + fppd.tail()
+    # the control: the output really is over budget, or nothing was declined
+    assert fps < 150, f"{fps:.1f} fps clocked out of 200 offered: not over budget, so this proves nothing"
+    share = windows / frames
+    assert share > 0.3, f"only {share:.0%} of {frames} frames opened a listen window: the chain is not being queried"
+    assert share < 0.6, (f"{share:.0%} of {frames} frames carried a query over budget ({fps:.1f} fps); "
+                         "the scheduler's rest frames are being turned into queries")
