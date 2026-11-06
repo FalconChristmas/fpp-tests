@@ -85,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     # TSan runs fppd several times slower than ASan, and the coverage build
     # is unoptimized. A whole ASan or TSan run takes longer than a hosted
-    # runner's job may (360 minutes), so each runs as four shards side by side
+    # runner's job may (360 minutes), so each runs as eight shards side by side
     # (scripts/shard.py) and the results job puts them back together.
     timeout-minutes: 240
     strategy:
@@ -98,12 +98,12 @@ jobs:
         flavor: ${{ fromJSON(github.event_name == 'schedule' && '["asan","tsan","coverage"]' || format('["{0}"]', github.event.inputs.flavor || 'asan')) }}
         # A dispatch with its own pytest arguments may name files, so it runs
         # whole, in one job.
-        shard: ${{ fromJSON(github.event.inputs.pytest_args != '' && github.event.inputs.pytest_args != null && '[1]' || '[1,2,3,4]') }}
+        shard: ${{ fromJSON(github.event.inputs.pytest_args != '' && github.event.inputs.pytest_args != null && '[1]' || '[1,2,3,4,5,6,7,8]') }}
     env:
       FPP_REF: ${{ needs.ref.outputs.sha }}
       FLAVOR: ${{ matrix.flavor }}
       SHARD: ${{ matrix.shard }}
-      SHARDS: ${{ (github.event.inputs.pytest_args != '' && github.event.inputs.pytest_args != null) && '1' || '4' }}
+      SHARDS: ${{ (github.event.inputs.pytest_args != '' && github.event.inputs.pytest_args != null) && '1' || '8' }}
     steps:
       - name: Checkout fpp-tests
         uses: actions/checkout@v6
@@ -483,7 +483,7 @@ jobs:
         flavor: ${{ fromJSON(github.event_name == 'schedule' && '["asan","tsan","coverage"]' || format('["{0}"]', github.event.inputs.flavor || 'asan')) }}
     env:
       FLAVOR: ${{ matrix.flavor }}
-      SHARDS: ${{ (github.event.inputs.pytest_args != '' && github.event.inputs.pytest_args != null) && '1' || '4' }}
+      SHARDS: ${{ (github.event.inputs.pytest_args != '' && github.event.inputs.pytest_args != null) && '1' || '8' }}
     steps:
       - name: Checkout fpp-tests
         uses: actions/checkout@v6
