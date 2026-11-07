@@ -7,7 +7,7 @@ import { inPlayer } from './container';
 // sees it.
 
 export const REAL_FFMPEG = '/opt/fpp-tests-ffmpeg/ffmpeg';
-const LINK = '/usr/bin/ffmpeg';
+export const REAL_FFPROBE = '/opt/fpp-tests-ffmpeg/ffprobe';
 
 const sh = (script: string) => inPlayer('sh', '-c', script);
 
@@ -16,15 +16,22 @@ export function hasRealFfmpeg(): boolean {
   return sh(`test -x ${REAL_FFMPEG} && echo yes || echo no`).trim() === 'yes';
 }
 
-export function linkRealFfmpeg() {
-  sh(`if [ -e ${LINK} ] && [ "$(readlink ${LINK})" != ${REAL_FFMPEG} ]; then
-        echo "${LINK} is already something else" >&2; exit 1; fi
-      ln -sfn ${REAL_FFMPEG} ${LINK}`);
+function link(real: string) {
+  const at = `/usr/bin/${real.split('/').pop()}`;
+  sh(`if [ -e ${at} ] && [ "$(readlink ${at})" != ${real} ]; then
+        echo "${at} is already something else" >&2; exit 1; fi
+      ln -sfn ${real} ${at}`);
 }
 
-export function unlinkRealFfmpeg() {
-  sh(`if [ "$(readlink ${LINK})" = ${REAL_FFMPEG} ]; then rm -f ${LINK}; fi`);
+function unlink(real: string) {
+  const at = `/usr/bin/${real.split('/').pop()}`;
+  sh(`if [ "$(readlink ${at})" = ${real} ]; then rm -f ${at}; fi`);
 }
+
+export const linkRealFfmpeg = () => link(REAL_FFMPEG);
+export const unlinkRealFfmpeg = () => unlink(REAL_FFMPEG);
+export const linkRealFfprobe = () => link(REAL_FFPROBE);
+export const unlinkRealFfprobe = () => unlink(REAL_FFPROBE);
 
 // Runs the real ffmpeg in the player (to make test media), quietly.
 export function ffmpeg(args: string) {
