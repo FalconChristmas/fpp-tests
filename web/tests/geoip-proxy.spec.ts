@@ -50,6 +50,8 @@ test("the Settings page's location Lookup asks the player, not ipapi.co", async 
   });
   await page.goto('/settings.php');
   await page.waitForFunction(() => typeof (window as any).GetGeoLocation === 'function');
+  // Its tab loads on its own, and an answer that comes first fills in nothing.
+  await page.locator('#Latitude').waitFor({ state: 'attached' });
   const asked = page.waitForResponse((r) => new URL(r.url()).pathname.endsWith('/api/geoip'));
   await page.evaluate(() => (window as any).GetGeoLocation());
   expect((await asked).status()).toBe(200);
