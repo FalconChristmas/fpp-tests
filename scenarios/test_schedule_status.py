@@ -5,6 +5,8 @@ import datetime
 import os
 import time
 
+import pytest
+
 import shims
 from fseq import solid_frames
 from show import CHANNELS, install, status
@@ -67,3 +69,49 @@ def test_missing_playlist_warning_names_it_and_comes_down(fppd):
     reload_schedule(fppd)
     time.sleep(3)
     assert not about_gone(), f"the warning stayed up with the playlist back: {about_gone()}"
+
+
+@pytest.mark.parametrize("stop_type, name", [(0, "Graceful"), (1, "Hard"), (2, "Graceful Loop")])
+def test_scheduler_status_says_how_and_when_the_playlist_stops(fppd, stop_type, name):
+    """While a scheduled playlist plays, the status names its stop type and
+    counts down to its end."""
+    install(fppd, solid_frames(40, CHANNELS, 55))
+    start, end = window(-60, 600)
+    fppd.write("config/schedule.json", [schedule_entry("Show", start, end, stop_type=stop_type)])
+    fppd.start()
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", timeout=30,
+                  interval=0.5, what="the scheduled playlist to start")
+    current = status(fppd)["scheduler"]["currentPlaylist"]
+    assert (current["stopType"], current["stopTypeStr"]) == (stop_type, name), current
+    assert current["actualEndTime"] == int(end.timestamp()), current
+    assert current["secondsRemaining"] == current["actualEndTime"] - current["currentTime"], current
+
+
+def test_the_plan_shows_the_extended_end_of_the_running_playlist(fppd):
+    """Extend Schedule moves the running playlist's end in GET /fppd/schedule
+    and in the actual end of its status; its scheduled end stays put."""
+    install(fppd, solid_frames(40, CHANNELS, 55))
+    start, end = window(-60, 600)
+    fppd.write("config/schedule.json", [schedule_entry("Show", start, end)])
+    fppd.start()
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", timeout=30,
+                  interval=0.5, what="the scheduled playlist to start")
+    assert fppd.command("Extend Schedule", "120") == "Schedule Updated"
+    extended = int(end.timestamp()) + 120
+    current = status(fppd)["scheduler"]["currentPlaylist"]
+    assert current["actualEndTime"] == extended and current["scheduledEndTime"] == int(end.timestamp()), current
+    assert fppd.get("/fppd/schedule")["schedule"]["items"][0]["endTime"] == extended
+
+
+def test_a_playlist_started_early_reports_the_start_it_was_given(fppd):
+    """Start Next Scheduled Item starts the playlist now, and its status says
+    so rather than giving the later start of the entry."""
+    install(fppd, solid_frames(40, CHANNELS, 55))
+    start, end = window(300, 600)
+    fppd.write("config/schedule.json", [schedule_entry("Show", start, end)])
+    fppd.start()
+    assert fppd.command("Start Next Scheduled Item") == "Next scheduled item started"
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", timeout=10,
+                  interval=0.25, what="the next item to start")
+    current = status(fppd)["scheduler"]["currentPlaylist"]
+    assert current["scheduledStartTime"] <= current["currentTime"], current

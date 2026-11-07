@@ -157,3 +157,33 @@ def test_calendar_range_past_any_year_answers(fppd, start):
     got = fppd.get(f"/fppd/schedule/range?start={start}&end={start + 86400}", timeout=10)
     assert got["schedule"]["items"] == [], got
     fppd.get("/fppd/status", timeout=5)
+
+
+def test_calendar_names_each_stop_type(fppd):
+    """Each occurrence in the calendar names its entry's stop type."""
+    names = {0: "Graceful", 1: "Hard", 2: "Graceful Loop"}
+    first = fall_back() - datetime.timedelta(days=4)
+    show(fppd)
+    fppd.write("config/schedule.json", [entry(7, f"1{t}:00:00", f"1{t}:30:00", stopType=t) for t in names])
+    fppd.start(fake_time=f"{first.isoformat()} 03:00:00", tz=ZONE)
+    r0, r1 = local(first, "00:00:00"), local(first, "23:59:59")
+    got = fppd.get(f"/fppd/schedule/range?start={r0}&end={r1}")["schedule"]["items"]
+    assert {i["id"]: i["stopTypeStr"] for i in got} == names, got
+
+
+def test_day_summary_is_overridden_only_if_every_occurrence_is(fppd):
+    """A day's summary of an entry is flagged overridden only when all of that
+    day's occurrences are: part of the entry still plays."""
+    first = fall_back() - datetime.timedelta(days=4)
+    show(fppd)
+    fppd.write("config/schedule.json", [
+        entry(7, "12:00:00", "12:20:00"),
+        entry(7, "11:00:00", "13:00:00", repeat=6000),  # hourly: 11:00 plays; 12:00 is under entry 0
+    ])
+    fppd.start(fake_time=f"{first.isoformat()} 03:00:00", tz=ZONE)
+    r0, r1 = local(first, "00:00:00"), local(first, "23:59:59")
+    url = f"/fppd/schedule/range?start={r0}&end={r1}"
+    full = [i["overridden"] for i in fppd.get(url)["schedule"]["items"] if i["id"] == 1]
+    assert sorted(full) == [False, True], full
+    summary = [i for i in fppd.get(url + "&summary=1")["schedule"]["items"] if i["id"] == 1]
+    assert len(summary) == 1 and summary[0]["count"] == 2 and not summary[0]["overridden"], summary
