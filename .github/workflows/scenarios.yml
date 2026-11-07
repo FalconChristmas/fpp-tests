@@ -56,7 +56,7 @@ jobs:
   # builds the newer one -- and the coverage merge then reads counts for
   # files its checkout does not have and writes no report.
   ref:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
     steps:
@@ -82,7 +82,7 @@ jobs:
   scenarios:
     needs: ref
     if: github.event.inputs.suites != 'web'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # TSan runs fppd several times slower than ASan, and the coverage build
     # is unoptimized. A whole ASan or TSan run takes longer than a hosted
     # runner's job may (360 minutes), so each runs as eight shards side by side
@@ -125,6 +125,13 @@ jobs:
           path: .ccache
           key: ccache-${{ env.FLAVOR }}-${{ github.run_id }}-${{ matrix.shard }}
           restore-keys: ccache-${{ env.FLAVOR }}-
+
+      # TSan maps its shadow at fixed addresses and dies on start ("unexpected
+      # memory mapping") when the kernel randomizes mmap with more than 28
+      # bits, as newer runner kernels do. The container shares the host's.
+      - name: Narrow mmap randomization for TSan
+        if: env.FLAVOR == 'tsan'
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
 
       - name: Build fpp and run scenarios
         env:
@@ -476,7 +483,7 @@ jobs:
   results:
     needs: [scenarios, device, am335x]
     if: always() && needs.scenarios.result != 'skipped'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -566,7 +573,7 @@ jobs:
   web:
     needs: ref
     if: github.event.inputs.suites != 'scenarios'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -667,7 +674,7 @@ jobs:
   web-results:
     needs: [web]
     if: always() && needs.web.result != 'skipped'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       SHARDS: ${{ (github.event.inputs.playwright_args != '' && github.event.inputs.playwright_args != null) && '1' || '4' }}
     steps:
@@ -710,7 +717,7 @@ jobs:
   publish:
     needs: [results, web-results, am335x]
     if: always() && !cancelled() && (github.event_name == 'schedule' || (github.event.inputs.publish == 'true' && github.event.inputs.fpp_ref == 'master' && github.event.inputs.flavor == 'coverage'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pages: write
