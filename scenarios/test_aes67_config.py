@@ -125,11 +125,27 @@ def test_drift_trim_keeps_the_channel_count(fppd):
     downstream forced one until the S24BE caps, so it negotiated mono and the
     stream went out as mono upmixed to stereo -- right sizes, right
     timestamps, one channel."""
-    write_config(fppd, ptpEnabled=True, adaptiveResample=True)
+    # driftResample off: with it on, adaptiveResample is ignored (see below).
+    write_config(fppd, ptpEnabled=True, adaptiveResample=True, driftResample=False)
     start(fppd)
     p = send_pipeline(fppd)
     assert "! audio/x-raw,format=F32LE,channels=2 ! pitch name=drift " \
            "! audio/x-raw,format=F32LE,channels=2 " in p, p
+
+
+def test_the_rate_trim_is_ignored_while_drift_resampling_is_on(fppd):
+    """adaptiveResample with driftResample on as well (its default): fppd
+    warns that adaptiveResample is ignored and sends with driftResample
+    alone, with no rate-trim element in the pipeline.
+
+    Regression: 262a16ed5. With both on the pipeline text had two caps filters side by
+    side; it never parsed ("no element \"audio\""), so nothing was sent and
+    the watchdog rebuilt it again and again."""
+    write_config(fppd, ptpEnabled=True, adaptiveResample=True)
+    start(fppd)
+    p = send_pipeline(fppd)
+    assert "name=drift " not in p and "name=driftpoint" in p, p
+    assert "adaptiveResample is ignored" in fppd.log()
 
 
 def test_multichannel_pipeline_names_its_layout(fppd):
