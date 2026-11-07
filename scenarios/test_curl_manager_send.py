@@ -19,8 +19,8 @@ class _Recorder(http.server.BaseHTTPRequestHandler):
 
     def _answer(self):
         # Chunked framing decides the body over any Content-Length (RFC 9112
-        # 6.3). doPut() sends both: it never sets CURLOPT_INFILESIZE, so curl
-        # chunks the upload, under the Content-Length header it was handed.
+        # 6.3). Read either, so a body sent with the wrong framing is still
+        # compared, and the framing itself is checked on its own.
         if "chunked" in self.headers.get("Transfer-Encoding", ""):
             body = b""
             while True:
@@ -32,6 +32,7 @@ class _Recorder(http.server.BaseHTTPRequestHandler):
         else:
             body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         self.server.requests.append((self.command, self.path, self.headers.get("Content-Type"), body))
+        self.server.framing.append((self.headers.get("Transfer-Encoding"), self.headers.get_all("Content-Length")))
         reply = self.server.reply
         self.send_response(self.server.status)
         self.send_header("Content-Length", str(len(reply)))
@@ -48,7 +49,7 @@ class _Recorder(http.server.BaseHTTPRequestHandler):
 @pytest.fixture
 def recorder():
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Recorder)
-    server.requests, server.status, server.reply = [], 200, b"stored"
+    server.requests, server.framing, server.status, server.reply = [], [], 200, b"stored"
     threading.Thread(target=server.serve_forever, daemon=True).start()
     yield server
     server.shutdown()
@@ -81,6 +82,21 @@ def test_the_body_arrives_whole_with_its_type(fppd, recorder, method, size):
     got_method, path, content_type, body = recorder.requests[0]
     assert (got_method, path, content_type) == (method, "/store/it", "application/x-fpp-test")
     assert body == want
+
+
+@pytest.mark.parametrize("method", ["POST", "PUT"])
+@pytest.mark.parametrize("size", [0, 20, 300000], ids=["empty", "small", "many-read-buffers"])
+def test_the_body_is_framed_by_its_length_alone(fppd, recorder, method, size):
+    """The request says how long its body is once, in a Content-Length, and is
+    not also chunked: RFC 9112 forbids both, and a server that goes by the
+    Content-Length reads the chunk framing as the body.
+
+    Regression: 294720880. doPut() set CURLOPT_POSTFIELDSIZE, which an upload ignores, so
+    curl chunked the body under the Content-Length it had been handed."""
+    load(fppd)
+    url = f"http://127.0.0.1:{recorder.server_address[1]}/store/it"
+    assert send(fppd, method, url, size) == (200, "stored")
+    assert recorder.framing == [(None, [str(size)])]
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT"])
