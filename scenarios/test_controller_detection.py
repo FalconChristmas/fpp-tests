@@ -694,3 +694,37 @@ def test_a_device_named_and_addressed_in_the_scan_is_listed_once(fppd):
         time.sleep(3)
         rows = [s for s in fppd.get("/fppd/multiSyncSystems")["systems"] if not s.get("local")]
     assert [s["address"] for s in rows] == ["10.88.0.9"], rows
+
+
+def probed(addresses):
+    return {a for a in addresses if requests_seen(a)}
+
+
+def test_a_cidr_range_scans_its_hosts_not_network_or_broadcast(fppd):
+    """10.88.0.0/29 in MultiSyncHTTPSubnets is its six host addresses: the
+    devices on the first and last of those fppd can reach are found, and
+    neither the broadcast address nor the next address on is probed."""
+    devices = {"10.88.0.2": FPP, "10.88.0.6": FALCON, "10.88.0.7": FALCON, "10.88.0.8": FALCON}
+    with fake_devices(devices):
+        got = discover(fppd, devices, subnets="10.88.0.0/29", want=["10.88.0.2", "10.88.0.6"])
+        assert got["10.88.0.2"]["hostname"] == "fake-fpp", got
+        assert got["10.88.0.6"]["hostname"] == "fake-falcon", got
+        assert probed(["10.88.0.7", "10.88.0.8"]) == set()
+
+
+def test_a_slash_31_scans_both_its_addresses(fppd):
+    """A /31 has no network or broadcast address: both are scanned."""
+    devices = {"10.88.0.2": FPP, "10.88.0.3": FALCON, "10.88.0.4": FALCON}
+    with fake_devices(devices):
+        discover(fppd, devices, subnets="10.88.0.2/31", want=["10.88.0.2", "10.88.0.3"])
+        assert probed(["10.88.0.4"]) == set()
+
+
+def test_a_range_too_wide_to_scan_is_refused_with_a_warning(fppd):
+    """Only /16 to /32 can be scanned. A wider one is logged and skipped, and
+    the rest of the list is still scanned."""
+    devices = {"10.88.0.2": FPP}
+    with fake_devices(devices):
+        discover(fppd, devices, subnets="10.0.0.0/8,10.88.0.2")
+        assert "ignoring 10.0.0.0/8, only /16 to /32 can be scan" in fppd.log()
+
