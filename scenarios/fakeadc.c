@@ -17,6 +17,11 @@
  *
  * FAKEADC_I2C_LOG=<file>: each I2C block read's command byte (an ADS7828's
  * channel select) is appended to <file>, two hex digits a line.
+ *
+ * FAKEADC_REFUSE_WRITE="<path>[;<path>...]": a descriptor opened on one of
+ * these (the path fppd asks for, before mapping) opens, but write() on it
+ * fails with EINVAL -- as the kernel answers "1" written to buffer/enable of
+ * a triggered buffer that has no trigger assigned.
  */
 #undef _TIME_BITS
 #undef _FILE_OFFSET_BITS
@@ -45,6 +50,8 @@ static int nmaps = -1;
 
 static int busFds[MAX_FDS];
 static int nBusFds;
+static int refusedFds[MAX_FDS];
+static int nRefusedFds;
 static int goodReads = -1;
 
 static void load_maps(void) {
@@ -90,6 +97,27 @@ static int isBusFd(int fd) {
         if (busFds[i] == fd) return 1;
     }
     return 0;
+}
+
+static int isRefused(const char* path) {
+    const char* env = getenv("FAKEADC_REFUSE_WRITE");
+    if (!env || !path) return 0;
+    size_t n = strlen(path);
+    for (const char* p = env; *p;) {
+        const char* end = strchr(p, ';');
+        size_t len = end ? (size_t)(end - p) : strlen(p);
+        if (len == n && strncmp(p, path, n) == 0) return 1;
+        if (!end) break;
+        p = end + 1;
+    }
+    return 0;
+}
+
+static int track(const char* path, int fd) {
+    if (fd >= 0 && nRefusedFds < MAX_FDS && isRefused(path)) {
+        refusedFds[nRefusedFds++] = fd;
+    }
+    return fd;
 }
 
 #define REAL(name) \
@@ -165,7 +193,7 @@ int open(const char* path, int flags, ...) {
     va_end(ap);
     if (isBus(path)) return openBus();
     char buf[512];
-    return real_open(map(path, buf, sizeof(buf)), flags, mode);
+    return track(path, real_open(map(path, buf, sizeof(buf)), flags, mode));
 }
 
 int open64(const char* path, int flags, ...) {
@@ -176,7 +204,7 @@ int open64(const char* path, int flags, ...) {
     va_end(ap);
     if (isBus(path)) return openBus();
     char buf[512];
-    return real_open64(map(path, buf, sizeof(buf)), flags, mode);
+    return track(path, real_open64(map(path, buf, sizeof(buf)), flags, mode));
 }
 
 int openat(int dirfd, const char* path, int flags, ...) {
@@ -187,7 +215,7 @@ int openat(int dirfd, const char* path, int flags, ...) {
     va_end(ap);
     if (isBus(path)) return openBus();
     char buf[512];
-    return real_openat(dirfd, map(path, buf, sizeof(buf)), flags, mode);
+    return track(path, real_openat(dirfd, map(path, buf, sizeof(buf)), flags, mode));
 }
 
 FILE* fopen(const char* path, const char* how) {
@@ -210,7 +238,24 @@ int close(int fd) {
             break;
         }
     }
+    for (int i = 0; i < nRefusedFds; i++) {
+        if (refusedFds[i] == fd) {
+            refusedFds[i] = refusedFds[--nRefusedFds];
+            break;
+        }
+    }
     return real_close(fd);
+}
+
+ssize_t write(int fd, const void* data, size_t len) {
+    REAL(write);
+    for (int i = 0; i < nRefusedFds; i++) {
+        if (refusedFds[i] == fd) {
+            errno = EINVAL;
+            return -1;
+        }
+    }
+    return real_write(fd, data, len);
 }
 
 static int smbus(struct i2c_smbus_ioctl_data* d) {
