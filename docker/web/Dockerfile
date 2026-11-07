@@ -51,3 +51,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends gstreamer1.0-pl
 # otherwise, so a run without it serves PHP as a player does.
 RUN apt-get update && apt-get install -y --no-install-recommends php8.4-pcov \
     && phpdismod pcov && rm -rf /var/lib/apt/lists/*
+
+# ffmpeg, which every player has (FPP_Install.sh), kept off the PATH: the suite
+# otherwise runs as it was written for, with no ffmpeg or ffprobe (the metadata
+# APIs' gst-discoverer fallback; pw-calibration's click track needing neither).
+# A spec that measures real audio -- Normalize -- links it in for its own tests
+# (web/tests/real-ffmpeg.ts).
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && mkdir -p /opt/fpp-tests-ffmpeg && mv /usr/bin/ffmpeg /usr/bin/ffprobe /opt/fpp-tests-ffmpeg/ \
+    && rm -rf /var/lib/apt/lists/*
