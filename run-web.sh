@@ -2,7 +2,7 @@
 # Build fpp at a given ref, serve its web UI from Docker, and run the
 # Playwright suite in web/ against it from this machine.
 #
-#   ./run-web.sh [--fpp DIR] [--ref REF] [--flavor asan|tsan|debug|optimized] [--nopch] [--port N] [--artifacts DIR] [playwright args...]
+#   ./run-web.sh [--fpp DIR] [--ref REF] [--flavor asan|tsan|debug|optimized|coverage] [--nopch] [--port N] [--artifacts DIR] [playwright args...]
 #
 # The options are run.sh's; --port is where the UI is published on 127.0.0.1
 # (default 8080), and --artifacts where the results go (default
@@ -19,7 +19,8 @@
 # Needs Node.js 20+ here; the first run installs the suite's packages and its
 # Chromium. Results go to the artifacts: junit.xml, the HTML report, failed
 # tests' screenshots and traces, fppd.json (fppd's verdict) and, when fppd
-# failed, its media directory and Apache's logs.
+# failed, its media directory and Apache's logs. --flavor coverage also writes
+# coverage/ (scripts/coverage-report.sh): the fppd code the pages reached.
 set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -107,6 +108,10 @@ rc=0
 # SIGTERM: web_serve.py stops fppd and judges it; give an ASan fppd time.
 docker stop -t 120 "$NAME" > /dev/null
 fppd_rc=$(docker wait "$NAME")
+if [ "$FLAVOR" = coverage ]; then
+    $DOCKER -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" fpp-tests-env \
+        /tests/scripts/coverage-report.sh "$TREE" /artifacts/coverage || rc=1
+fi
 # Hand what the container wrote (fppd.json, apache2/, media/) back to the caller.
 $DOCKER -v "$ARTIFACTS:/artifacts" fpp-tests-env chown -hR "$(id -u):$(id -g)" /artifacts
 if [ "$fppd_rc" != 0 ]; then
