@@ -33,9 +33,17 @@ def tool():
         out = os.path.join(tempfile.mkdtemp(prefix="interleavecheck-"), "interleavecheck")
         flags = {"asan": ["-fsanitize=address"], "tsan": ["-fsanitize=thread"],
                  "ubsan": ["-fsanitize=undefined"]}.get(sanitizer(), [])
+        handler = os.path.join(src, "channeloutput", "PanelInterleaveHandler")
+        if os.path.exists(os.path.join(os.environ["FPP_TREE"], "gcov-exit.so")):
+            # The coverage flavor: link the tree's own instrumented object, so
+            # these runs add to the .gcda the coverage report reads. fppd never
+            # calls this handler off a Beagle, so nothing else counts it.
+            flags, handler = ["--coverage"], handler + ".o"
+        else:
+            handler += ".cpp"
         cmd = ["g++", "-std=gnu++20", "-g", "-O1", *flags, f"-I{src}",
                os.path.join(HERE, "..", "tools", "interleavecheck.cpp"),
-               os.path.join(src, "channeloutput", "PanelInterleaveHandler.cpp"), "-o", out]
+               handler, "-o", out]
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode != 0:
             raise RuntimeError("building interleavecheck failed:\n" + r.stderr[-4000:])
