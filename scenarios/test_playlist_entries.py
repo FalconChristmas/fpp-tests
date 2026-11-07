@@ -997,3 +997,48 @@ def test_starting_an_empty_playlist_raises_a_warning(fppd):
     fppd.wait_for(lambda: any("Empty" in str(w) and "empty" in str(w)
                               for w in fppd.get("/fppd/warnings", timeout=5)),
                   timeout=15, what="the empty playlist warning")
+
+
+def test_a_playlist_with_only_a_lead_in_plays_it_and_goes_idle(fppd):
+    """A lead-in with nothing after it plays once, and the player goes idle
+    with the playlist done."""
+    fppd.write("playlists/P.json", playlist("P", lead_in=[step(1), step(2)]))
+    fppd.start()
+    assert run(fppd, "P") == "12"
+
+
+def test_a_lead_in_goes_straight_to_the_lead_out_with_no_main_section(fppd):
+    """A playlist with a lead-in and a lead-out and no main section plays the
+    two in order."""
+    fppd.write("playlists/P.json", playlist("P", lead_in=[step(1)], lead_out=[step(4)]))
+    fppd.start()
+    assert run(fppd, "P") == "14"
+
+
+def count(name):
+    """A command entry that adds one to the variable `name`."""
+    return {"type": "command", "enabled": 1, "playOnce": 0, "command": "Set Variable",
+            "args": [name, "Expression", "", "1", "0", "100", f"={name}+1", "false"]}
+
+
+def test_a_playlist_branching_to_itself_stops_nesting_with_a_warning(fppd):
+    """A playlist whose branch inserts itself nests one level a pass, up to
+    the limit of ten. The insert past the limit is refused with a warning,
+    fppd keeps running, and the player unwinds back to idle, having played
+    each of the ten nested copies through once."""
+    fppd.write("playlists/P.json", playlist("P", main=[
+        count("Before"),
+        branch("Loop", true_type="Playlist", trueBranchPlaylist="P",
+               iterationStart=1, iterationCount=1),
+        count("After")]))
+    fppd.start()
+    fppd.command("Set Variable", "Before", "Value", "0")
+    fppd.command("Set Variable", "After", "Value", "0")
+    fppd.command("Start Playlist", "P", "false", "false")
+    fppd.wait_for(lambda: any("too many nested inserts" in w for w in status(fppd).get("warnings", [])),
+                  timeout=30, interval=0.1, what="the warning that the nesting stopped")
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=30, interval=0.1,
+                  what="the player to unwind")
+    v = fppd.get("/variables")
+    played = [int(float(v[n]["value"])) for n in ("Before", "After")]
+    assert played == [10, 10], played
