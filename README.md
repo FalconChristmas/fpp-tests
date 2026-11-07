@@ -231,6 +231,10 @@ so in the docstring. Name the fix commit in the scenario's docstring.
 Make the failure deterministic. A race that reproduces one run in ten belongs in a
 loop that makes it near-certain, or it isn't a regression test yet.
 
+Coverage says a line ran, not that anything checked it. `scripts/mutate.py` tries
+hand-written mutants of a source file against the scenarios you name and records which
+ones nothing notices; see its docstring.
+
 ## Old commits that don't build
 
 `fixups/*.patch` are build-only backports, each named after the fpp commit it comes
