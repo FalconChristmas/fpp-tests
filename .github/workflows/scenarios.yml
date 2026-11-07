@@ -503,6 +503,11 @@ jobs:
 
       - name: Merge them
         run: |
+          # With one artifact to fetch, download-artifact puts its files straight in
+          # the path, not in a directory named after it.
+          if [ "$SHARDS" = 1 ] && [ -d shards ] && [ ! -d "shards/shard-$FLAVOR-1" ]; then
+            mv shards "shard-$FLAVOR-1" && mkdir shards && mv "shard-$FLAVOR-1" shards/
+          fi
           mkdir -p artifacts/coverage
           set --
           for i in $(seq 1 "$SHARDS"); do set -- "$@" "shards/shard-$FLAVOR-$i/junit.xml"; done
@@ -689,6 +694,11 @@ jobs:
 
       - name: Merge them
         run: |
+          # With one artifact to fetch, download-artifact puts its files straight in
+          # the path, not in a directory named after it.
+          if [ "$SHARDS" = 1 ] && [ -d shards ] && [ ! -d shards/shard-web-1 ]; then
+            mv shards shard-web-1 && mkdir shards && mv shard-web-1 shards/
+          fi
           mkdir -p artifacts/web
           set --
           for i in $(seq 1 "$SHARDS"); do set -- "$@" "shards/shard-web-$i/junit.xml"; done
@@ -834,6 +844,11 @@ jobs:
 
       - name: Add them together
         run: |
+          # With one artifact to fetch, download-artifact puts its files straight in
+          # the path, not in a directory named after it.
+          if [ -e raw/php-lines.json ]; then
+            mv raw www-coverage-raw-1 && mkdir raw && mv www-coverage-raw-1 raw/
+          fi
           set -- raw/www-coverage-raw-*
           [ -e "$1" ] || { echo "no shard recorded any coverage" >&2; exit 1; }
           python3 scripts/www-coverage-report.py fpp www-coverage "$@"

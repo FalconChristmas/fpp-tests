@@ -176,10 +176,12 @@ def main():
         json.dump(data, f, indent=1)
     names = [("PHP under www/", "php"), ("JS under www/", "js"), ("Scripts inside PHP pages", "js_inline"),
              ("PHP under scripts/", "php_scripts"), ("Limonade (www/api/lib)", "php_vendored")]
+    # No lines at all (no page was loaded, say) is not 0%, and not "None%".
+    shown = lambda d: "n/a" if d["percent"] is None else f"{d['percent']}%"
     with open(os.path.join(out, "summary.txt"), "w") as f:
         for label, key in names:
             d = data[key]
-            f.write(f"{label}: {d['percent']}% ({d['lines_hit']} of {d['lines']} lines, "
+            f.write(f"{label}: {shown(d)} ({d['lines_hit']} of {d['lines']} lines, "
                     f"{d['files_unreached']} of {d['files']} files never reached)\n")
         for label, key, rowskey in (("PHP under www/", "php", "by_file"), ("JS under www/", "js", "by_file"),
                                     ("Scripts inside PHP pages", "js_inline", "by_page"),
@@ -192,7 +194,7 @@ def main():
         f.write("### PHP and JS under www/\n\n| Code | Line coverage | Lines | Files never reached |\n|---|---|---|---|\n")
         for label, key in names:
             d = data[key]
-            f.write(f"| {label} | {d['percent']}% | {d['lines_hit']:,} of {d['lines']:,} | "
+            f.write(f"| {label} | {shown(d)} | {d['lines_hit']:,} of {d['lines']:,} | "
                     f"{d['files_unreached']} of {d['files']} |\n")
         for label, key in (("PHP", "php"), ("JS", "js")):
             f.write(f"\n**{label}: most lines not reached**\n\n| File | Lines | Not reached |\n|---|---|---|\n")
