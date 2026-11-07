@@ -4,9 +4,7 @@ model: the playing video has to follow it to the new one.
 
 import os
 
-import pytest
 
-from fppd import sanitizer
 from test_overlays import colorlight_panel, resave_outputs
 from test_video import make_video
 
@@ -19,25 +17,22 @@ def showing(fppd):
     return any(fppd.get("/overlays/model/Panel/data").get("data", []))
 
 
-# GStreamerOutput's model listener writes m_videoOverlayModel holding
-# m_videoOverlayModelLock, and IsOverlayingVideo() reads it holding only
-# m_overlayOutputsLock: a data race TSan reports whenever this reload happens
-# mid-video. Run this under TSan again once they share a lock.
-@pytest.mark.skipif(sanitizer() == "tsan", reason="m_videoOverlayModel is read without its lock; see above")
 def test_a_playing_video_follows_its_model_through_an_output_reload(fppd, audio):
     """A video plays to an output's own model. Saving the outputs removes that
     model and creates it again, off and black, with the video still playing:
     the video lights up the new one without being restarted, and goes on using
     it, rather than the one that has gone.
 
-    alwaysTransmit keeps the channel output thread coming back after the
-    reload stops it. Without it nothing restarts the thread, since the main
-    loop's check doesn't count a video and the new model isn't active until a
-    frame reaches it, so the model stays dark while the video plays on.
+    Regression: a5b69be94. The reload stops the channel output thread, and the main
+    loop's restart check didn't count a video, while the new model isn't
+    active until a frame reaches it, so nothing started the thread again and
+    the model stayed dark while the video played on. And IsOverlayingVideo()
+    read the model pointer without the lock the reload's listener writes it
+    under, a data race TSan reported on every reload mid-video.
     """
     make_video(os.path.join(fppd.media, "videos", "Bars.mkv"), seconds=40, width=64, height=32)
     fppd.write("config/channeloutputs.json", colorlight_panel())
-    fppd.settings(DisableFakeNetworkBridges="1", VideoOutput="Panel", LogLevel_MediaOut="info", alwaysTransmit="1")
+    fppd.settings(DisableFakeNetworkBridges="1", VideoOutput="Panel", LogLevel_MediaOut="info")
     fppd.start()
     fppd.command("Play Media", "Bars.mkv", "1", "0", "1", "--Default--")
     fppd.wait_for(lambda: showing(fppd), timeout=20, interval=0.2, what="the video on the model")
