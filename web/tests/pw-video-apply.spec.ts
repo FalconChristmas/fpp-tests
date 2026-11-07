@@ -124,6 +124,25 @@ test('the enabled groups\' members become consumers, each named for its group an
     .toEqual([['HDMI-A-1', true], ['HDMI-A-2', false]]);
 });
 
+test('an HDMI member shows the part of the frame its region names, and all of it otherwise', async ({ request }) => {
+  fakeDrmConnectors([{ card: 0, name: 'HDMI-A-1', status: 'connected', id: 7, modes: ['640x480'] }]);
+  const regions = [
+    { region: 'right' }, { region: 'top' }, { region: 'bottom' },
+    // A custom region that is the whole frame, as it is with nothing set.
+    { region: 'custom', cropX: 0, cropY: 0, cropWidth: 100, cropHeight: 100 }, { region: 'custom' },
+    { region: 'full' }, {}, { region: 'diagonal' },
+  ];
+  writeFile(GROUPS, { videoOutputGroups: [{ id: 1, name: 'Split', enabled: true,
+    members: regions.map((r) => ({ type: 'hdmi', connector: 'HDMI-A-1', ...r })) }] });
+  const r = await (await request.post('/api/pipewire/video/groups/apply')).json();
+  expect(r.consumers.map((c: { crop?: unknown }) => c.crop ?? null)).toEqual([
+    { x: 0.5, y: 0, width: 0.5, height: 1 },
+    { x: 0, y: 0, width: 1, height: 0.5 },
+    { x: 0, y: 0.5, width: 1, height: 0.5 },
+    null, null, null, null, null,
+  ]);
+});
+
 test('only the stream slots the groups name are given a video sink', async ({ request }) => {
   writeFile(GROUPS, { videoOutputGroups: [
     { id: 1, name: 'A', enabled: true, streamSlots: [2], members: [{ type: 'overlay', overlayModel: 'M1' }] },
