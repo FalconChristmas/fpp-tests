@@ -795,11 +795,23 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
+      # Its test results too, for web-coverage-results to compare with the
+      # web job's: the same failures, run after run, say the coverage
+      # recording changes nothing and the two jobs can be one.
+      - name: Upload the shard's results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-shard-web-${{ matrix.shard }}
+          path: artifacts/web-coverage/junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
   # The web-coverage shards' raw coverage added together into one report,
   # coverage/www/ on the dashboard: totals.json (what the dashboard reads),
   # summary.txt (every file, most unreached lines first) and summary.md.
   web-coverage-results:
-    needs: [ref, web-coverage]
+    needs: [ref, web, web-coverage]
     if: always() && needs.web-coverage.result != 'skipped'
     runs-on: ubuntu-24.04
     steps:
@@ -833,6 +845,22 @@ jobs:
           name: www-coverage-report
           path: www-coverage/
           retention-days: 14
+
+      - name: Download both jobs' test results
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: '*shard-web-*'
+          path: junit
+
+      - name: Compare the failures with the web job's
+        if: always()
+        run: |
+          mkdir -p junit/web junit/web-coverage
+          for d in junit/shard-web-*; do if [ -d "$d" ]; then mv "$d" junit/web/; fi; done
+          for d in junit/coverage-shard-web-*; do if [ -d "$d" ]; then mv "$d" junit/web-coverage/; fi; done
+          python3 scripts/compare-junit.py web junit/web web-coverage junit/web-coverage >> "$GITHUB_STEP_SUMMARY"
 
   # The dashboard on GitHub Pages: the test counts and coverage of every run
   # so far (history.json, carried over from the live site each time) and the
