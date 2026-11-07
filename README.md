@@ -113,7 +113,7 @@ flavor. Each run's page in the Actions tab carries a summary: the test counts, a
 the slowest scenarios and, for the coverage build, coverage by source directory and the files
 with the most unreached lines. The nightly run also publishes the
 [dashboard](https://falconchristmas.github.io/fpp-tests/): pass counts and coverage for every
-night so far, and the latest coverage report line by line. It is the place to look for
+night so far, the latest coverage report line by line, and the web UI's PHP and JS coverage. It is the place to look for
 something to test: the directories and files with the most code no scenario reaches.
 
 Under TSan, a data race fails the scenario like any other sanitizer report, except for the
@@ -179,6 +179,10 @@ scripts/verify-fix.sh 6dd0f6f88 web/tests/page-still-loading.spec.ts
 The suite runs as the `web` job of the scenarios workflow: nightly against fpp master, with
 its counts on the dashboard next to the scenarios', on every pull request here, and by hand
 from the Actions tab for any fpp ref (`suites` picks scenarios, web or both).
+The nightly also runs it once more as the `web-coverage` job, with `--www-coverage` and in
+shards of its own so the recording can't change the `web` job's results; `web-coverage-results`
+adds the shards together, and the dashboard shows the PHP and JS totals, their trend, and the
+per-file report (`coverage/www/summary.txt`). A dispatch with flavor `coverage` runs it too.
 
 ## Writing a scenario
 

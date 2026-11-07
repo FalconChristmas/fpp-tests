@@ -8,7 +8,9 @@ each in a directory of its own, or unpacked into RESULTS itself when there
 was only one. HISTORY is the published
 site's history.json, or a missing file for the first run. Writes
 SITE/index.html and SITE/history.json, with this run added to the history.
-The workflow puts the coverage report's HTML in SITE/coverage/ itself.
+The workflow puts the coverage report's HTML in SITE/coverage/ itself, and the
+web UI's PHP and JS coverage report (www-coverage-report.py) in
+SITE/coverage/www/, whose totals.json this run's entry takes its numbers from.
 """
 
 import datetime
@@ -74,6 +76,16 @@ if "am62x-panel" in entry["flavors"]:
         else:
             for k in base:
                 base[k] = round(base[k] + panel[k], 1) if k == "minutes" else base[k] + panel[k]
+# The web UI's own PHP and JS (the web-coverage job), when this run has them.
+WWW = os.path.join(site, "coverage", "www")
+try:
+    with open(os.path.join(WWW, "totals.json")) as f:
+        www = json.load(f)
+except (OSError, ValueError):
+    www = None
+if www:
+    entry["www_coverage"] = {k: {f: www[k][f] for f in ("lines", "lines_hit", "files", "files_unreached")}
+                             for k in ("php", "js") if isinstance(www.get(k), dict) and www[k].get("lines")}
 if not no_entry:
     history.append(entry)
 os.makedirs(site, exist_ok=True)
@@ -83,6 +95,9 @@ with open(os.path.join(site, "history.json"), "w") as f:
 e = html.escape
 covered = [h for h in history if h.get("coverage")]
 prev_cov = covered[-2]["coverage"] if cov and len(covered) > 1 else None
+wcovered = [h for h in history if h.get("www_coverage")]
+prev_www = wcovered[-2]["www_coverage"] if len(wcovered) > 1 else None
+WWW_LABEL = {"php": "PHP", "js": "JS"}
 
 
 def pct(hit, total):
@@ -160,13 +175,22 @@ for fl in FLAVORS:
 if covered:
     c = covered[-1]["coverage"]
     lp, fp = pct(c["lines_hit"], c["lines"]), pct(c["functions_hit"], c["functions"])
-    cards.append(f'<div class="card"><h3>line coverage</h3><div class="big">{lp:.1f}%</div>'
+    cards.append(f'<div class="card"><h3>fppd line coverage</h3><div class="big">{lp:.1f}%</div>'
                  f'<p>{c["lines_hit"]:,} of {c["lines"]:,} lines '
                  f'{delta(lp, pct(prev_cov["lines_hit"], prev_cov["lines"]) if prev_cov else None)}</p></div>')
-    cards.append(f'<div class="card"><h3>function coverage</h3><div class="big">{fp:.1f}%</div>'
+    cards.append(f'<div class="card"><h3>fppd function coverage</h3><div class="big">{fp:.1f}%</div>'
                  f'<p>{c["functions_hit"]:,} of {c["functions"]:,} functions · '
                  f'{c["files_unreached"]} of {c["files"]} files never reached '
                  f'{delta(fp, pct(prev_cov["functions_hit"], prev_cov["functions"]) if prev_cov else None)}</p></div>')
+if wcovered:
+    w = wcovered[-1]["www_coverage"]
+    for k, d in w.items():
+        p = pct(d["lines_hit"], d["lines"])
+        b = (prev_www or {}).get(k)
+        cards.append(f'<div class="card"><h3>web UI {WWW_LABEL[k]} line coverage</h3><div class="big">{p:.1f}%</div>'
+                     f'<p>{d["lines_hit"]:,} of {d["lines"]:,} lines · {d["files_unreached"]} of {d["files"]} '
+                     f'files never reached · {wcovered[-1]["date"][:10]} '
+                     f'{delta(p, pct(b["lines_hit"], b["lines"]) if b else None)}</p></div>')
 
 charts = []
 if covered:
@@ -175,8 +199,17 @@ if covered:
     fvals = [pct(h["coverage"]["functions_hit"], h["coverage"]["functions"]) if h.get("coverage")
              else None for h in history]
     top = min(100, max(v for v in vals + fvals if v is not None) + 10)
-    charts.append("<section><h2>Coverage over time</h2>" + chart(
+    charts.append("<section><h2>fppd coverage over time</h2>" + chart(
         [("lines", "--c1", vals), ("functions", "--c2", fvals)], 0, top, "%") + "</section>")
+if wcovered:
+    wseries = []
+    for i, k in enumerate(("php", "js")):
+        v = [pct(h["www_coverage"][k]["lines_hit"], h["www_coverage"][k]["lines"])
+             if k in h.get("www_coverage", {}) else None for h in history]
+        if any(x is not None for x in v):
+            wseries.append((WWW_LABEL[k] + " lines", f"--c{i + 3}", v))
+    top = min(100, max(x for _, _, v in wseries for x in v if x is not None) + 10)
+    charts.append("<section><h2>Web UI coverage over time</h2>" + chart(wseries, 0, top, "%") + "</section>")
 # Three scales: the scenarios on the build flavors, the device runs (a hundred
 # or so each, which would sit on the floor of the scenarios' axis), and the web
 # suite.
@@ -256,13 +289,18 @@ for h in reversed(history[-30:]):
     sha = h.get("sha", "")
     ver = f'<a href="{FPP_COMMIT}{e(sha)}">{e(h.get("fpp", "?"))}</a>' if sha else e(h.get("fpp", "?"))
     cv = f"{pct(c['lines_hit'], c['lines']):.1f}%" if c else ""
+    w = h.get("www_coverage") or {}
+    wv = " / ".join(f"{pct(w[k]['lines_hit'], w[k]['lines']):.1f}%" if k in w else "–" for k in ("php", "js")) if w else ""
     runs.append(f'<tr><td><a href="{e(h["run"])}">{e(h["date"].replace("T", " "))}</a></td>'
-                f'<td>{ver}</td>{"".join(cells)}<td>{cv}</td></tr>')
+                f'<td>{ver}</td>{"".join(cells)}<td>{cv}</td><td>{wv}</td></tr>')
 
 last = history[-1]
 cov_link = ('<a class="button" href="coverage/html/index.html">Line-by-line coverage report</a> '
             '<a class="button" href="coverage/functions.csv">Every function and its call count (CSV)</a>'
             if cov else "")
+if os.path.exists(os.path.join(WWW, "summary.txt")):
+    cov_link += (' <a class="button" href="coverage/www/summary.txt">Web UI PHP and JS coverage, every file</a>'
+                 ' <a class="button" href="coverage/www/totals.json">The same, as JSON</a>')
 
 page = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -313,7 +351,8 @@ td.good {{ color:var(--good); }} td.bad {{ color:var(--bad); }}
 <p class="sub">Nightly runs of <a href="https://github.com/FalconChristmas/fpp-tests">fpp-tests</a>
 against fpp master: every scenario under ASan and TSan, once more in a coverage build to see
 what FPP code the scenarios reach, and the web UI suite in a browser against the pages served
-as on a player, with the ASan fppd behind them. Last run {e(last["date"].replace("T", " "))},
+as on a player, with the ASan fppd behind them, and that suite once more recording which of the
+web UI's own PHP and JS it runs. Last run {e(last["date"].replace("T", " "))},
 fpp {e(last.get("fpp", "?"))} (<a href="{e(last["run"])}">run log</a>).</p>
 <div class="cards">{"".join(cards)}</div>
 <p>{cov_link}</p>
@@ -323,7 +362,7 @@ coverage report to see which paths no scenario takes, and add a scenario that dr
 <div class="charts">{"".join(charts)}</div>
 {"".join(tables)}
 <section><h2>Recent runs</h2><div class="scroll"><table><thead><tr><th>run</th><th>fpp</th>
-{"".join(f"<th>{LABEL[fl]}</th>" for fl in FLAVORS)}<th>line coverage</th></tr></thead>
+{"".join(f"<th>{LABEL[fl]}</th>" for fl in FLAVORS)}<th>fppd line coverage</th><th>web UI PHP / JS</th></tr></thead>
 <tbody>{"".join(runs)}</tbody></table></div>
 <p class="note">All runs, as JSON: <a href="history.json">history.json</a></p></section>
 </main></body></html>
