@@ -107,3 +107,36 @@ def test_a_sync_to_a_media_entry_plays_it_from_that_time_and_tells_the_remotes(f
     assert ("open", "A.wav") in acts and ("start", "A.wav") in acts, acts
     five = [s for s in sent if s.action == "sync" and s.filename == "A.wav" and abs(s.seconds - 5) < 0.01]
     assert five, [(s.action, s.seconds) for s in sent]
+
+
+def test_a_sync_to_another_media_entry_stops_the_playing_media_and_starts_its_own(fppd, audio):
+    """With A.wav playing from one playlist, a plugin's SyncPlaylistToMS() to
+    another whose entry is B.wav stops A.wav and plays B.wav, and the remotes
+    are told to stop A.wav and start B.wav.
+
+    Regression: fc6eabd21. The stop named the entry's file, B.wav, and StopSyncedMedia()
+    only closes media of the name it is given, so A.wav played on, B.wav
+    never started, and the remotes were told to stop B.wav."""
+    write_tone_wav(os.path.join(fppd.media, "music", "A.wav"), 30)
+    write_tone_wav(os.path.join(fppd.media, "music", "B.wav"), 30)
+    fppd.write("playlists/PA.json", media_list("PA", "A.wav"))
+    fppd.write("playlists/PB.json", media_list("PB", "B.wav"))
+    plugin_build.build_and_install(fppd, "syncplaylistplugin.cpp", "fpp-sync")
+    fppd.settings(MultiSyncEnabled="1", MultiSyncRemotes="127.0.0.2")
+    with UdpCapture(PORT, "127.0.0.2") as cap:
+        fppd.start()
+        fppd.wait_for(lambda: "fpp-sync SyncSend" in {c["name"] for c in fppd.get("/commands")},
+                      timeout=15, interval=0.25, what="the plugin to load")
+        assert str(fppd.command("fpp-sync SyncSend", "2000", "0", "PA")) == "ok"
+        fppd.wait_for(lambda: status(fppd).get("current_song") == "A.wav", timeout=10, interval=0.1,
+                      what=f"A.wav to play; have {status(fppd).get('current_song')!r}")
+        assert str(fppd.command("fpp-sync SyncSend", "3000", "0", "PB")) == "ok"
+        fppd.wait_for(lambda: status(fppd).get("current_song") == "B.wav", timeout=10, interval=0.1,
+                      what=f"B.wav to play; have {status(fppd).get('current_song')!r}")
+        time.sleep(0.5)
+        sent = media_syncs(cap.snapshot())
+    fppd.command("Stop Now")
+    acts = [(s.action, s.filename) for s in sent]
+    assert ("stop", "A.wav") in acts and ("stop", "B.wav") not in acts, acts
+    assert ("start", "B.wav") in acts, acts
+    assert acts.index(("stop", "A.wav")) < acts.index(("start", "B.wav")), acts
