@@ -283,3 +283,35 @@ def test_starting_another_playlist_stops_an_inserted_one_without_resuming(fppd, 
     assert status(fppd).get("breadcrumbs") in (None, []), status(fppd)
     acts = playlist_actions(d)
     assert resumed_after_stop(acts) == [], acts
+
+
+def test_a_disabled_entry_is_not_scheduled(fppd):
+    """A disabled entry whose window is open plays nothing and isn't in the
+    plan, though it stays in the list of entries."""
+    start, end = scheduled_show(fppd, -60, 600)
+    fppd.write("config/schedule.json", [dict(schedule_entry("Show", start, end), enabled=0)])
+    fppd.start()
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        assert status(fppd).get("status_name") == "idle", "the disabled entry's playlist started"
+        time.sleep(0.25)
+    schedule = fppd.get("/fppd/schedule")["schedule"]
+    assert len(schedule["entries"]) == 1 and schedule["items"] == [], schedule["items"]
+    assert status(fppd)["scheduler"]["nextPlaylist"]["playlistName"] == "No playlist scheduled."
+
+
+def test_a_reload_does_not_replay_a_finished_occurrence(fppd):
+    """A non-repeating entry whose playlist has finished stays finished when
+    the schedule is reloaded while its window is still open."""
+    install(fppd, solid_frames(40, CHANNELS, 55))
+    start, end = window(-60, 600)
+    fppd.write("config/schedule.json", [schedule_entry("Show", start, end, repeat=0)])
+    fppd.start()
+    fppd.wait_for(lambda: playing(fppd), timeout=30, interval=0.25, what="the scheduled playlist to start")
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=30, interval=0.25,
+                  what="the playlist to finish")
+    reload_schedule(fppd)
+    deadline = time.monotonic() + 6
+    while time.monotonic() < deadline:
+        assert status(fppd).get("status_name") == "idle", "the reload played the finished occurrence again"
+        time.sleep(0.25)
