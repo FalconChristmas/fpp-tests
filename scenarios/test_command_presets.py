@@ -19,7 +19,7 @@ def set_variable(name, value):
 
 
 def variable(fppd, name):
-    return fppd.get("/variables", timeout=5).get(name, {}).get("value")
+    return (fppd.get("/variables", timeout=5) or {}).get(name, {}).get("value")
 
 
 def test_edit_reloads_without_wedging(fppd):
