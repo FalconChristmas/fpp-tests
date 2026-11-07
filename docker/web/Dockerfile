@@ -46,3 +46,8 @@ RUN echo "ServerName localhost" > /etc/apache2/conf-enabled/servername.conf
 # ffprobe on a player, the media metadata and duration APIs fall back to it.
 RUN apt-get update && apt-get install -y --no-install-recommends gstreamer1.0-plugins-base-apps \
     && rm -rf /var/lib/apt/lists/*
+
+# For run-web.sh --www-coverage, which turns it on (scripts/web_serve.py). Off
+# otherwise, so a run without it serves PHP as a player does.
+RUN apt-get update && apt-get install -y --no-install-recommends php8.4-pcov \
+    && phpdismod pcov && rm -rf /var/lib/apt/lists/*

@@ -12,6 +12,7 @@ backtrace, config) and Apache's logs are copied next to it.
 import fcntl
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -20,6 +21,53 @@ import threading
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scenarios"))
 from fppd import Fppd  # noqa: E402
+
+
+PCOV_INI = """extension=pcov.so
+pcov.enabled=1
+pcov.directory=/opt/fpp
+pcov.exclude="~^/opt/fpp/(?!www/|scripts/)~"
+auto_prepend_file=/tests/scripts/www-coverage-prepend.php
+opcache.enable=0
+opcache.enable_cli=0
+"""
+
+
+def write_php_lines(path):
+    """Every executable line of FPP's PHP, run or not: a file no test loaded is
+    otherwise missing from the report. PCOV reports a file's lines once it is
+    compiled, so each is compiled, in a process of its own (files may declare
+    the same names), from a copy that returns on its first line and so runs
+    nothing. The return has a condition: PCOV leaves out code it can tell can't
+    be reached, which after a plain one is all of the file's top level. A file
+    that can't take that (a namespace or declare has to come first) is left to
+    the lines the suite ran, and listed in "uncounted"."""
+    code = ("ob_start(); \\pcov\\start(); include $argv[1]; \\pcov\\stop(); $d = \\pcov\\collect(\\pcov\\all);"
+            " ob_end_clean(); echo json_encode(array_keys($d[$argv[1]] ?? []));")
+    copy = "/opt/fpp/www/.fpp-tests-www-coverage.php"
+    lines, uncounted = {}, []
+    for top in ("www", "scripts"):
+        for root, _, names in os.walk(os.path.join("/opt/fpp", top)):
+            for name in names:
+                source = os.path.join(root, name)
+                if source == copy or not os.path.isfile(source):
+                    continue
+                with open(source, "rb") as src:
+                    text = src.read()
+                # Some of scripts/ is PHP with no extension, only a #! line.
+                if not name.endswith((".php", ".inc")) and not re.match(rb"#!.*\bphp", text):
+                    continue
+                with open(copy, "wb") as dst:
+                    dst.write(b"<?php if (empty($GLOBALS['fpp_tests_run'])) return; ?>" + text)
+                r = subprocess.run(["php", "-d", "auto_prepend_file=", "-d", "display_errors=0", "-r", code, copy],
+                                   capture_output=True, text=True, timeout=30)
+                try:
+                    lines[source] = json.loads(r.stdout)
+                except ValueError:
+                    uncounted.append(source)
+    os.unlink(copy)
+    with open(path, "w") as out:
+        json.dump({"lines": lines, "uncounted": uncounted}, out)
 
 
 def sh(*cmd):
@@ -56,6 +104,22 @@ def main():
             shutil.copytree(os.path.join(tree, entry), os.path.join("/opt/fpp", entry), symlinks=True)
         else:
             os.symlink(os.path.join(tree, entry), os.path.join("/opt/fpp", entry))
+
+    www_coverage = bool(os.environ.get("FPP_TESTS_WWW_COVERAGE"))
+    if www_coverage:
+        # scripts/www-coverage-prepend.php records what each request and PHP
+        # command ran. opcache off: PCOV sees a file only as it is compiled.
+        for sapi in ("cli", "fpm"):
+            with open(f"/etc/php/8.4/{sapi}/conf.d/99-fpp-tests-www-coverage.ini", "w") as ini:
+                ini.write(PCOV_INI)
+        # backup.php takes the first included file for the page being served;
+        # the prepended file is now first. In this copy, on the same line.
+        backup = "/opt/fpp/www/backup.php"
+        if os.path.exists(backup):
+            with open(backup) as page:
+                text = page.read()
+            with open(backup, "w") as page:
+                page.write(text.replace("= get_included_files();", "= array_slice(get_included_files(), 1);"))
 
     f = Fppd("/opt/fpp")
 
@@ -165,6 +229,8 @@ def main():
         shutil.copytree(f.media, os.path.join(artifacts, "media"), symlinks=True, dirs_exist_ok=True)
     shutil.copytree("/var/log/apache2", os.path.join(artifacts, "apache2"), dirs_exist_ok=True)
     subprocess.run(["apache2ctl", "stop"])
+    if www_coverage:
+        write_php_lines(os.path.join(artifacts, "coverage/www/raw/php-lines.json"))
     f.cleanup()
     return 1 if failed else 0
 

@@ -21,6 +21,10 @@
 # tests' screenshots and traces, fppd.json (fppd's verdict) and, when fppd
 # failed, its media directory and Apache's logs. --flavor coverage also writes
 # coverage/ (scripts/coverage-report.sh): the fppd code the pages reached.
+#
+# --www-coverage writes coverage/www/ (scripts/www-coverage-report.py), with any
+# flavor: the PHP and the JS under www/ the suite ran. Only tests that take the
+# page from fixtures.ts count towards the JS.
 set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -29,6 +33,7 @@ REF=HEAD
 FLAVOR=asan
 PORT=${FPP_TESTS_WEB_PORT:-8080}
 SERVE=
+WWW_COVERAGE=
 ARTIFACTS="$HERE/artifacts/web"
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -38,6 +43,7 @@ while [ $# -gt 0 ]; do
     --port) PORT="$2"; shift 2 ;;
     --nopch) export FPP_TESTS_NOPCH=require; shift ;;
     --serve) SERVE=1; shift ;;
+    --www-coverage) WWW_COVERAGE=1; shift ;;
     --artifacts) ARTIFACTS="$2"; shift 2 ;;
     *) break ;;
     esac
@@ -64,6 +70,14 @@ if [ ! -d "$HERE/web/node_modules" ]; then
     (cd "$HERE/web" && npm ci --no-audit --no-fund && npx playwright install chromium)
 fi
 
+WWW_ENV=
+if [ -n "$WWW_COVERAGE" ]; then
+    # Written by the container's root and the host's Playwright.
+    mkdir -p "$ARTIFACTS/coverage/www/raw/php" "$ARTIFACTS/coverage/www/raw/js" "$ARTIFACTS/coverage/www/raw/js-src"
+    WWW_ENV="-e FPP_TESTS_WWW_COVERAGE=1"
+    export FPP_TESTS_WWW_COVERAGE_DIR="$ARTIFACTS/coverage/www/raw"
+fi
+
 # Not --rm: the container's exit code is fppd's verdict, read after it stops.
 NAME="fpp-tests-web-$$"
 make_test_network
@@ -73,6 +87,7 @@ ${DOCKER%%--rm*}${DOCKER#*--rm} -d --init --name "$NAME" --network "$NETWORK" -p
     -e FPP_TREE="$TREE" -e FPP_TESTS_ARTIFACTS=/artifacts \
     --cap-add SYS_PTRACE --cap-add SYS_NICE \
     --tmpfs /tmp:rw,exec,nosuid,size=4g \
+    $WWW_ENV \
     fpp-tests-web python3 /tests/scripts/web_serve.py > /dev/null
 
 echo "waiting for the web UI on 127.0.0.1:$PORT"
@@ -111,6 +126,10 @@ fppd_rc=$(docker wait "$NAME")
 if [ "$FLAVOR" = coverage ]; then
     $DOCKER -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" fpp-tests-env \
         /tests/scripts/coverage-report.sh "$TREE" /artifacts/coverage || rc=1
+fi
+if [ -n "$WWW_COVERAGE" ]; then
+    $DOCKER -v "$HERE:/tests:ro" -v "$ARTIFACTS:/artifacts" fpp-tests-env \
+        python3 /tests/scripts/www-coverage-report.py "$TREE" /artifacts/coverage/www /artifacts/coverage/www/raw || rc=1
 fi
 # Hand what the container wrote (fppd.json, apache2/, media/) back to the caller.
 $DOCKER -v "$ARTIFACTS:/artifacts" fpp-tests-env chown -hR "$(id -u):$(id -g)" /artifacts

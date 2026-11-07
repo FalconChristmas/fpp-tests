@@ -154,6 +154,18 @@ on SIGTERM or wrote a sanitizer report, whatever the tests themselves said. Resu
 traces, `fppd.json` with fppd's verdict and, when fppd failed, its media directory and
 Apache's logs.
 
+`--flavor coverage` also writes `artifacts/web/coverage/`: the fppd code the pages reached,
+as `run.sh`'s does for the scenarios.
+
+`--www-coverage`, with any flavor, measures the suite's own subject: `artifacts/web/coverage/www/`
+holds `summary.txt` (line coverage of FPP's PHP and JS under `www/`, per file, most unreached
+first), `summary.md` and `totals.json`. PHP comes from PCOV, recording every request and PHP
+command through a prepended file, and JS from Chromium's V8 coverage of the pages taken from
+`web/tests/fixtures.ts`. Third-party code (Limonade, minified and bundled scripts) stays out of
+the totals. For a sharded run, give `scripts/www-coverage-report.py` each shard's `raw/` directory
+to add their counts together. It serves `backup.php` with one line changed, because that page
+looks for itself first in `get_included_files()`.
+
 `FPP_TESTS_THEMES=1` runs every test in both color schemes and writes a side-by-side
 screenshot report (`web/playwright-report/sightline.html`), for reviewing theme work.
 

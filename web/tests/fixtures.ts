@@ -1,5 +1,6 @@
 import { test as base } from '@playwright/test';
 import type { Page, Request } from '@playwright/test';
+import { coveringContext, startCoverage } from './www-coverage';
 
 // Chrome here runs on the host, beside the containers. A container or Docker
 // network coming or going can make it drop requests in flight, and the page
@@ -31,7 +32,11 @@ export function retryGotoOnNetworkChange(page: Page, errorText = NETWORK_CHANGED
 }
 
 export const test = base.extend({
+  context: async ({ context }, use) => {
+    await coveringContext(context, use);
+  },
   page: async ({ page, request }, use) => {
+    await startCoverage(page);
     retryGotoOnNetworkChange(page);
     await request.put('/api/settings/themeOverride', { data: '' });
     await use(page);
