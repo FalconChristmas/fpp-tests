@@ -132,3 +132,21 @@ def test_a_started_preset_that_starts_its_playlist_again_settles(fppd):
     fppd.wait_for(lambda: "notification cascade exceeded" in fppd.log(), timeout=30,
                   what="the preset loop to be cut off")
     fppd.wait_for(lambda: status_name(fppd) == "playing", timeout=10, what="P to play")
+
+
+def test_the_countdown_preset_runs_minutes_ahead_and_names_the_playlist(fppd):
+    """PLAYLIST_START_TMINUS_120 runs two minutes before a scheduled playlist
+    starts, with %PLAYLIST_NAME% set to it."""
+    from fseq import solid_frames
+    from show import CHANNELS, install
+    from test_scheduler import reload_schedule, schedule_entry, window
+    install(fppd, solid_frames(40, CHANNELS, 55))
+    fppd.write("config/commandPresets.json", {"commands": preset(
+        "PLAYLIST_START_TMINUS_120",
+        ("Set Variable", "Next", "Value", "%PLAYLIST_NAME%", "1", "0", "100", ""))})
+    fppd.start()
+    start_at, end_at = window(125, 600)
+    fppd.write("config/schedule.json", [schedule_entry("Show", start_at, end_at)])
+    reload_schedule(fppd)
+    fppd.wait_for(lambda: variable(fppd, "Next") == "Show", timeout=20, interval=0.25,
+                  what="the two-minute countdown preset to run")
