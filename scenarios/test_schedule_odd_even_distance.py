@@ -9,7 +9,8 @@ has scheduled is read back from GET /fppd/schedule.
 import datetime
 from zoneinfo import ZoneInfo
 
-from show import status
+from fseq import solid_frames
+from show import CHANNELS, install, status
 from test_schedule_calendar import ODD_DAY, YEAR, ZONE, dint, entry, items
 
 TZ = ZoneInfo(ZONE)
@@ -87,3 +88,27 @@ def test_extend_schedule_limit_only_moves_entries_due_within_it(fppd):
     fppd.wait_for(lambda: starts().get(1) == "12:35", timeout=10,
                   what="the entry due within the limit to move 5 minutes later")
     assert starts()[2] == "15:00", f"an entry due in three hours moved: {starts()}"
+
+
+def test_odd_day_entries_reach_the_last_day_of_the_distance(fppd):
+    """An odd-days entry is scheduled on the last day ScheduleDistance reaches,
+    counted from this week's Sunday, when that day is an odd one."""
+    today = TODAY if (TODAY - datetime.date(2013, 7, 15)).days % 2 == 1 else TODAY + datetime.timedelta(days=1)
+    sunday_offset = (today.weekday() + 1) % 7
+    fppd.settings(ScheduleDistance=str(sunday_offset + 10))
+    got = items(fppd, [entry(ODD_DAY, "20:00:00", "21:00:00")], f"{today.isoformat()} 12:00:00")
+    last = max(i["startDateInt"] for i in got)
+    assert last == dint(today + datetime.timedelta(days=10)), sorted(i["startDateInt"] for i in got)
+
+
+def test_an_odd_day_show_past_midnight_plays_into_the_even_day(fppd):
+    """An odd-days 22:00-02:00 entry is still playing at 00:30 on the even day
+    after: its start was yesterday."""
+    today = TODAY if (TODAY - datetime.date(2013, 7, 15)).days % 2 == 0 else TODAY + datetime.timedelta(days=1)
+    if today.weekday() == 6:  # keep yesterday in the same week
+        today += datetime.timedelta(days=2)
+    install(fppd, solid_frames(40, CHANNELS, 55))
+    fppd.write("config/schedule.json", [entry(ODD_DAY, "22:00:00", "02:00:00")])
+    fppd.start(fake_time=f"{today.isoformat()} 00:30:00", tz=ZONE)
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "playing", timeout=20, interval=0.25,
+                  what="yesterday's odd-day occurrence to be playing")
