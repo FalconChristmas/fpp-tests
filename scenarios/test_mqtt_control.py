@@ -2,8 +2,10 @@
 topics published with mosquitto_pub."""
 
 import contextlib
+import http.server
 import shutil
 import subprocess
+import threading
 import time
 
 import pytest
@@ -671,3 +673,66 @@ def test_fppd_unsubscribes_before_it_shuts_down(fppd, tmp_path):
     assert "Received UNSUBSCRIBE" in text, f"no unsubscribe reached the broker:\n{text[-2000:]}"
     after = text[text.index("Received UNSUBSCRIBE"):]
     assert topic in after, f"{topic} was not what it withdrew:\n{after[:1000]}"
+
+
+def publish_until(fppd, topic, done, what):
+    """Publish until it lands: fppd subscribes some time after it starts."""
+    def land():
+        publish(topic)
+        return done()
+    fppd.wait_for(land, timeout=20, interval=0.5, what=what)
+
+
+def test_the_stop_topic_stops_fppd_and_an_unknown_one_does_not(fppd):
+    """system/fppd/stop ends fppd, cleanly. Another topic under system/fppd/
+    is refused and fppd carries on."""
+    with broker():
+        fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+        fppd.start()
+        publish_until(fppd, "system/fppd/nonsense", lambda: "Invalid request in fppd_callback" in fppd.log(),
+                      "the unknown topic to be refused")
+        fppd.check_alive()
+        publish("system/fppd/stop")
+        deadline = time.monotonic() + 30
+        while fppd.proc.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.1)
+    assert fppd.proc.poll() == 0, f"fppd after system/fppd/stop: {fppd.proc.poll()}"
+    assert "Stopping FPP for request" in fppd.log()
+    fppd.exit_expected = True
+
+
+@pytest.mark.parametrize("topic, path", [("system/shutdown", "/api/system/shutdown"),
+                                         ("system/restart", "/api/system/reboot")])
+def test_the_system_topics_ask_the_player_to_shut_down_or_reboot(fppd, topic, path):
+    """system/shutdown and system/restart POST the player's own shutdown and
+    reboot APIs on loopback, and only the one asked for. fppd itself keeps
+    running until the OS takes it down."""
+    seen = []
+
+    class Api(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            seen.append(("POST", self.path))
+            self.send_response(200)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            self.close_connection = True
+
+        def log_message(self, *a):
+            pass
+
+    try:
+        api = http.server.ThreadingHTTPServer(("127.0.0.1", 80), Api)
+    except PermissionError:
+        pytest.skip("needs port 80")
+    threading.Thread(target=api.serve_forever, daemon=True).start()
+    try:
+        with broker():
+            fppd.settings(MQTTHost="127.0.0.1", MQTTPort=PORT, HostName=HOST)
+            fppd.start()
+            publish_until(fppd, topic, lambda: seen, f"a request for {topic}")
+            time.sleep(0.5)
+            fppd.check_alive()
+    finally:
+        api.shutdown()
+        api.server_close()
+    assert set(seen) == {("POST", path)}, seen
