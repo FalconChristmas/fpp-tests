@@ -6,6 +6,10 @@
  * cards list, cardN/id and the <id> -> cardN links.  glob() results are
  * handed back under /proc/asound, as the PHP expects to see them.
  *
+ * Also /sys/class/drm, for the display connectors, which Docker's sysfs has
+ * none of and takes no files: sent to /tmp/fpp-tests-fakedrm, but only while
+ * that directory exists, so the real one is seen otherwise.
+ *
  * The calls are the ones php-fpm8.4 imports for file access: open, fopen,
  * stat, lstat, access, readlink, opendir, scandir and glob.
  */
@@ -28,13 +32,32 @@ static const char* root(void) {
     return r && *r ? r : "/tmp/fpp-tests-fakeasound";
 }
 
-/* `path` under /proc/asound, rewritten into `buf`; otherwise `path` itself. */
+#define DRM "/sys/class/drm"
+#define FAKE_DRM "/tmp/fpp-tests-fakedrm"
+
+static int under(const char* path, const char* dir) {
+    size_t n = strlen(dir);
+    return path && strncmp(path, dir, n) == 0 && (path[n] == '\0' || path[n] == '/');
+}
+
+static int (*real_access_fn)(const char*, int);
+
+/* `path` under /proc/asound (or /sys/class/drm while FAKE_DRM exists),
+ * rewritten into `buf`; otherwise `path` itself. */
 static const char* fake(const char* path, char* buf, size_t len) {
-    size_t n = strlen(PROC);
-    if (!path || strncmp(path, PROC, n) != 0 || (path[n] != '\0' && path[n] != '/'))
-        return path;
-    snprintf(buf, len, "%s%s", root(), path + n);
-    return buf;
+    if (under(path, PROC)) {
+        snprintf(buf, len, "%s%s", root(), path + strlen(PROC));
+        return buf;
+    }
+    if (under(path, DRM)) {
+        if (!real_access_fn)
+            real_access_fn = (int (*)(const char*, int))dlsym(RTLD_NEXT, "access");
+        if (real_access_fn(FAKE_DRM, F_OK) == 0) {
+            snprintf(buf, len, "%s%s", FAKE_DRM, path + strlen(DRM));
+            return buf;
+        }
+    }
+    return path;
 }
 
 #define REAL(name) static __typeof__(name)* real_##name; \

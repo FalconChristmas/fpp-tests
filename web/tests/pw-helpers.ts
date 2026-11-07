@@ -112,10 +112,33 @@ export function fakeSoundCards(cards: { id: string; name?: string }[]) {
     writeFile(`${ASOUND}/card${i}/id`, `${c.id}\n`);
     inPlayer('ln', '-sfn', `card${i}`, `${ASOUND}/${c.id}`);
   });
+  preloadShim();
+}
+
+function preloadShim() {
   if (!exists(FAKE_ASOUND_SO)) {
     inPlayer('gcc', '-O2', '-shared', '-fPIC', '-o', FAKE_ASOUND_SO, '/tests/web/tests/fakeasound.c', '-ldl');
   }
   restartPhpFpm(FAKE_ASOUND_SO);
+}
+
+// Display connectors for the PHP to find under /sys/class/drm, through the
+// same shim: cardN-<name>/status, connector_id and modes.  Undone by
+// cleanupPipeWire().
+const FAKE_DRM = '/tmp/fpp-tests-fakedrm';
+
+export type DrmConnector = { card: number; name: string; status?: string; id?: number; modes?: string[] };
+
+export function fakeDrmConnectors(connectors: DrmConnector[]) {
+  inPlayer('mkdir', '-p', FAKE_DRM);
+  for (const c of connectors) {
+    const dir = `${FAKE_DRM}/card${c.card}-${c.name}`;
+    inPlayer('mkdir', '-p', dir);
+    if (c.status !== undefined) writeFile(`${dir}/status`, `${c.status}\n`);
+    if (c.id !== undefined) writeFile(`${dir}/connector_id`, `${c.id}\n`);
+    if (c.modes !== undefined) writeFile(`${dir}/modes`, c.modes.map((m) => `${m}\n`).join(''));
+  }
+  preloadShim();
 }
 
 // A stand-in for a program the PHP runs by its full path (sudo
@@ -136,7 +159,7 @@ function undoStandIns() {
   for (const path of REPLACEABLE) {
     inPlayer('sh', '-c', `[ -e '${path}.fpp-tests-real' ] && mv -f '${path}.fpp-tests-real' '${path}' || true`);
   }
-  inPlayer('sh', '-c', `rm -rf ${ASOUND} /tmp/fpp-tests-aplay /tmp/fpp-tests-*.log ` +
+  inPlayer('sh', '-c', `rm -rf ${ASOUND} ${FAKE_DRM} /tmp/fpp-tests-aplay /tmp/fpp-tests-*.log ` +
     '/usr/local/bin/aplay /usr/local/bin/amixer /usr/local/bin/pactl /usr/local/bin/pw-cli /tmp/fpp-tests-pw-cli.txt');
   // Only a php-fpm that was started with the shim is restarted again.
   const preloaded = inPlayer('sh', '-c',
