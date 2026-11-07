@@ -23,6 +23,12 @@ const PATHS: Record<string, string> = {
   iwconfig: '/usr/sbin/iwconfig',
   ifconfig: '/usr/sbin/ifconfig',
   wpa_cli: '/usr/local/bin/wpa_cli',
+  // Real programs in the player, shadowed for sudo (secure_path) and for
+  // php-fpm (PATH) by a stand-in earlier in the path; removeStubs() takes it
+  // away and the real one answers again.
+  journalctl: '/usr/local/bin/journalctl',
+  networkctl: '/usr/local/bin/networkctl',
+  arp: '/usr/local/bin/arp',
 };
 
 // [shell case pattern over the arguments, output] -- the first match answers.
@@ -87,6 +93,11 @@ const REAL_SYNTAX = [
   /^iwlist \S+ scan(ning)?( essid \S+)?( last)?$/,
   /^wpa_cli -i \S+ (status|scan|scan_results)$/,
   /^(ifconfig|iwconfig) \S+$/,
+  // journalctl 257's -u UNIT -n N --no-pager; networkctl's --no-legend -l
+  // -n N status IF; net-tools arp's -a HOST.
+  /^journalctl -u \S+ -n \d+ --no-pager$/,
+  /^networkctl --no-legend -l -n \d+ status \S+$/,
+  /^arp -a \S+$/,
 ];
 
 // Fails on any recorded call the real tool would refuse.
