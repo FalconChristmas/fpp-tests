@@ -6,7 +6,10 @@ import datetime
 import os
 import re
 import stat
+import subprocess
 import time
+
+import pytest
 
 import shims
 from test_schedule_calendar import YEAR, ZONE, entry
@@ -304,3 +307,16 @@ def test_a_log_line_names_its_logger_before_the_source_file(fppd):
     assert lines, fppd.log()[-2000:]
     shape = re.compile(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} fppd\(\d+\) \[\w+\] [\w./]+:\d+: ")
     assert all(shape.match(l) for l in lines), [l for l in lines if not shape.match(l)][:5]
+
+
+@pytest.mark.parametrize("args, code", [(["-h"], 0), (["--help"], 0), (["--no-such-option"], 1)])
+def test_help_and_a_bad_option_print_the_usage_and_exit(fppd, args, code):
+    """fppd -h prints its usage and exits 0; an option it doesn't know prints
+    the same and exits 1. Neither starts a player."""
+    fppd.exit_expected = True
+    src = os.path.join(fppd.tree, "src")
+    env = dict(os.environ, ASAN_OPTIONS="detect_leaks=0", LD_LIBRARY_PATH=src)
+    r = subprocess.run([os.path.join(src, "fppd"), *args], cwd=src, env=env, capture_output=True,
+                       text=True, timeout=30)
+    assert r.returncode == code, r.stdout[-2000:] + r.stderr[-2000:]
+    assert "Usage: " in r.stdout and "--log-level" in r.stdout, r.stdout[-2000:]
