@@ -77,6 +77,37 @@ if "am62x-panel" in entry["flavors"]:
             for k in base:
                 base[k] = round(base[k] + panel[k], 1) if k == "minutes" else base[k] + panel[k]
 # The web UI's own PHP and JS (the web-coverage job), when this run has them.
+# Its files, as the source-directory and file tables list them: each with the
+# language, since www/ holds both PHP and JS, and scripts/ (the PHP the web UI
+# runs from there) beside it.  Limonade (www/api/lib) is vendored, like the
+# submodules left out of src/.
+WWW_PARTS = (("php", "PHP", "by_file"), ("php_scripts", "PHP", "by_file"),
+             ("js", "JS", "by_file"), ("js_inline", "inline JS", "by_page"))
+
+
+def www_files(www):
+    """[(file, language, lines, lines hit)] for every web UI file the report lists."""
+    out = []
+    for key, lang, rows in WWW_PARTS:
+        for r in (www.get(key) or {}).get(rows, []):
+            f = r["file"]
+            if key == "js_inline":  # the page the scripts are in, as /about.php
+                f = "www/" + f.lstrip("/")
+            out.append((f, lang, r["lines"], r["lines_hit"]))
+    return out
+
+
+def www_areas(www):
+    """{"directory · language": [lines, lines hit, files]}"""
+    areas = {}
+    for f, lang, n, h in www_files(www):
+        a = areas.setdefault(f"{os.path.dirname(f) or '.'} · {lang}", [0, 0, 0])
+        a[0] += n
+        a[1] += h
+        a[2] += 1
+    return areas
+
+
 WWW = os.path.join(site, "coverage", "www")
 try:
     with open(os.path.join(WWW, "totals.json")) as f:
@@ -86,6 +117,7 @@ except (OSError, ValueError):
 if www:
     entry["www_coverage"] = {k: {f: www[k][f] for f in ("lines", "lines_hit", "files", "files_unreached")}
                              for k in ("php", "js") if isinstance(www.get(k), dict) and www[k].get("lines")}
+    entry["www_areas"] = www_areas(www)
 if not no_entry:
     history.append(entry)
 os.makedirs(site, exist_ok=True)
@@ -239,38 +271,73 @@ if any(wtests):
         0, max(v for v in wtests if v) * 1.15, "") + "</section>")
 
 tables = []
+# The source directories and the files with the most unreached lines, fppd's
+# (src/, reached by the scenarios) and the web UI's (www/ and scripts/, reached
+# by the web suite) apart: a gap in one is filled by a scenario, in the other by
+# a Playwright spec.  Each group puts the most lines not reached first.
+wareas = wcovered[-1].get("www_areas") if wcovered else None
+dir_rows, file_rows = [], []
+
+
+def group(title, note, cols=6):
+    return f'<tr class="group"><th colspan="{cols}">{title} <span>{note}</span></th></tr>'
+
+
 if covered:
     c = covered[-1]["coverage"]
     before = (prev_cov or {}).get("areas", {})
-    rows = sorted(c["areas"].items(), key=lambda kv: kv[1][1] - kv[1][0])
-    tr = []
-    for d, (n, h, fn, fh, files) in rows:
+    dir_rows.append(group("src/", f'fppd, its plugins and tools · {pct(c["lines_hit"], c["lines"]):.1f}% of '
+                                  f'{c["lines"]:,} lines · reached by the scenarios'))
+    for d, (n, h, fn, fh, files) in sorted(c["areas"].items(), key=lambda kv: kv[1][1] - kv[1][0]):
         p = pct(h, n)
         b = before.get(d)
-        tr.append(f'<tr><td><code>{e(d)}</code></td><td>{files}</td><td>{n:,}</td>'
-                  f'<td><div class="bar"><span style="width:{p:.1f}%"></span></div>{p:.1f}% '
-                  f'{delta(p, pct(b[1], b[0]) if b else None)}</td>'
-                  f'<td>{pct(fh, fn):.1f}%</td><td>{n - h:,}</td></tr>')
+        dir_rows.append(f'<tr><td><code>{e(d)}</code></td><td>{files}</td><td>{n:,}</td>'
+                        f'<td><div class="bar"><span style="width:{p:.1f}%"></span></div>{p:.1f}% '
+                        f'{delta(p, pct(b[1], b[0]) if b else None)}</td>'
+                        f'<td>{pct(fh, fn):.1f}%</td><td>{n - h:,}</td></tr>')
+if wareas:
+    before = (wcovered[-2].get("www_areas") or {}) if len(wcovered) > 1 else {}
+    tn, th = sum(a[0] for a in wareas.values()), sum(a[1] for a in wareas.values())
+    dir_rows.append(group("www/ and scripts/", f'the web UI\'s PHP and JS · {pct(th, tn):.1f}% of {tn:,} lines · '
+                                               'reached by the web suite'))
+    for d, (n, h, files) in sorted(wareas.items(), key=lambda kv: kv[1][1] - kv[1][0]):
+        p = pct(h, n)
+        b = before.get(d)
+        dir_rows.append(f'<tr><td><code>{e(d)}</code></td><td>{files}</td><td>{n:,}</td>'
+                        f'<td><div class="bar"><span style="width:{p:.1f}%"></span></div>{p:.1f}% '
+                        f'{delta(p, pct(b[1], b[0]) if b else None)}</td>'
+                        f'<td>—</td><td>{n - h:,}</td></tr>')
+if dir_rows:
     tables.append(
         '<section><h2>Coverage by source directory</h2>'
-        '<p class="note">FPP\'s own code under <code>src/</code> (fppd, its plugins and tools), not the submodules. Most lines '
-        'no scenario reaches first: these are the places a new scenario adds the most. '
+        '<p class="note">FPP\'s own code, not the submodules or vendored libraries: fppd under <code>src/</code>, '
+        'and the web UI under <code>www/</code> and <code>scripts/</code>, by directory and language. Most lines '
+        'not reached first: these are the places a new scenario or web spec adds the most. '
         'Some code can\'t run in the Docker suite at all (cape GPIO, PRU, framebuffers, '
-        'serial ports), so no directory is expected to reach 100%.</p>'
+        'serial ports), so no directory is expected to reach 100%. The web UI\'s coverage counts lines only, '
+        'not functions.</p>'
         '<div class="scroll"><table><thead><tr><th>directory</th><th>files</th><th>lines</th>'
         '<th>line coverage</th><th>functions</th><th>lines not reached</th></tr></thead><tbody>'
-        + "".join(tr) + "</tbody></table></div></section>")
-    if cov:
-        files = sorted(cov["by_file"].items(), key=lambda kv: kv[1][1] - kv[1][0])[:40]
-        tr = [f'<tr><td><code>{e(name)}</code></td><td>{n:,}</td>'
-              f'<td><div class="bar"><span style="width:{pct(h, n):.1f}%"></span></div>'
-              f'{pct(h, n):.1f}%</td><td>{pct(fh, fn):.1f}%</td><td>{n - h:,}</td></tr>'
-              for name, (n, h, fn, fh) in files]
-        tables.append(
-            '<section><h2>The 40 files with the most unreached lines</h2>'
-            '<div class="scroll"><table><thead><tr><th>file</th><th>lines</th>'
-            '<th>line coverage</th><th>functions</th><th>lines not reached</th></tr></thead><tbody>'
-            + "".join(tr) + "</tbody></table></div></section>")
+        + "".join(dir_rows) + "</tbody></table></div></section>")
+
+if cov:
+    file_rows.append(group("src/", "the 40 with the most", 5))
+    for name, (n, h, fn, fh) in sorted(cov["by_file"].items(), key=lambda kv: kv[1][1] - kv[1][0])[:40]:
+        file_rows.append(f'<tr><td><code>{e(name)}</code></td><td>{n:,}</td>'
+                         f'<td><div class="bar"><span style="width:{pct(h, n):.1f}%"></span></div>'
+                         f'{pct(h, n):.1f}%</td><td>{pct(fh, fn):.1f}%</td><td>{n - h:,}</td></tr>')
+if www:
+    file_rows.append(group("www/ and scripts/", "the 25 with the most", 5))
+    for name, lang, n, h in sorted(www_files(www), key=lambda r: r[3] - r[2])[:25]:
+        file_rows.append(f'<tr><td><code>{e(name)}</code> <span class="lang">{lang}</span></td><td>{n:,}</td>'
+                         f'<td><div class="bar"><span style="width:{pct(h, n):.1f}%"></span></div>'
+                         f'{pct(h, n):.1f}%</td><td>—</td><td>{n - h:,}</td></tr>')
+if file_rows:
+    tables.append(
+        '<section><h2>The files with the most unreached lines</h2>'
+        '<div class="scroll"><table><thead><tr><th>file</th><th>lines</th>'
+        '<th>line coverage</th><th>functions</th><th>lines not reached</th></tr></thead><tbody>'
+        + "".join(file_rows) + "</tbody></table></div></section>")
 
 runs = []
 for h in reversed(history[-30:]):
@@ -338,6 +405,7 @@ section {{ background:var(--card); border:1px solid var(--line); border-radius:1
 table {{ border-collapse:collapse; width:100%; font-size:.88rem; }}
 th, td {{ text-align:left; padding:6px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }}
 th {{ color:var(--muted); font-weight:600; }}
+tr.group th {{ color:var(--fg); padding-top:18px; }} tr.group span, .lang {{ color:var(--muted); font-weight:400; }}
 td.good {{ color:var(--good); }} td.bad {{ color:var(--bad); }}
 .bar {{ display:inline-block; width:80px; height:8px; background:var(--bar); border-radius:4px;
   margin-right:8px; vertical-align:middle; overflow:hidden; }}
