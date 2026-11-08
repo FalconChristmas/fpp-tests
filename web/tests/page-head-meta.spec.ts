@@ -11,9 +11,16 @@ import { answerUpdateCheck } from './standin-http';
 
 const PAGES = [
   'index.php', 'about.php', 'settings.php', 'playlists.php', 'scheduler.php',
-  'filemanager.php', 'cronjobs.php', 'help.php', 'networkconfig.php', 'plugins.php',
+  'filemanager.php', 'help.php', 'networkconfig.php', 'plugins.php',
   'credits.php', 'effects.php', 'changelog.php', 'commandPresets.php', 'channeloutputs.php',
 ];
+
+test('the unfinished cron editor mockup is no longer served', async ({ request }) => {
+  // cronjobs.php was a 2014 mockup nothing linked to, with a crontab writer
+  // that piped unescaped text into `crontab -`; removed in fpp (see the
+  // commit that deleted www/cronjobs.php).
+  expect((await request.get('/cronjobs.php')).status()).toBe(404);
+});
 
 test('every page carries the shared viewport and charset tags once', async ({ page }) => {
   // Also fd22ccf55: "< meta name=viewport" (a stray space) was text, not a tag.

@@ -15,7 +15,7 @@ test('a page that names no active menu draws the menu without a PHP warning', as
   // don't) logged "Undefined variable $activeParentMenuItem" on every load.
   const count = () => Number(inPlayer('sh', '-c', `grep -c 'activeParentMenuItem' ${LOG} 2>/dev/null || true`).trim() || 0);
   const before = count();
-  for (const path of ['/initialSetup.php', '/cronjobs.php', '/settings-all.php']) {
+  for (const path of ['/initialSetup.php', '/settings-all.php']) {
     const r = await request.get(path);
     expect(r.status(), path).toBe(200);
     // The control: the menu was drawn.
