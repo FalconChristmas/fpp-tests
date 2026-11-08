@@ -99,12 +99,10 @@ test('the sequence meta API answers for a name with # in it when the name is esc
 });
 
 test('Sequence Info works for a sequence with # in its name', async ({ page }) => {
-  // Known bug (~/FUTURE.md, fpp 49f2b29a0): GetSequenceInfo() and
-  // GetVideoInfo() put the name into the URL as it is, so "#1.fseq" is cut
-  // off at the # as a fragment, the API finds no such sequence,
-  // and nothing opens.  Expected to fail until the name is encoded
-  // (the test above is the control: escaped, the API answers).
-  test.fail();
+  // Before 364fca0fd GetSequenceInfo() and GetVideoInfo() put the name into
+  // the URL as it was, so "#1.fseq" was cut off at the # as a fragment, the
+  // API found no such sequence, and nothing opened (the test above is the
+  // control: escaped, the API answers).
   const name = `${P} #1.fseq`;
   putFile(`${SEQ}/${name}`, fseqV2({ stepMs: 50, channels: 3, frames: 10 }));
   const dialog = await sequenceInfo(page, name);
@@ -136,6 +134,16 @@ test.describe('Video Info', () => {
     expect(Number(info.format.duration)).toBeLessThan(4.5);
     const kinds = (info.streams as any[]).map((s) => s.codec_type).sort();
     expect(kinds, JSON.stringify(info.streams)).toEqual(['audio', 'video']);
+  });
+
+  test('works for a video with # and ? in its name', async ({ page }) => {
+    const name = `${P} clip #2?.mp4`;
+    // With sound, as above: without ffprobe, GStreamer's discoverer here reads
+    // nothing from a video-only MPEG-4 file, whatever it is called.
+    ffmpeg(`-f lavfi -i testsrc=size=160x120:rate=10:d=2 -f lavfi -i "aevalsrc=0.1*sin(2*PI*440*t):s=48000:d=2" ` +
+      `-c:v mpeg4 -c:a aac -shortest '${VIDEOS}/${name}'`);
+    const info = await shownJson(await videoInfo(page, name));
+    expect(Math.round(Number(info.format?.duration)), JSON.stringify(info)).toBe(2);
   });
 
   test('uses ffprobe when the player has it', async ({ page }) => {
