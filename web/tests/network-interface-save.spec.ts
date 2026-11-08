@@ -104,12 +104,10 @@ test('a bad name, lease, address, flag, string or number is refused', async ({ r
   expect(leases(ETH), 'a refused lease writes no leases file').toBe('MISSING');
 });
 
-// Known bug (~/FUTURE.md, fpp 49f2b29a0): the interface file is opened for
-// writing -- emptied -- before the address, SSID/PSK, flag and number checks,
-// so a save they refuse leaves the interface with no config, or half of one.
-// Expected to fail until the checks come first.
+// Before f89cda65f the interface file was opened for writing -- emptied --
+// before the address, SSID/PSK, flag and number checks, so a save they
+// refused left the interface with no config, or half of one.
 test('a refused save leaves the saved settings as they were', async ({ request }) => {
-  test.fail();
   const saved = { INTERFACE: WL, PROTO: 'static', ADDRESS: '192.168.9.5', NETMASK: '255.255.255.0',
     SSID: 'net', PSK: 'key', HIDDEN: false, WPA3: false, BACKUPSSID: '', BACKUPPSK: '', BACKUPHIDDEN: false, BACKUPWPA3: false };
   expect((await save(request, WL, saved)).json).toEqual({ status: 'OK' });
@@ -121,10 +119,25 @@ test('a refused save leaves the saved settings as they were', async ({ request }
   }
 });
 
+test('a save refused by a late check leaves the leases as they were, and no temp file behind', async ({ request }) => {
+  // DHCPOFFSET is the last check, after the leases used to be rewritten
+  // (before f89cda65f).
+  const base = { INTERFACE: ETH, PROTO: 'static', ADDRESS: '192.168.9.1', NETMASK: '255.255.255.0',
+    DHCPSERVER: true, DHCPOFFSET: 100, DHCPPOOLSIZE: 50, Leases: { '192.168.9.10': '02:00:00:00:09:10' } };
+  expect((await save(request, ETH, base)).json).toEqual({ status: 'OK' });
+  const before = { cfg: cfg(ETH), leases: leases(ETH) };
+  const r = await save(request, ETH, { ...base, DHCPOFFSET: 'ten', Leases: { '192.168.9.20': '02:00:00:00:09:20' } });
+  expect(r.json?.status).toBe('ERROR: invalid value for DHCPOFFSET');
+  expect({ cfg: cfg(ETH), leases: leases(ETH) }).toEqual(before);
+  // The files are written through temp files renamed into place; none is left.
+  expect(sh(`ls -A ${CONFIG} | grep -c '\\.tmp$' || true`).trim()).toBe('0');
+  // ... and the file is readable by everything that reads it, as before.
+  expect(sh(`stat -c %a ${CONFIG}/interface.${ETH}`).trim()).toBe('644');
+});
+
 test('a save without an interface name is refused with a JSON answer', async ({ request }) => {
-  // Known bug (~/FUTURE.md): the refusal is printed after "WTF", so the
-  // answer isn't JSON.  Expected to fail until that echo goes.
-  test.fail();
+  // Before f89cda65f the refusal was printed after "WTF", so the answer
+  // wasn't JSON.
   const r = await save(request, ETH, { PROTO: 'dhcp' });
   expect(r.text).toContain('"status":"Invalid Name is required"');
   expect(r.json, r.text).toMatchObject({ status: 'Invalid Name is required' });

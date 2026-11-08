@@ -29,3 +29,28 @@ test('a settings backup carries the config of an interface besides eth0 and wlan
     if (name) await request.delete(`/api/backups/configuration/JsonBackups/${name}`);
   }
 });
+
+test('a settings backup leaves out the temp file a failed interface save left behind', async ({ request }) => {
+  // A save that died between writing its temp file and renaming it into place
+  // leaves config/.interface.<if>.<pid>.<id>.tmp, which holds the WiFi key.
+  // The backup's list of extra interface files used to take any name with
+  // "interface" in it (before f89cda65f).
+  inPlayer('mkdir', '-p', `${CONFIG}/backups`);
+  inPlayer('sh', '-c', `printf 'INTERFACE=fpptest0\\nPROTO=dhcp\\n' > ${CONFIG}/interface.fpptest0
+    printf 'SSID="net"\\nPSK="fpp-tests-leftover-key"\\n' > ${CONFIG}/.interface.fpptest0.1.x.tmp`);
+  let name = '';
+  try {
+    const made = await (await request.post('/api/backups/configuration', { data: 'fpp-tests-interface-tmp' })).json();
+    expect(made.success, JSON.stringify(made)).toBe(true);
+    name = made.backup_file_path.split('/').pop();
+    const r = await request.get(`/api/backups/configuration/JsonBackups/${name}`);
+    expect(r.ok()).toBe(true);
+    const text = await r.text();
+    expect(Object.keys(JSON.parse(text).network ?? {})).toContain('interface.fpptest0');
+    expect(text).not.toContain('fpp-tests-leftover-key');
+    expect(text).not.toContain('.interface.fpptest0.1.x.tmp');
+  } finally {
+    inPlayer('rm', '-f', `${CONFIG}/interface.fpptest0`, `${CONFIG}/.interface.fpptest0.1.x.tmp`);
+    if (name) await request.delete(`/api/backups/configuration/JsonBackups/${name}`);
+  }
+});
