@@ -36,20 +36,21 @@ for (const name of NAMES) {
   });
 }
 
-// The web server and the router each decode a URL once, so a name encoded
-// twice by its client reaches the handler plain.  One encoded three times
-// reaches it still encoded once, and the handler tries it decoded.
-test('a name encoded three times is still found by the upload move', async ({ request }) => {
+// The web server decodes a URL once and the router passes it on as it came
+// (fpp a2c6be1f5), so a name encoded once by its client reaches the handler
+// plain.  One encoded twice reaches it still encoded once, and the handler
+// tries it decoded.
+test('a name encoded twice is still found by the upload move', async ({ request }) => {
   // Regression: a22ee7166, 8338ea5c5.  The name was used as it came, so a
   // file with a space or percent sign in its name, from a client that encoded
   // it again, was reported not found in upload and never moved.  findFile()
   // now tries the decoded and sanitized names too.
   const enc = (n: string, times: number) => (times ? enc(encodeURIComponent(n), times - 1) : n);
-  const moved = 'fpp-tests thrice moved 50% off.fseq';
+  const moved = 'fpp-tests twice moved 50% off.fseq';
   inPlayer('sh', '-c', `mkdir -p ${MEDIA}/upload ${MEDIA}/sequences`);
   try {
-    // The control: encoded twice, the stack alone gives the handler the name.
-    for (const times of [2, 3]) {
+    // The control: encoded once, the stack alone gives the handler the name.
+    for (const times of [1, 2]) {
       putFile(`${MEDIA}/upload/${moved}`, 'x');
       inPlayer('rm', '-f', `${MEDIA}/sequences/${moved}`);
       const mv = await request.post(`/api/file/move/${enc(moved, times)}`);
