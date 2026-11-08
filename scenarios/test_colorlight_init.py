@@ -337,3 +337,78 @@ def test_the_link_warning_goes_once_the_panel_is_removed(fppd):
                       what="the outputs to reload")
         fppd.wait_for(lambda: 7 not in warning_ids(fppd), timeout=10,
                       what="the link warning to go once the panel was removed")
+
+
+def set_operstate(fppd, value):
+    """The fake interface's operstate rewritten while fppd runs (fake_link's
+    file, swapped in whole so a read never sees it half written)."""
+    d = os.path.join(fppd.media, "fakesys", "net", TX)
+    with open(os.path.join(d, ".operstate"), "w") as f:
+        f.write(value + "\n")
+    os.replace(os.path.join(d, ".operstate"), os.path.join(d, "operstate"))
+
+
+def test_the_link_warning_goes_when_the_link_comes_up_after_boot(fppd):
+    """With "Check Ethernet Link" unticked, an interface still without link
+    when the output starts raises warning 7, and when the link comes up a
+    few seconds later the output looks again (once, 10s after Init()) and
+    takes the warning down; it sent all along.
+
+    Regression: 668641b4a (#3170).
+    Init() read operstate once: at boot a Pi 4's onboard port was still
+    negotiating, the link came up half a second later, and the warning
+    stayed until fppd restarted. A workaround; FPP 11 is to follow the link.
+    """
+    preload, env = fake_link(fppd, operstate="down")
+    with captured() as cap:
+        cfg = panels_output([panel(0, 0, 0, 0)], channels=W * H * 3)
+        _play_with(fppd, cfg, preload, env)
+        fppd.wait_for(lambda: 7 in warning_ids(fppd), timeout=10, what="the link warning (id 7)")
+        set_operstate(fppd, "up")
+        lit_frame(fppd, cap, H, W * 3)
+        assert 7 in warning_ids(fppd), "the warning went before the output looked again"
+        fppd.wait_for(lambda: 7 not in warning_ids(fppd), timeout=20, interval=0.5,
+                      what="the link warning to go once the link came up")
+        assert "now has link" in fppd.log()
+
+
+def test_the_link_warning_stays_while_there_is_no_link(fppd):
+    """The second look at an interface that still has no link leaves warning
+    7 up, and says so in the log.
+
+    Regression: as test_the_link_warning_goes_when_the_link_comes_up_after_boot
+    (the retry must not take the warning down on its own).
+    """
+    preload, env = fake_link(fppd, operstate="down")
+    with captured():
+        cfg = panels_output([panel(0, 0, 0, 0)], channels=W * H * 3)
+        _play_with(fppd, cfg, preload, env)
+        fppd.wait_for(lambda: "still has no link after 10s" in fppd.log(), timeout=20, interval=0.5,
+                      what="the second look at the link")
+        assert 7 in warning_ids(fppd), "the warning went with the link still down"
+
+
+def test_a_link_checked_panel_stays_off_until_saved_again(fppd):
+    """With "Check Ethernet Link" ticked, no link at start refuses the output,
+    and warning 7 says it is disabled and how to bring it back. The link
+    coming up later changes nothing (no second look: the output is gone);
+    saving the output again brings it up and takes the warning down.
+
+    Regression: as test_the_link_warning_goes_when_the_link_comes_up_after_boot.
+    Before it the warning didn't say the output was off, so with the link
+    light on it read as wrong.
+    """
+    preload, env = fake_link(fppd, operstate="down")
+    with captured() as cap:
+        cfg = panels_output([panel(0, 0, 0, 0)], channels=W * H * 3, linkCheck=True)
+        _play_with(fppd, cfg, preload, env)
+        fppd.wait_for(lambda: 7 in warning_ids(fppd), timeout=10, what="the link warning (id 7)")
+        assert "(output disabled" in warning_ids(fppd)[7], warning_ids(fppd)[7]
+        set_operstate(fppd, "up")
+        time.sleep(12)  # past when an unchecked panel would have looked again
+        assert 7 in warning_ids(fppd), "the warning went while the output stayed off"
+        assert not cap.frames(), "a refused output sent frames"
+        resave(fppd, cfg)
+        fppd.wait_for(lambda: 7 not in warning_ids(fppd), timeout=10,
+                      what="the link warning to go once the output was saved again")
+        lit_frame(fppd, cap, H, W * 3)
