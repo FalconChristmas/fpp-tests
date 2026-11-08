@@ -40,8 +40,10 @@ test('the config-file and file APIs refuse a name that climbs out of their direc
 // routes refuse with a 403.
 test('the file API answers a refused delete with a 4xx', async ({ request }) => {
   const settings = readFile(SETTINGS);
+  // Decoded once, as the API now does, "..%2Fsettings" is a name with no file
+  // (404); decoded twice, as it was, it climbed out (403).  Either is a refusal.
   const outside = await request.delete(`/api/file/config/${UP}settings`);
-  expect(outside.status(), await outside.text()).toBe(403);
+  expect([403, 404], await outside.text()).toContain(outside.status());
   const missing = await request.delete('/api/file/music/fpp-tests-no-such-file.mp3');
   expect(missing.status(), await missing.text()).toBe(404);
   expect((await missing.json()).status).toBe('File Not Found');

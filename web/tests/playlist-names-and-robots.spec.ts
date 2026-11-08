@@ -37,20 +37,20 @@ for (const name of ['fpp tests spaced', 'fpp-tests+plus']) {
   });
 }
 
-test('a playlist name sent encoded three times is still found', async ({ request }) => {
-  // Regression: 3378ce7e8.  The name was used as the router gave it; one that
-  // had been encoded again (the web server and the router each decode once)
-  // never matched its file.
+test('a playlist name is decoded once: encoded once it is found, encoded again it is another name', async ({ request }) => {
+  // a2c6be1f5.  3378ce7e8 decoded the name in the handlers on top of the web server's and
+  // the router's decode, so a name encoded three times was found too, and
+  // one holding "%41" was not.  The path is now decoded once (no client was
+  // found that over-encodes); api-path-decoded-once.spec.ts has the "%41" case.
   const name = 'fpp tests thrice';
   const once = `/api/playlist/${encodeURIComponent(name)}`;
-  const twice = `/api/playlist/${encodeURIComponent(encodeURIComponent(encodeURIComponent(name)))}`;
+  const thrice = `/api/playlist/${encodeURIComponent(encodeURIComponent(encodeURIComponent(name)))}`;
   try {
     expect((await request.post(once, { data: playlist(name) })).ok()).toBe(true);
-    // The control: found by its plain name.
-    expect((await request.get(once)).status()).toBe(200);
-    const got = await request.get(twice);
-    expect(got.status(), `GET ${twice}`).toBe(200);
+    const got = await request.get(once);
+    expect(got.status()).toBe(200);
     expect((await got.json()).name).toBe(name);
+    expect((await request.get(thrice)).status(), `GET ${thrice}`).toBe(404);
   } finally {
     await request.delete(once);
   }

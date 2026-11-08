@@ -13,9 +13,8 @@ import { fseqV2 } from './fseq';
 // (364fca0fd).
 // (filemanager-info-buttons.spec.ts: Sequence Info with "#".)
 //
-// Not covered, and known (~/FUTURE.md): limonade decodes a path once more
-// after PHP has, so a name that holds a valid escape ("a%41") still arrives
-// changed.  The "%" names here are ones that hold no valid escape.
+// The "%" names here hold no valid escape; api-path-decoded-once.spec.ts
+// has one that does ("a%41").
 
 test.skip(!container, 'seeds sequences, scripts and playlists inside the run-web.sh container');
 
