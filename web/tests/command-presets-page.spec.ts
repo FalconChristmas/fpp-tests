@@ -153,24 +153,20 @@ test('a schedule command with markup in its arguments is saved back as it was', 
   }
 });
 
-// Known bug (~/FUTURE.md, "Command Presets: Save keeps two presets with the same
-// name", fpp 2edd0c0d7).  Passes as an expected failure until the page is fixed.
+// Rows that share a name are one preset (help corrected in d23062fc3): fppd's LoadPresets() groups them and
+// TriggerPreset() runs each command in order.  Clone keeps the name, which is
+// how such a preset is built, so the page must keep both rows.
 
-test('Save refuses two presets with the same name', async ({ page, request }) => {
-  // Clone gives the copy the original's name and SaveCommands() checks only
-  // for a missing name or command, so a copy not renamed is saved as a second
-  // preset of that name; a command naming the preset then runs whichever
-  // fppd finds first.  (The Recurring Tasks page refuses a name used twice.)
-  test.fail();
-  const original = [preset('fpp-tests twice', 10)];
-  await put(request, original);
-  const rows = await openPage(page, 1);
+test('a Clone not renamed adds a command to the same preset, and Save keeps every row', async ({ page, request }) => {
+  await put(request, [preset('fpp-tests twice', 10), preset('fpp-tests other', 30)]);
+  const rows = await openPage(page, 2);
   await pick(rows.nth(0));
   await page.locator('button.cloneCmdButton:visible').first().click();
-  await expect(rows).toHaveCount(2);
+  await expect(rows).toHaveCount(3);
   const said: string[] = [];
   page.on('dialog', (d) => { said.push(d.message()); d.accept(); });
-  await page.locator('button[value="Save"]:visible').first().click();
-  await expect.poll(() => said.join('\n'), { timeout: 3000 }).toContain('fpp-tests twice');
-  expect(await stored(request)).toEqual(original);
+  await save(page);
+  expect(said).toEqual([]);
+  expect((await stored(request)).map((c) => [c.name, c.args[0]])).toEqual([
+    ['fpp-tests twice', '10'], ['fpp-tests other', '30'], ['fpp-tests twice', '10']]);
 });
