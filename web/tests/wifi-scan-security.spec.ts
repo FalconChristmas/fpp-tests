@@ -79,37 +79,54 @@ test('an iw scan names each network\'s security, authentication and cipher', asy
   expect(realSyntaxErrors(), calls().join('\n')).toEqual([]);
 });
 
-// Known bugs (~/FUTURE.md, fpp 49f2b29a0): network_parse_iw_scan() knows only
-// PSK and a lower-case "802.1x" among iw's authentication suites, and names a
-// network's security only from its RSN and WPA elements.  iw prints WPA3's
-// suite as "SAE" and Enterprise's as "IEEE 802.1X", and a WEP network has
-// neither element, so a WPA3-only network is "WPA2" (and picking it leaves
-// WPA3 unticked), a WEP network has no security (so the page treats it as
-// Open and asks for no key), and an Enterprise one has no authentication.
-// Each test passes as an expected failure until that is fixed.
-test.describe('what an iw scan misses', () => {
+// iw prints WPA3's suite as "SAE" and Enterprise's as "IEEE 802.1X", and a
+// WEP network has neither an RSN nor a WPA element.  Before 40fcea7da
+// network_parse_iw_scan() called a WPA3-only network "WPA2" (so picking it
+// left WPA3 unticked), gave a WEP network no security (so the page treated it
+// as Open and asked for no key), and an Enterprise one no authentication.
+test.describe('what an iw scan used to miss', () => {
   test.beforeEach(() => stub('iwlist'));
 
   test('a WPA3-only network is named WPA3', async ({ request }) => {
-    test.fail();
     stub('iw', [[`dev ${WLAN} scan`, bss('02:aa:bb:cc:00:11', 'fpp-tests-wpa3', { privacy: true, ies: rsn('SAE') })]]);
     const n = byName((await scan(request)).networks)['fpp-tests-wpa3'];
     expect(n?.security, JSON.stringify(n)).toBe('WPA3');
   });
 
   test('a WEP network is named WEP', async ({ request }) => {
-    test.fail();
     stub('iw', [[`dev ${WLAN} scan`, bss('02:aa:bb:cc:00:12', 'fpp-tests-wep', { privacy: true })]]);
     const n = byName((await scan(request)).networks)['fpp-tests-wep'];
     expect(n?.encrypted, JSON.stringify(n)).toBe(true);
     expect(n.security).toBe('WEP');
   });
 
+  test('a WPA3 transition-mode network is both, so picking it leaves WPA3 unticked', async ({ request }) => {
+    stub('iw', [[`dev ${WLAN} scan`, bss('02:aa:bb:cc:00:14', 'fpp-tests-trans', { privacy: true, ies: rsn('PSK SAE') })]]);
+    const n = byName((await scan(request)).networks)['fpp-tests-trans'];
+    expect(n, JSON.stringify(n)).toMatchObject({ encrypted: true, security: 'WPA3 WPA2', auth: 'PSK' });
+  });
+
+  test('fast-transition and SAE-EXT-KEY suites are WPA3 too', async ({ request }) => {
+    stub('iw', [[`dev ${WLAN} scan`, bss('02:aa:bb:cc:00:15', 'fpp-tests-ft', { privacy: true, ies: rsn('FT/SAE SAE-EXT-KEY') })]]);
+    const n = byName((await scan(request)).networks)['fpp-tests-ft'];
+    expect(n, JSON.stringify(n)).toMatchObject({ security: 'WPA3', auth: 'PSK' });
+  });
+
+  test('an Enhanced Open (OWE) network is encrypted but asks for no key', async ({ request }) => {
+    // As wpa_supplicant's own scan results have it: encrypted, no security
+    // type, so the page shows it as secured and asks for no key.
+    stub('iw', [[`dev ${WLAN} scan`, bss('02:aa:bb:cc:00:16', 'fpp-tests-owe', { privacy: true, ies: rsn('OWE') })]]);
+    const n = byName((await scan(request)).networks)['fpp-tests-owe'];
+    expect(n?.encrypted, JSON.stringify(n)).toBe(true);
+    expect(n.security).toBeUndefined();
+    expect(n.auth).toBeUndefined();
+  });
+
   test('an Enterprise network is named Enterprise', async ({ request }) => {
-    test.fail();
     stub('iw', [[`dev ${WLAN} scan`, bss('02:aa:bb:cc:00:13', 'fpp-tests-corp', { privacy: true, ies: rsn('IEEE 802.1X') })]]);
     const n = byName((await scan(request)).networks)['fpp-tests-corp'];
     expect(n?.auth, JSON.stringify(n)).toBe('Enterprise');
+    expect(n.security).toBe('WPA2');
   });
 });
 
