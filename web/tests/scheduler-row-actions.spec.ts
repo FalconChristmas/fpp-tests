@@ -123,14 +123,11 @@ test('a row dragged above another is saved above it, so it takes priority', asyn
     .map((e: any) => e.playlist), { timeout: 10_000 }).toEqual([PL[2], PL[0], PL[1]]);
 });
 
-// Known bug (~/FUTURE.md, 'Scheduler: Save says "Schedule saved" when fppd
-// refuses the reload', fpp 2edd0c0d7).  Passes as an expected failure until fixed.
-
 test('a schedule fppd will not reload says so, not just "Schedule saved"', async ({ page, request }) => {
-  // SaveSchedule() reports the save, then asks fppd to reload with no error
-  // handler: with fppd stopped (or refusing), the page says "Schedule saved"
-  // and nothing else, and the player keeps running its old schedule.
-  test.fail();
+  // Regression: 38661b107.  SaveSchedule() reported the save, then asked fppd to reload
+  // with no error handler (and api/schedule/reload answered OK even when
+  // fppd didn't): with fppd stopped, the page said "Schedule saved" and
+  // nothing else, and the player kept running its old schedule.
   const rows = await openPage(page, request, [entry(PL[0])]);
   await page.route('**/api/schedule/reload', (route) => route.fulfill({ status: 500, body: 'fppd is not running' }));
   await rows.nth(0).locator('.schPlaylist').selectOption(PL[1]);
@@ -138,6 +135,7 @@ test('a schedule fppd will not reload says so, not just "Schedule saved"', async
   const growl = page.locator('#jGrowl');
   await expect(growl).toContainText('Schedule saved');
   expect(await names(request)).toEqual([PL[1]]);
-  await expect(page.getByText(/reload|not running|fppd/i).filter({ hasNotText: 'Schedule saved' }).first())
-    .toBeVisible({ timeout: 3000 });
+  const dialog = page.locator('.modal.show', { hasText: 'Schedule Not Reloaded' });
+  await expect(dialog).toBeVisible({ timeout: 3000 });
+  await expect(dialog).toContainText('did not confirm the reload');
 });
