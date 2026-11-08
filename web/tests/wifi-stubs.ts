@@ -93,9 +93,9 @@ const REAL_SYNTAX = [
   /^iwlist \S+ scan(ning)?( essid \S+)?( last)?$/,
   /^wpa_cli -i \S+ (status|scan|scan_results)$/,
   /^(ifconfig|iwconfig) \S+$/,
-  // journalctl 257's -u UNIT -n N --no-pager; networkctl's --no-legend -l
-  // -n N status IF; net-tools arp's -a HOST.
-  /^journalctl -u \S+ -n \d+ --no-pager$/,
+  // journalctl 257's -u UNIT [--since @EPOCH] -n N --no-pager; networkctl's
+  // --no-legend -l -n N status IF; net-tools arp's -a HOST.
+  /^journalctl -u \S+( --since @\d+)? -n \d+ --no-pager$/,
   /^networkctl --no-legend -l -n \d+ status \S+$/,
   /^arp -a \S+$/,
 ];

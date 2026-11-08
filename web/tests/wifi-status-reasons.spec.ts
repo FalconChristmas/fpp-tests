@@ -56,10 +56,8 @@ test('associated but with no address yet: waiting for DHCP', async ({ request })
   expect(r.reason).toBe('Associated - waiting for an IP address (DHCP).');
 });
 
-test('a failed four-way handshake, or the log saying so, is a wrong password', async ({ request }) => {
-  station({ state: '4WAY_HANDSHAKE', seen: [home] });
-  expect((await status(request)).reason).toBe('Authentication failed - the WiFi password is likely incorrect.');
-
+test('the log saying the handshake failed is a wrong password', async ({ request }) => {
+  // (The 4WAY_HANDSHAKE state alone is not: see "the four-way handshake ..." below.)
   for (const log of [
     `Nov 08 10:00:01 fpp wpa_supplicant[612]: ${WLAN}: CTRL-EVENT-SSID-TEMP-DISABLED id=0 ssid="${HOME}" auth_failures=1 duration=10 reason=WRONG_KEY\n`,
     `Nov 08 10:00:01 fpp wpa_supplicant[612]: ${WLAN}: WPA: 4-Way Handshake failed - pre-shared key may be incorrect\n`,
@@ -68,7 +66,8 @@ test('a failed four-way handshake, or the log saying so, is a wrong password', a
     const r = await status(request);
     expect(r.reason, log).toBe('Authentication failed - the WiFi password is likely incorrect.');
     // Read from wpa_supplicant's own unit for this adapter.
-    expect(calls()).toContain(`journalctl -u wpa_supplicant@${WLAN} -n 40 --no-pager`);
+    expect(calls().some((c) => new RegExp(`^journalctl -u wpa_supplicant@${WLAN}( --since @\\d+)? -n 40 --no-pager$`).test(c)),
+      calls().join('\n')).toBe(true);
   }
 });
 
@@ -103,20 +102,66 @@ test('the status of an interface the player does not have is refused', async ({ 
   expect(await (await request.get('/api/network/wifi/status/wlan77')).json()).toEqual({ status: 'Invalid Interface' });
 });
 
-// Known bug (~/FUTURE.md, fpp 49f2b29a0): with a network saved, ssidVisible
-// is always true or false, so the reasons after "Found ... but could not
-// connect" -- WiFi inactive, the connection service not running, and
-// "Connecting to ..." while wpa_supplicant is still at it -- can never be
-// given.  A Pi in the middle of joining its network says to check the
-// password.  Expected to fail until the order is fixed.
+// Before 27a3b8da8, with a network saved, ssidVisible was always true or false,
+// so the reasons after "Found ... but could not connect" -- WiFi inactive,
+// the connection service not running, and "Connecting to ..." while
+// wpa_supplicant is still at it -- were never given: a Pi in the middle of
+// joining its network said to check the password.
 test('a connection still in progress says it is connecting, not to check the password', async ({ request }) => {
-  test.fail();
   station({ state: 'ASSOCIATING', seen: [home] });
   expect((await status(request)).reason).toBe(`Connecting to '${HOME}'... (ASSOCIATING)`);
 });
 
+test('the four-way handshake says the password is being checked, and a logged WRONG_KEY still says it is wrong', async ({ request }) => {
+  // Every WPA2 join passes through 4WAY_HANDSHAKE; a wrong key waits there a
+  // few seconds, then logs WRONG_KEY.  The state alone can't tell them apart.
+  station({ state: '4WAY_HANDSHAKE', seen: [home] });
+  expect((await status(request)).reason).toBe(`Checking the password with '${HOME}'... (4WAY_HANDSHAKE)`);
+  station({ state: '4WAY_HANDSHAKE', seen: [home],
+    log: `Nov 08 10:00:01 fpp wpa_supplicant[612]: ${WLAN}: WPA: 4-Way Handshake failed - pre-shared key may be incorrect\n` });
+  expect((await status(request)).reason).toBe('Authentication failed - the WiFi password is likely incorrect.');
+});
+
+test('the log is read only from when the interface was last saved', async ({ request }) => {
+  // A WRONG_KEY from before the key was changed says nothing about the new one.
+  station({ state: 'ASSOCIATING', seen: [home] });
+  inPlayer('touch', '-d', '@1794000000', CONFIG);
+  await status(request);
+  expect(calls()).toContain(`journalctl -u wpa_supplicant@${WLAN} --since @1794000000 -n 40 --no-pager`);
+});
+
+test('a clock behind the saved file reads the whole log, so a wrong key is still found', async ({ request }) => {
+  // A player with no RTC that can't reach NTP until its WiFi works comes up
+  // with a clock earlier than the last save; every line would be "before" it.
+  station({ state: 'SCANNING', seen: [home],
+    log: `Nov 08 10:00:01 fpp wpa_supplicant[612]: ${WLAN}: CTRL-EVENT-SSID-TEMP-DISABLED id=0 ssid="${HOME}" auth_failures=1 duration=10 reason=WRONG_KEY\n` });
+  inPlayer('touch', '-d', '@4102444800', CONFIG); // 2100-01-01
+  expect((await status(request)).reason).toBe('Authentication failed - the WiFi password is likely incorrect.');
+  expect(calls()).toContain(`journalctl -u wpa_supplicant@${WLAN} -n 40 --no-pager`);
+});
+
+test('the other ways in say connecting, a blocked radio says so, and scanning in range without joining says to check', async ({ request }) => {
+  for (const state of ['AUTHENTICATING', 'ASSOCIATED', 'GROUP_HANDSHAKE']) {
+    station({ state, seen: [home] });
+    expect((await status(request)).reason, state).toBe(`Connecting to '${HOME}'... (${state})`);
+  }
+  // Joining: the scan dump may not have the network yet.
+  station({ state: 'ASSOCIATING', seen: [] });
+  expect((await status(request)).reason).toBe(`Connecting to '${HOME}'... (ASSOCIATING)`);
+
+  station({ state: 'INTERFACE_DISABLED', seen: [] });
+  expect((await status(request)).reason).toContain('The WiFi interface is disabled');
+
+  // In range, and wpa_supplicant keeps scanning without ever joining or
+  // logging why: the security type (WPA3) doesn't match the AP's.
+  station({ state: 'SCANNING', seen: [home] });
+  expect((await status(request)).reason).toBe(`Found '${HOME}' but could not connect - check the password and security type.`);
+
+  station({ state: 'INACTIVE', seen: [home] });
+  expect((await status(request)).reason).toBe('WiFi is inactive - no configured network is available.');
+});
+
 test('no answer from wpa_supplicant at all says its service is not running', async ({ request }) => {
-  test.fail();
   stub('wpa_cli');
   stub('iw', [[`dev ${WLAN} scan dump*`, home], [`dev ${WLAN} link*`, 'Not connected.\n']]);
   stub('journalctl');
