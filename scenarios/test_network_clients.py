@@ -135,3 +135,59 @@ def test_a_detection_callback_that_throws_is_contained(fppd):
                       interval=0.25, what="the callback's throw to be logged")
         fppd.check_alive()
         assert fppd.get("/fppd/status").get("fppd") == "running"
+
+
+class SilentServer:
+    """A TCP server that accepts connections and never answers, so a request
+    to it stays in flight until fppd gives up on it."""
+
+    def __init__(self):
+        import socket
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen(16)
+        self.port = self.sock.getsockname()[1]
+        self.conns = []
+        self.stopping = False
+
+        def accept():
+            while not self.stopping:
+                try:
+                    c, _ = self.sock.accept()
+                except OSError:
+                    return
+                self.conns.append(c)
+        threading.Thread(target=accept, daemon=True).start()
+
+    def close(self):
+        self.stopping = True
+        for c in self.conns:
+            c.close()
+        self.sock.close()
+
+
+def test_shutdown_with_a_plugin_request_still_in_flight(fppd):
+    """A plugin's asynchronous requests (one tagged with its name, one not)
+    are still waiting on a server that never answers when fppd is stopped:
+    fppd exits cleanly.
+
+    Regression: c3b4ecef9. PluginManager::Cleanup() dlclose()d the plugin
+    libraries before fppd's CurlManager::cancelAll() destroyed the requests
+    still queued, and destroying a callback ran its std::function manager in
+    the unmapped library: fppd crashed on every such shutdown."""
+    server = SilentServer()
+    try:
+        start_with_plugin(fppd)
+        url = f"http://127.0.0.1:{server.port}/never"
+        got = fppd.command(f"{PLUGIN} Curl Pending", url, timeout=15)
+        assert str(got) == "queued", got
+        fppd.wait_for(lambda: len(server.conns) >= 2, timeout=10, interval=0.05,
+                      what="both requests to connect")
+        rc = fppd.stop()
+        fppd.exit_expected = True
+        assert rc == 0, f"fppd exited with {rc} on SIGTERM\n{fppd.tail()}"
+        reports = fppd.sanitizer_reports()
+        assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
+    finally:
+        server.close()

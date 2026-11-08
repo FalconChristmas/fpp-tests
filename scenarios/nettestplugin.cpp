@@ -15,6 +15,12 @@
 //   "<PLUGIN_NAME> Detect Throwing" <address>
 //       Fetches the device's front page and starts controller detection on
 //       it with a callback that throws once it has the result.
+//   "<PLUGIN_NAME> Curl Pending" <url>
+//       Queues two asynchronous GETs of <url> (CurlManager::addGet), one
+//       tagged with the plugin's name as owner and one untagged, and returns
+//       at once.  Pointed at a server that never answers, both are still in
+//       flight when fppd shuts down, holding callbacks whose code is in this
+//       library.
 
 #include <atomic>
 #include <cstdio>
@@ -106,6 +112,23 @@ public:
     }
 };
 
+class CurlPendingCommand : public Command {
+public:
+    CurlPendingCommand() :
+        Command(std::string(PLUGIN_NAME) + " Curl Pending") {}
+    std::unique_ptr<Command::Result> run(const std::vector<std::string>& args) override {
+        if (args.empty()) {
+            return std::make_unique<Command::ErrorResult>("needs <url>");
+        }
+        // Captures, so destroying each callback runs a manager in this library.
+        std::string tag = "tagged";
+        CurlManager::INSTANCE.addGet(args[0], [tag](int, const std::string&) {}, PLUGIN_NAME);
+        tag = "untagged";
+        CurlManager::INSTANCE.addGet(args[0], [tag](int, const std::string&) {});
+        return std::make_unique<Command::Result>("queued");
+    }
+};
+
 class NetTestPlugin : public FPPPlugins::Plugin {
 public:
     NetTestPlugin() :
@@ -113,15 +136,18 @@ public:
         CommandManager::INSTANCE.addCommand(&curlThreads);
         CommandManager::INSTANCE.addCommand(&pingAgain);
         CommandManager::INSTANCE.addCommand(&detectThrowing);
+        CommandManager::INSTANCE.addCommand(&curlPending);
     }
     virtual ~NetTestPlugin() {
         CommandManager::INSTANCE.removeCommand(&curlThreads);
         CommandManager::INSTANCE.removeCommand(&pingAgain);
         CommandManager::INSTANCE.removeCommand(&detectThrowing);
+        CommandManager::INSTANCE.removeCommand(&curlPending);
     }
     CurlThreadsCommand curlThreads;
     PingAgainCommand pingAgain;
     DetectThrowingCommand detectThrowing;
+    CurlPendingCommand curlPending;
 };
 
 extern "C" {
