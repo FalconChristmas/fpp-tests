@@ -187,3 +187,31 @@ def test_day_summary_is_overridden_only_if_every_occurrence_is(fppd):
     assert sorted(full) == [False, True], full
     summary = [i for i in fppd.get(url + "&summary=1")["schedule"]["items"] if i["id"] == 1]
     assert len(summary) == 1 and summary[0]["count"] == 2 and not summary[0]["overridden"], summary
+
+
+def test_a_disabled_playlist_overrides_nothing(fppd):
+    """With disabled entries included (the calendar's "Show disabled
+    entries"), a disabled playlist above another does not flag it overridden:
+    the scheduler never runs a disabled entry, so it blocks nothing.  The
+    enabled entry an enabled one covers is still flagged.
+
+    Regression: 9ea849418. The range collected every playlist's windows before checking
+    the entry was enabled, so the calendar's "Hide overridden" took a playlist
+    that would play off the calendar as soon as disabled entries were shown."""
+    first = fall_back() - datetime.timedelta(days=4)
+    show(fppd)
+    fppd.write("config/schedule.json", [
+        entry(7, "12:00:00", "14:00:00", enabled=0),
+        entry(7, "13:00:00", "13:30:00"),            # under the disabled entry 0: plays
+        entry(7, "13:10:00", "13:20:00"),            # under entry 1, enabled: skipped
+    ])
+    fppd.start(fake_time=f"{first.isoformat()} 03:00:00", tz=ZONE)
+    r0, r1 = local(first, "00:00:00"), local(first, "23:59:59")
+    for summary in ("", "&summary=1"):
+        url = f"/fppd/schedule/range?start={r0}&end={r1}&includeDisabled=1{summary}"
+        got = {i["id"]: i["overridden"] for i in fppd.get(url)["schedule"]["items"]}
+        assert got == {0: False, 1: False, 2: True}, (summary, got)
+    # Without disabled entries, as before.
+    url = f"/fppd/schedule/range?start={r0}&end={r1}"
+    got = {i["id"]: i["overridden"] for i in fppd.get(url)["schedule"]["items"]}
+    assert got == {1: False, 2: True}, got
