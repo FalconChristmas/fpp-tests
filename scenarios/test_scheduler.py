@@ -189,6 +189,18 @@ def inserted_stack(fppd, schedule):
     fppd.command("Insert Playlist Immediate", "Inner", "0", "0", "false")
     fppd.wait_for(lambda: status(fppd).get("breadcrumbs") == ["Outer"], timeout=10,
                   interval=0.2, what="Inner to play inside Outer")
+    # The main loop starts Inner and then runs its "start" and "playing"
+    # callbacks, a fork each; the breadcrumbs show before they have run.  A
+    # stop sent now runs its own callbacks on another thread, and Inner's
+    # late "playing" lands after its "stop", where it reads as Outer resuming
+    # (seen under ASan).
+    from test_plugin_scripts import playlist_actions
+
+    def inner_announced():
+        acts = playlist_actions(d)
+        starts = [i for i, a in enumerate(acts) if a == "start"]
+        return len(starts) >= 2 and "playing" in acts[starts[1]:]
+    fppd.wait_for(inner_announced, timeout=10, interval=0.1, what="Inner's start and playing callbacks")
     return d
 
 
