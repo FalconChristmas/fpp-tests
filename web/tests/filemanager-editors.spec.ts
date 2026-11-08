@@ -92,16 +92,13 @@ test.describe('the script editor', () => {
   test('a script with HTML-like text in it is shown and saved as it is', async ({ page }) => {
     // Shell scripts are full of &, < and >; one that echoes HTML may hold
     // entities and tags, even a closing textarea tag.
-    //
-    // Known bug (~/FUTURE.md, fpp 49f2b29a0): EditScript() builds the
-    // textarea as HTML with the script's text inside it, so the browser
-    // decodes the entities, a </textarea> ends the box early and what follows
-    // becomes part of the page, and Save writes back what is left.  The
-    // config editor sets the text with .val() and keeps it whole.  This test
-    // passes as an expected failure until that is fixed; then drop the mark.
-    test.fail();
+    // Before 4c145ded5 EditScript() built the textarea as HTML with the text
+    // inside it: the entities were decoded, a </textarea> ended the box and
+    // what followed became part of the page, and Save wrote back what was
+    // left.  It now sets the text with .val(), as the config editor does.
+    // The Save closing at once also needs f9c20b37f (dialog-close-during-fade).
     const tricky = '#!/bin/sh\n[ -f a ] && echo "a &amp; b &lt;c&gt; <b>bold</b>" > /tmp/x\n' +
-      'echo "</textarea><i>after</i>"\necho done\n';
+      'echo "</textarea><i>after</i><img src=x onerror=window.fppTestsRan=1>"\necho done\n';
     put(`${SCRIPTS}/${name}`, tricky);
     await openTab(page, 'scripts', 'Scripts', name);
     await page.locator('#tab-scripts input[value="Edit"]').click();
@@ -109,6 +106,8 @@ test.describe('the script editor', () => {
     await expect(dialog.locator('#scriptText')).toHaveValue(tricky);
     // Nothing of the script is made into the page's own elements.
     await expect(dialog.locator('.modal-body i')).toHaveCount(0);
+    await expect(dialog.locator('.modal-body img')).toHaveCount(0);
+    expect(await page.evaluate(() => (window as any).fppTestsRan), 'no markup from the script ran').toBeUndefined();
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(dialog).toBeHidden();
     expect(read(`${SCRIPTS}/${name}`), 'saving unchanged leaves the script unchanged').toBe(tricky);
