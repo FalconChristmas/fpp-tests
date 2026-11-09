@@ -27,6 +27,7 @@ import pytest
 
 import fakedrm
 import shims
+from fppd import sanitizer
 
 FLIP_PATH = re.compile(r"KMSFrameBuffer (\S+) flip-path event; totals since start: \d+ syncs >20ms "
                        r"\([^)]*\), (\d+) wait timeouts, (\d+) flip rejects")
@@ -64,6 +65,8 @@ def start_dpi_and_hdmi(fppd, interval_ms, env_more=None, preload_more=()):
     fppd.command("Test Start", interval_ms, "RGB Cycle", "1-12288", "R-G-B")
 
 
+@pytest.mark.skipif(sanitizer() == "tsan", reason="a flip-rate test; TSan's fppd can't make 50 frames a second "
+                    "(34 measured), and the lock test below covers this under TSan")
 def test_an_hdmi_output_keeps_its_rate_beside_a_20hz_dpi_output(fppd):
     """Virtual Matrices on the 20 Hz DPI panel and the 60 Hz HDMI display of
     one card, fed 50 frames a second for 8 s: the HDMI one keeps up (over 35
