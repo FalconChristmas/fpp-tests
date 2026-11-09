@@ -87,6 +87,35 @@ def dpi_env(fppd, fail_modeset=None):
     return preload, env
 
 
+def two_display_env(fppd, first="HDMI-A-1", second="HDMI-A-2", phase_us=None):
+    """(preload, extra_env) for fppd.start(): the fake card with two displays
+    on it, each on its own CRTC, both driven through the one card fd --
+    a Pi 4's two HDMI ports (the default), or with first="DPI-1",
+    second="HDMI-A-1" a Pi 0-4's DPI panel (20 Hz) beside its HDMI display.
+    phase_us: how far the second CRTC's vblanks fall after the first's (see
+    FAKEDRM_SECOND_PHASE_US). No display load limit, no GStreamer stand-in."""
+    if first == "DPI-1":
+        preload, env = dpi_env(fppd)
+    else:
+        preload, env = panel_env(fppd, first, "1920x1080\n1280x720")
+    sysfs = os.path.join(env["FAKEDRM_DIR"], "sys", "class", "drm", f"card0-{second}")
+    os.makedirs(sysfs)
+    for name, text in (("status", "connected"), ("enabled", "enabled"), ("connector_id", "45"),
+                       ("modes", "1920x1080\n1280x720")):
+        with open(os.path.join(sysfs, name), "w") as f:
+            f.write(text + "\n")
+    env["FAKEDRM_SECOND"] = second
+    if phase_us is not None:
+        env["FAKEDRM_SECOND_PHASE_US"] = str(phase_us)
+    return preload, env
+
+
+def flip_refusals(fppd):
+    """Page flips the fake card refused with EBUSY, as "refuse flip <crtc>: EBUSY"
+    lines: each is a flip queued while the CRTC's last one was still in flight."""
+    return [line for line in log(fppd).splitlines() if line.startswith("refuse flip ")]
+
+
 def dsi_env(fppd):
     """panel_env() with an 800x480 DSI touchscreen on DSI-1."""
     return panel_env(fppd, "DSI-1", "800x480")

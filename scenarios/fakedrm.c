@@ -47,6 +47,22 @@
  *                         frame's own size, so it can't trip that by itself
  *   FAKEDRM_NO_RESOURCES  "1": drmModeGetResources() fails (NULL), as for a
  *                         /dev/dri card that is not a display controller
+ *   FAKEDRM_SECOND        "HDMI-A-2" (or "HDMI-A-1" beside a DPI-1 first
+ *                         connector): a second HDMI display on the same card,
+ *                         with its own encoder, CRTC (running 1920x1080@60)
+ *                         and primary plane, the overlays shared -- as a
+ *                         Pi 4's two HDMI ports, or a Pi 0-4's DPI panel and
+ *                         HDMI.  Both CRTCs' events come back on whichever
+ *                         card fd queued them, so an fd shared by two outputs
+ *                         reads both outputs' flips
+ *   FAKEDRM_SECOND_PHASE_US  how far the second CRTC's vblanks fall after the
+ *                         first's (default 7000): two displays are never
+ *                         genlocked
+ *
+ * A page flip on a CRTC whose last flip hasn't landed yet fails with EBUSY,
+ * as the kernel's does; FAKEDRM_LOG gets "refuse flip <crtc>: EBUSY".
+ *   FAKEDRM_LOG_FLIPS     "1": FAKEDRM_LOG gets "flip <crtc>" for every page
+ *                         flip queued, too
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -74,6 +90,9 @@
 #define CONN_ID 35
 #define ENC_ID 34
 #define CRTC_ID 97
+#define CONN2_ID 45
+#define ENC2_ID 44
+#define CRTC2_ID 131
 #define PROP_EDID 1
 #define PROP_TYPE 2
 #define EDID_BLOB 300
@@ -84,16 +103,21 @@
 typedef struct {
     uint32_t id;
     int type;  // DRM_PLANE_TYPE_*
+    int head;  // a primary plane's CRTC (index into heads); -1: any CRTC
     uint32_t crtc, fb;
     int32_t cx, cy;
     uint32_t cw, ch, sx, sy, sw, sh;  // src in 16.16
 } Plane;
 
+// The second head's primary comes before the overlays, as on vc4, so a
+// framebuffer output on it picks its own primary as fppd looks for a plane;
+// it exists only with FAKEDRM_SECOND (see live_plane()).
 static Plane planes[] = {
-    { .id = 86, .type = DRM_PLANE_TYPE_PRIMARY },
-    { .id = 98, .type = DRM_PLANE_TYPE_OVERLAY },
-    { .id = 109, .type = DRM_PLANE_TYPE_OVERLAY },
-    { .id = 120, .type = DRM_PLANE_TYPE_OVERLAY },
+    { .id = 86, .type = DRM_PLANE_TYPE_PRIMARY, .head = 0 },
+    { .id = 141, .type = DRM_PLANE_TYPE_PRIMARY, .head = 1 },
+    { .id = 98, .type = DRM_PLANE_TYPE_OVERLAY, .head = -1 },
+    { .id = 109, .type = DRM_PLANE_TYPE_OVERLAY, .head = -1 },
+    { .id = 120, .type = DRM_PLANE_TYPE_OVERLAY, .head = -1 },
 };
 #define NPLANES ((int)(sizeof(planes) / sizeof(planes[0])))
 
@@ -112,6 +136,7 @@ typedef struct {
     int fd;
     int signalled;  // its eventfd has been written
     int flip;       // page flip (else vblank)
+    int head;       // the CRTC it is for
     uint64_t due_us;
     uint32_t seq;
     void* data;
@@ -130,8 +155,68 @@ static uint32_t next_fb = 600, next_handle, next_lessee;
 static Event events[MAXEVENTS];
 static int nevents;
 static int timer_started;
-static int crtc_active = 1, flip_pending;
-static drmModeModeInfo crtc_mode;
+
+// A connector, its encoder and the CRTC driving it.  Head 0 is the card's
+// one display; head 1 exists with FAKEDRM_SECOND.
+typedef struct {
+    uint32_t conn, enc, crtc;
+    int active, flip_pending;
+    drmModeModeInfo mode;
+    uint64_t phase_us;  // where its vblank grid sits
+    int second;         // head 1: an HDMI display, whatever the first is
+    uint32_t type_id;   // the connector's number: the 2 of HDMI-A-2
+} Head;
+
+static Head heads[2] = {
+    { .conn = CONN_ID, .enc = ENC_ID, .crtc = CRTC_ID, .active = 1, .type_id = 1 },
+    { .conn = CONN2_ID, .enc = ENC2_ID, .crtc = CRTC2_ID, .active = 1, .second = 1, .type_id = 2 },
+};
+static int nheads = 1;
+
+static Head* head_of_crtc(uint32_t crtc) {
+    for (int i = 0; i < nheads; i++) {
+        if (heads[i].crtc == crtc) {
+            return &heads[i];
+        }
+    }
+    return NULL;
+}
+
+static Head* head_of_conn(uint32_t conn) {
+    for (int i = 0; i < nheads; i++) {
+        if (heads[i].conn == conn) {
+            return &heads[i];
+        }
+    }
+    return NULL;
+}
+
+static Head* head_of_enc(uint32_t enc) {
+    for (int i = 0; i < nheads; i++) {
+        if (heads[i].enc == enc) {
+            return &heads[i];
+        }
+    }
+    return NULL;
+}
+
+static int head_index(const Head* h) {
+    return (int)(h - heads);
+}
+
+// Planes that exist: the second head's primary only with a second head.
+static int live_plane(const Plane* p) {
+    return p->head < nheads;
+}
+
+static Plane* primary_of(const Head* h) {
+    for (int i = 0; i < NPLANES; i++) {
+        if (planes[i].type == DRM_PLANE_TYPE_PRIMARY && planes[i].head == head_index(h)) {
+            return &planes[i];
+        }
+    }
+    return NULL;
+}
 
 static drmModeModeInfo mode(int w, int h, uint32_t clock, int hs, int he, int ht, int vs, int ve, int vt,
                             uint32_t type) {
@@ -158,7 +243,12 @@ static int dsi(void) {
 }
 
 // The connector's modes, the preferred first; returns how many.
-static int modes(drmModeModeInfo out[2]) {
+static int modes(const Head* h, drmModeModeInfo out[2]) {
+    if (h->second) {
+        out[0] = mode(1920, 1080, 148500, 2008, 2052, 2200, 1084, 1089, 1125, DRM_MODE_TYPE_PREFERRED);
+        out[1] = mode(1280, 720, 74250, 1390, 1430, 1650, 725, 730, 750, 0);
+        return 2;
+    }
     if (dpi()) {
         out[0] = mode(1920, 997, 38400, 1920, 1921, 1921, 998, 999, 1000, DRM_MODE_TYPE_PREFERRED);
         out[0].vrefresh = 20;
@@ -180,12 +270,22 @@ static int modes(drmModeModeInfo out[2]) {
 
 // The console left the CRTC running the preferred mode.
 __attribute__((constructor)) static void init(void) {
-    drmModeModeInfo m[2];
-    modes(m);
-    crtc_mode = m[0];
+    const char* second = getenv("FAKEDRM_SECOND");
+    if (second && *second) {
+        nheads = 2;
+        size_t n = strlen(second);
+        heads[1].type_id = (n && second[n - 1] >= '1' && second[n - 1] <= '9') ? (uint32_t)(second[n - 1] - '0') : 2;
+        const char* phase = getenv("FAKEDRM_SECOND_PHASE_US");
+        heads[1].phase_us = phase ? strtoull(phase, NULL, 10) : 7000;
+    }
+    for (int i = 0; i < nheads; i++) {
+        drmModeModeInfo m[2];
+        modes(&heads[i], m);
+        heads[i].mode = m[0];
+    }
     const char* off = getenv("FAKEDRM_CRTC_OFF");
     if (off && !strcmp(off, "1")) {
-        crtc_active = 0;
+        heads[0].active = 0;
     }
 }
 
@@ -219,8 +319,19 @@ static uint64_t now_us(void) {
     return (uint64_t)ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000;
 }
 
-static uint64_t period_us(void) {
-    return 1000000ULL / (crtc_mode.vrefresh ? crtc_mode.vrefresh : 60);
+static uint64_t period_us(const Head* h) {
+    return 1000000ULL / (h->mode.vrefresh ? h->mode.vrefresh : 60);
+}
+
+// The first vblank of `h` after `now`, and its sequence number.
+static uint64_t next_vblank(const Head* h, uint64_t now, uint32_t* seq) {
+    uint64_t p = period_us(h);
+    uint64_t t = now > h->phase_us ? now - h->phase_us : 0;
+    uint64_t n = t / p + 1;
+    if (seq) {
+        *seq = (uint32_t)n;
+    }
+    return n * p + h->phase_us;
 }
 
 /* --- fds ------------------------------------------------------------------ */
@@ -405,7 +516,7 @@ static Fb* fb_locked(uint32_t id) {
 
 static Plane* plane_locked(uint32_t id) {
     for (int i = 0; i < NPLANES; i++) {
-        if (planes[i].id == id) {
+        if (planes[i].id == id && live_plane(&planes[i])) {
             return &planes[i];
         }
     }
@@ -436,16 +547,14 @@ static int layout(uint32_t format, int sub[3], int cpp[3]) {
 // its id.  Caller holds mu.
 static void load_locked(const Plane* with, uint64_t* hvs, uint64_t* membus) {
     *hvs = *membus = 0;
-    if (!crtc_active) {
-        return;
-    }
-    uint64_t vrefresh = crtc_mode.vrefresh ? crtc_mode.vrefresh : 60;
     for (int i = 0; i < NPLANES; i++) {
         const Plane* p = (with && with->id == planes[i].id) ? with : &planes[i];
         Fb* fb = p->fb ? fb_locked(p->fb) : NULL;
-        if (!p->crtc || !fb || !p->cw || !p->ch) {
+        Head* h = p->crtc ? head_of_crtc(p->crtc) : NULL;
+        if (!h || !h->active || !fb || !p->cw || !p->ch) {
             continue;
         }
+        uint64_t vrefresh = h->mode.vrefresh ? h->mode.vrefresh : 60;
         int sub[3], cpp[3];
         int n = layout(fb->format, sub, cpp);
         uint32_t sw = p->sw >> 16, sh = p->sh >> 16;
@@ -513,13 +622,17 @@ int drmModeSetPlane(int fd, uint32_t plane_id, uint32_t crtc_id, uint32_t fb_id,
         return 0;
     }
     Fb* fb = fb_locked(fb_id);
-    if (!fb || crtc_id != CRTC_ID || !crtc_active || !crtc_w || !crtc_h ||
+    Head* h = head_of_crtc(crtc_id);
+    if (!fb || !h || !h->active || !crtc_w || !crtc_h ||
+        (p->head >= 0 && p->head != head_index(h)) ||
         ((uint64_t)src_x + src_w) >> 16 > fb->w || ((uint64_t)src_y + src_h) >> 16 > fb->h) {
         pthread_mutex_unlock(&mu);
         errno = fb ? EINVAL : ENOENT;
         return -1;
     }
-    Plane next = { p->id, p->type, crtc_id, fb_id, crtc_x, crtc_y, crtc_w, crtc_h, src_x, src_y, src_w, src_h };
+    Plane next = { .id = p->id, .type = p->type, .head = p->head, .crtc = crtc_id, .fb = fb_id,
+                   .cx = crtc_x, .cy = crtc_y, .cw = crtc_w, .ch = crtc_h,
+                   .sx = src_x, .sy = src_y, .sw = src_w, .sh = src_h };
     uint64_t hvs;
     char f[5];
     const char* refuse = getenv("FAKEDRM_REFUSE_PLANES");
@@ -553,17 +666,25 @@ int drmModeSetCrtc(int fd, uint32_t crtc_id, uint32_t fb_id, uint32_t x, uint32_
     (void)connectors;
     (void)count;
     pthread_mutex_lock(&mu);
-    if (!is_ours_locked(fd) || crtc_id != CRTC_ID) {
+    Head* h = head_of_crtc(crtc_id);
+    if (!is_ours_locked(fd) || !h) {
         pthread_mutex_unlock(&mu);
         errno = EINVAL;
         return -1;
     }
     if (!fb_id || !m) {
         for (int i = 0; i < NPLANES; i++) {
-            disable_plane_locked(&planes[i], "crtc off");
+            // One display: everything goes, as before there were two.
+            if (nheads == 1 || planes[i].crtc == crtc_id) {
+                disable_plane_locked(&planes[i], "crtc off");
+            }
         }
-        crtc_active = 0;
-        logf_("crtc off");
+        h->active = 0;
+        if (nheads == 1) {
+            logf_("crtc off");
+        } else {
+            logf_("crtc %u off", crtc_id);
+        }
         pthread_mutex_unlock(&mu);
         return 0;
     }
@@ -584,25 +705,31 @@ int drmModeSetCrtc(int fd, uint32_t crtc_id, uint32_t fb_id, uint32_t x, uint32_
         errno = fb ? ENOSPC : ENOENT;
         return -1;
     }
-    Plane next = planes[0];
+    Plane* primary = primary_of(h);
+    Plane next = *primary;
     next.crtc = crtc_id, next.fb = fb_id;
     next.cx = next.cy = 0, next.cw = m->hdisplay, next.ch = m->vdisplay;
     next.sx = x << 16, next.sy = y << 16, next.sw = (uint32_t)m->hdisplay << 16, next.sh = (uint32_t)m->vdisplay << 16;
-    int wasActive = crtc_active;
-    drmModeModeInfo was = crtc_mode;
-    crtc_active = 1;
-    crtc_mode = *m;
+    int wasActive = h->active;
+    drmModeModeInfo was = h->mode;
+    h->active = 1;
+    h->mode = *m;
     uint64_t hvs;
     if (over_limit_locked(&next, &hvs)) {
-        crtc_active = wasActive;
-        crtc_mode = was;
+        h->active = wasActive;
+        h->mode = was;
         logf_("refuse crtc hvs %llu: ENOSPC", (unsigned long long)hvs);
         pthread_mutex_unlock(&mu);
         errno = ENOSPC;
         return -1;
     }
-    planes[0] = next;
-    logf_("crtc %dx%d@%d primary fb %u", m->hdisplay, m->vdisplay, m->vrefresh, fb_id);
+    *primary = next;
+    // "crtc WxH@R" stays the first head's line, as scenarios read it.
+    if (head_index(h) == 0) {
+        logf_("crtc %dx%d@%d primary fb %u", m->hdisplay, m->vdisplay, m->vrefresh, fb_id);
+    } else {
+        logf_("crtc %u %dx%d@%d primary fb %u", crtc_id, m->hdisplay, m->vdisplay, m->vrefresh, fb_id);
+    }
     pthread_mutex_unlock(&mu);
     return 0;
 }
@@ -637,7 +764,7 @@ static void* timer(void* arg) {
             if (!events[i].signalled && events[i].due_us <= now) {
                 events[i].signalled = 1;
                 if (events[i].flip) {
-                    flip_pending = 0;
+                    heads[events[i].head].flip_pending = 0;
                 }
                 uint64_t one = 1;
                 ssize_t w = write(events[i].fd, &one, sizeof(one));
@@ -648,14 +775,14 @@ static void* timer(void* arg) {
     return NULL;
 }
 
-// The next vblank, as the kernel would report it.  Caller holds mu.
-static int queue_locked(int fd, int flip, void* data, uint64_t* due) {
+// The next vblank of `h`, as the kernel would report it.  Caller holds mu.
+static int queue_locked(int fd, int flip, void* data, const Head* h, uint64_t* due) {
     if (nevents >= MAXEVENTS) {
         return -1;
     }
-    uint64_t p = period_us();
-    uint64_t at = (now_us() / p + 1) * p;
-    events[nevents++] = (Event){ fd, 0, flip, at, (uint32_t)(at / p), data };
+    uint32_t seq;
+    uint64_t at = next_vblank(h, now_us(), &seq);
+    events[nevents++] = (Event){ fd, 0, flip, head_index(h), at, seq, data };
     if (due) {
         *due = at;
     }
@@ -677,20 +804,27 @@ static int queue_locked(int fd, int flip, void* data, uint64_t* due) {
 int drmModePageFlip(int fd, uint32_t crtc_id, uint32_t fb_id, uint32_t flags, void* data) {
     pthread_mutex_lock(&mu);
     Fb* fb = fb_locked(fb_id);
-    if (!is_ours_locked(fd) || crtc_id != CRTC_ID || !crtc_active || !fb || !planes[0].fb) {
+    Head* h = head_of_crtc(crtc_id);
+    Plane* primary = h ? primary_of(h) : NULL;
+    if (!is_ours_locked(fd) || !h || !h->active || !fb || !primary->fb) {
         pthread_mutex_unlock(&mu);
         errno = EINVAL;
         return -1;
     }
-    if (flip_pending) {
+    if (h->flip_pending) {
+        logf_("refuse flip %u: EBUSY", crtc_id);
         pthread_mutex_unlock(&mu);
         errno = EBUSY;
         return -1;
     }
-    planes[0].fb = fb_id;
+    primary->fb = fb_id;
+    const char* logflips = getenv("FAKEDRM_LOG_FLIPS");
+    if (logflips && *logflips == '1') {
+        logf_("flip %u", crtc_id);
+    }
     if (flags & DRM_MODE_PAGE_FLIP_EVENT) {
-        flip_pending = 1;
-        queue_locked(fd, 1, data, NULL);
+        h->flip_pending = 1;
+        queue_locked(fd, 1, data, h, NULL);
     }
     pthread_mutex_unlock(&mu);
     return 0;
@@ -703,20 +837,28 @@ int drmWaitVBlank(int fd, drmVBlankPtr vbl) {
         errno = EBADF;
         return -1;
     }
+    // The pipe: the high CRTC bits, or DRM_VBLANK_SECONDARY for pipe 1.
+    unsigned int type = (unsigned int)vbl->request.type;
+    int pipe = (int)((type & _DRM_VBLANK_HIGH_CRTC_MASK) >> _DRM_VBLANK_HIGH_CRTC_SHIFT);
+    if (!pipe && (type & DRM_VBLANK_SECONDARY)) {
+        pipe = 1;
+    }
+    const Head* h = &heads[pipe < nheads ? pipe : 0];
     uint64_t due;
-    if (vbl->request.type & DRM_VBLANK_EVENT) {
-        queue_locked(fd, 0, (void*)vbl->request.signal, &due);
+    uint32_t seq;
+    if (type & DRM_VBLANK_EVENT) {
+        due = next_vblank(h, now_us(), &seq);
+        queue_locked(fd, 0, (void*)vbl->request.signal, h, NULL);
         pthread_mutex_unlock(&mu);
     } else {
-        uint64_t p = period_us();
-        due = (now_us() / p + 1) * p;
+        due = next_vblank(h, now_us(), &seq);
         pthread_mutex_unlock(&mu);
         uint64_t now = now_us();
         if (due > now) {
             usleep((useconds_t)(due - now));
         }
     }
-    vbl->reply.sequence = (unsigned int)(due / period_us());
+    vbl->reply.sequence = seq;
     vbl->reply.tval_sec = (long)(due / 1000000ULL);
     vbl->reply.tval_usec = (long)(due % 1000000ULL);
     return 0;
@@ -865,7 +1007,7 @@ int close(int fd) {
         for (int i = 0; i < nevents;) {
             if (events[i].fd == fd) {
                 if (events[i].flip && !events[i].signalled) {
-                    flip_pending = 0;
+                    heads[events[i].head].flip_pending = 0;
                 }
                 events[i] = events[--nevents];
             } else {
@@ -923,27 +1065,33 @@ drmModeResPtr drmModeGetResources(int fd) {
         return NULL;
     }
     drmModeResPtr r = calloc(1, sizeof(*r));
-    r->count_crtcs = r->count_connectors = r->count_encoders = 1;
-    r->crtcs = malloc(sizeof(uint32_t));
-    r->crtcs[0] = CRTC_ID;
-    r->connectors = malloc(sizeof(uint32_t));
-    r->connectors[0] = CONN_ID;
-    r->encoders = malloc(sizeof(uint32_t));
-    r->encoders[0] = ENC_ID;
+    r->count_crtcs = r->count_connectors = r->count_encoders = nheads;
+    r->crtcs = malloc(nheads * sizeof(uint32_t));
+    r->connectors = malloc(nheads * sizeof(uint32_t));
+    r->encoders = malloc(nheads * sizeof(uint32_t));
+    for (int i = 0; i < nheads; i++) {
+        r->crtcs[i] = heads[i].crtc;
+        r->connectors[i] = heads[i].conn;
+        r->encoders[i] = heads[i].enc;
+    }
     r->max_width = r->max_height = 2048;
     return r;
 }
 
 static drmModeConnectorPtr connector(int fd, uint32_t id) {
-    if (!is_ours(fd) || id != CONN_ID) {
+    const Head* h = head_of_conn(id);
+    if (!is_ours(fd) || !h) {
         errno = ENOENT;
         return NULL;
     }
     drmModeConnectorPtr c = calloc(1, sizeof(*c));
-    c->connector_id = CONN_ID;
-    c->encoder_id = ENC_ID;
-    c->connector_type = dpi() ? DRM_MODE_CONNECTOR_DPI : dsi() ? DRM_MODE_CONNECTOR_DSI : DRM_MODE_CONNECTOR_HDMIA;
-    c->connector_type_id = 1;
+    c->connector_id = h->conn;
+    c->encoder_id = h->enc;
+    c->connector_type = h->second ? DRM_MODE_CONNECTOR_HDMIA
+                        : dpi()   ? DRM_MODE_CONNECTOR_DPI
+                        : dsi()   ? DRM_MODE_CONNECTOR_DSI
+                                  : DRM_MODE_CONNECTOR_HDMIA;
+    c->connector_type_id = h->type_id;
     c->connection = DRM_MODE_CONNECTED;
     c->mmWidth = 520, c->mmHeight = 290;
     const char* mm = getenv("FAKEDRM_MM");
@@ -952,7 +1100,7 @@ static drmModeConnectorPtr connector(int fd, uint32_t id) {
     }
     c->subpixel = DRM_MODE_SUBPIXEL_UNKNOWN;
     c->modes = malloc(2 * sizeof(drmModeModeInfo));
-    c->count_modes = modes(c->modes);
+    c->count_modes = modes(h, c->modes);
     c->count_props = 1;
     c->props = malloc(sizeof(uint32_t));
     c->props[0] = PROP_EDID;
@@ -960,7 +1108,7 @@ static drmModeConnectorPtr connector(int fd, uint32_t id) {
     c->prop_values[0] = EDID_BLOB;
     c->count_encoders = 1;
     c->encoders = malloc(sizeof(uint32_t));
-    c->encoders[0] = ENC_ID;
+    c->encoders[0] = h->enc;
     return c;
 }
 
@@ -973,35 +1121,40 @@ drmModeConnectorPtr drmModeGetConnectorCurrent(int fd, uint32_t id) {
 }
 
 drmModeEncoderPtr drmModeGetEncoder(int fd, uint32_t id) {
-    if (!is_ours(fd) || id != ENC_ID) {
+    const Head* h = head_of_enc(id);
+    if (!is_ours(fd) || !h) {
         errno = ENOENT;
         return NULL;
     }
     drmModeEncoderPtr e = calloc(1, sizeof(*e));
-    e->encoder_id = ENC_ID;
-    e->encoder_type = dpi() ? DRM_MODE_ENCODER_DPI : dsi() ? DRM_MODE_ENCODER_DSI : DRM_MODE_ENCODER_TMDS;
+    e->encoder_id = h->enc;
+    e->encoder_type = h->second ? DRM_MODE_ENCODER_TMDS
+                      : dpi()   ? DRM_MODE_ENCODER_DPI
+                      : dsi()   ? DRM_MODE_ENCODER_DSI
+                                : DRM_MODE_ENCODER_TMDS;
     pthread_mutex_lock(&mu);
-    e->crtc_id = crtc_active ? CRTC_ID : 0;
+    e->crtc_id = h->active ? h->crtc : 0;
     pthread_mutex_unlock(&mu);
-    e->possible_crtcs = 1;
+    e->possible_crtcs = 1u << head_index(h);
     return e;
 }
 
 // The CRTC and the mode it runs, for whoever asks what the display is doing
 // (kmssink does, and fppd's aspect check).
 drmModeCrtcPtr drmModeGetCrtc(int fd, uint32_t id) {
-    if (!is_ours(fd) || id != CRTC_ID) {
+    const Head* h = head_of_crtc(id);
+    if (!is_ours(fd) || !h) {
         errno = ENOENT;
         return NULL;
     }
     drmModeCrtcPtr c = calloc(1, sizeof(*c));
-    c->crtc_id = CRTC_ID;
+    c->crtc_id = h->crtc;
     pthread_mutex_lock(&mu);
-    if (crtc_active) {
-        c->mode = crtc_mode;
+    if (h->active) {
+        c->mode = h->mode;
         c->mode_valid = 1;
-        c->width = crtc_mode.hdisplay;
-        c->height = crtc_mode.vdisplay;
+        c->width = h->mode.hdisplay;
+        c->height = h->mode.vdisplay;
     }
     pthread_mutex_unlock(&mu);
     return c;
@@ -1013,10 +1166,11 @@ drmModePlaneResPtr drmModeGetPlaneResources(int fd) {
         return NULL;
     }
     drmModePlaneResPtr r = calloc(1, sizeof(*r));
-    r->count_planes = NPLANES;
     r->planes = malloc(NPLANES * sizeof(uint32_t));
     for (int i = 0; i < NPLANES; i++) {
-        r->planes[i] = planes[i].id;
+        if (live_plane(&planes[i])) {
+            r->planes[r->count_planes++] = planes[i].id;
+        }
     }
     return r;
 }
@@ -1034,7 +1188,7 @@ drmModePlanePtr drmModeGetPlane(int fd, uint32_t id) {
     r->crtc_id = p->crtc;
     r->fb_id = p->fb;
     r->crtc_x = (uint32_t)p->cx, r->crtc_y = (uint32_t)p->cy;
-    r->possible_crtcs = 1;
+    r->possible_crtcs = p->head >= 0 ? 1u << p->head : (1u << nheads) - 1;
     pthread_mutex_unlock(&mu);
     r->count_formats = NFORMATS;
     r->formats = malloc(sizeof(FORMATS));
@@ -1056,7 +1210,7 @@ drmModeObjectPropertiesPtr drmModeObjectGetProperties(int fd, uint32_t id, uint3
         r->props[0] = PROP_TYPE;
         r->prop_values = malloc(sizeof(uint64_t));
         r->prop_values[0] = (uint64_t)p->type;
-    } else if (type == DRM_MODE_OBJECT_CONNECTOR && id == CONN_ID) {
+    } else if (type == DRM_MODE_OBJECT_CONNECTOR && head_of_conn(id)) {
         r->count_props = 1;
         r->props = malloc(sizeof(uint32_t));
         r->props[0] = PROP_EDID;

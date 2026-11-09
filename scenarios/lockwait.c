@@ -10,7 +10,9 @@
  *   <samples> <waits over 1 ms> <median wait us> <longest wait us>
  *
  * The lock is found by name (a std::mutex is a pthread_mutex_t); if fppd
- * has none, the line is "missing".
+ * has none, the line is "missing".  LOCKWAIT_LOCK names another lock to time
+ * the same way (drmMasterLock: the one every KMS framebuffer output and the
+ * DRM lease bookkeeping share).
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -44,7 +46,8 @@ static void* run(void* arg) {
         return NULL;
     }
     // libfpp.so is loaded by now: fppd links it.
-    pthread_mutex_t* lock = (pthread_mutex_t*)dlsym(RTLD_DEFAULT, "mediaOutputLock");
+    const char* name = getenv("LOCKWAIT_LOCK");
+    pthread_mutex_t* lock = (pthread_mutex_t*)dlsym(RTLD_DEFAULT, name && *name ? name : "mediaOutputLock");
     if (!lock || count < 1) {
         fprintf(f, "missing\n");
         fclose(f);
