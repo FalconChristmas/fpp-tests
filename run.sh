@@ -155,8 +155,8 @@ done
 $DOCKER -v "$HERE:/tests:ro" fpp-tests-env sh -c 'exec 8< "$1" && flock -s 8 &&
     /tests/scripts/build-fpp.sh "$1" "$2"' sh "$TREE" "$FLAVOR"
 eval "set -- $ITEMS"
-SPLIT=$($DOCKER -v "$HERE:/tests:ro" fpp-tests-env sh -c 'n=$1; shift
-    for i in $(seq 1 "$n"); do python3 /tests/scripts/shard.py "$i" "$n" "$@" | sed "s/^/$i /"; done' sh "$JOBS" "$@")
+SPLIT=$($DOCKER -v "$HERE:/tests:ro" fpp-tests-env sh -c 'n=$1 f=$2; shift 2
+    for i in $(seq 1 "$n"); do python3 /tests/scripts/shard.py --flavor "$f" "$i" "$n" "$@" | sed "s/^/$i /"; done' sh "$JOBS" "$FLAVOR" "$@")
 eval "set -- $OPTS"
 SHARDS=""
 for i in $(seq 1 "$JOBS"); do

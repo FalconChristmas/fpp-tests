@@ -145,7 +145,7 @@ jobs:
         run: |
           FILES=
           if [ "$SHARDS" -gt 1 ]; then
-            FILES=$(python3 scripts/shard.py "$SHARD" "$SHARDS")
+            FILES=$(python3 scripts/shard.py --flavor "$FLAVOR" "$SHARD" "$SHARDS")
           fi
           ./run.sh --fpp fpp --ref HEAD --flavor "$FLAVOR" $NOPCH -v -rA $PYTEST_ARGS $FILES
 

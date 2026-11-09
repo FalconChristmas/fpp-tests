@@ -32,7 +32,7 @@ Requires Docker. From this directory, with fpp checked out next to it (`../fpp`)
 
 A scenario spends most of its time waiting on fppd, so one run uses little of the
 machine. `-j N` splits the scenarios (or the files and node ids you name) into N shards
-balanced by `scripts/shard-weights.json`. Each shard runs in a container and on a
+balanced by the flavor's `scripts/shard-weights-<flavor>.json`. Each shard runs in a container and on a
 network of its own, and writes its output to `artifacts/shard-N.log`. The shards'
 results are merged into `artifacts/junit.xml`. An ASan shard peaks under 1GB of the
 Docker VM's memory.
