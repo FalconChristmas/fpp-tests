@@ -1190,8 +1190,8 @@ www/js/fpp.js	requestPluginUpdateCheck	17129	7	18	todo		auto: not examined yet
 www/js/fpp.js	pluginUpdateCheckedAgo	17203	6	14	todo		auto: not examined yet
 www/js/jquery4-compat.js	(top level)	0	31	101	todo		auto: not examined yet
 www/js/jquery4-compat.js	proxy	79	6	6	todo		auto: not examined yet
-www/js/pipewire-mixer.js	PWMixerSectionOpen	41	3	16	todo		auto: not examined yet
-www/js/pipewire-mixer.js	PWMixerToggleSection	60	1	9	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerSectionOpen	41	3	16	test	web/tests/pw-mixer-writes.spec.ts	the stored layout read; the localStorage failure catch is left
+www/js/pipewire-mixer.js	PWMixerToggleSection	60	1	9	test	web/tests/pw-mixer-writes.spec.ts	a closed section opened and remembered
 www/js/pipewire-mixer.js	OpenPipeWireMixer	75	28	28	todo		auto: not examined yet
 www/js/pipewire-mixer.js	PWMixerStartPolling	118	4	4	todo		auto: not examined yet
 www/js/pipewire-mixer.js	PWMixerStopPolling	123	6	6	todo		auto: not examined yet
@@ -1203,20 +1203,20 @@ www/js/pipewire-mixer.js	PWMixerStrip	210	7	79	todo		auto: not examined yet
 www/js/pipewire-mixer.js	PWMixerSubscribeMeters	410	27	27	todo		auto: not examined yet
 www/js/pipewire-mixer.js	PWMixerStopMeterSubscription	445	13	13	todo		auto: not examined yet
 www/js/pipewire-mixer.js	PWMixerOnLevels	463	16	18	todo		auto: not examined yet
-www/js/pipewire-mixer.js	PWMixerRender	482	101	216	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerRender	482	101	216	test	web/tests/pw-mixer-writes.spec.ts	slots, input buses (direct and send sources), routing paths, groups and cards, disabled ones left out, effective levels; the empty-section texts are left
 www/js/pipewire-mixer.js	PWMixerDragEnd	775	3	3	todo		auto: not examined yet
 www/js/pipewire-mixer.js	PWMixerDragging	783	2	12	todo		auto: not examined yet
 www/js/pipewire-mixer.js	PWMixerSlide	796	2	15	todo		auto: not examined yet
-www/js/pipewire-mixer.js	PWMixerSlideEnd	814	3	3	todo		auto: not examined yet
-www/js/pipewire-mixer.js	PWMixerToggleMute	818	8	8	todo		auto: not examined yet
-www/js/pipewire-mixer.js	PWMixerParseId	829	17	26	todo		auto: not examined yet
-www/js/pipewire-mixer.js	PWMixerCurrentMute	856	39	39	todo		auto: not examined yet
-www/js/pipewire-mixer.js	PWMixerSend	897	64	103	todo		auto: not examined yet
-www/js/pipewire-mixer.js	PWMixerTogglePreview	1024	59	59	todo		auto: not examined yet
-www/js/pipewire-mixer.js	PWMixerStartMeter	1107	35	35	todo		auto: not examined yet
-www/js/pipewire-mixer.js	tick	1148	14	14	todo		auto: not examined yet
-www/js/pipewire-mixer.js	PWMixerStopMeter	1178	13	13	todo		auto: not examined yet
-www/js/pipewire-mixer.js	PWMixerStopPreview	1193	14	14	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerSlideEnd	814	3	3	test	web/tests/pw-mixer-writes.spec.ts	the change at the end of a fill
+www/js/pipewire-mixer.js	PWMixerToggleMute	818	8	8	test	web/tests/pw-mixer-writes.spec.ts	group, card, bus, source, route
+www/js/pipewire-mixer.js	PWMixerParseId	829	17	26	test	web/tests/pw-mixer-writes.spec.ts	every kind of control id
+www/js/pipewire-mixer.js	PWMixerCurrentMute	856	39	39	test	web/tests/pw-mixer-writes.spec.ts	group and card; for bus, source and route it reads the stale model (test.fail(), FUTURE.md)
+www/js/pipewire-mixer.js	PWMixerSend	897	64	103	test	web/tests/pw-mixer-writes.spec.ts	every kind's endpoint and body, the master moving the page's slider, a refusal shown; the stale mute for bus, source and route is a test.fail() (FUTURE.md)
+www/js/pipewire-mixer.js	PWMixerTogglePreview	1024	59	59	todo		the browser preview: needs the preview stream endpoint (pipewire.php) and an <audio> that plays; Chromium can with --autoplay-policy, untried
+www/js/pipewire-mixer.js	PWMixerStartMeter	1107	35	35	todo		the browser preview: needs the preview stream endpoint (pipewire.php) and an <audio> that plays; Chromium can with --autoplay-policy, untried
+www/js/pipewire-mixer.js	tick	1148	14	14	todo		the browser preview: needs the preview stream endpoint (pipewire.php) and an <audio> that plays; Chromium can with --autoplay-policy, untried
+www/js/pipewire-mixer.js	PWMixerStopMeter	1178	13	13	todo		the browser preview: needs the preview stream endpoint (pipewire.php) and an <audio> that plays; Chromium can with --autoplay-policy, untried
+www/js/pipewire-mixer.js	PWMixerStopPreview	1193	14	14	todo		the browser preview: needs the preview stream endpoint (pipewire.php) and an <audio> that plays; Chromium can with --autoplay-policy, untried
 www/json/eff/index.php	(top level)	0	4	4	test	web/tests/wled-json.spec.ts	every line
 www/json/index.php	(top level)	0	7	7	test	web/tests/wled-json.spec.ts	every line
 www/json/info/index.php	(top level)	0	4	4	test	web/tests/wled-json.spec.ts	every line
