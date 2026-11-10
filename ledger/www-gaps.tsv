@@ -322,8 +322,8 @@ www/api/controllers/playlist.php	playlistIssueText	358	1	4	todo		auto: not exami
 www/api/controllers/playlist.php	playlist_list_validate	402	3	37	todo		auto: not examined yet
 www/api/controllers/playlist.php	playlist_playable	475	1	17	todo		auto: not examined yet
 www/api/controllers/playlist.php	playlist_insert	580	2	16	todo		auto: not examined yet
-www/api/controllers/playlist.php	LoadSubPlaylist	620	16	16	todo		auto: not examined yet
-www/api/controllers/playlist.php	LoadPlayListDetails	660	7	30	todo		auto: not examined yet
+www/api/controllers/playlist.php	LoadSubPlaylist	620	16	16	test	playlist-merge-subs.spec.ts	mergeSubs merge; test.fail loop recursion
+www/api/controllers/playlist.php	LoadPlayListDetails	660	7	30	test	playlist-merge-subs.spec.ts	mergeSubs merge; test.fail loop recursion
 www/api/controllers/playlist.php	GetPlaylist	721	1	5	todo		auto: not examined yet
 www/api/controllers/playlist.php	playlist_get	763	2	12	todo		auto: not examined yet
 www/api/controllers/playlist.php	playlist_update	811	4	32	todo		auto: not examined yet
