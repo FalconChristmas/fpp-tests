@@ -184,17 +184,17 @@ www/api/controllers/network.php	network_delete_interface	1306	4	28	todo		auto: n
 www/api/controllers/network.php	network_write_file_atomically	1370	4	9	todo		auto: not examined yet
 www/api/controllers/network.php	network_set_interface	1398	2	75	todo		auto: not examined yet
 www/api/controllers/options.php	(top level)	0	1	2	todo		auto: not examined yet
-www/api/controllers/options.php	GetAudioCurrentCard	8	12	18	todo		auto: not examined yet
-www/api/controllers/options.php	GetOptions_AudioMixerDevice	49	15	15	todo		auto: not examined yet
-www/api/controllers/options.php	GetOptions_PipeWireNodes	104	28	34	todo		auto: not examined yet
-www/api/controllers/options.php	GetOptions_AudioOutputDevice	184	22	58	todo		auto: not examined yet
-www/api/controllers/options.php	GetOptions_AudioInputDevice	310	25	31	todo		auto: not examined yet
+www/api/controllers/options.php	GetAudioCurrentCard	8	12	18	untestable	web/tests/options-api.spec.ts	the rest is the MacOS system_profiler branch
+www/api/controllers/options.php	GetOptions_AudioMixerDevice	49	15	15	test	web/tests/options-api.spec.ts	card id, legacy number and none resolved for amixer; amixer failing gives no controls. The MacOS branch is left
+www/api/controllers/options.php	GetOptions_PipeWireNodes	104	28	34	test	web/tests/options-api.spec.ts	sources and sinks, internal fpp_tee_/fpp_fx_ nodes, nick in the label, aliases, node.name vs node.description, pw-dump failing
+www/api/controllers/options.php	GetOptions_AudioOutputDevice	184	22	58	todo	web/tests/options-api.spec.ts	the PipeWire list is tested; the ALSA lists are audio-card-lists.spec.ts's. Left: MacOS (untestable) and ALSA lines 273-290 (a card id from a device line, the Select an Audio Device entry)
+www/api/controllers/options.php	GetOptions_AudioInputDevice	310	25	31	test	web/tests/options-api.spec.ts	ALSA short and full lists, twin cards renamed by number, Playing Media, aliases, PipeWire sources
 www/api/controllers/options.php	GetOptions_FrameBuffer	381	2	2	todo		auto: not examined yet
 www/api/controllers/options.php	GetOptions_TimeZone	450	1	7	todo		auto: not examined yet
 www/api/controllers/options.php	GetOptions_BBBLeds	522	7	18	todo		auto: not examined yet
-www/api/controllers/options.php	GetOptions_GPIOS	559	26	26	todo		auto: not examined yet
+www/api/controllers/options.php	GetOptions_GPIOS	559	26	26	test	web/tests/options-api.spec.ts	cape show and hide rules (regexes), showAllOptions, the list form
 www/api/controllers/options.php	GetOptions_AES67Interface	607	9	9	todo		auto: not examined yet
-www/api/controllers/options.php	GetOptions	635	12	36	todo		auto: not examined yet
+www/api/controllers/options.php	GetOptions	635	12	36	todo	web/tests/options-api.spec.ts	dispatcher: AudioMixerDevice, AudioInput*, GPIOS/GPIOLIST, AES67Interface, unknown name reached. Left: FrameBuffer (fpp -FB), BBBLeds
 www/api/controllers/pipewire.php	(top level)	0	1	5	todo		auto: not examined yet
 www/api/controllers/pipewire.php	pw_find_combine_streams	75	1	19	todo		auto: not examined yet
 www/api/controllers/pipewire.php	pw_node_channel_count	107	1	5	todo		auto: not examined yet
