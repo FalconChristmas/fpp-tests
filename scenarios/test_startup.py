@@ -18,6 +18,42 @@ def test_starts_and_stops_cleanly(fppd):
     assert status["fppd"] == "running", status
 
 
+def test_a_stop_during_a_restart_stops_fppd(fppd):
+    """SIGTERM sent while a restart is tearing down (systemd stopping fppd
+    just after a Restart FPPD, or a test that stops fppd as a mode switch
+    restarts it) ends fppd with exit 0. It does not come back up.
+
+    Regression: 93440b16f. The handler only cleared runMainFPPDLoop, which the
+    restart had already cleared, so the teardown went on to execlp() and the
+    new fppd never heard the stop: it ran until SIGKILL. The teardown takes
+    about 2 s (the channel output thread's stop), so a signal sent once
+    "Shutting down main loop." is logged lands inside it.
+    """
+    import signal
+    import subprocess
+    import urllib.error
+
+    fppd.start()
+    banners = fppd.log().count("Starting main processing loop")
+    try:
+        fppd.command("Restart FPPD", timeout=5)
+    except (urllib.error.URLError, ConnectionError, TimeoutError):
+        pass
+    fppd.wait_for(lambda: "Shutting down main loop." in fppd.log(), timeout=10,
+                  what="the restart to start tearing down")
+    fppd.proc.send_signal(signal.SIGTERM)
+    try:
+        rc = fppd.proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        raise AssertionError("fppd restarted instead of stopping\n" + fppd.tail())
+    fppd.exit_expected = True
+    assert rc == 0, f"fppd exited {rc}\n" + fppd.tail()
+    assert fppd.log().count("Starting main processing loop") == banners, \
+        "fppd came back up after the stop\n" + fppd.tail()
+    reports = fppd.sanitizer_reports()
+    assert not reports, "sanitizer report:\n" + "\n".join(r[:8000] for r in reports)
+
+
 def test_failed_startup_exits_cleanly(fppd):
     """An fppd that gives up during startup leaves through exit(), which runs
     every static destructor. Holding the MultiSync port makes it do that.

@@ -213,11 +213,19 @@ def saved_mode(fppd):
 
 
 def switch(fppd, command):
-    """Run a mode switch; fppd restarts itself straight after answering."""
+    """Run a mode switch; fppd restarts itself straight after answering.
+
+    Returns once the restarted fppd has reached its main loop. The old one
+    reloads the saved mode before it restarts, so it can answer with the new
+    mode while still tearing down; waiting on the mode alone left this test
+    stopping fppd in the middle of the restart."""
+    banners = fppd.log().count("Starting main processing loop")
     try:
         fppd.command(command, timeout=20)
     except (urllib.error.URLError, ConnectionError):
         pass
+    fppd.wait_for(lambda: fppd.log().count("Starting main processing loop") > banners,
+                  timeout=90, interval=0.5, what="fppd to restart")
 
 
 def test_switch_between_player_and_remote_mode(fppd):
