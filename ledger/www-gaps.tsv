@@ -1335,7 +1335,7 @@ www/upgradeCapeFirmware.php	capeFirmwareResolveUrl	141	3	18	todo		auto: not exam
 www/upgradeOS.php	(top level)	0	24	140	todo		auto: not examined yet
 www/upgradeOS.php	downloadImage	69	25	25	skip		dead: only caller commented out (wget replaced PHP curl)
 www/upgradeOS.php	progress	385	15	15	skip		dead: curl progress callback of downloadImage
-www/upgradefpp.php	(top level)	0	37	43	todo		auto: not examined yet
+www/upgradefpp.php	(top level)	0	37	43	test	upgradefpp-run.spec.ts	run, verdicts, log, version filter, lock; the non-wrapped HTML half is dead ($wrapped starts at 1)
 www/variables.php	(inline script)	0	96	402	todo		auto: not examined yet
 www/vban-config.php	(inline script)	0	199	351	todo		auto: not examined yet
 www/virtualdisplay.php	(inline script)	0	50	278	todo		auto: not examined yet
