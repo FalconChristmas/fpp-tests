@@ -314,10 +314,10 @@ www/api/controllers/pipewire_control.php	pwctl_persist_routing	1178	14	14	todo		
 www/api/controllers/pipewire_control.php	PWCtl_SetRoutingVolume	1213	21	21	todo		auto: not examined yet
 www/api/controllers/pipewire_control.php	PWCtl_SetRoutingMute	1260	31	31	todo		auto: not examined yet
 www/api/controllers/playlist.php	(top level)	0	1	2	todo		auto: not examined yet
-www/api/controllers/playlist.php	validatePlaylistReference	99	6	11	todo		auto: not examined yet
+www/api/controllers/playlist.php	validatePlaylistReference	99	6	11	test	playlist-validate-entries.spec.ts	sub-playlist checks, loop, depth, disabled, entry kinds, unreadable file
 www/api/controllers/playlist.php	validationVideoOutputExists	128	2	23	todo		auto: not examined yet
-www/api/controllers/playlist.php	validatePlaylistEntry	169	27	88	todo		auto: not examined yet
-www/api/controllers/playlist.php	validatePlaylistByName	308	5	25	todo		auto: not examined yet
+www/api/controllers/playlist.php	validatePlaylistEntry	169	27	88	test	playlist-validate-entries.spec.ts	sub-playlist checks, loop, depth, disabled, entry kinds, unreadable file
+www/api/controllers/playlist.php	validatePlaylistByName	308	5	25	test	playlist-validate-entries.spec.ts	sub-playlist checks, loop, depth, disabled, entry kinds, unreadable file
 www/api/controllers/playlist.php	playlistIssueText	358	1	4	todo		auto: not examined yet
 www/api/controllers/playlist.php	playlist_list_validate	402	3	37	todo		auto: not examined yet
 www/api/controllers/playlist.php	playlist_playable	475	1	17	todo		auto: not examined yet
