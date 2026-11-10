@@ -1158,7 +1158,7 @@ www/js/fpp.js	SubCommandChanged	13473	24	24	test	web/tests/command-args-editable
 www/js/fpp.js	valFunc	13573	77	148	test	web/tests/command-args-editable.spec.ts	PrintArgsInputsForEditable (fpp-osc's printer). Left: the time and date branches (no fppd command has those types) and the children bullet (children is never filled: dead)
 www/js/fpp.js	subCommandInitFunc	13622	6	6	test	web/tests/command-args-editable.spec.ts	the editable printer's subcommand select
 www/js/fpp.js	InitArgHelpTooltips	13759	4	16	todo		auto: not examined yet
-www/js/fpp.js	PrintArgInputs	13776	103	713	todo		auto: not examined yet
+www/js/fpp.js	PrintArgInputs	13776	103	713	todo	web/tests/command-editor-subcommand.spec.ts	the subcommand select, range and colour args are tested now. Left: Adjustable checkboxes (configAdjustable is true only for playlist entry types' own args, which have none: plugin-only), date and time args (no command has them), onChange without children, the playlistEntryCommandOptions children hook
 www/js/fpp.js	SyncMultistringChecks	14531	10	31	todo		auto: not examined yet
 www/js/fpp.js	ReloadContentList	14563	7	105	todo		auto: not examined yet
 www/js/fpp.js	addItem	14610	1	8	todo		auto: not examined yet
