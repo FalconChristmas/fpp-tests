@@ -1027,7 +1027,7 @@ www/js/fpp.js	ExtendSchedulePopup	6184	24	24	todo		auto: not examined yet
 www/js/fpp.js	GetPlaylistArray	6213	2	19	todo		auto: not examined yet
 www/js/fpp.js	GetSequenceArray	6234	5	16	todo		auto: not examined yet
 www/js/fpp.js	GetMediaArray	6252	13	13	todo		auto: not examined yet
-www/js/fpp.js	GetFiles	6266	102	102	todo		auto: not examined yet
+www/js/fpp.js	GetFiles	6266	102	102	skip		dead: only filemanager.php calls GetFiles, and fpp-filemanager.js's own GetFiles (3 args) replaces this one there
 www/js/fpp.js	moveFile	6393	4	17	todo		auto: not examined yet
 www/js/fpp.js	updateFPPStatus	6411	3	3	todo		auto: not examined yet
 www/js/fpp.js	changeTemperatureUnit	6505	10	10	todo		auto: not examined yet
@@ -1154,9 +1154,9 @@ www/js/fpp.js	SetMultisyncHosts	13278	4	25	todo		auto: not examined yet
 www/js/fpp.js	DisposeArgHelpTooltips	13323	2	11	todo		auto: not examined yet
 www/js/fpp.js	CommandSelectChanged	13335	9	93	todo		auto: not examined yet
 www/js/fpp.js	MoveEntryPropertiesToBottom	13449	4	15	todo		auto: not examined yet
-www/js/fpp.js	SubCommandChanged	13473	24	24	todo		auto: not examined yet
-www/js/fpp.js	valFunc	13573	77	148	todo		auto: not examined yet
-www/js/fpp.js	subCommandInitFunc	13622	6	6	todo		auto: not examined yet
+www/js/fpp.js	SubCommandChanged	13473	24	24	test	web/tests/command-args-editable.spec.ts	a subcommand changed in the editable printer: old sub-args removed, the new effect's printed
+www/js/fpp.js	valFunc	13573	77	148	test	web/tests/command-args-editable.spec.ts	PrintArgsInputsForEditable (fpp-osc's printer). Left: the time and date branches (no fppd command has those types) and the children bullet (children is never filled: dead)
+www/js/fpp.js	subCommandInitFunc	13622	6	6	test	web/tests/command-args-editable.spec.ts	the editable printer's subcommand select
 www/js/fpp.js	InitArgHelpTooltips	13759	4	16	todo		auto: not examined yet
 www/js/fpp.js	PrintArgInputs	13776	103	713	todo		auto: not examined yet
 www/js/fpp.js	SyncMultistringChecks	14531	10	31	todo		auto: not examined yet
