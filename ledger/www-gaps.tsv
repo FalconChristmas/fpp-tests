@@ -1217,24 +1217,24 @@ www/js/pipewire-mixer.js	PWMixerStartMeter	1107	35	35	todo		auto: not examined y
 www/js/pipewire-mixer.js	tick	1148	14	14	todo		auto: not examined yet
 www/js/pipewire-mixer.js	PWMixerStopMeter	1178	13	13	todo		auto: not examined yet
 www/js/pipewire-mixer.js	PWMixerStopPreview	1193	14	14	todo		auto: not examined yet
-www/json/eff/index.php	(top level)	0	4	4	todo		auto: not examined yet
-www/json/index.php	(top level)	0	7	7	todo		auto: not examined yet
-www/json/info/index.php	(top level)	0	4	4	todo		auto: not examined yet
-www/json/live/index.php	(top level)	0	4	4	todo		auto: not examined yet
-www/json/nodes/index.php	(top level)	0	4	4	todo		auto: not examined yet
-www/json/pal/index.php	(top level)	0	4	4	todo		auto: not examined yet
-www/json/palx/index.php	(top level)	0	5	5	todo		auto: not examined yet
-www/json/state/index.php	(top level)	0	44	44	todo		auto: not examined yet
-www/json/wled_common.inc.php	(top level)	0	2	2	todo		auto: not examined yet
-www/json/wled_common.inc.php	fpp_curl_json	7	10	10	todo		auto: not examined yet
-www/json/wled_common.inc.php	fpp_primary_mac	22	12	12	todo		auto: not examined yet
-www/json/wled_common.inc.php	fpp_primary_ip	46	9	9	todo		auto: not examined yet
-www/json/wled_common.inc.php	fpp_overlay_models	65	2	2	todo		auto: not examined yet
-www/json/wled_common.inc.php	fpp_overlay_effects	71	2	2	todo		auto: not examined yet
-www/json/wled_common.inc.php	fpp_overlay_running	77	2	2	todo		auto: not examined yet
-www/json/wled_common.inc.php	build_wled_info	85	50	50	todo		auto: not examined yet
-www/json/wled_common.inc.php	build_wled_state	170	55	55	todo		auto: not examined yet
-www/json/wled_common.inc.php	send_wled_json	263	7	7	todo		auto: not examined yet
+www/json/eff/index.php	(top level)	0	4	4	test	web/tests/wled-json.spec.ts	every line
+www/json/index.php	(top level)	0	7	7	test	web/tests/wled-json.spec.ts	every line
+www/json/info/index.php	(top level)	0	4	4	test	web/tests/wled-json.spec.ts	every line
+www/json/live/index.php	(top level)	0	4	4	test	web/tests/wled-json.spec.ts	every line
+www/json/nodes/index.php	(top level)	0	4	4	test	web/tests/wled-json.spec.ts	every line
+www/json/pal/index.php	(top level)	0	4	4	test	web/tests/wled-json.spec.ts	every line
+www/json/palx/index.php	(top level)	0	5	5	test	web/tests/wled-json.spec.ts	answered, but its one palette comes out as a list (test.fail(), FUTURE.md)
+www/json/state/index.php	(top level)	0	44	44	test	web/tests/wled-json.spec.ts	GET, OPTIONS, POST per segment and for the whole node, a missing segment, a body that is not JSON
+www/json/wled_common.inc.php	(top level)	0	2	2	test	web/tests/wled-json.spec.ts	the shim's requires
+www/json/wled_common.inc.php	fpp_curl_json	7	10	10	test	web/tests/wled-json.spec.ts	segments per model, on and fx from fppd's state, CORS headers
+www/json/wled_common.inc.php	fpp_primary_mac	22	12	12	test	web/tests/wled-json.spec.ts	eth0's address; the fallbacks (wlan0, end0, the status, 02:00:..) need an interface the container lacks
+www/json/wled_common.inc.php	fpp_primary_ip	46	9	9	test	web/tests/wled-json.spec.ts	the status's first IP; the interfaces fallback is left
+www/json/wled_common.inc.php	fpp_overlay_models	65	2	2	test	web/tests/wled-json.spec.ts	segments per model, on and fx from fppd's state, CORS headers
+www/json/wled_common.inc.php	fpp_overlay_effects	71	2	2	test	web/tests/wled-json.spec.ts	segments per model, on and fx from fppd's state, CORS headers
+www/json/wled_common.inc.php	fpp_overlay_running	77	2	2	test	web/tests/wled-json.spec.ts	segments per model, on and fx from fppd's state, CORS headers
+www/json/wled_common.inc.php	build_wled_info	85	50	50	test	web/tests/wled-json.spec.ts	the host-description branch is reached only after an fppd restart (fppd's status caches it, a test.fail(), FUTURE.md)
+www/json/wled_common.inc.php	build_wled_state	170	55	55	test	web/tests/wled-json.spec.ts	segments per model, on and fx from fppd's state, CORS headers
+www/json/wled_common.inc.php	send_wled_json	263	7	7	test	web/tests/wled-json.spec.ts	segments per model, on and fx from fppd's state, CORS headers
 www/jurisdiction.inc	(top level)	0	1	2	todo		auto: not examined yet
 www/jurisdiction.inc	jurisdictionOptions	52	1	8	todo		auto: not examined yet
 www/jurisdiction.inc	jurisdictionRequiresPriorOptIn	111	2	12	todo		auto: not examined yet
