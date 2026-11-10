@@ -193,7 +193,7 @@ www/api/controllers/options.php	GetOptions_FrameBuffer	381	2	2	todo		auto: not e
 www/api/controllers/options.php	GetOptions_TimeZone	450	1	7	todo		auto: not examined yet
 www/api/controllers/options.php	GetOptions_BBBLeds	522	7	18	todo		auto: not examined yet
 www/api/controllers/options.php	GetOptions_GPIOS	559	26	26	test	web/tests/options-api.spec.ts	cape show and hide rules (regexes), showAllOptions, the list form
-www/api/controllers/options.php	GetOptions_AES67Interface	607	9	9	todo		auto: not examined yet
+www/api/controllers/options.php	GetOptions_AES67Interface	607	9	9	test	web/tests/network-interface-lists.spec.ts	grep -v lo and the @<link> suffix are a test.fail() (FUTURE.md); the setting it fills is read by nothing
 www/api/controllers/options.php	GetOptions	635	12	36	todo	web/tests/options-api.spec.ts	dispatcher: AudioMixerDevice, AudioInput*, GPIOS/GPIOLIST, AES67Interface, unknown name reached. Left: FrameBuffer (fpp -FB), BBBLeds
 www/api/controllers/pipewire.php	(top level)	0	1	5	todo		auto: not examined yet
 www/api/controllers/pipewire.php	pw_find_combine_streams	75	1	19	todo		auto: not examined yet
