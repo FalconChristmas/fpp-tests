@@ -765,7 +765,7 @@ www/common/settings.php	setVolume	599	7	23	todo		auto: not examined yet
 www/common/updateLock.inc.php	(top level)	0	1	2	todo		auto: not examined yet
 www/common/updateLock.inc.php	UpdateLockFile	42	3	9	todo		auto: not examined yet
 www/common/updateLock.inc.php	UpdateLockAcquireOrConflict	71	4	34	todo		auto: not examined yet
-www/config.php	(top level)	0	186	517	todo		auto: not examined yet
+www/config.php	(top level)	0	186	517	todo	web/tests/settings-file-legacy.spec.ts	the settings parser's master/bridge migration and Directory slash are tested. Left: platform and variant detection (/proc/device-tree, per board: device only), the container/OS logo branches, the debug error_logs
 www/config.php	LoadLocale	98	1	17	todo		auto: not examined yet
 www/config.php	ApprovedCape	131	9	9	todo		auto: not examined yet
 www/config.php	GetDirSetting	760	1	41	todo		auto: not examined yet
