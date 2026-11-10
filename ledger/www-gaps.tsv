@@ -137,7 +137,7 @@ www/api/controllers/files.php	MovePluginFile	592	3	29	todo		auto: not examined y
 www/api/controllers/files.php	GetFileImpl	706	2	60	todo		auto: not examined yet
 www/api/controllers/files.php	ServeFileRange	850	5	55	todo		auto: not examined yet
 www/api/controllers/files.php	findFile	949	3	14	todo		auto: not examined yet
-www/api/controllers/files.php	MoveFile	989	25	56	todo		auto: not examined yet
+www/api/controllers/files.php	MoveFile	989	25	56	test	upload-move-destinations.spec.ts	every destination, fseq.gz unpack, script CRLF, eeprom; rename-failure branches untested
 www/api/controllers/files.php	GetZipDir	1106	4	32	todo		auto: not examined yet
 www/api/controllers/files.php	ZipLogs	1180	1	28	todo		auto: not examined yet
 www/api/controllers/files.php	ZipConfigs	1277	1	14	todo		auto: not examined yet
