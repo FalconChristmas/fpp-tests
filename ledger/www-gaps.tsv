@@ -1103,15 +1103,15 @@ www/js/fpp.js	CommandListRowSavedThenReopen	11145	4	24	todo		auto: not examined 
 www/js/fpp.js	CommandListRowCancelledThenReopen	11178	3	3	todo		auto: not examined yet
 www/js/fpp.js	RemoveCommandListRow	11182	4	4	todo		auto: not examined yet
 www/js/fpp.js	MoveCommandListRow	11187	11	11	todo		auto: not examined yet
-www/js/fpp.js	FetchConditionNameOptions	11322	21	41	todo		auto: not examined yet
-www/js/fpp.js	done	11327	5	5	todo		auto: not examined yet
-www/js/fpp.js	BuildInlineSelect	11406	10	10	todo		auto: not examined yet
-www/js/fpp.js	NewGroup	11420	3	3	todo		auto: not examined yet
+www/js/fpp.js	FetchConditionNameOptions	11322	21	41	test	web/tests/condition-editor.spec.ts	a run of that spec alone left 4 of 41
+www/js/fpp.js	done	11327	5	5	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
+www/js/fpp.js	BuildInlineSelect	11406	10	10	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
+www/js/fpp.js	NewGroup	11420	3	3	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
 www/js/fpp.js	BackendJSONToTree	11442	2	19	todo		auto: not examined yet
-www/js/fpp.js	TreeToBackendJSON	11476	2	10	todo		auto: not examined yet
-www/js/fpp.js	LoadConditionListFromHiddenField	11489	3	18	todo		auto: not examined yet
-www/js/fpp.js	SerializeConditionList	11554	3	8	todo		auto: not examined yet
-www/js/fpp.js	RefreshConditionFormula	11575	3	9	todo		auto: not examined yet
+www/js/fpp.js	TreeToBackendJSON	11476	2	10	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
+www/js/fpp.js	LoadConditionListFromHiddenField	11489	3	18	test	web/tests/condition-editor.spec.ts	a run of that spec alone left 2 of 18
+www/js/fpp.js	SerializeConditionList	11554	3	8	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
+www/js/fpp.js	RefreshConditionFormula	11575	3	9	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
 www/js/fpp.js	MarkdownToSafeHtml	11610	17	88	todo		auto: not examined yet
 www/js/fpp.js	safeUrl	11621	2	8	todo		auto: not examined yet
 www/js/fpp.js	splitUrlTrail	11634	10	12	todo		auto: not examined yet
@@ -1119,29 +1119,29 @@ www/js/fpp.js	inline	11649	4	28	todo		auto: not examined yet
 www/js/fpp.js	renderList	11684	7	22	todo		auto: not examined yet
 www/js/fpp.js	cells	11707	2	20	todo		auto: not examined yet
 www/js/fpp.js	stripComments	11734	16	36	todo		auto: not examined yet
-www/js/fpp.js	BuildConditionFormula	11869	4	14	todo		auto: not examined yet
+www/js/fpp.js	BuildConditionFormula	11869	4	14	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
 www/js/fpp.js	SummarizeConditionItemHtml	11893	4	28	todo		auto: not examined yet
-www/js/fpp.js	RenderConditionTree	11931	3	14	todo		auto: not examined yet
-www/js/fpp.js	RenderMatchToggle	11957	28	28	todo		auto: not examined yet
-www/js/fpp.js	RenderConditionGroupRow	11991	67	67	todo		auto: not examined yet
-www/js/fpp.js	RenderConditionLeafRow	12062	25	51	todo		auto: not examined yet
-www/js/fpp.js	RenderAddButtons	12124	8	16	todo		auto: not examined yet
+www/js/fpp.js	RenderConditionTree	11931	3	14	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
+www/js/fpp.js	RenderMatchToggle	11957	28	28	test	web/tests/condition-editor.spec.ts	a run of that spec alone left 2 of 28
+www/js/fpp.js	RenderConditionGroupRow	11991	67	67	test	web/tests/condition-editor.spec.ts	a run of that spec alone left 10 of 67
+www/js/fpp.js	RenderConditionLeafRow	12062	25	51	test	web/tests/condition-editor.spec.ts	a run of that spec alone left 10 of 51: the Move up and Remove of a leaf (Move down is the test.fail() for the depth bug, FUTURE.md)
+www/js/fpp.js	RenderAddButtons	12124	8	16	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
 www/js/fpp.js	SummarizeConditionItem	12141	4	18	todo		auto: not examined yet
-www/js/fpp.js	RenderConditionFields	12169	273	273	todo		auto: not examined yet
-www/js/fpp.js	RefreshConditionPreview	12182	3	3	todo		auto: not examined yet
-www/js/fpp.js	FindUnwrappedVariableReference	12203	35	35	todo		auto: not examined yet
-www/js/fpp.js	RefreshConditionWarning	12239	23	23	todo		auto: not examined yet
-www/js/fpp.js	onChange	12266	5	5	todo		auto: not examined yet
-www/js/fpp.js	LabeledField	12459	10	10	todo		auto: not examined yet
-www/js/fpp.js	EyeButtonField	12475	3	3	todo		auto: not examined yet
-www/js/fpp.js	RenderSharedExpressionValueHelper	12545	88	88	todo		auto: not examined yet
-www/js/fpp.js	focusAtEnd	12562	5	5	todo		auto: not examined yet
-www/js/fpp.js	insertPendingValue	12573	30	30	todo		auto: not examined yet
-www/js/fpp.js	position	12642	37	37	todo		auto: not examined yet
-www/js/fpp.js	ShowConditionEvaluationPopup	12719	113	113	todo		auto: not examined yet
-www/js/fpp.js	SubstituteVariableValues	12792	11	11	todo		auto: not examined yet
-www/js/fpp.js	FindReferencedVariableNames	12855	32	32	todo		auto: not examined yet
-www/js/fpp.js	ShowConditionSubEditor	12900	33	33	todo		auto: not examined yet
+www/js/fpp.js	RenderConditionFields	12169	273	273	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
+www/js/fpp.js	RefreshConditionPreview	12182	3	3	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
+www/js/fpp.js	FindUnwrappedVariableReference	12203	35	35	test	web/tests/condition-editor.spec.ts	a run of that spec alone left 2 of 35
+www/js/fpp.js	RefreshConditionWarning	12239	23	23	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
+www/js/fpp.js	onChange	12266	5	5	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
+www/js/fpp.js	LabeledField	12459	10	10	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
+www/js/fpp.js	EyeButtonField	12475	3	3	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
+www/js/fpp.js	RenderSharedExpressionValueHelper	12545	88	88	test	web/tests/condition-editor.spec.ts	a run of that spec alone left 1 of 88
+www/js/fpp.js	focusAtEnd	12562	5	5	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
+www/js/fpp.js	insertPendingValue	12573	30	30	test	web/tests/condition-editor.spec.ts	a run of that spec alone left 2 of 30
+www/js/fpp.js	position	12642	37	37	test	web/tests/condition-editor.spec.ts	a run of that spec alone left 16 of 37: the fallback for Name and Value on separate lines (a narrow dialog)
+www/js/fpp.js	ShowConditionEvaluationPopup	12719	113	113	test	web/tests/condition-editor.spec.ts	a run of that spec alone left 6 of 113: more than one variable referenced at once
+www/js/fpp.js	SubstituteVariableValues	12792	11	11	test	web/tests/condition-editor.spec.ts	a run of that spec alone left 1 of 11
+www/js/fpp.js	FindReferencedVariableNames	12855	32	32	test	web/tests/condition-editor.spec.ts	a run of that spec alone left 5 of 32
+www/js/fpp.js	ShowConditionSubEditor	12900	33	33	test	web/tests/condition-editor.spec.ts	a run of that spec alone reached every line
 www/js/fpp.js	DebounceValidateExpression	12956	19	57	todo		auto: not examined yet
 www/js/fpp.js	RenderExpressionKindBadge	13017	25	25	todo		auto: not examined yet
 www/js/fpp.js	PopulateExpressionVarHelpers	13053	2	19	todo		auto: not examined yet
