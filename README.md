@@ -266,6 +266,7 @@ tests fpp master.
 | `web/` | The Playwright suite: `tests/`, its config, and the wizard's `setup` project |
 | `scripts/build-fpp.sh` | Builds an exported tree inside the container |
 | `scripts/verify-fix.sh` | Red-before, green-after check for a fix |
+| `scripts/www-gaps.py` | Refreshes `ledger/www-gaps.tsv`, the web UI code no test reaches |
 | `scenarios/fppd.py` | Starts, drives and stops one fppd |
 | `scenarios/conftest.py` | The `fppd` fixture and its end-of-test checks |
 | `tools/fseqgen.cpp` | Writes an FSEQ file with FPP's `FSEQFile` writer |

@@ -1,0 +1,1348 @@
+file	function	line	unreached	lines	status	test	note
+scripts/apply_pipewire_simple_config	(top level)	0	8	44	todo		auto: not examined yet
+scripts/genXlightsModelGroups.php	(top level)	0	133	133	todo		auto: not examined yet
+scripts/genXlightsModelGroups.php	configDir	25	6	6	todo		auto: not examined yet
+scripts/genXlightsModelGroups.php	normName	51	1	1	todo		auto: not examined yet
+scripts/genXlightsModelGroups.php	sanitizeName	55	1	1	todo		auto: not examined yet
+scripts/genXlightsModelGroups.php	resolveMember	133	23	23	todo		auto: not examined yet
+scripts/genXlightsSubmodels.php	(top level)	0	103	103	todo		auto: not examined yet
+scripts/genXlightsSubmodels.php	configDir	22	6	6	todo		auto: not examined yet
+scripts/genXlightsSubmodels.php	normName	51	1	1	todo		auto: not examined yet
+scripts/genXlightsSubmodels.php	sanitizeName	59	1	1	todo		auto: not examined yet
+scripts/genXlightsSubmodels.php	expandToken	82	16	16	todo		auto: not examined yet
+scripts/genXlightsSubmodels.php	expandLine	110	5	5	todo		auto: not examined yet
+scripts/generateEEPROM	(top level)	0	33	33	todo		auto: not examined yet
+scripts/generateEEPROM	GenerateEEPROM	60	16	16	todo		auto: not examined yet
+scripts/generateEEPROM	CloneEEPROM	87	10	10	todo		auto: not examined yet
+scripts/generateEEPROM	DumpEEPROMInfo	105	8	8	todo		auto: not examined yet
+scripts/generateEEPROM	ExtractFiles	119	7	7	todo		auto: not examined yet
+scripts/generateEEPROM	ParseJSONConfig	133	22	22	todo		auto: not examined yet
+scripts/generateEEPROM	CheckSerialNumber	170	12	12	todo		auto: not examined yet
+scripts/generateEEPROM	CheckOutputFilename	193	6	6	todo		auto: not examined yet
+scripts/generateEEPROM	SanityCheckOptions	206	16	16	todo		auto: not examined yet
+scripts/generateEEPROM	GetOptions	235	11	11	todo		auto: not examined yet
+scripts/generateEEPROM	UsageJSON	272	17	17	todo		auto: not examined yet
+scripts/generateEEPROM	Usage	291	53	53	todo		auto: not examined yet
+scripts/handle_boot_actions	(top level)	0	4	19	todo		auto: not examined yet
+scripts/handle_boot_actions	HandleSettings	7	9	35	todo		auto: not examined yet
+scripts/handle_boot_actions	HandleExpandFS	53	8	8	todo		auto: not examined yet
+scripts/media_report.php	(top level)	0	100	278	todo		auto: not examined yet
+scripts/media_report.php	audioRates	118	4	11	todo		auto: not examined yet
+scripts/media_report.php	rateGroup	147	4	10	todo		auto: not examined yet
+scripts/media_report.php	clip	185	4	6	todo		auto: not examined yet
+scripts/media_report.php	humanDuration	207	2	6	todo		auto: not examined yet
+scripts/media_report.php	hz	218	1	3	todo		auto: not examined yet
+scripts/media_report.php	aspect	237	12	12	todo		auto: not examined yet
+scripts/media_report.php	scanType	264	4	4	todo		auto: not examined yet
+scripts/media_report.php	frameRate	272	5	5	todo		auto: not examined yet
+scripts/media_report.php	bitDepth	282	5	10	todo		auto: not examined yet
+scripts/media_report.php	probe	311	6	22	todo		auto: not examined yet
+scripts/media_report.php	classify	345	15	47	todo		auto: not examined yet
+scripts/media_report.php	countTable	483	2	18	todo		auto: not examined yet
+scripts/media_report.php	rateNote	509	3	8	todo		auto: not examined yet
+scripts/media_report.php	bitrateBucket	522	6	8	todo		auto: not examined yet
+scripts/media_report.php	resolutionBucket	538	1	1	todo		auto: not examined yet
+scripts/plugin_history.php	(top level)	0	82	263	todo		auto: not examined yet
+scripts/plugin_history.php	gitInfo	61	7	7	todo		auto: not examined yet
+scripts/plugin_history.php	shownPath	92	1	1	todo		auto: not examined yet
+scripts/plugin_update_check.php	(top level)	0	14	90	todo		auto: not examined yet
+scripts/plugin_update_check.php	PluginSweepDueList	46	2	13	todo		auto: not examined yet
+scripts/plugin_update_check.php	PluginSweepRecord	72	1	14	todo		auto: not examined yet
+scripts/plugin_update_check.php	PluginSweepOne	94	1	19	todo		auto: not examined yet
+scripts/regenerate_pipewire_groups	(top level)	0	37	101	todo		auto: not examined yet
+scripts/regenerate_pipewire_groups	json	61	1	1	todo		auto: not examined yet
+scripts/upgradeCapeFirmware	(top level)	0	124	171	todo		auto: not examined yet
+scripts/upgradeCapeFirmware	find_eeprom_offsets	25	14	17	todo		auto: not examined yet
+scripts/upgradeCapeFirmware	mintCapeSerial	70	1	1	todo		auto: not examined yet
+scripts/upgradeCapeFirmware	blankCapeChecksum	79	17	17	todo		auto: not examined yet
+www/CSP_regeneration_script.php	(top level)	0	1	7	todo		auto: not examined yet
+www/about.php	(inline script)	0	122	965	todo		auto: not examined yet
+www/about.php	(top level)	0	10	93	todo		auto: not examined yet
+www/aes67-config.php	(inline script)	0	296	622	todo		auto: not examined yet
+www/api/api.html	(inline script)	0	1	20	todo		auto: not examined yet
+www/api/api.php	(top level)	0	2	15	todo		auto: not examined yet
+www/api/commandhelp.php	(top level)	0	8	19	todo		auto: not examined yet
+www/api/controllers/audioaliases.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/audioaliases.php	LoadAudioCardAliases	22	2	16	todo		auto: not examined yet
+www/api/controllers/audioaliases.php	ApplyAudioCardAlias	50	1	5	todo		auto: not examined yet
+www/api/controllers/audioaliases.php	GetAudioCardAliases	64	19	64	todo		auto: not examined yet
+www/api/controllers/audioaliases.php	SaveAudioCardAliases	179	7	26	todo		auto: not examined yet
+www/api/controllers/backups.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/backups.php	ProxyBackupToRemote	18	6	24	todo		auto: not examined yet
+www/api/controllers/backups.php	GetAvailableBackupsFromDir	69	1	16	todo		auto: not examined yet
+www/api/controllers/backups.php	GetAvailableBackupsOnDevice	163	1	9	todo		auto: not examined yet
+www/api/controllers/backups.php	DriveMountHelper	202	10	75	todo		auto: not examined yet
+www/api/controllers/backups.php	MountDevice	369	6	29	todo		auto: not examined yet
+www/api/controllers/backups.php	UnmountDevice	443	7	34	todo		auto: not examined yet
+www/api/controllers/backups.php	process_jsonbackup_file_data_helper	582	1	81	todo		auto: not examined yet
+www/api/controllers/backups.php	MakeJSONBackup	766	3	23	todo		auto: not examined yet
+www/api/controllers/backups.php	GetAvailableJSONBackupsOnDevice	855	9	9	todo		auto: not examined yet
+www/api/controllers/backups.php	RestoreJsonBackup	903	17	39	todo		auto: not examined yet
+www/api/controllers/backups.php	DownloadJsonBackup	1026	18	41	todo		auto: not examined yet
+www/api/controllers/backups.php	DeleteJsonBackup	1123	2	32	todo		auto: not examined yet
+www/api/controllers/backups.php	MountReturnCodeMap	1214	7	17	todo		auto: not examined yet
+www/api/controllers/cape.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/cape.php	GetCapeDefaultSettings	84	4	28	todo		auto: not examined yet
+www/api/controllers/cape.php	GetEEPROMVendorLists	166	1	56	todo		auto: not examined yet
+www/api/controllers/cape.php	GetCapeOptions	260	2	12	todo		auto: not examined yet
+www/api/controllers/cape.php	GetEEPROMFilename	292	1	15	todo		auto: not examined yet
+www/api/controllers/cape.php	GetSigningDataHelper	333	17	64	todo		auto: not examined yet
+www/api/controllers/cape.php	GetSigningFile	470	6	6	todo		auto: not examined yet
+www/api/controllers/cape.php	SignEEPROMHelper	493	6	23	todo		auto: not examined yet
+www/api/controllers/cape.php	SignEEPROM	547	30	30	todo		auto: not examined yet
+www/api/controllers/cape.php	PostSigningData	610	6	15	todo		auto: not examined yet
+www/api/controllers/cape.php	RedeemVoucher	656	4	45	todo		auto: not examined yet
+www/api/controllers/cape.php	RecordCapeLicenseCheck	848	11	11	todo		auto: not examined yet
+www/api/controllers/channel.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/channel.php	channel_input_get_stats	27	2	9	todo		auto: not examined yet
+www/api/controllers/channel.php	channel_input_delete_stats	55	11	11	todo		auto: not examined yet
+www/api/controllers/channel.php	channel_get_output	214	2	32	todo		auto: not examined yet
+www/api/controllers/configfile.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/configfile.php	ConfigFileWithinBase	7	11	20	todo		auto: not examined yet
+www/api/controllers/configfile.php	GetConfigFileList	86	1	10	todo		auto: not examined yet
+www/api/controllers/configfile.php	DownloadConfigFile	119	2	10	todo		auto: not examined yet
+www/api/controllers/configfile.php	UploadConfigFile	166	4	27	todo		auto: not examined yet
+www/api/controllers/configfile.php	DeleteConfigFile	236	10	14	todo		auto: not examined yet
+www/api/controllers/crashes.php	(top level)	0	1	6	todo		auto: not examined yet
+www/api/controllers/crashes.php	CrashReportPath	58	4	21	todo		auto: not examined yet
+www/api/controllers/crashes.php	PostCrashUpload	187	8	36	todo		auto: not examined yet
+www/api/controllers/crashes.php	PostCrashReport	287	5	37	todo		auto: not examined yet
+www/api/controllers/crashes.php	FppdListening	344	2	5	todo		auto: not examined yet
+www/api/controllers/crashes.php	BuildManualCrashReportWithoutFppd	358	12	52	todo		auto: not examined yet
+www/api/controllers/docs.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/docs.php	ServeApiDocs	8	1	5	todo		auto: not examined yet
+www/api/controllers/docs.php	ServeApiHtml	15	4	4	todo		auto: not examined yet
+www/api/controllers/docs.php	ServeOpenApiSpec	21	1	19	todo		auto: not examined yet
+www/api/controllers/docs.php	MergePluginApiDocs	112	3	38	todo		auto: not examined yet
+www/api/controllers/docs.php	MergeUndocumentedFppdRoutes	193	3	42	todo		auto: not examined yet
+www/api/controllers/effects.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/effects.php	effects_list_ALL	44	15	15	todo		auto: not examined yet
+www/api/controllers/email.php	(top level)	0	1	3	todo		auto: not examined yet
+www/api/controllers/errorReport.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/errorReport.php	GetErrorReportPreview	26	5	35	todo		auto: not examined yet
+www/api/controllers/events.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/events.php	events_list	20	11	11	todo		auto: not examined yet
+www/api/controllers/events.php	event_get	58	21	21	todo		auto: not examined yet
+www/api/controllers/events.php	event_trigger	110	5	18	todo		auto: not examined yet
+www/api/controllers/files.php	(top level)	0	1	3	todo		auto: not examined yet
+www/api/controllers/files.php	MapExtention	12	6	24	todo		auto: not examined yet
+www/api/controllers/files.php	FilesValidatePathOrFail	77	6	21	todo		auto: not examined yet
+www/api/controllers/files.php	files_copy	122	3	19	todo		auto: not examined yet
+www/api/controllers/files.php	files_rename	170	3	19	todo		auto: not examined yet
+www/api/controllers/files.php	GetFilesHelper	212	6	74	todo		auto: not examined yet
+www/api/controllers/files.php	GetFiles	383	1	12	todo		auto: not examined yet
+www/api/controllers/files.php	GetSequenceFPS	426	1	27	todo		auto: not examined yet
+www/api/controllers/files.php	GetPluginFileInfo	485	2	22	todo		auto: not examined yet
+www/api/controllers/files.php	MovePluginFile	592	3	29	todo		auto: not examined yet
+www/api/controllers/files.php	GetFileImpl	706	2	60	todo		auto: not examined yet
+www/api/controllers/files.php	ServeFileRange	850	5	55	todo		auto: not examined yet
+www/api/controllers/files.php	findFile	949	3	14	todo		auto: not examined yet
+www/api/controllers/files.php	MoveFile	989	25	56	todo		auto: not examined yet
+www/api/controllers/files.php	GetZipDir	1106	4	32	todo		auto: not examined yet
+www/api/controllers/files.php	ZipLogs	1180	1	28	todo		auto: not examined yet
+www/api/controllers/files.php	ZipConfigs	1277	1	14	todo		auto: not examined yet
+www/api/controllers/files.php	DeleteFile	1393	4	38	todo		auto: not examined yet
+www/api/controllers/files.php	emulated_fseek_for_big_files	1472	14	14	todo		auto: not examined yet
+www/api/controllers/files.php	PatchFile	1520	9	39	todo		auto: not examined yet
+www/api/controllers/files.php	PatchFileReceiveChunk	1592	8	24	todo		auto: not examined yet
+www/api/controllers/files.php	PatchFileAddChunk	1640	5	29	todo		auto: not examined yet
+www/api/controllers/files.php	PatchFileAssemble	1702	13	46	todo		auto: not examined yet
+www/api/controllers/files.php	PostFile	1788	7	36	todo		auto: not examined yet
+www/api/controllers/files.php	GetFileInfo	1853	4	16	todo		auto: not examined yet
+www/api/controllers/files.php	CreateDir	1895	2	17	todo		auto: not examined yet
+www/api/controllers/files.php	DeleteDir	1937	3	16	todo		auto: not examined yet
+www/api/controllers/files.php	TailFollowFile	1990	18	85	todo		auto: not examined yet
+www/api/controllers/geoip.php	(top level)	0	1	3	todo		auto: not examined yet
+www/api/controllers/geoip.php	GetGeoIP	51	8	30	todo		auto: not examined yet
+www/api/controllers/geoip.php	GeoIPLookup	161	3	17	todo		auto: not examined yet
+www/api/controllers/geoip.php	GeoIPFromIpapi	193	1	3	todo		auto: not examined yet
+www/api/controllers/geoip.php	GeoIPFromIpwhois	208	12	12	todo		auto: not examined yet
+www/api/controllers/geoip.php	GeoIPSuggestedSettings	250	1	15	todo		auto: not examined yet
+www/api/controllers/geoip.php	GeoIPSuggestedSettingsWithCoords	292	2	9	todo		auto: not examined yet
+www/api/controllers/geoip.php	TimeZoneCoordinates	326	16	18	todo		auto: not examined yet
+www/api/controllers/geoip.php	SettingOptions	362	2	7	todo		auto: not examined yet
+www/api/controllers/git.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/git.php	GitOSReleases	144	3	79	todo		auto: not examined yet
+www/api/controllers/git.php	GitOSReleaseNotes	278	2	22	todo		auto: not examined yet
+www/api/controllers/git.php	GitOSReleaseSizes	328	1	20	todo		auto: not examined yet
+www/api/controllers/git.php	GitHubForkBranchNames	372	4	37	todo		auto: not examined yet
+www/api/controllers/git.php	GitBranches	434	7	51	todo		auto: not examined yet
+www/api/controllers/git.php	GitForkBranches	553	64	118	todo		auto: not examined yet
+www/api/controllers/git.php	GitPullRequests	762	6	59	todo		auto: not examined yet
+www/api/controllers/help.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/help.php	help_help	12	41	41	todo		auto: not examined yet
+www/api/controllers/media.php	(top level)	0	1	3	todo		auto: not examined yet
+www/api/controllers/media.php	GetMediaDuration	58	1	7	todo		auto: not examined yet
+www/api/controllers/network.php	(top level)	0	1	3	todo		auto: not examined yet
+www/api/controllers/network.php	network_wifi_scan_cache_save	380	1	6	todo		auto: not examined yet
+www/api/controllers/network.php	WifiHotspotIsActive	567	1	10	todo		auto: not examined yet
+www/api/controllers/network.php	network_wifi_status	584	1	118	todo		auto: not examined yet
+www/api/controllers/network.php	network_save_dns	932	2	17	todo		auto: not examined yet
+www/api/controllers/network.php	network_save_gateway	1016	2	14	todo		auto: not examined yet
+www/api/controllers/network.php	network_add_interface	1257	1	11	todo		auto: not examined yet
+www/api/controllers/network.php	network_delete_interface	1306	4	28	todo		auto: not examined yet
+www/api/controllers/network.php	network_write_file_atomically	1370	4	9	todo		auto: not examined yet
+www/api/controllers/network.php	network_set_interface	1398	2	75	todo		auto: not examined yet
+www/api/controllers/options.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/options.php	GetAudioCurrentCard	8	12	18	todo		auto: not examined yet
+www/api/controllers/options.php	GetOptions_AudioMixerDevice	49	15	15	todo		auto: not examined yet
+www/api/controllers/options.php	GetOptions_PipeWireNodes	104	28	34	todo		auto: not examined yet
+www/api/controllers/options.php	GetOptions_AudioOutputDevice	184	22	58	todo		auto: not examined yet
+www/api/controllers/options.php	GetOptions_AudioInputDevice	310	25	31	todo		auto: not examined yet
+www/api/controllers/options.php	GetOptions_FrameBuffer	381	2	2	todo		auto: not examined yet
+www/api/controllers/options.php	GetOptions_TimeZone	450	1	7	todo		auto: not examined yet
+www/api/controllers/options.php	GetOptions_BBBLeds	522	7	18	todo		auto: not examined yet
+www/api/controllers/options.php	GetOptions_GPIOS	559	26	26	todo		auto: not examined yet
+www/api/controllers/options.php	GetOptions_AES67Interface	607	9	9	todo		auto: not examined yet
+www/api/controllers/options.php	GetOptions	635	12	36	todo		auto: not examined yet
+www/api/controllers/pipewire.php	(top level)	0	1	5	todo		auto: not examined yet
+www/api/controllers/pipewire.php	pw_find_combine_streams	75	1	19	todo		auto: not examined yet
+www/api/controllers/pipewire.php	pw_node_channel_count	107	1	5	todo		auto: not examined yet
+www/api/controllers/pipewire.php	RestartPipeWireServices	302	2	13	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetPipeWireAudioGroups	332	1	7	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SavePipeWireAudioGroups	351	6	24	todo		auto: not examined yet
+www/api/controllers/pipewire.php	ApplyPipeWireAudioGroups	401	15	183	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetPipeWireSinks	753	9	14	todo		auto: not examined yet
+www/api/controllers/pipewire.php	QueryAlsaCardBestRate	815	2	27	todo		auto: not examined yet
+www/api/controllers/pipewire.php	DetectAlsaCardMaxChannels	879	4	21	todo		auto: not examined yet
+www/api/controllers/pipewire.php	PipeWireProbeFormatRate	947	14	14	todo		auto: not examined yet
+www/api/controllers/pipewire.php	PipeWireBestFormatForRate	988	17	23	todo		auto: not examined yet
+www/api/controllers/pipewire.php	PipeWireCardHwParams	1030	9	18	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetPipeWireAudioCards	1078	1	261	todo		auto: not examined yet
+www/api/controllers/pipewire.php	UsbFindTTOwner	1521	15	15	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetUsbAudioBandwidthCheck	1557	47	64	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SetPipeWireGroupVolume	1662	22	53	todo		auto: not examined yet
+www/api/controllers/pipewire.php	UpdatePipeWireEQRealtime	1751	3	31	todo		auto: not examined yet
+www/api/controllers/pipewire.php	UpdatePipeWireDelayRealtime	1808	3	25	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetSyncCalibrationSinkForGroup	1854	3	13	todo		auto: not examined yet
+www/api/controllers/pipewire.php	StartSyncCalibration	1882	6	18	todo		auto: not examined yet
+www/api/controllers/pipewire.php	StartSyncCalibrationPlayback	1965	4	27	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetPipeWireInputGroups	2133	1	7	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SavePipeWireInputGroups	2152	6	24	todo		auto: not examined yet
+www/api/controllers/pipewire.php	ApplyPipeWireInputGroups	2202	16	94	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SetInputGroupVolume	2455	4	42	todo		auto: not examined yet
+www/api/controllers/pipewire.php	RestorePipeWireInputGroupVolumes	2532	2	18	todo		auto: not examined yet
+www/api/controllers/pipewire.php	RestoreInputGroupSendAndPathLevels	2567	3	34	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SetInputGroupMemberVolume	2647	17	64	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SaveStreamSlotVolume	2780	1	11	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SetStreamSlotVolume	2822	3	21	todo		auto: not examined yet
+www/api/controllers/pipewire.php	PipeWireEntityStates	2924	2	64	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SetPipeWireAudioMeters	3035	13	13	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetPipeWireAudioPreview	3064	10	57	todo		auto: not examined yet
+www/api/controllers/pipewire.php	PipeWirePreviewKill	3210	2	8	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetPipeWireVolumeTargets	3234	1	43	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetStreamSlotStatus	3305	9	43	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetRoutingMatrix	3379	2	58	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SaveRoutingMatrix	3468	5	36	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SetRoutingPathVolume	3534	5	60	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SaveRoutingPreset	3693	1	46	todo		auto: not examined yet
+www/api/controllers/pipewire.php	LoadRoutingPreset	3775	4	55	todo		auto: not examined yet
+www/api/controllers/pipewire.php	DeleteRoutingPreset	3869	2	12	todo		auto: not examined yet
+www/api/controllers/pipewire.php	LiveApplyRoutingPreset	3906	1	209	todo		auto: not examined yet
+www/api/controllers/pipewire.php	UpdateInputGroupEQRealtime	4286	2	70	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetPipeWireAudioSources	4398	4	40	todo		auto: not examined yet
+www/api/controllers/pipewire.php	ResolvePipeWireNodeAudio	4522	3	34	todo		auto: not examined yet
+www/api/controllers/pipewire.php	ResolvePipeWireNodeChannels	4580	2	2	todo		auto: not examined yet
+www/api/controllers/pipewire.php	ResolveAlsaCaptureNodeName	4589	6	24	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GeneratePipeWireInputGroupsConfig	4674	40	394	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GroupsAreDummyOnly	5292	3	16	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SyncBootAdapterUsbHeadroom	5341	19	40	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SyncBootGraphClock	5432	2	38	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GeneratePipeWireGroupsConfig	5487	47	579	todo		auto: not examined yet
+www/api/controllers/pipewire.php	RestorePipeWireGroupVolumes	6601	1	32	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SaveAES67Instances	6688	22	54	todo		auto: not examined yet
+www/api/controllers/pipewire.php	RebuildAudioGraphForSenderChange	6796	2	20	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SignalFPPDCommand	6851	2	18	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetAES67Status	6926	2	7	todo		auto: not examined yet
+www/api/controllers/pipewire.php	AES67FetchSDP	6969	2	7	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetAES67SDP	6997	3	6	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetAES67SDPFile	7027	2	18	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetAES67NetworkInterfaces	7064	2	16	todo		auto: not examined yet
+www/api/controllers/pipewire.php	RTSPOutputsConfigFile	7106	1	1	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetRTSPOutputs	7117	7	7	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SaveRTSPOutputs	7131	15	15	todo		auto: not examined yet
+www/api/controllers/pipewire.php	ApplyRTSPOutputs	7161	2	2	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetRTSPOutputsStatus	7172	6	11	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SaveOpusRTPInstances	7215	8	41	todo		auto: not examined yet
+www/api/controllers/pipewire.php	ApplyOpusRTPInstances	7271	12	12	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetOpusRTPStatus	7306	2	7	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SaveVBANInstances	7392	7	83	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GenerateVBANConfig	7539	5	119	todo		auto: not examined yet
+www/api/controllers/pipewire.php	ApplyVBANInstances	7709	4	35	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetVBANStatus	7781	4	39	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetPipeWireNodeMap	7845	9	17	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetPipeWireGraph	7895	1	505	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetVideoConnectors	8743	2	45	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetVideoOverlayModels	8813	4	19	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetPipeWireVideoGroups	8854	1	7	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SavePipeWireVideoGroups	8873	21	21	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetPipeWireVideoInputSources	9216	1	14	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SavePipeWireVideoInputSources	9247	9	22	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetV4L2Devices	9433	31	39	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetV4L2DeviceModes	9517	27	27	todo		auto: not examined yet
+www/api/controllers/pipewire.php	FetchFppdVideoPreview	9563	1	6	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetVideoInputPreview	9573	42	103	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SaveVideoRoutingMatrix	9844	24	24	todo		auto: not examined yet
+www/api/controllers/pipewire.php	ResolveAlsaCardNumberToId	9913	7	7	todo		auto: not examined yet
+www/api/controllers/pipewire.php	BuildSimpleVideoGroupsData	9964	13	15	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	(top level)	0	1	3	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_load_output_groups	87	2	7	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_load_input_groups	98	1	7	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_backend_mode	109	5	8	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_live_sinks	133	2	27	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_live_node_names	172	10	14	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_clamp	192	2	6	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_resolve_mute	210	2	5	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_set_channelmix_volume	241	18	18	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_persist_input_groups	271	2	2	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_not_pipewire_response	276	4	4	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	PWCtl_GetStatus	299	2	26	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	PWCtl_GetGroups	400	6	6	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	PWCtl_GetGroup	424	2	7	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	PWCtl_SetGroupVolume	454	3	30	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	PWCtl_SetGroupMute	514	35	35	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	PWCtl_SetMemberVolume	583	38	38	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	PWCtl_SetMemberMute	652	8	48	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_input_member_loopback_names	723	8	8	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_build_input_group_view	737	16	25	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_find_input_member	825	6	6	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	PWCtl_SetInputMemberVolume	856	35	35	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	PWCtl_SetInputMemberMute	922	29	29	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	PWCtl_SetStreamVolume	1036	12	25	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_apply_routing_volume	1129	34	34	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_persist_routing	1178	14	14	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	PWCtl_SetRoutingVolume	1213	21	21	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	PWCtl_SetRoutingMute	1260	31	31	todo		auto: not examined yet
+www/api/controllers/playlist.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/playlist.php	validatePlaylistReference	99	6	11	todo		auto: not examined yet
+www/api/controllers/playlist.php	validationVideoOutputExists	128	2	23	todo		auto: not examined yet
+www/api/controllers/playlist.php	validatePlaylistEntry	169	27	88	todo		auto: not examined yet
+www/api/controllers/playlist.php	validatePlaylistByName	308	5	25	todo		auto: not examined yet
+www/api/controllers/playlist.php	playlistIssueText	358	1	4	todo		auto: not examined yet
+www/api/controllers/playlist.php	playlist_list_validate	402	3	37	todo		auto: not examined yet
+www/api/controllers/playlist.php	playlist_playable	475	1	17	todo		auto: not examined yet
+www/api/controllers/playlist.php	playlist_insert	580	2	16	todo		auto: not examined yet
+www/api/controllers/playlist.php	LoadSubPlaylist	620	16	16	todo		auto: not examined yet
+www/api/controllers/playlist.php	LoadPlayListDetails	660	7	30	todo		auto: not examined yet
+www/api/controllers/playlist.php	GetPlaylist	721	1	5	todo		auto: not examined yet
+www/api/controllers/playlist.php	playlist_get	763	2	12	todo		auto: not examined yet
+www/api/controllers/playlist.php	playlist_update	811	4	32	todo		auto: not examined yet
+www/api/controllers/playlist.php	playlist_delete	884	4	17	todo		auto: not examined yet
+www/api/controllers/playlist.php	PlaylistSectionInsertItem	928	8	29	todo		auto: not examined yet
+www/api/controllers/playlist.php	playlist_repeat	1146	2	14	todo		auto: not examined yet
+www/api/controllers/plugin.php	(top level)	0	1	49	todo		auto: not examined yet
+www/api/controllers/plugin.php	DepsRequirePackages	54	1	6	todo		auto: not examined yet
+www/api/controllers/plugin.php	DepsRequirePython	68	1	6	todo		auto: not examined yet
+www/api/controllers/plugin.php	IsOfficialPluginSrcURL	102	1	8	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginBoundedFetch	154	1	12	todo		auto: not examined yet
+www/api/controllers/plugin.php	GetListedPluginInfo	269	8	12	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginRepoSlugFromURL	388	2	14	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginSrcURLIsListed	433	2	7	todo		auto: not examined yet
+www/api/controllers/plugin.php	GetPluginRepoRecords	462	1	13	todo		auto: not examined yet
+www/api/controllers/plugin.php	SetPluginRepoRecords	483	1	11	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginUnverifiedLock	517	3	11	todo		auto: not examined yet
+www/api/controllers/plugin.php	RecordPluginInstallSource	562	6	21	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginAptFiles	649	1	9	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginPackageSnapshot	687	1	8	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginPackageChanges	705	7	40	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginPackageChangesKeep	770	1	8	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginPackageChangesMerge	788	1	32	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginDeclaredDependencies	838	1	7	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginPackageChangesText	863	1	22	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginTryQuickListFetch	949	7	19	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginWarmListDetached	990	1	9	todo		auto: not examined yet
+www/api/controllers/plugin.php	ResolveUnverifiedPlugins	1014	4	25	todo		auto: not examined yet
+www/api/controllers/plugin.php	CleanupPartialPluginInstall	1128	3	6	todo		auto: not examined yet
+www/api/controllers/plugin.php	InstallPlugin	1320	15	49	todo		auto: not examined yet
+www/api/controllers/plugin.php	InstallPluginFromInfo	1413	24	168	todo		auto: not examined yet
+www/api/controllers/plugin.php	ResolveLocalDependencies	1768	3	60	todo		auto: not examined yet
+www/api/controllers/plugin.php	ResolveDependencyPlugins	1905	1	41	todo		auto: not examined yet
+www/api/controllers/plugin.php	SelectPluginVersion	2004	1	5	todo		auto: not examined yet
+www/api/controllers/plugin.php	SelectPluginVersionEntry	2031	1	27	todo		auto: not examined yet
+www/api/controllers/plugin.php	MergePluginDependencies	2085	1	15	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginVersionToNumber	2111	3	18	todo		auto: not examined yet
+www/api/controllers/plugin.php	GetPluginInfo	2173	7	24	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginEmitIcon	2223	1	9	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginCachedIconData	2251	2	11	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginServeIcon	2293	5	36	todo		auto: not examined yet
+www/api/controllers/plugin.php	FPPDPluginLifecycle	2386	2	10	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginSharedLibraryFingerprint	2418	3	8	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginReloadAfterUpgrade	2442	5	11	todo		auto: not examined yet
+www/api/controllers/plugin.php	UninstallPlugin	2459	10	65	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginFetchLock	2647	11	23	todo		auto: not examined yet
+www/api/controllers/plugin.php	CheckForPluginUpdates	2710	11	54	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginFetchFailureReason	2825	7	24	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginUpdateCheckSrcURL	2871	5	22	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginFetchReinstallTargetByURL	2909	1	8	todo		auto: not examined yet
+www/api/controllers/plugin.php	UndeclaredPackageClaims	2992	1	5	todo		auto: not examined yet
+www/api/controllers/plugin.php	ReleaseUndeclaredPackageClaims	3008	2	4	todo		auto: not examined yet
+www/api/controllers/plugin.php	ReconcilePluginDependencies	3028	8	18	todo		auto: not examined yet
+www/api/controllers/plugin.php	UpgradePlugin	3062	19	115	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginRecordUpgradedPrivacy	3283	4	14	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginPrivacyMaterial	3377	1	17	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginPrivacyRecordIsForThisDevice	3436	1	4	todo		auto: not examined yet
+www/api/controllers/plugin.php	LoadPluginPrivacyAccepted	3448	1	13	todo		auto: not examined yet
+www/api/controllers/plugin.php	RecordPluginPrivacyAccepted	3522	1	9	todo		auto: not examined yet
+www/api/controllers/plugin.php	MarkPluginPrivacyUninstalled	3541	1	12	todo		auto: not examined yet
+www/api/controllers/plugin.php	ForgetPluginPrivacyAccepted	3560	7	7	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginReinstallTarget	3578	3	11	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginCurrentBranch	3603	2	16	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginFetchBranch	3633	6	6	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginPendingPrivacy	3657	4	41	todo		auto: not examined yet
+www/api/controllers/plugin.php	GetPluginPrivacyStatus	3769	3	21	todo		auto: not examined yet
+www/api/controllers/plugin.php	FetchURLWithGitHubCredentials	3840	23	82	todo		auto: not examined yet
+www/api/controllers/plugin.php	BuildSlimPluginPopularity	4027	10	10	todo		auto: not examined yet
+www/api/controllers/plugin.php	GetPluginPopularity	4052	12	30	todo		auto: not examined yet
+www/api/controllers/plugin.php	GitHubStatsSearchPage	4126	11	27	todo		auto: not examined yet
+www/api/controllers/plugin.php	GitHubStatsSearchAll	4173	2	28	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginGitHubStatsFetchChunk	4218	13	31	todo		auto: not examined yet
+www/api/controllers/plugin.php	GetPluginGitHubStats	4288	4	44	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginOfferedReleaseNotesStyle	4431	1	6	todo		auto: not examined yet
+www/api/controllers/plugin.php	GetPluginReleaseNotes	4491	1	15	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginReleaseNotesGitHubGet	4517	2	23	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginReleaseNotesFromGitHub	4555	1	48	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginReleaseNotesGitLog	4642	2	13	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginScriptEnv	4714	1	8	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginRunScriptBounded	4741	4	54	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginReleaseNotesFromScript	4825	4	22	todo		auto: not examined yet
+www/api/controllers/plugin.php	FetchPluginInfoProxy	4885	5	26	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginUpdateVerdict	4953	5	29	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginPinnedVerdict	5016	1	11	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginGitUpdateVerdict	5058	3	19	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginUpdateStateRead	5130	3	12	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginUpdateStateWrite	5153	5	14	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginUpdateStateUpdate	5175	2	15	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginUpdateStateRecordedAt	5198	1	3	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginUpdateStateSet	5216	5	23	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginUpdateSweepDue	5364	1	8	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginUpdateStartSweep	5401	6	17	todo		auto: not examined yet
+www/api/controllers/plugin.php	GetPluginUpdateStatus	5446	7	56	todo		auto: not examined yet
+www/api/controllers/plugin.php	RefreshPluginUpdateStatus	5550	2	14	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginGetSetting	5590	2	9	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginSetSetting	5624	8	15	todo		auto: not examined yet
+www/api/controllers/plugin.php	GetPluginPageUrl	5667	1	4	todo		auto: not examined yet
+www/api/controllers/plugin.php	_PluginGetBestPageUrl	5698	1	18	todo		auto: not examined yet
+www/api/controllers/plugin.php	_PluginScanMenuPagesRaw	5755	2	24	todo		auto: not examined yet
+www/api/controllers/plugin.php	_PluginExtractPageFromRaw	5851	14	36	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginApiDeclaredFunctions	5951	14	50	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginApiFunctionConflicts	6045	1	7	todo		auto: not examined yet
+www/api/controllers/plugin.php	collectPluginEndpoints	6074	2	43	todo		auto: not examined yet
+www/api/controllers/plugin.php	addPluginEndpoints	6161	8	14	todo		auto: not examined yet
+www/api/controllers/pluginHeaders.php	(top level)	0	1	3	todo		auto: not examined yet
+www/api/controllers/pluginHeaders.php	GetPluginHeaderIndicators	26	7	44	todo		auto: not examined yet
+www/api/controllers/pluginHeaders.php	ReadPluginHeaderIndicatorCache	116	1	7	todo		auto: not examined yet
+www/api/controllers/privacy.php	(top level)	0	1	3	todo		auto: not examined yet
+www/api/controllers/privacy.php	RecordConsent	30	2	10	todo		auto: not examined yet
+www/api/controllers/proxies.php	(top level)	0	1	3	todo		auto: not examined yet
+www/api/controllers/proxies.php	remoteAction	22	1	29	todo		auto: not examined yet
+www/api/controllers/proxies.php	proxyCleanDescription	161	1	5	todo		auto: not examined yet
+www/api/controllers/proxies.php	PostProxies	192	1	20	todo		auto: not examined yet
+www/api/controllers/proxies.php	WriteProxyFile	235	3	28	todo		auto: not examined yet
+www/api/controllers/proxies.php	AddProxy	320	3	18	todo		auto: not examined yet
+www/api/controllers/proxies.php	DeleteProxy	357	9	9	todo		auto: not examined yet
+www/api/controllers/proxies.php	GetRemotes	395	11	46	todo		auto: not examined yet
+www/api/controllers/proxies.php	GetProxiedURL	488	19	19	todo		auto: not examined yet
+www/api/controllers/schedule.php	(top level)	0	1	3	todo		auto: not examined yet
+www/api/controllers/schedule.php	SaveSchedule	70	2	11	todo		auto: not examined yet
+www/api/controllers/schedule.php	ReloadSchedule	112	2	7	todo		auto: not examined yet
+www/api/controllers/scripts.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/scripts.php	script_save	79	6	24	todo		auto: not examined yet
+www/api/controllers/sequence.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/sequence.php	GetSequence	42	2	21	todo		auto: not examined yet
+www/api/controllers/sequence.php	GetSequenceMetaData	97	3	26	todo		auto: not examined yet
+www/api/controllers/sequence.php	PostSequence	144	19	19	todo		auto: not examined yet
+www/api/controllers/sequence.php	DeleteSequences	185	3	15	todo		auto: not examined yet
+www/api/controllers/sequence.php	GetSequenceStart	231	1	14	todo		auto: not examined yet
+www/api/controllers/sequence.php	GetSequenceStep	272	3	3	todo		auto: not examined yet
+www/api/controllers/sequence.php	FSeqOrEseqDirectory	332	1	5	todo		auto: not examined yet
+www/api/controllers/settings.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/settings.php	GetSetting	41	3	36	todo		auto: not examined yet
+www/api/controllers/settings.php	PutSetting	123	37	138	todo		auto: not examined yet
+www/api/controllers/settings.php	ResetFanThermalTrips	422	4	4	todo		auto: not examined yet
+www/api/controllers/settings.php	UpdateJSONValueSetting	499	2	16	todo		auto: not examined yet
+www/api/controllers/stats.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_generate	10	2	11	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_get_last_file	94	1	14	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_network	125	13	53	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_memory	274	27	45	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_significantSubset	371	1	23	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_publish_stats_file	537	1	30	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_getOutputProcessors	696	6	11	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_getFiles	722	2	12	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_addressClass	754	8	12	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_stackOf	781	3	10	todo		auto: not examined yet
+www/api/controllers/stats.php	localPeerIdentity	810	1	1	todo		auto: not examined yet
+www/api/controllers/stats.php	peerMacIdentity	830	1	4	todo		auto: not examined yet
+www/api/controllers/stats.php	addMultiSyncUUID	851	2	11	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_multiSyncCollect	891	4	63	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_getPlugins	1126	5	10	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_getSequenceShape	1156	27	64	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_universeRowChannels	1480	1	4	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_universeRowUniverses	1497	1	4	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_universe_in	1506	1	33	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_multiSyncPeerLookup	1599	5	27	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_addressForm	1672	2	11	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_universe_out	1702	9	87	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_panel_out	1937	1	12	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_other_out	1977	11	23	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_pixel_or_pi	2024	2	41	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_pwm_out	2141	16	21	todo		auto: not examined yet
+www/api/controllers/system.php	(top level)	0	1	4	todo		auto: not examined yet
+www/api/controllers/system.php	RebootDevice	18	1	5	todo		auto: not examined yet
+www/api/controllers/system.php	SystemShutdownOS	46	1	5	todo		auto: not examined yet
+www/api/controllers/system.php	StartFPPD	73	9	9	todo		auto: not examined yet
+www/api/controllers/system.php	StopFPPDNoStatus	94	9	9	todo		auto: not examined yet
+www/api/controllers/system.php	StopFPPD	129	3	3	todo		auto: not examined yet
+www/api/controllers/system.php	RestartFPPD	149	2	9	todo		auto: not examined yet
+www/api/controllers/system.php	GetUpdateStatus	230	68	117	todo		auto: not examined yet
+www/api/controllers/system.php	UpdateActivityLogFile	475	5	7	todo		auto: not examined yet
+www/api/controllers/system.php	UpdateActivityLockFile	509	3	7	todo		auto: not examined yet
+www/api/controllers/system.php	UpdateActivityLockHolder	546	2	16	todo		auto: not examined yet
+www/api/controllers/system.php	UpdateActivityRequestedLines	573	8	8	todo		auto: not examined yet
+www/api/controllers/system.php	UpdateActivityWorkersActive	595	4	14	todo		auto: not examined yet
+www/api/controllers/system.php	UpdateActivityReadTail	632	2	20	todo		auto: not examined yet
+www/api/controllers/system.php	UpdateActivityLastLines	673	35	35	todo		auto: not examined yet
+www/api/controllers/system.php	UpdateActivityReadCache	745	4	16	todo		auto: not examined yet
+www/api/controllers/system.php	UpdateActivityWriteCache	773	2	11	todo		auto: not examined yet
+www/api/controllers/system.php	GetUpdateActivityInternal	806	34	154	todo		auto: not examined yet
+www/api/controllers/system.php	GetUpdateActivity	1131	7	12	todo		auto: not examined yet
+www/api/controllers/system.php	SystemSetAudio	1163	4	20	todo		auto: not examined yet
+www/api/controllers/system.php	SystemParseVolumeTarget	1208	6	8	todo		auto: not examined yet
+www/api/controllers/system.php	SystemGetTargetVolume	1231	44	54	todo		auto: not examined yet
+www/api/controllers/system.php	SystemSetTargetedAudio	1325	16	27	todo		auto: not examined yet
+www/api/controllers/system.php	SystemGetAudio	1379	3	25	todo		auto: not examined yet
+www/api/controllers/system.php	SystemGetStatus	1451	5	95	todo		auto: not examined yet
+www/api/controllers/system.php	GetFPPDRestartBlocked	1669	9	45	todo		auto: not examined yet
+www/api/controllers/system.php	finalizeStatusJson	1772	9	44	todo		auto: not examined yet
+www/api/controllers/system.php	ReadPackageNamesFrom	1874	1	10	todo		auto: not examined yet
+www/api/controllers/system.php	CollectOSPackageNames	1916	3	6	todo		auto: not examined yet
+www/api/controllers/testmode.php	(top level)	0	1	3	todo		auto: not examined yet
+www/api/controllers/testmode.php	testMode_Set	43	1	5	todo		auto: not examined yet
+www/api/controllers/validate.php	(top level)	0	1	2	todo		auto: not examined yet
+www/api/controllers/validate.php	validationFileExists	92	1	4	todo		auto: not examined yet
+www/api/controllers/validate.php	validationMediaExists	105	1	4	todo		auto: not examined yet
+www/api/controllers/validate.php	validateFPPCommand	124	13	67	todo		auto: not examined yet
+www/api/controllers/validate.php	validate_commands	242	1	8	todo		auto: not examined yet
+www/api/index.php	(inline script)	0	25	67	todo		auto: not examined yet
+www/api/index.php	(top level)	0	1	315	todo		auto: not examined yet
+www/audio-card-aliases.php	(inline script)	0	54	205	todo		auto: not examined yet
+www/backup.php	(inline script)	0	163	592	todo		auto: not examined yet
+www/backup.php	(top level)	0	26	203	todo		auto: not examined yet
+www/backup.php	doRestore	304	11	47	todo		auto: not examined yet
+www/backup.php	ParseIniConfigForBackup	465	1	4	todo		auto: not examined yet
+www/backup.php	BackupProvenance	553	1	14	todo		auto: not examined yet
+www/backup.php	GetSettingsNotCarriedByRestore	622	1	13	todo		auto: not examined yet
+www/backup.php	processRestoreData	701	78	282	todo		auto: not examined yet
+www/backup.php	processRestoreDataArray	1397	11	74	todo		auto: not examined yet
+www/backup.php	IsSafeRestoreFilename	1611	4	9	todo		auto: not examined yet
+www/backup.php	BackupConfigFolderConfigs	1648	2	53	todo		auto: not examined yet
+www/backup.php	RestoreConfigFolderConfigs	1806	11	11	todo		auto: not examined yet
+www/backup.php	ConfigAreasForFolder	1934	5	32	todo		auto: not examined yet
+www/backup.php	performBackup	2056	4	24	todo		auto: not examined yet
+www/backup.php	doBackupDownload	2112	16	55	todo		auto: not examined yet
+www/backup.php	genSelectList	2247	1	21	todo		auto: not examined yet
+www/backup.php	ListExtraNetworkInterfaceFiles	2320	1	9	todo		auto: not examined yet
+www/backup.php	moveBackupFiles_ToBackupDirectory	2428	1	5	todo		auto: not examined yet
+www/backup.php	changeLocalFPPBackupFileLocation	2449	3	3	todo		auto: not examined yet
+www/backup.php	pruneOrRemoveAgedBackupFiles	2460	4	61	todo		auto: not examined yet
+www/backup.php	collectFppMajorVersion	2619	2	7	todo		auto: not examined yet
+www/backup.php	setBackupMaxAge	2642	3	3	todo		auto: not examined yet
+www/backup.php	setMinimumBackupCount	2655	3	3	todo		auto: not examined yet
+www/backup.php	is_array_empty	2664	2	6	todo		auto: not examined yet
+www/cape-info.php	(inline script)	0	145	665	todo		auto: not examined yet
+www/cape-info.php	(top level)	0	43	273	todo		auto: not examined yet
+www/capeLicense.inc	(top level)	0	1	4	todo		auto: not examined yet
+www/capeLicense.inc	capeLicenseStateFile	31	1	1	todo		auto: not examined yet
+www/capeLicense.inc	capeLicenseReadState	37	6	6	todo		auto: not examined yet
+www/capeLicense.inc	capeLicenseIdentity	54	5	5	todo		auto: not examined yet
+www/capeLicense.inc	capeLicenseNotifyURL	74	17	17	todo		auto: not examined yet
+www/capeLicense.inc	capeLicenseDueURL	109	9	11	todo		auto: not examined yet
+www/capeLicense.inc	capeLicenseRecord	133	8	8	todo		auto: not examined yet
+www/changebranch.php	(inline script)	0	2	19	todo		auto: not examined yet
+www/changebranch.php	(top level)	0	71	132	todo		auto: not examined yet
+www/changebranch.php	PendingConfigMigrations	128	29	29	todo		auto: not examined yet
+www/changelog.php	(inline script)	0	47	160	todo		auto: not examined yet
+www/changelog.php	(top level)	0	10	98	todo		auto: not examined yet
+www/channelinputs.php	(inline script)	0	36	243	todo		auto: not examined yet
+www/channelinputs.php	(top level)	0	2	30	todo		auto: not examined yet
+www/channeloutputs.php	(inline script)	0	932	5221	todo		auto: not examined yet
+www/channeloutputs.php	(top level)	0	6	154	todo		auto: not examined yet
+www/co-ledPanels.php	(top level)	0	20	363	todo		auto: not examined yet
+www/co-other-modules.php	(top level)	0	34	119	todo		auto: not examined yet
+www/co-pixelStrings.php	(top level)	0	11	162	todo		auto: not examined yet
+www/co-pixelStrings.php	readCapes	7	2	21	todo		auto: not examined yet
+www/co-pixelStrings.php	getLicensedOutputs	2247	1	8	todo		auto: not examined yet
+www/co-pwm.php	(top level)	0	1	28	todo		auto: not examined yet
+www/co-pwm.php	outputTypeSelect	3	3	14	todo		auto: not examined yet
+www/co-pwm.php	outputPortRow	25	2	21	todo		auto: not examined yet
+www/co-universes.php	(top level)	0	1	16	todo		auto: not examined yet
+www/commandPresets.php	(inline script)	0	28	251	todo		auto: not examined yet
+www/commandhelp.php	(inline script)	0	95	222	todo		auto: not examined yet
+www/commandsocket.php	(top level)	0	1	3	todo		auto: not examined yet
+www/commandsocket.php	SendCommand	15	19	51	todo		auto: not examined yet
+www/common.php	(top level)	0	1	7	todo		auto: not examined yet
+www/common.php	check	4	2	5	todo		auto: not examined yet
+www/common.php	GetFPPUserIds	29	1	4	todo		auto: not examined yet
+www/common.php	ScrubFile	90	1	18	todo		auto: not examined yet
+www/common.php	IsPipeWireBackend	132	1	4	todo		auto: not examined yet
+www/common.php	IsSimplePipeWireBackend	146	1	4	todo		auto: not examined yet
+www/common.php	MissingSetupSettings	173	1	14	todo		auto: not examined yet
+www/common.php	ReadSettingFromFile	228	2	21	todo		auto: not examined yet
+www/common.php	custom_parse_ini_file	276	1	15	todo		auto: not examined yet
+www/common.php	RepairConfigFileOwnership	326	8	10	todo		auto: not examined yet
+www/common.php	JsonForScript	370	1	4	todo		auto: not examined yet
+www/common.php	IsRemotePeerHost	395	1	15	todo		auto: not examined yet
+www/common.php	RemotePeerPinnedAddresses	439	1	7	todo		auto: not examined yet
+www/common.php	RemotePeerPinCurl	459	1	13	todo		auto: not examined yet
+www/common.php	RemotePeerConnectHost	484	1	4	todo		auto: not examined yet
+www/common.php	RemotePeerAddressAllowed	494	3	9	todo		auto: not examined yet
+www/common.php	RemotePeerResolve	522	12	23	todo		auto: not examined yet
+www/common.php	RemotePlayerAction	570	3	19	todo		auto: not examined yet
+www/common.php	IsValidSettingValue	659	3	27	todo		auto: not examined yet
+www/common.php	IsValidEmailList	702	1	6	todo		auto: not examined yet
+www/common.php	WriteSettingToFile	738	4	34	todo		auto: not examined yet
+www/common.php	WriteFileAtomic	812	8	23	todo		auto: not examined yet
+www/common.php	ResolveAlsaCardIdToNumber	865	1	9	todo		auto: not examined yet
+www/common.php	SetAudioOutput	957	13	33	todo		auto: not examined yet
+www/common.php	NormalizeAudioOutputToCardId	1024	2	14	todo		auto: not examined yet
+www/common.php	EffectiveAudioOutput	1056	1	6	todo		auto: not examined yet
+www/common.php	DeleteSettingFromFile	1067	9	29	todo		auto: not examined yet
+www/common.php	IfSettingEqualPrint	1115	2	12	todo		auto: not examined yet
+www/common.php	IfSettingInListPrint	1153	6	12	todo		auto: not examined yet
+www/common.php	LoadPluginSettingInfos	1185	1	11	todo		auto: not examined yet
+www/common.php	filterForPlatformControls	1211	7	7	todo		auto: not examined yet
+www/common.php	LoadTroubleShootingCommands	1231	1	9	todo		auto: not examined yet
+www/common.php	ParseBooleanValue	1306	1	1	todo		auto: not examined yet
+www/common.php	GetFanThermalZones	1348	38	41	todo		auto: not examined yet
+www/common.php	PrintFanThermalSettings	1418	48	51	todo		auto: not examined yet
+www/common.php	ShouldPrintSetting	1483	5	60	todo		auto: not examined yet
+www/common.php	PrintSetting	1580	9	172	todo		auto: not examined yet
+www/common.php	PrintPluginSettingGroup	1836	2	2	todo		auto: not examined yet
+www/common.php	PrintSettingGroup	1841	6	43	todo		auto: not examined yet
+www/common.php	PrintPluginSettingGroupTable	1925	2	2	todo		auto: not examined yet
+www/common.php	PrintSettingCheckbox	1981	1	48	todo		auto: not examined yet
+www/common.php	PrintSettingSelectInternal	2084	8	89	todo		auto: not examined yet
+www/common.php	PrintSettingText	2262	2	14	todo		auto: not examined yet
+www/common.php	PrintSettingPasswordSaved	2454	8	8	todo		auto: not examined yet
+www/common.php	PrintSettingSave	2477	5	19	todo		auto: not examined yet
+www/common.php	real_filesize	2527	4	7	todo		auto: not examined yet
+www/common.php	get_sequence_file_info	2548	4	52	todo		auto: not examined yet
+www/common.php	media_duration_cache	2707	1	28	todo		auto: not examined yet
+www/common.php	sequence_fps_cache	2774	4	25	todo		auto: not examined yet
+www/common.php	human_playtime	2845	1	4	todo		auto: not examined yet
+www/common.php	get_server_memory_info	2888	6	37	todo		auto: not examined yet
+www/common.php	file_cache_internal	2972	15	15	todo		auto: not examined yet
+www/common.php	fpp_exec_argv	3031	1	16	todo		auto: not examined yet
+www/common.php	get_cpu_stats	3173	1	17	todo		auto: not examined yet
+www/common.php	get_cpu_stats_raw	3208	2	4	todo		auto: not examined yet
+www/common.php	get_server_uptime	3266	2	24	todo		auto: not examined yet
+www/common.php	get_fpp_head_version	3308	10	10	todo		auto: not examined yet
+www/common.php	get_git_branch	3329	11	11	todo		auto: not examined yet
+www/common.php	get_remote_git_version	3394	6	52	todo		auto: not examined yet
+www/common.php	MatchesDeviceOSImage	3512	8	24	todo		auto: not examined yet
+www/common.php	check_fppstats_updates	3590	2	80	todo		auto: not examined yet
+www/common.php	getFPPVersionDisplay	3778	1	7	todo		auto: not examined yet
+www/common.php	ReplaceIllegalCharacters	3795	5	5	todo		auto: not examined yet
+www/common.php	ApplyEmailConfig	3828	11	79	todo		auto: not examined yet
+www/common.php	DisableOutputBuffering	4051	3	16	todo		auto: not examined yet
+www/common.php	PrintToolTip	4089	1	9	todo		auto: not examined yet
+www/common.php	PrintAwesomeFree	4107	5	5	todo		auto: not examined yet
+www/common.php	network_wifi_strength_obj	4120	35	61	todo		auto: not examined yet
+www/common.php	network_list_interfaces_array	4221	3	11	todo		auto: not examined yet
+www/common.php	network_interface_is_hardware	4257	1	4	todo		auto: not examined yet
+www/common.php	ConfigPathIsCredential	4294	1	13	todo		auto: not examined yet
+www/common.php	network_list_interfaces_obj	4319	19	55	todo		auto: not examined yet
+www/common.php	SanitizeDownloadFilename	4472	1	5	todo		auto: not examined yet
+www/common.php	is_valid_domain_name	4482	3	3	todo		auto: not examined yet
+www/common.php	getSystemUUID	4571	2	15	todo		auto: not examined yet
+www/common.php	getSystemUUIDSource	4636	3	16	todo		auto: not examined yet
+www/common.php	isValidSystemUUID	4684	6	22	todo		auto: not examined yet
+www/common.php	GetSystemInfoJsonInternal	4749	11	91	todo		auto: not examined yet
+www/common.php	read_directory_files	4895	2	20	todo		auto: not examined yet
+www/common.php	IsBackupBlobRef	4995	5	5	todo		auto: not examined yet
+www/common.php	ExtractBackupBlobs	5024	4	22	todo		auto: not examined yet
+www/common.php	BackupBlobRefsInJson	5085	2	5	todo		auto: not examined yet
+www/common.php	InlineBackupBlobs	5115	5	32	todo		auto: not examined yet
+www/common.php	CollectUnreferencedBackupBlobs	5189	3	15	todo		auto: not examined yet
+www/common.php	GetBackupBlobReferenceMap	5231	22	22	todo		auto: not examined yet
+www/common.php	DescribeBackupBlobDeletion	5290	21	32	todo		auto: not examined yet
+www/common.php	DescribeBackupList	5354	3	3	todo		auto: not examined yet
+www/common.php	SaveBackupMetadataCache	5421	1	5	todo		auto: not examined yet
+www/common.php	RememberBackupMetadata	5444	1	14	todo		auto: not examined yet
+www/common.php	GenerateBackupViaAPI	5473	2	13	todo		auto: not examined yet
+www/common.php	DoJsonBackupToUSB	5510	9	18	todo		auto: not examined yet
+www/common.php	GenerateBackupComment	5562	4	9	todo		auto: not examined yet
+www/common.php	GetAvailableBackupsDevices	5590	7	36	todo		auto: not examined yet
+www/common.php	CheckIfDeviceIsUsable	5662	2	12	todo		auto: not examined yet
+www/common.php	GetFlashTargetDevices	5702	4	51	todo		auto: not examined yet
+www/common.php	json_validate	5795	6	6	todo		auto: not examined yet
+www/common.php	json_array_validate	5824	1	6	todo		auto: not examined yet
+www/common.php	fetch_api_with_limit	5845	2	16	todo		auto: not examined yet
+www/common.php	fppUrlHost	5897	2	9	todo		auto: not examined yet
+www/common.php	fppSendCacheValidators	5951	5	17	todo		auto: not examined yet
+www/common.php	fppSendFileCacheValidators	6019	3	14	todo		auto: not examined yet
+www/common.php	GPIOPinLabel	6083	1	4	todo		auto: not examined yet
+www/common.php	SerialStableName	6108	2	7	todo		auto: not examined yet
+www/common.php	GetSerialDevices	6122	10	39	todo		auto: not examined yet
+www/common.php	PathIsWithin	6190	1	4	todo		auto: not examined yet
+www/common.php	DeprecatedStateChangingGetRoute	6210	1	13	todo		auto: not examined yet
+www/common.php	NoteDeprecatedStateChangingGet	6243	1	22	todo		auto: not examined yet
+www/common/audioNormalize.inc.php	(top level)	0	1	8	todo		auto: not examined yet
+www/common/audioNormalize.inc.php	AN_Available	65	4	4	todo		auto: not examined yet
+www/common/audioNormalize.inc.php	AN_Run	77	5	36	todo		auto: not examined yet
+www/common/audioNormalize.inc.php	AN_ParseEbur128Summary	154	2	11	todo		auto: not examined yet
+www/common/audioNormalize.inc.php	AN_Measure	199	1	22	todo		auto: not examined yet
+www/common/audioNormalize.inc.php	AN_SaveGains	311	2	8	todo		auto: not examined yet
+www/common/audioNormalize.inc.php	AN_SafeName	325	1	9	todo		auto: not examined yet
+www/common/audioNormalize.inc.php	AN_Process	349	1	30	todo		auto: not examined yet
+www/common/audioNormalize.inc.php	AN_FileMoved	430	2	21	todo		auto: not examined yet
+www/common/audioNormalize.inc.php	AN_FileDeleted	462	2	14	todo		auto: not examined yet
+www/common/htmlMeta.inc	(top level)	0	2	16	todo		auto: not examined yet
+www/common/menuHead.inc	(top level)	0	6	67	todo		auto: not examined yet
+www/common/metadata.php	(top level)	0	1	2	todo		auto: not examined yet
+www/common/metadata.php	getMediaDurationInfo	11	7	38	todo		auto: not examined yet
+www/common/metadata.php	GetMetaDataFromFFProbe	97	3	13	todo		auto: not examined yet
+www/common/metadata.php	ProbeMediaWithGstDiscoverer	154	2	26	todo		auto: not examined yet
+www/common/metadata.php	MediaProbeFindBinary	214	1	7	todo		auto: not examined yet
+www/common/mqtthelp.php	(top level)	0	1	2	todo		auto: not examined yet
+www/common/oplog.inc.php	(top level)	0	1	2	todo		auto: not examined yet
+www/common/packages.inc.php	(top level)	0	1	10	todo		auto: not examined yet
+www/common/packages.inc.php	WithUserPackagesLock	115	5	17	todo		auto: not examined yet
+www/common/packages.inc.php	LoadUserPackages	157	9	35	todo		auto: not examined yet
+www/common/packages.inc.php	SaveUserPackages	249	5	22	todo		auto: not examined yet
+www/common/packages.inc.php	AddPackageRequesters	312	1	16	todo		auto: not examined yet
+www/common/packages.inc.php	PackagesInstalledVia	339	5	5	todo		auto: not examined yet
+www/common/packages.inc.php	PackagesNativeArch	371	4	4	todo		auto: not examined yet
+www/common/packages.inc.php	PackageIsForeignArch	382	1	3	todo		auto: not examined yet
+www/common/packages.inc.php	InstalledReverseDependencies	404	13	13	todo		auto: not examined yet
+www/common/packages.inc.php	AptSimulate	443	5	17	todo		auto: not examined yet
+www/common/packages.inc.php	KeptConffiles	519	3	14	todo		auto: not examined yet
+www/common/packages.inc.php	RunAptStreaming	543	4	21	todo		auto: not examined yet
+www/common/packages.inc.php	AptGetUpdate	578	5	9	todo		auto: not examined yet
+www/common/packages.inc.php	FinishInterruptedDpkg	603	7	11	todo		auto: not examined yet
+www/common/packages.inc.php	InstallSystemPackage	640	15	47	todo		auto: not examined yet
+www/common/packages.inc.php	ReinstallSystemPackage	726	10	20	todo		auto: not examined yet
+www/common/packages.inc.php	RemoveSystemPackageRequester	758	2	2	todo		auto: not examined yet
+www/common/packages.inc.php	ReleasePackageClaims	774	51	87	todo		auto: not examined yet
+www/common/pluginhistory.inc.php	(top level)	0	1	3	todo		auto: not examined yet
+www/common/pluginhistory.inc.php	PluginHistoryURL	76	3	9	todo		auto: not examined yet
+www/common/pluginhistory.inc.php	AppendPluginHistory	97	6	27	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	(top level)	0	1	13	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	run	103	3	23	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	startReady	152	16	32	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	advance	204	2	4	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	handleYield	213	1	13	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	fail	231	3	3	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	startHttp	245	2	28	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	startCommand	302	3	9	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	readCommands	315	1	13	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	wait	336	1	16	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	RemoteJobUtf8CompleteLength	395	1	8	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	RemoteJobURL	414	1	3	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	RemoteJobStreamPage	483	4	27	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	RemoteJobStreamPageAnyHost	522	2	10	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	RemoteJobUpgradeOS	544	2	5	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	MultiSyncCopyDirs	555	1	8	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	RemoteJobCopyFiles	580	5	29	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	RemoteJobPushFiles	627	12	55	todo		auto: not examined yet
+www/common/remoteJobs.inc.php	RemoteJobChangeBranch	706	10	40	todo		auto: not examined yet
+www/common/settings.php	(top level)	0	1	2	todo		auto: not examined yet
+www/common/settings.php	SetTimeZone	3	6	13	todo		auto: not examined yet
+www/common/settings.php	SetRTC	54	2	2	todo		auto: not examined yet
+www/common/settings.php	SetupHtaccess	101	2	15	todo		auto: not examined yet
+www/common/settings.php	UIPasswordHash	172	1	13	todo		auto: not examined yet
+www/common/settings.php	SetUIPassword	193	1	9	todo		auto: not examined yet
+www/common/settings.php	EnableOSPassword	214	1	7	todo		auto: not examined yet
+www/common/settings.php	SetOSPassword	233	1	4	todo		auto: not examined yet
+www/common/settings.php	SetForceHDMI	258	1	9	todo		auto: not examined yet
+www/common/settings.php	SetForceHDMIResolution	285	2	16	todo		auto: not examined yet
+www/common/settings.php	SetInstalledCape	318	16	16	todo		auto: not examined yet
+www/common/settings.php	SetGPIOFanProperties	358	1	24	todo		auto: not examined yet
+www/common/settings.php	SetupLocalMQTTBroker	431	2	25	todo		auto: not examined yet
+www/common/settings.php	SetupScreenBlanking	468	10	10	todo		auto: not examined yet
+www/common/settings.php	ApplySetting	490	15	80	todo		auto: not examined yet
+www/common/settings.php	setVolume	599	7	23	todo		auto: not examined yet
+www/common/updateLock.inc.php	(top level)	0	1	2	todo		auto: not examined yet
+www/common/updateLock.inc.php	UpdateLockFile	42	3	9	todo		auto: not examined yet
+www/common/updateLock.inc.php	UpdateLockAcquireOrConflict	71	4	34	todo		auto: not examined yet
+www/config.php	(top level)	0	186	517	todo		auto: not examined yet
+www/config.php	LoadLocale	98	1	17	todo		auto: not examined yet
+www/config.php	ApprovedCape	131	9	9	todo		auto: not examined yet
+www/config.php	GetDirSetting	760	1	41	todo		auto: not examined yet
+www/copystorage.php	(top level)	0	18	162	todo		auto: not examined yet
+www/credits.php	(inline script)	0	24	109	todo		auto: not examined yet
+www/currentmonitor.php	(inline script)	0	19	207	todo		auto: not examined yet
+www/currentmonitor.php	(top level)	0	1	19	todo		auto: not examined yet
+www/disableKiosk.php	(top level)	0	1	19	todo		auto: not examined yet
+www/effects.php	(inline script)	0	22	215	todo		auto: not examined yet
+www/effects.php	PrintEffectRows	149	2	13	todo		auto: not examined yet
+www/filemanager.php	(inline script)	0	151	420	todo		auto: not examined yet
+www/filemanager.php	(top level)	0	1	83	todo		auto: not examined yet
+www/flash-storage.php	(top level)	0	5	33	todo		auto: not examined yet
+www/fppEEPROM.php	(top level)	0	2	2	todo		auto: not examined yet
+www/fppEEPROM.php	parseData	30	60	60	todo		auto: not examined yet
+www/fppEEPROM.php	generateData	118	81	81	todo		auto: not examined yet
+www/fppEEPROM.php	verifySignature	251	23	23	todo		auto: not examined yet
+www/fppEEPROM.php	setLocation	292	12	12	todo		auto: not examined yet
+www/fppEEPROM.php	insertFile	312	15	15	todo		auto: not examined yet
+www/fppEEPROM.php	insertVariable	334	4	4	todo		auto: not examined yet
+www/fppEEPROM.php	replaceVariable	341	15	15	todo		auto: not examined yet
+www/fppEEPROM.php	getSetting	366	4	4	todo		auto: not examined yet
+www/fppEEPROM.php	read	376	5	5	todo		auto: not examined yet
+www/fppEEPROM.php	write	387	6	6	todo		auto: not examined yet
+www/fppEEPROM.php	clone	398	17	17	todo		auto: not examined yet
+www/fppEEPROM.php	sigStatusText	426	6	6	todo		auto: not examined yet
+www/fppEEPROM.php	dumpInfo	437	38	38	todo		auto: not examined yet
+www/fppEEPROM.php	dumpTable	489	41	41	todo		auto: not examined yet
+www/fppEEPROM.php	extractFiles	545	26	26	todo		auto: not examined yet
+www/fppEEPROM.php	setKeyDir	585	4	4	todo		auto: not examined yet
+www/fppEEPROM.php	setCapeName	592	2	2	todo		auto: not examined yet
+www/fppEEPROM.php	setCapeVersion	596	2	2	todo		auto: not examined yet
+www/fppEEPROM.php	setCapeSerial	600	2	2	todo		auto: not examined yet
+www/fppEEPROM.php	setDeviceSerial	604	2	2	todo		auto: not examined yet
+www/fppEEPROM.php	setSigningKey	608	2	2	todo		auto: not examined yet
+www/fppEEPROM.php	checkSignature	612	1	1	todo		auto: not examined yet
+www/fppEEPROM.php	getSize	616	1	1	todo		auto: not examined yet
+www/fppEEPROM.php	getData	620	1	1	todo		auto: not examined yet
+www/fppEEPROM.php	getCapeName	624	1	1	todo		auto: not examined yet
+www/fppEEPROM.php	getCapeVersion	628	1	1	todo		auto: not examined yet
+www/fppEEPROM.php	getCapeSerial	632	1	1	todo		auto: not examined yet
+www/fppEEPROM.php	getDeviceSerial	636	1	1	todo		auto: not examined yet
+www/fppEEPROM.php	getVariable	640	11	11	todo		auto: not examined yet
+www/fppdefines.php	(top level)	0	10	39	todo		auto: not examined yet
+www/fppdefines_unknown.php	(top level)	0	1	8	todo		auto: not examined yet
+www/fppunknown_versions.php	(top level)	0	1	2	todo		auto: not examined yet
+www/fppunknown_versions.php	getFPPVersionTriplet	31	1	1	todo		auto: not examined yet
+www/fppunknown_versions.php	writeFPPVersionJavascriptFunctions	38	2	2	todo		auto: not examined yet
+www/fppversion.php	(top level)	0	1	2	todo		auto: not examined yet
+www/gitCheckoutVersion.php	(top level)	0	22	30	todo		auto: not examined yet
+www/gpio.php	(inline script)	0	35	544	todo		auto: not examined yet
+www/gpio.php	(top level)	0	57	137	todo		auto: not examined yet
+www/growsd.php	(top level)	0	4	21	todo		auto: not examined yet
+www/hdmi_table.json.php	(top level)	0	2	11	todo		auto: not examined yet
+www/healthCheck.php	(inline script)	0	18	128	todo		auto: not examined yet
+www/healthCheckHelper.php	(top level)	0	1	6	todo		auto: not examined yet
+www/healthCheckSSE.php	(top level)	0	1	10	todo		auto: not examined yet
+www/help.php	(inline script)	0	22	121	todo		auto: not examined yet
+www/help/about.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/backup.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/channelinputs.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/channelmemorymaps.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/channeloutputs.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/commandPresets.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/filemanager.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/gpio.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/keybindings.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/mqtt.php	(top level)	0	1	14	todo		auto: not examined yet
+www/help/multisync.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/networkconfig.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/outputprocessors.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/packages.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/pixeloverlaymodels.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/playlists.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/plugins.php	(top level)	0	3	3	todo		auto: not examined yet
+www/help/proxies.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/recurringtasks.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/scheduler.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/settings-developer.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/settings-email.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/settings-localization.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/settings-output.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/settings-privacy.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/settings-services.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/settings-storage.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/settings-system.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/settings.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/system-stats.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/testing.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/troubleshooting.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/variables.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/vban-config.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/virtualdisplaywrapper.php	(top level)	0	2	2	todo		auto: not examined yet
+www/help/virtualdisplaywrapper3d.php	(top level)	0	2	2	todo		auto: not examined yet
+www/index.php	(inline script)	0	92	736	todo		auto: not examined yet
+www/index.php	(top level)	0	4	52	todo		auto: not examined yet
+www/initialSetup.php	(inline script)	0	176	840	todo		auto: not examined yet
+www/initialSetup.php	(top level)	0	20	154	todo		auto: not examined yet
+www/installKiosk.php	(top level)	0	14	14	todo		auto: not examined yet
+www/jqupload.php	(top level)	0	8	23	todo		auto: not examined yet
+www/jqupload.php	isUploadBlockedExtension	34	2	12	todo		auto: not examined yet
+www/jqupload.php	sanitizeUploadFilename	60	1	3	todo		auto: not examined yet
+www/js/fpp-backup-filecopy.js	(top level)	0	28	308	todo		auto: not examined yet
+www/js/fpp-bootstrap-table.js	(top level)	0	20	584	todo		auto: not examined yet
+www/js/fpp-bootstrap-table.js	metricSorter	676	11	13	todo		auto: not examined yet
+www/js/fpp-bootstrap-table.js	numericSorter	692	5	7	todo		auto: not examined yet
+www/js/fpp-bootstrap-table.js	GetBootstrapTableSelectedItems	760	5	5	todo		auto: not examined yet
+www/js/fpp-bootstrap-table.js	ClearBootstrapTableSelection	771	5	5	todo		auto: not examined yet
+www/js/fpp-bootstrap-table.js	RefreshBootstrapTable	783	6	6	todo		auto: not examined yet
+www/js/fpp-filemanager.js	IsFppOwnLog	96	3	3	todo		auto: not examined yet
+www/js/fpp-filemanager.js	GetFiles	143	2	155	todo		auto: not examined yet
+www/js/fpp-filemanager.js	next	430	2	24	todo		auto: not examined yet
+www/js/fpp-filemanager.js	QueueGetAllFiles	481	2	9	todo		auto: not examined yet
+www/js/fpp-filemanager.js	LoadSequenceFPS	495	4	42	todo		auto: not examined yet
+www/js/fpp-filemanager.js	FileManagerHideEmptyTabsToggled	686	5	5	todo		auto: not examined yet
+www/js/fpp-filemanager.js	RemoveFileManagerRow	706	25	80	todo		auto: not examined yet
+www/js/fpp-filemanager.js	GetVideoInfo	830	6	23	todo		auto: not examined yet
+www/js/fpp-filemanager.js	ButtonHandler	854	5	246	todo		auto: not examined yet
+www/js/fpp-filemanager.js	ClearSelections	1129	5	5	todo		auto: not examined yet
+www/js/fpp-filemanager.js	pageSpecific_PageLoad_PostDOMLoad_ActionsSetup	1160	10	111	todo		auto: not examined yet
+www/js/fpp-filemanager.js	BuildRows	1366	5	95	todo		auto: not examined yet
+www/js/fpp-filemanager.js	BulkAddPlaylist	1552	5	47	todo		auto: not examined yet
+www/js/fpp-filemanager.js	RunScript	1612	1	32	todo		auto: not examined yet
+www/js/fpp-filemanager.js	EditScript	1647	1	37	todo		auto: not examined yet
+www/js/fpp-filemanager.js	SaveScript	1687	1	17	todo		auto: not examined yet
+www/js/fpp-filemanager.js	SaveConfigFile	1756	6	27	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	isPublicIp6	250	6	16	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	lineHtml	762	9	12	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	headlineFor	782	1	37	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	stateDotHtml	948	1	6	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	dotHtml	959	17	17	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	stripHtml	998	16	73	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	lightChanges	1094	24	24	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	changeLineHtml	1127	9	9	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	changesSummaryHtml	1142	24	24	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	headlineHtml	1174	16	16	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	summaryHtml	1193	1	4	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	detailsHtml	1204	6	21	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	bind	1228	6	22	todo		auto: not examined yet
+www/js/fpp-privacy-table.js	(top level)	0	9	130	todo		auto: not examined yet
+www/js/fpp-update.js	UpdateActivityBusySide	76	2	9	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_ClearCompleted	194	1	9	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_OnCompleted	218	10	34	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_RefreshHeaderVersion	267	8	38	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_ShowToast	311	2	9	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_GetDismissedRunId	347	2	7	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_SetDismissedRunId	355	1	8	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_SetBannerMode	373	3	13	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_Title	388	8	16	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_FetchModalState	653	18	18	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_UpdateModal	688	32	32	todo		auto: not examined yet
+www/js/fpp-update.js	openUpdateProgress	733	29	29	todo		auto: not examined yet
+www/js/fpp-update.js	tick	759	3	3	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_HideModal	770	13	13	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_Acknowledge	793	6	15	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_AcknowledgeOnClose	818	2	13	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_AddHideButton	836	8	17	todo		auto: not examined yet
+www/js/fpp-update.js	FPPUpdate_Init	869	8	26	todo		auto: not examined yet
+www/js/fpp.js	(top level)	0	99	1143	todo		auto: not examined yet
+www/js/fpp.js	CopyTextToClipboard	219	2	6	todo		auto: not examined yet
+www/js/fpp.js	fallback	220	2	12	todo		auto: not examined yet
+www/js/fpp.js	common_PageLoad_PostDOMLoad_ActionsSetup	365	2	75	todo		auto: not examined yet
+www/js/fpp.js	findPrefixedVariable	660	12	12	todo		auto: not examined yet
+www/js/fpp.js	sortHTMLSelectByText	673	33	33	todo		auto: not examined yet
+www/js/fpp.js	DoModalDialog	822	1	110	todo		auto: not examined yet
+www/js/fpp.js	handleKeypress	1185	3	36	todo		auto: not examined yet
+www/js/fpp.js	KeyBindingsNormalizeKeyName	1316	4	30	todo		auto: not examined yet
+www/js/fpp.js	KeyBindingsEventToString	1348	4	20	todo		auto: not examined yet
+www/js/fpp.js	KeyBindingsIsAllowedCombo	1378	8	8	todo		auto: not examined yet
+www/js/fpp.js	KeyBindingsGetCustomBindings	1387	4	11	todo		auto: not examined yet
+www/js/fpp.js	KeyBindingsIsTypingTarget	1399	2	9	todo		auto: not examined yet
+www/js/fpp.js	KeyBindingsRunBinding	1416	2	12	todo		auto: not examined yet
+www/js/fpp.js	KeyBindingsHandleEvent	1430	6	29	todo		auto: not examined yet
+www/js/fpp.js	versionToNumber	1618	4	23	todo		auto: not examined yet
+www/js/fpp.js	ValidatePassword	1692	6	10	todo		auto: not examined yet
+www/js/fpp.js	CheckPassword	1705	4	13	todo		auto: not examined yet
+www/js/fpp.js	CheckPasswordVerify	1720	3	13	todo		auto: not examined yet
+www/js/fpp.js	CheckOSPassword	1756	4	13	todo		auto: not examined yet
+www/js/fpp.js	CheckOSPasswordVerify	1771	3	13	todo		auto: not examined yet
+www/js/fpp.js	RegexCheckData	1786	4	17	todo		auto: not examined yet
+www/js/fpp.js	CompareFPPVersions	1807	1	12	todo		auto: not examined yet
+www/js/fpp.js	Convert24HToUIFormat	1823	4	36	todo		auto: not examined yet
+www/js/fpp.js	Convert24HFromUIFormat	1873	7	40	todo		auto: not examined yet
+www/js/fpp.js	StreamURL	2055	10	91	todo		auto: not examined yet
+www/js/fpp.js	StreamJobs	2200	8	57	todo		auto: not examined yet
+www/js/fpp.js	PostPutHelper	2263	4	20	todo		auto: not examined yet
+www/js/fpp.js	Delete	2294	3	3	todo		auto: not examined yet
+www/js/fpp.js	Get	2318	1	17	todo		auto: not examined yet
+www/js/fpp.js	GetSync	2338	3	3	todo		auto: not examined yet
+www/js/fpp.js	GetAsync	2342	3	3	todo		auto: not examined yet
+www/js/fpp.js	SetElementValue	2346	7	7	todo		auto: not examined yet
+www/js/fpp.js	GetItemCount	2354	14	14	todo		auto: not examined yet
+www/js/fpp.js	ShowTableWrapper	2502	5	17	todo		auto: not examined yet
+www/js/fpp.js	ShowPlaylistDetails	2527	5	5	todo		auto: not examined yet
+www/js/fpp.js	HidePlaylistDetails	2533	5	5	todo		auto: not examined yet
+www/js/fpp.js	PlaylistEntryTypeToString	2549	14	36	todo		auto: not examined yet
+www/js/fpp.js	psiDetailsForEntrySimpleBranch	2644	10	24	todo		auto: not examined yet
+www/js/fpp.js	psiDetailsForEntrySimple	2674	12	62	todo		auto: not examined yet
+www/js/fpp.js	psiDetailsForEntry	2750	12	82	todo		auto: not examined yet
+www/js/fpp.js	psiDetailsBranchDestination	2850	23	34	todo		auto: not examined yet
+www/js/fpp.js	psiDetailsForEntryBranch	2888	22	51	todo		auto: not examined yet
+www/js/fpp.js	psiExtraMediaBadge	2985	7	36	todo		auto: not examined yet
+www/js/fpp.js	GetPlaylistRowHTML	3029	13	106	todo		auto: not examined yet
+www/js/fpp.js	BranchItemToString	3159	17	17	todo		auto: not examined yet
+www/js/fpp.js	PlaylistTypeChanged	3178	2	54	todo		auto: not examined yet
+www/js/fpp.js	PlaylistNameOK	3246	6	11	todo		auto: not examined yet
+www/js/fpp.js	LoadPlaylistDetails	3298	1	19	todo		auto: not examined yet
+www/js/fpp.js	CreateNewPlaylist	3319	36	36	todo		auto: not examined yet
+www/js/fpp.js	UpdatePlaylistDurations	3443	4	46	todo		auto: not examined yet
+www/js/fpp.js	GetSequenceDuration	3503	7	43	todo		auto: not examined yet
+www/js/fpp.js	SetPlaylistItemMetaData	3551	46	122	todo		auto: not examined yet
+www/js/fpp.js	PopulatePlaylistItemDuration	3685	3	16	todo		auto: not examined yet
+www/js/fpp.js	AddPlaylistEntry	3705	24	127	todo		auto: not examined yet
+www/js/fpp.js	GetPlaylistEntry	3854	10	76	todo		auto: not examined yet
+www/js/fpp.js	AddPlaylist	3939	8	8	todo		auto: not examined yet
+www/js/fpp.js	SavePlaylist	3948	3	8	todo		auto: not examined yet
+www/js/fpp.js	updateAddGlobalPauseIndicator	3998	11	11	todo		auto: not examined yet
+www/js/fpp.js	updateMainPageGlobalPauseIndicator	4011	60	107	todo		auto: not examined yet
+www/js/fpp.js	updateRandomizeFromPlaylist	4042	6	12	todo		auto: not examined yet
+www/js/fpp.js	RandomizePlaylistEntries	4290	14	14	todo		auto: not examined yet
+www/js/fpp.js	ApplyGeoIPSettings	4326	4	15	todo		auto: not examined yet
+www/js/fpp.js	SetFromGeoIP	4351	2	6	todo		auto: not examined yet
+www/js/fpp.js	BrowserLocaleHints	4376	13	13	todo		auto: not examined yet
+www/js/fpp.js	GeoIPBrowserFallback	4401	18	18	todo		auto: not examined yet
+www/js/fpp.js	GeoIPBrowserLookup	4461	19	19	todo		auto: not examined yet
+www/js/fpp.js	FlagApproximateCoords	4504	19	19	todo		auto: not examined yet
+www/js/fpp.js	GeoIPLocalFallback	4524	36	36	todo		auto: not examined yet
+www/js/fpp.js	GetTimeZone	4573	10	10	todo		auto: not examined yet
+www/js/fpp.js	GetGeoLocation	4586	1	11	todo		auto: not examined yet
+www/js/fpp.js	GeoIPTestQuery	4611	2	6	todo		auto: not examined yet
+www/js/fpp.js	ViewLatLon	4618	6	6	todo		auto: not examined yet
+www/js/fpp.js	RemoveIllegalChars	4634	7	7	todo		auto: not examined yet
+www/js/fpp.js	AssignPlaylistEditorFPPCommandArgsFromList	4655	37	37	todo		auto: not examined yet
+www/js/fpp.js	EditPlaylistEntry	4693	28	76	todo		auto: not examined yet
+www/js/fpp.js	RevealAdvancedArgsWithValues	4795	1	17	todo		auto: not examined yet
+www/js/fpp.js	RemovePlaylistEntry	4816	6	14	todo		auto: not examined yet
+www/js/fpp.js	PingIP	4836	1	23	todo		auto: not examined yet
+www/js/fpp.js	PingE131IP	4867	4	4	todo		auto: not examined yet
+www/js/fpp.js	ViewReleaseNotes	4873	1	26	todo		auto: not examined yet
+www/js/fpp.js	VersionUpgradeDone	4904	3	3	todo		auto: not examined yet
+www/js/fpp.js	UpgradeFPPVersion	4907	14	62	todo		auto: not examined yet
+www/js/fpp.js	ChangeGitBranch	4983	30	47	todo		auto: not examined yet
+www/js/fpp.js	RebuildFPPSource	5032	3	3	todo		auto: not examined yet
+www/js/fpp.js	SetUniverseCount	5093	9	108	todo		auto: not examined yet
+www/js/fpp.js	IPOutputTypeChanged	5214	6	74	todo		auto: not examined yet
+www/js/fpp.js	CloneUniverses	5719	44	44	todo		auto: not examined yet
+www/js/fpp.js	CloneUniverse	5768	8	8	todo		auto: not examined yet
+www/js/fpp.js	UpdateSendingModeOptions	5777	8	20	todo		auto: not examined yet
+www/js/fpp.js	CalculatePacingMaxFPS	5800	5	79	todo		auto: not examined yet
+www/js/fpp.js	PacingRateChanged	5893	4	4	todo		auto: not examined yet
+www/js/fpp.js	postUniverseJSON	5898	4	91	todo		auto: not examined yet
+www/js/fpp.js	disableTestModeIfActive	6010	2	29	todo		auto: not examined yet
+www/js/fpp.js	validateEmail	6042	5	5	todo		auto: not examined yet
+www/js/fpp.js	validateUniverseData	6048	10	56	todo		auto: not examined yet
+www/js/fpp.js	validateNumber	6143	9	17	todo		auto: not examined yet
+www/js/fpp.js	StartNextScheduledItemNow	6161	3	11	todo		auto: not examined yet
+www/js/fpp.js	ExtendSchedule	6173	1	10	todo		auto: not examined yet
+www/js/fpp.js	ExtendSchedulePopup	6184	24	24	todo		auto: not examined yet
+www/js/fpp.js	GetPlaylistArray	6213	2	19	todo		auto: not examined yet
+www/js/fpp.js	GetSequenceArray	6234	5	16	todo		auto: not examined yet
+www/js/fpp.js	GetMediaArray	6252	13	13	todo		auto: not examined yet
+www/js/fpp.js	GetFiles	6266	102	102	todo		auto: not examined yet
+www/js/fpp.js	moveFile	6393	4	17	todo		auto: not examined yet
+www/js/fpp.js	updateFPPStatus	6411	3	3	todo		auto: not examined yet
+www/js/fpp.js	changeTemperatureUnit	6505	10	10	todo		auto: not examined yet
+www/js/fpp.js	GetFPPStatus	6515	4	116	todo		auto: not examined yet
+www/js/fpp.js	isSafeFixUrl	6681	4	10	todo		auto: not examined yet
+www/js/fpp.js	updateWarnings	6700	2	130	todo		auto: not examined yet
+www/js/fpp.js	modeToString	6930	3	13	todo		auto: not examined yet
+www/js/fpp.js	ResetMultiSyncStats	7455	5	5	todo		auto: not examined yet
+www/js/fpp.js	ResetUniverseBytesReceived	7467	12	12	todo		auto: not examined yet
+www/js/fpp.js	GetUniverseBytesReceived	7480	59	92	todo		auto: not examined yet
+www/js/fpp.js	ToggleSequencePause	7613	1	9	todo		auto: not examined yet
+www/js/fpp.js	SingleStepSequence	7623	10	10	todo		auto: not examined yet
+www/js/fpp.js	SetSetting	7690	10	67	todo		auto: not examined yet
+www/js/fpp.js	SetPluginSetting	7787	16	47	todo		auto: not examined yet
+www/js/fpp.js	ReloadSettingOptions	7849	34	34	todo		auto: not examined yet
+www/js/fpp.js	SetRebootFlag	7925	1	9	todo		auto: not examined yet
+www/js/fpp.js	SkipBootDelay	8032	11	11	todo		auto: not examined yet
+www/js/fpp.js	RestartFPPD	8044	30	52	todo		auto: not examined yet
+www/js/fpp.js	zeroPad	8115	4	4	todo		auto: not examined yet
+www/js/fpp.js	ControlFPPD	8120	1	20	todo		auto: not examined yet
+www/js/fpp.js	PlayPlaylist	8273	4	17	todo		auto: not examined yet
+www/js/fpp.js	StartPlaylistNow	8294	4	22	todo		auto: not examined yet
+www/js/fpp.js	StopEffect	8322	2	14	todo		auto: not examined yet
+www/js/fpp.js	GetRunningEffects	8341	12	56	todo		auto: not examined yet
+www/js/fpp.js	GetRunningOverlayEffects	8400	7	59	todo		auto: not examined yet
+www/js/fpp.js	RebootFPP	8506	6	25	todo		auto: not examined yet
+www/js/fpp.js	ShutdownFPP	8568	5	18	todo		auto: not examined yet
+www/js/fpp.js	UpgradePlaylist	8588	58	106	todo		auto: not examined yet
+www/js/fpp.js	PopulatePlaylistDetails	8755	8	116	todo		auto: not examined yet
+www/js/fpp.js	PopulatePlaylistDetailsEntries	8897	2	24	todo		auto: not examined yet
+www/js/fpp.js	SetVolume	8926	1	25	todo		auto: not examined yet
+www/js/fpp.js	SetFPPDmode	8968	1	10	todo		auto: not examined yet
+www/js/fpp.js	GetFPPDmodeLocal	9005	4	9	todo		auto: not examined yet
+www/js/fpp.js	DisplayHelp	9053	1	52	todo		auto: not examined yet
+www/js/fpp.js	ErUpdateNextBtn	9163	6	34	todo		auto: not examined yet
+www/js/fpp.js	ErGoToStep	9236	4	4	todo		auto: not examined yet
+www/js/fpp.js	ErNext	9252	6	16	todo		auto: not examined yet
+www/js/fpp.js	DisplayErrorReportDialog	9320	23	135	todo		auto: not examined yet
+www/js/fpp.js	close	9369	1	3	todo		auto: not examined yet
+www/js/fpp.js	ErBuildCrashReport	9476	24	54	todo		auto: not examined yet
+www/js/fpp.js	showError	9484	4	6	todo		auto: not examined yet
+www/js/fpp.js	ErSendCrashReport	9538	62	62	todo		auto: not examined yet
+www/js/fpp.js	ErOpenGitHubPrefilled	9607	26	26	todo		auto: not examined yet
+www/js/fpp.js	PlayFileInBrowser	9683	5	55	todo		auto: not examined yet
+www/js/fpp.js	CopyFile	9760	2	20	todo		auto: not examined yet
+www/js/fpp.js	RenameFile	9782	2	20	todo		auto: not examined yet
+www/js/fpp.js	DownloadFiles	9809	9	14	todo		auto: not examined yet
+www/js/fpp.js	FileURLPath	9838	1	7	todo		auto: not examined yet
+www/js/fpp.js	ViewImage	9846	12	12	todo		auto: not examined yet
+www/js/fpp.js	TailFollowFile	9885	25	75	todo		auto: not examined yet
+www/js/fpp.js	startTailFollowStream	9971	19	38	todo		auto: not examined yet
+www/js/fpp.js	ViewFileImpl	10021	3	38	todo		auto: not examined yet
+www/js/fpp.js	DeleteFile	10073	14	36	todo		auto: not examined yet
+www/js/fpp.js	UploadAndDeleteCrashReports	10146	1	10	todo		auto: not examined yet
+www/js/fpp.js	ShowCrashUploadDialog	10160	57	141	todo		auto: not examined yet
+www/js/fpp.js	UploadCrashReportsSequentially	10326	38	38	todo		auto: not examined yet
+www/js/fpp.js	next	10338	3	3	todo		auto: not examined yet
+www/js/fpp.js	UploadCrashReportViaBrowser	10394	51	51	todo		auto: not examined yet
+www/js/fpp.js	DeleteUploadedCrashReport	10456	19	19	todo		auto: not examined yet
+www/js/fpp.js	ReportCrashUploadResults	10476	53	53	todo		auto: not examined yet
+www/js/fpp.js	SetupSelectableTableRow	10531	8	50	todo		auto: not examined yet
+www/js/fpp.js	handleVisibilityChange	10665	6	15	todo		auto: not examined yet
+www/js/fpp.js	syntaxHighlight	10690	3	24	todo		auto: not examined yet
+www/js/fpp.js	CommandToJSON	10715	26	70	todo		auto: not examined yet
+www/js/fpp.js	UpdateChildVisibility	10884	2	37	todo		auto: not examined yet
+www/js/fpp.js	UpdateGenericArgChildVisibility	10929	2	22	todo		auto: not examined yet
+www/js/fpp.js	CommandListSummary	10972	2	16	todo		auto: not examined yet
+www/js/fpp.js	LoadCommandListFromHiddenField	11001	2	9	todo		auto: not examined yet
+www/js/fpp.js	RenderCommandListRows	11023	4	39	todo		auto: not examined yet
+www/js/fpp.js	ReopenOuterCommandEditorAfterCommandListPick	11103	2	8	todo		auto: not examined yet
+www/js/fpp.js	EditCommandListRow	11136	3	3	todo		auto: not examined yet
+www/js/fpp.js	CommandListRowSavedThenReopen	11145	4	24	todo		auto: not examined yet
+www/js/fpp.js	CommandListRowCancelledThenReopen	11178	3	3	todo		auto: not examined yet
+www/js/fpp.js	RemoveCommandListRow	11182	4	4	todo		auto: not examined yet
+www/js/fpp.js	MoveCommandListRow	11187	11	11	todo		auto: not examined yet
+www/js/fpp.js	FetchConditionNameOptions	11322	21	41	todo		auto: not examined yet
+www/js/fpp.js	done	11327	5	5	todo		auto: not examined yet
+www/js/fpp.js	BuildInlineSelect	11406	10	10	todo		auto: not examined yet
+www/js/fpp.js	NewGroup	11420	3	3	todo		auto: not examined yet
+www/js/fpp.js	BackendJSONToTree	11442	2	19	todo		auto: not examined yet
+www/js/fpp.js	TreeToBackendJSON	11476	2	10	todo		auto: not examined yet
+www/js/fpp.js	LoadConditionListFromHiddenField	11489	3	18	todo		auto: not examined yet
+www/js/fpp.js	SerializeConditionList	11554	3	8	todo		auto: not examined yet
+www/js/fpp.js	RefreshConditionFormula	11575	3	9	todo		auto: not examined yet
+www/js/fpp.js	MarkdownToSafeHtml	11610	17	88	todo		auto: not examined yet
+www/js/fpp.js	safeUrl	11621	2	8	todo		auto: not examined yet
+www/js/fpp.js	splitUrlTrail	11634	10	12	todo		auto: not examined yet
+www/js/fpp.js	inline	11649	4	28	todo		auto: not examined yet
+www/js/fpp.js	renderList	11684	7	22	todo		auto: not examined yet
+www/js/fpp.js	cells	11707	2	20	todo		auto: not examined yet
+www/js/fpp.js	stripComments	11734	16	36	todo		auto: not examined yet
+www/js/fpp.js	BuildConditionFormula	11869	4	14	todo		auto: not examined yet
+www/js/fpp.js	SummarizeConditionItemHtml	11893	4	28	todo		auto: not examined yet
+www/js/fpp.js	RenderConditionTree	11931	3	14	todo		auto: not examined yet
+www/js/fpp.js	RenderMatchToggle	11957	28	28	todo		auto: not examined yet
+www/js/fpp.js	RenderConditionGroupRow	11991	67	67	todo		auto: not examined yet
+www/js/fpp.js	RenderConditionLeafRow	12062	25	51	todo		auto: not examined yet
+www/js/fpp.js	RenderAddButtons	12124	8	16	todo		auto: not examined yet
+www/js/fpp.js	SummarizeConditionItem	12141	4	18	todo		auto: not examined yet
+www/js/fpp.js	RenderConditionFields	12169	273	273	todo		auto: not examined yet
+www/js/fpp.js	RefreshConditionPreview	12182	3	3	todo		auto: not examined yet
+www/js/fpp.js	FindUnwrappedVariableReference	12203	35	35	todo		auto: not examined yet
+www/js/fpp.js	RefreshConditionWarning	12239	23	23	todo		auto: not examined yet
+www/js/fpp.js	onChange	12266	5	5	todo		auto: not examined yet
+www/js/fpp.js	LabeledField	12459	10	10	todo		auto: not examined yet
+www/js/fpp.js	EyeButtonField	12475	3	3	todo		auto: not examined yet
+www/js/fpp.js	RenderSharedExpressionValueHelper	12545	88	88	todo		auto: not examined yet
+www/js/fpp.js	focusAtEnd	12562	5	5	todo		auto: not examined yet
+www/js/fpp.js	insertPendingValue	12573	30	30	todo		auto: not examined yet
+www/js/fpp.js	position	12642	37	37	todo		auto: not examined yet
+www/js/fpp.js	ShowConditionEvaluationPopup	12719	113	113	todo		auto: not examined yet
+www/js/fpp.js	SubstituteVariableValues	12792	11	11	todo		auto: not examined yet
+www/js/fpp.js	FindReferencedVariableNames	12855	32	32	todo		auto: not examined yet
+www/js/fpp.js	ShowConditionSubEditor	12900	33	33	todo		auto: not examined yet
+www/js/fpp.js	DebounceValidateExpression	12956	19	57	todo		auto: not examined yet
+www/js/fpp.js	RenderExpressionKindBadge	13017	25	25	todo		auto: not examined yet
+www/js/fpp.js	PopulateExpressionVarHelpers	13053	2	19	todo		auto: not examined yet
+www/js/fpp.js	RenderVarInsertHelper	13097	17	52	todo		auto: not examined yet
+www/js/fpp.js	InsertAtCursor	13152	14	14	todo		auto: not examined yet
+www/js/fpp.js	OnMultisyncChanged	13176	4	10	todo		auto: not examined yet
+www/js/fpp.js	ReloadArgContentList	13190	2	11	todo		auto: not examined yet
+www/js/fpp.js	AddCustomMultisyncHost	13259	4	16	todo		auto: not examined yet
+www/js/fpp.js	SetMultisyncHosts	13278	4	25	todo		auto: not examined yet
+www/js/fpp.js	DisposeArgHelpTooltips	13323	2	11	todo		auto: not examined yet
+www/js/fpp.js	CommandSelectChanged	13335	9	93	todo		auto: not examined yet
+www/js/fpp.js	MoveEntryPropertiesToBottom	13449	4	15	todo		auto: not examined yet
+www/js/fpp.js	SubCommandChanged	13473	24	24	todo		auto: not examined yet
+www/js/fpp.js	valFunc	13573	77	148	todo		auto: not examined yet
+www/js/fpp.js	subCommandInitFunc	13622	6	6	todo		auto: not examined yet
+www/js/fpp.js	InitArgHelpTooltips	13759	4	16	todo		auto: not examined yet
+www/js/fpp.js	PrintArgInputs	13776	103	713	todo		auto: not examined yet
+www/js/fpp.js	SyncMultistringChecks	14531	10	31	todo		auto: not examined yet
+www/js/fpp.js	ReloadContentList	14563	7	105	todo		auto: not examined yet
+www/js/fpp.js	addItem	14610	1	8	todo		auto: not examined yet
+www/js/fpp.js	PopulateExistingCommand	14693	29	96	todo		auto: not examined yet
+www/js/fpp.js	fppCommandColorPicker	14808	9	67	todo		auto: not examined yet
+www/js/fpp.js	EditCommandTemplateCanceled	14904	5	5	todo		auto: not examined yet
+www/js/fpp.js	EditCommandTemplateSaved	14910	3	3	todo		auto: not examined yet
+www/js/fpp.js	EditCommandTemplate	14914	4	27	todo		auto: not examined yet
+www/js/fpp.js	GetCommandTemplateData	14944	6	10	todo		auto: not examined yet
+www/js/fpp.js	ValidateCommands	15122	2	22	todo		auto: not examined yet
+www/js/fpp.js	ShowCommandEditor	15270	2	43	todo		auto: not examined yet
+www/js/fpp.js	ScheduleCalendar	15362	3	43	todo		auto: not examined yet
+www/js/fpp.js	FetchScheduleCalendarEvents	15507	4	52	todo		auto: not examined yet
+www/js/fpp.js	ScheduleCalendarItemInfo	15603	9	37	todo		auto: not examined yet
+www/js/fpp.js	ToggleMenu	15650	20	20	todo		auto: not examined yet
+www/js/fpp.js	SetSystemAugRefreshSeconds	15980	11	11	todo		auto: not examined yet
+www/js/fpp.js	PluginIndicatorSafeLink	16072	2	11	todo		auto: not examined yet
+www/js/fpp.js	BuildPluginHeaderIndicator	16087	2	41	todo		auto: not examined yet
+www/js/fpp.js	InitHeaderPlayerTooltip	16153	11	29	todo		auto: not examined yet
+www/js/fpp.js	RefreshHeaderBar	16187	2	444	todo		auto: not examined yet
+www/js/fpp.js	PreviewStatistics	16667	15	15	todo		auto: not examined yet
+www/js/fpp.js	isValidIpAddress	16684	2	8	todo		auto: not examined yet
+www/js/fpp.js	isValidHostname	16695	4	24	todo		auto: not examined yet
+www/js/fpp.js	bytesToHuman	16728	2	20	todo		auto: not examined yet
+www/js/fpp.js	CreateSelect	16749	8	43	todo		auto: not examined yet
+www/js/fpp.js	checkForFppUpdate	16875	13	133	todo		auto: not examined yet
+www/js/fpp.js	checkForPluginUpdates	17059	19	40	todo		auto: not examined yet
+www/js/fpp.js	requestPluginUpdateCheck	17129	7	18	todo		auto: not examined yet
+www/js/fpp.js	pluginUpdateCheckedAgo	17203	6	14	todo		auto: not examined yet
+www/js/jquery4-compat.js	(top level)	0	31	101	todo		auto: not examined yet
+www/js/jquery4-compat.js	proxy	79	6	6	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerSectionOpen	41	3	16	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerToggleSection	60	1	9	todo		auto: not examined yet
+www/js/pipewire-mixer.js	OpenPipeWireMixer	75	28	28	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerStartPolling	118	4	4	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerStopPolling	123	6	6	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerSchedulePoll	130	11	11	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerPoll	143	28	28	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerNodeState	179	2	9	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerLed	191	2	16	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerStrip	210	7	79	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerSubscribeMeters	410	27	27	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerStopMeterSubscription	445	13	13	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerOnLevels	463	16	18	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerRender	482	101	216	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerDragEnd	775	3	3	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerDragging	783	2	12	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerSlide	796	2	15	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerSlideEnd	814	3	3	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerToggleMute	818	8	8	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerParseId	829	17	26	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerCurrentMute	856	39	39	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerSend	897	64	103	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerTogglePreview	1024	59	59	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerStartMeter	1107	35	35	todo		auto: not examined yet
+www/js/pipewire-mixer.js	tick	1148	14	14	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerStopMeter	1178	13	13	todo		auto: not examined yet
+www/js/pipewire-mixer.js	PWMixerStopPreview	1193	14	14	todo		auto: not examined yet
+www/json/eff/index.php	(top level)	0	4	4	todo		auto: not examined yet
+www/json/index.php	(top level)	0	7	7	todo		auto: not examined yet
+www/json/info/index.php	(top level)	0	4	4	todo		auto: not examined yet
+www/json/live/index.php	(top level)	0	4	4	todo		auto: not examined yet
+www/json/nodes/index.php	(top level)	0	4	4	todo		auto: not examined yet
+www/json/pal/index.php	(top level)	0	4	4	todo		auto: not examined yet
+www/json/palx/index.php	(top level)	0	5	5	todo		auto: not examined yet
+www/json/state/index.php	(top level)	0	44	44	todo		auto: not examined yet
+www/json/wled_common.inc.php	(top level)	0	2	2	todo		auto: not examined yet
+www/json/wled_common.inc.php	fpp_curl_json	7	10	10	todo		auto: not examined yet
+www/json/wled_common.inc.php	fpp_primary_mac	22	12	12	todo		auto: not examined yet
+www/json/wled_common.inc.php	fpp_primary_ip	46	9	9	todo		auto: not examined yet
+www/json/wled_common.inc.php	fpp_overlay_models	65	2	2	todo		auto: not examined yet
+www/json/wled_common.inc.php	fpp_overlay_effects	71	2	2	todo		auto: not examined yet
+www/json/wled_common.inc.php	fpp_overlay_running	77	2	2	todo		auto: not examined yet
+www/json/wled_common.inc.php	build_wled_info	85	50	50	todo		auto: not examined yet
+www/json/wled_common.inc.php	build_wled_state	170	55	55	todo		auto: not examined yet
+www/json/wled_common.inc.php	send_wled_json	263	7	7	todo		auto: not examined yet
+www/jurisdiction.inc	(top level)	0	1	2	todo		auto: not examined yet
+www/jurisdiction.inc	jurisdictionOptions	52	1	8	todo		auto: not examined yet
+www/jurisdiction.inc	jurisdictionRequiresPriorOptIn	111	2	12	todo		auto: not examined yet
+www/jurisdiction.inc	jurisdictionPriorOptInMap	145	1	7	todo		auto: not examined yet
+www/jurisdiction.inc	jurisdictionForCountry	171	4	10	todo		auto: not examined yet
+www/jurisdiction.inc	localeForCountry	200	2	11	todo		auto: not examined yet
+www/localonly/cleanedphpinfo.php	(top level)	0	1	48	todo		auto: not examined yet
+www/manualUpdate.php	(top level)	0	6	74	todo		auto: not examined yet
+www/menu.inc	(top level)	0	25	154	todo		auto: not examined yet
+www/menu.inc	list_plugin_entries	33	2	32	todo		auto: not examined yet
+www/multisync.php	(inline script)	0	430	2556	todo		auto: not examined yet
+www/multisync.php	(top level)	0	3	64	todo		auto: not examined yet
+www/networkconfig.php	(inline script)	0	288	1015	todo		auto: not examined yet
+www/networkconfig.php	(top level)	0	2	52	todo		auto: not examined yet
+www/newpartitionsd.php	(top level)	0	11	11	todo		auto: not examined yet
+www/opus-rtp-config.php	(inline script)	0	119	431	todo		auto: not examined yet
+www/outputprocessors.php	(inline script)	0	152	379	todo		auto: not examined yet
+www/packages.php	(inline script)	0	78	302	todo		auto: not examined yet
+www/packagesHelper.php	(top level)	0	23	75	todo		auto: not examined yet
+www/pipewire-audio.php	(inline script)	0	333	899	todo		auto: not examined yet
+www/pipewire-graph.php	(inline script)	0	74	699	todo		auto: not examined yet
+www/pipewire-input-mixing.php	(inline script)	0	261	588	todo		auto: not examined yet
+www/pipewire-routing-matrix.php	(inline script)	0	207	405	todo		auto: not examined yet
+www/pipewire-rtsp-outputs.php	(inline script)	0	41	206	todo		auto: not examined yet
+www/pipewire-video-inputs.php	(inline script)	0	293	616	todo		auto: not examined yet
+www/pipewire-video-inputs.php	(top level)	0	1	43	todo		auto: not examined yet
+www/pipewire-video.php	(inline script)	0	218	516	todo		auto: not examined yet
+www/pixeloverlaymodels.php	(inline script)	0	155	650	todo		auto: not examined yet
+www/pixeloverlaymodels.php	(top level)	0	15	73	todo		auto: not examined yet
+www/playlistDetails.php	(top level)	0	1	11	todo		auto: not examined yet
+www/playlistEditor.php	(top level)	0	1	18	todo		auto: not examined yet
+www/playlists.php	(inline script)	0	107	774	todo		auto: not examined yet
+www/plugin.php	(inline script)	0	43	207	todo		auto: not examined yet
+www/plugin.php	(top level)	0	30	130	todo		auto: not examined yet
+www/plugin.php	pluginRealPath	16	5	21	todo		auto: not examined yet
+www/pluginconfig.php	(top level)	0	1	17	todo		auto: not examined yet
+www/plugins.php	(inline script)	0	467	2006	todo		auto: not examined yet
+www/plugins.php	(top level)	0	1	23	todo		auto: not examined yet
+www/privacyConsent.inc	(top level)	0	1	4	todo		auto: not examined yet
+www/privacyConsent.inc	RecordPrivacyConsent	108	3	19	todo		auto: not examined yet
+www/privacyConsent.inc	PrivacyConsentDrift	181	2	12	todo		auto: not examined yet
+www/privacyConsent.inc	PrivacyConsentFor	209	1	9	todo		auto: not examined yet
+www/privacyDisclosures.inc	(top level)	0	1	3	todo		auto: not examined yet
+www/privacyTable.inc	(top level)	0	1	3	todo		auto: not examined yet
+www/proxies.php	(inline script)	0	21	277	todo		auto: not examined yet
+www/rebootRemoteFPP.php	(top level)	0	28	36	todo		auto: not examined yet
+www/rebuildfpp.php	(top level)	0	5	51	todo		auto: not examined yet
+www/recurringtasks.php	(inline script)	0	103	408	todo		auto: not examined yet
+www/resetConfig.php	(top level)	0	2	99	todo		auto: not examined yet
+www/restartRemoteFPPD.php	(top level)	0	5	46	todo		auto: not examined yet
+www/runEventScript.php	(top level)	0	1	32	todo		auto: not examined yet
+www/run_normalize.php	(top level)	0	6	103	todo		auto: not examined yet
+www/scheduleCalendar.php	(top level)	0	2	11	todo		auto: not examined yet
+www/schedulePreview.php	(inline script)	0	3	63	todo		auto: not examined yet
+www/schedulePreview.php	(top level)	0	8	130	todo		auto: not examined yet
+www/schedulePreview.php	checkIfHoliday	69	1	27	todo		auto: not examined yet
+www/schedulePreview.php	getItemInfo	119	3	34	todo		auto: not examined yet
+www/schedulePreview.php	showPlaylistEnds	178	3	31	todo		auto: not examined yet
+www/scheduleentry.php	(top level)	0	2	2	todo		auto: not examined yet
+www/scheduleentry.php	__construct	17	14	14	todo		auto: not examined yet
+www/scheduler.php	(inline script)	0	100	799	todo		auto: not examined yet
+www/scriptbrowser.php	(inline script)	0	24	103	todo		auto: not examined yet
+www/settings-all.php	(top level)	0	28	62	todo		auto: not examined yet
+www/settings-av.php	(top level)	0	9	39	todo		auto: not examined yet
+www/settings-developer.php	(top level)	0	13	40	todo		auto: not examined yet
+www/settings-developer.php	filterBranch	24	1	10	todo		auto: not examined yet
+www/settings-developer.php	PrintGitBranchOptions	42	44	82	todo		auto: not examined yet
+www/settings-email.php	(top level)	0	1	7	todo		auto: not examined yet
+www/settings-localization.php	(top level)	0	1	11	todo		auto: not examined yet
+www/settings-logs.php	(top level)	0	1	7	todo		auto: not examined yet
+www/settings-mqtt.php	(inline script)	0	60	60	todo		auto: not examined yet
+www/settings-mqtt.php	(top level)	0	1	6	todo		auto: not examined yet
+www/settings-output.php	(top level)	0	1	7	todo		auto: not examined yet
+www/settings-playback.php	(top level)	0	1	8	todo		auto: not examined yet
+www/settings-privacy.php	(top level)	0	1	12	todo		auto: not examined yet
+www/settings-services.php	(top level)	0	2	16	todo		auto: not examined yet
+www/settings-storage.php	(top level)	0	33	84	todo		auto: not examined yet
+www/settings-storage.php	PrintStorageDeviceSelect	107	4	62	todo		auto: not examined yet
+www/settings-system.php	(top level)	0	1	28	todo		auto: not examined yet
+www/settings-ui.php	(top level)	0	1	26	todo		auto: not examined yet
+www/settings.php	(inline script)	0	116	717	todo		auto: not examined yet
+www/settings.php	(top level)	0	9	96	todo		auto: not examined yet
+www/shutdownRemoteFPP.php	(top level)	0	3	16	todo		auto: not examined yet
+www/streamRemoteJobs.php	(top level)	0	14	50	todo		auto: not examined yet
+www/system-stats.php	(inline script)	0	45	571	todo		auto: not examined yet
+www/system-stats.php	(top level)	0	17	134	todo		auto: not examined yet
+www/system-stats.php	formatMemBytes	788	1	6	todo		auto: not examined yet
+www/testing.php	(inline script)	0	155	771	todo		auto: not examined yet
+www/testing.php	(top level)	0	8	80	todo		auto: not examined yet
+www/troubleshooting.php	(inline script)	0	132	685	todo		auto: not examined yet
+www/troubleshootingHelper.php	(top level)	0	5	43	todo		auto: not examined yet
+www/troubleshootingText.php	(top level)	0	13	67	todo		auto: not examined yet
+www/universeentry.php	(top level)	0	1	2	todo		auto: not examined yet
+www/universeentry.php	__construct	13	10	10	todo		auto: not examined yet
+www/upgradeCapeFirmware.php	(top level)	0	8	77	todo		auto: not examined yet
+www/upgradeCapeFirmware.php	capeFirmwareUrlIsPublic	17	38	73	todo		auto: not examined yet
+www/upgradeCapeFirmware.php	capeFirmwareResolveUrl	141	3	18	todo		auto: not examined yet
+www/upgradeOS.php	(top level)	0	24	140	todo		auto: not examined yet
+www/upgradeOS.php	downloadImage	69	25	25	todo		auto: not examined yet
+www/upgradeOS.php	progress	385	15	15	todo		auto: not examined yet
+www/upgradefpp.php	(top level)	0	37	43	todo		auto: not examined yet
+www/variables.php	(inline script)	0	96	402	todo		auto: not examined yet
+www/vban-config.php	(inline script)	0	199	351	todo		auto: not examined yet
+www/virtualdisplay.php	(inline script)	0	50	278	todo		auto: not examined yet
+www/virtualdisplaybody.php	(top level)	0	9	71	todo		auto: not examined yet
+www/virtualdisplaybody3d.php	(top level)	0	118	169	todo		auto: not examined yet
+www/virtualdisplaywrapper.php	(inline script)	0	79	303	todo		auto: not examined yet
+www/virtualdisplaywrapper3d.php	(top level)	0	8	42	todo		auto: not examined yet
+www/warningHelper.php	(top level)	0	1	3	todo		auto: not examined yet
+www/win/index.php	(top level)	0	47	47	todo		auto: not examined yet
+www/wled/index.php	(top level)	0	3	3	todo		auto: not examined yet

@@ -61,3 +61,46 @@ at least eight are. A row left `todo` gets a note saying how many of its added
 lines master still has, so the rest can be read starting with the ones that
 survive. The notes start with "script check:": a person who reads a row and
 disagrees should change the outcome and rewrite the note.
+
+# Web UI coverage gaps
+
+`www-gaps.tsv` is the other half of the web work: not commits, but the code
+under fpp's `www/` (and the PHP under `scripts/` the pages run) that no web
+test reaches, from the nightly's `--www-coverage` run. One row per function
+with a line no test ran, and one per page for the script inside it
+(`(inline script)`).
+
+| column    | meaning |
+|-----------|---------|
+| file      | path in the fpp tree |
+| function  | the function, `(top level)` or `(inline script)` |
+| line      | where the function starts (0 for top level and inline scripts) |
+| unreached | its executable lines no test ran, at the last refresh |
+| lines     | its executable lines |
+| status    | `todo`, `test` (a test reaches what is worth reaching), `untestable` (with the reason: Mac-only, needs a real cape, ...), `skip` (not worth a test, with the reason); and, from the script, `covered` and `gone` |
+| test      | the test(s) that reach it, as `web/tests/file.spec.ts` |
+| note      | why, what is left, what a test would need |
+
+## Keeping it current
+
+    git -C ../fpp checkout <the nightly's fpp commit>   # the dashboard's history.json "sha"
+    python3 scripts/www-gaps.py --tree ../fpp --nightly
+
+downloads the last scheduled run's `www-coverage-raw-*` shards (or give it
+RAW directories, e.g. a run of your own's `artifacts/web/coverage/www/raw`),
+rewrites every row's counts and adds rows for new gaps. As with the commit
+ledger, only rows whose note starts with `auto:` get their status from the
+script (`todo`, `covered` once nothing is unreached, `gone` once the function
+is), so edit a row in place to take it.
+
+## Taking a share
+
+The biggest gaps still open, and the open lines per file:
+
+    awk -F'\t' '$6=="todo"' ledger/www-gaps.tsv | sort -t$'\t' -k4,4nr | head -30
+    awk -F'\t' '$6=="todo" {n[$1]+=$4} END {for (f in n) print n[f], f}' ledger/www-gaps.tsv | sort -rn | head
+
+For each: write a test that reaches it and checks what it does (coverage says
+a line ran, not that anything looked at the result), then set the row's status
+to `test`, its test and a note on what is still unreached and why. A bug the
+test finds goes in a `test.fail()` with a control beside it, and in FUTURE.md.
