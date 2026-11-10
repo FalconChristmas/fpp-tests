@@ -23,7 +23,7 @@ def test_a_stop_during_a_restart_stops_fppd(fppd):
     just after a Restart FPPD, or a test that stops fppd as a mode switch
     restarts it) ends fppd with exit 0. It does not come back up.
 
-    Regression: 93440b16f. The handler only cleared runMainFPPDLoop, which the
+    Regression: 16b7347c3. The handler only cleared runMainFPPDLoop, which the
     restart had already cleared, so the teardown went on to execlp() and the
     new fppd never heard the stop: it ran until SIGKILL. The teardown takes
     about 2 s (the channel output thread's stop), so a signal sent once
