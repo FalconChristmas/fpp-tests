@@ -16,7 +16,7 @@ import pathlib
 import re
 import os
 
-from test_output_model_pixel_strings import set_range, vstring
+from test_output_model_pixel_strings import set_range, settled_model_data, vstring
 
 MODEL = "Aliases"
 WIDTH = 5
@@ -62,11 +62,7 @@ def test_every_ws2811_family_name_is_drawn_as_ws2811(fppd):
     for ch in range(1, last + 1):
         set_range(fppd, ch, ch, 10 + ch)
 
-    def settled():
-        d = fppd.get(f"/overlays/model/{MODEL}/data").get("data") or []
-        return d if (10 + last) in d else None
-
-    got = fppd.wait_for(settled, timeout=10, what="the input pixels to reach the model")
+    got = settled_model_data(fppd, MODEL, 10 + last, what="the input pixels to reach the model")
     rows = {p: got[r * WIDTH * 3:(r + 1) * WIDTH * 3] for r, p in enumerate(protocols)}
     want = [10 + ch for ch in range(1, last + 1)]
     assert rows["ws2811"] == want, f"ws2811 drew {rows['ws2811']}"

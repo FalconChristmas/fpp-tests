@@ -6,7 +6,7 @@ BBShiftString and DPIPixels use, but writes each string into a row of an
 overlay model, where the wire bytes can be read back.
 """
 
-from test_output_model_pixel_strings import vstring
+from test_output_model_pixel_strings import settled_model_data, vstring
 
 MODEL = "Orders"
 ORDERS = ["RGB", "RBG", "GRB", "GBR", "BRG", "BGR"]
@@ -45,13 +45,7 @@ def test_each_colour_order_reaches_the_wire_in_that_order(fppd):
     for ch in range(1, last + 1):
         fppd.request("PUT", f"/overlays/range/{ch}-{ch}", {"Value": ch})
 
-    def settled():
-        # every frame lays all the channels at once, so once the last one
-        # set shows (wherever it lands) they all have
-        d = fppd.get(f"/overlays/model/{MODEL}/data").get("data") or []
-        return d if last in d else None
-
-    got = fppd.wait_for(settled, timeout=10, what="the last channel set to reach the model")
+    got = settled_model_data(fppd, MODEL, last)
     wrong = []
     for r, order in enumerate(ORDERS):
         for p in range(PIXELS):

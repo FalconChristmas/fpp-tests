@@ -64,6 +64,30 @@ def set_range(fppd, first, last, value):
     fppd.request("PUT", f"/overlays/range/{first}-{last}", {"Value": value})
 
 
+def settled_model_data(fppd, model, last, what="the last channel set to reach the model"):
+    """The model's data once the output has drawn a whole frame of the input.
+
+    The output thread copies each frame into the model while a read copies it
+    out, with no lock between them (PixelOverlayModel::setData is lock-free by
+    design). After the ranges go in, the output thread may still be in its
+    idle wait, so the model is all zeros until the first frame. A read that
+    lands while that frame is being copied in sees the start of the model
+    still zero and the end already drawn, and the last value is already
+    there. Every frame after that is the same, so wait for two reads in a row
+    that match and hold the last value.
+    """
+    prev = []
+
+    def settled():
+        nonlocal prev
+        d = fppd.get(f"/overlays/model/{model}/data").get("data") or []
+        ok = last in d and d == prev
+        prev = d
+        return d if ok else None
+
+    return fppd.wait_for(settled, timeout=10, what=what)
+
+
 def test_a_w_first_string_loads_without_writing_past_its_map(fppd):
     """A 9-pixel WRGB string, the last on its port, loads without writing
     past its channel map, and fppd lives. (Since 3710f07ca the output then
@@ -280,13 +304,7 @@ def test_rgb_strings_on_a_four_byte_model_keep_its_pixel_stride(fppd):
     for ch in range(1, 61):
         set_range(fppd, ch, ch, ch)
 
-    def settled():
-        # The ranges went in 1 to 60, and each frame is laid from all the
-        # channels at once, so once 60 shows (wherever it lands) they all have.
-        d = fppd.get(f"/overlays/model/{MODEL}/data").get("data") or []
-        return d if 60 in d else None
-
-    got = fppd.wait_for(settled, timeout=10, what="the last channel set to reach the model")
+    got = settled_model_data(fppd, MODEL, 60)
     # width * height * 4: the model really is four bytes a pixel
     assert len(got) == cells, f"read back {len(got)} bytes, want {cells}"
 
@@ -335,13 +353,7 @@ def test_a_zigzag_folds_only_its_own_virtual_string(fppd):
     for ch in range(1, 61):
         set_range(fppd, ch, ch, ch)
 
-    def settled():
-        # The ranges went in 1 to 60 and every frame lays all of them at
-        # once, so once 60 shows (wherever it lands) they all have.
-        d = fppd.get(f"/overlays/model/{MODEL}/data").get("data") or []
-        return d if 60 in d else None
-
-    got = fppd.wait_for(settled, timeout=10, what="the last channel set to reach the model")
+    got = settled_model_data(fppd, MODEL, 60)
     cells = WIDTH * HEIGHT * 3
     assert len(got) == cells, f"read back {len(got)} bytes, want {cells}"
 
