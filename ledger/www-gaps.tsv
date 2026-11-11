@@ -1280,7 +1280,7 @@ www/privacyConsent.inc	PrivacyConsentFor	209	1	9	todo		auto: not examined yet
 www/privacyDisclosures.inc	(top level)	0	1	3	todo		auto: not examined yet
 www/privacyTable.inc	(top level)	0	1	3	todo		auto: not examined yet
 www/proxies.php	(inline script)	0	21	277	todo		auto: not examined yet
-www/rebootRemoteFPP.php	(top level)	0	28	36	todo		auto: not examined yet
+www/rebootRemoteFPP.php	(top level)	0	28	36	test	web/tests/multisync-remote-reboot-helper.spec.ts	the reboot request, the 20 second wait and the status polls until the remote answers; a refused reboot reported as done is a test.fail() (FUTURE.md); left: the 180 second timeout message (too slow to wait for)
 www/rebuildfpp.php	(top level)	0	5	51	todo		auto: not examined yet
 www/recurringtasks.php	(inline script)	0	103	408	todo		auto: not examined yet
 www/resetConfig.php	(top level)	0	2	99	todo		auto: not examined yet
@@ -1317,7 +1317,7 @@ www/settings-system.php	(top level)	0	1	28	todo		auto: not examined yet
 www/settings-ui.php	(top level)	0	1	26	todo		auto: not examined yet
 www/settings.php	(inline script)	0	116	717	todo		auto: not examined yet
 www/settings.php	(top level)	0	9	96	todo		auto: not examined yet
-www/shutdownRemoteFPP.php	(top level)	0	3	16	todo		auto: not examined yet
+www/shutdownRemoteFPP.php	(top level)	0	3	16	test	web/tests/multisync-remote-reboot-helper.spec.ts	asked once by POST, by GET when the remote has no POST route; a refused shutdown reported as done is a test.fail() (FUTURE.md)
 www/streamRemoteJobs.php	(top level)	0	14	50	todo		auto: not examined yet
 www/system-stats.php	(inline script)	0	45	571	todo		auto: not examined yet
 www/system-stats.php	(top level)	0	17	134	todo		auto: not examined yet
