@@ -51,7 +51,7 @@ scripts/plugin_update_check.php	PluginSweepRecord	72	1	14	todo		auto: not examin
 scripts/plugin_update_check.php	PluginSweepOne	94	1	19	todo		auto: not examined yet
 scripts/regenerate_pipewire_groups	(top level)	0	37	101	todo		auto: not examined yet
 scripts/regenerate_pipewire_groups	json	61	1	1	todo		auto: not examined yet
-scripts/upgradeCapeFirmware	(top level)	0	124	171	todo		auto: not examined yet
+scripts/upgradeCapeFirmware	(top level)	0	124	171	skip		covered by scenarios/test_cape_identity.py (run outside the web coverage)
 scripts/upgradeCapeFirmware	find_eeprom_offsets	25	14	17	todo		auto: not examined yet
 scripts/upgradeCapeFirmware	mintCapeSerial	70	1	1	todo		auto: not examined yet
 scripts/upgradeCapeFirmware	blankCapeChecksum	79	17	17	todo		auto: not examined yet
@@ -457,7 +457,7 @@ www/api/controllers/sequence.php	GetSequenceStep	272	3	3	todo		auto: not examine
 www/api/controllers/sequence.php	FSeqOrEseqDirectory	332	1	5	todo		auto: not examined yet
 www/api/controllers/settings.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/settings.php	GetSetting	41	3	36	todo		auto: not examined yet
-www/api/controllers/settings.php	PutSetting	123	37	138	todo		auto: not examined yet
+www/api/controllers/settings.php	PutSetting	123	37	138	todo	settings-storage-fstab.spec.ts	storageDevice fstab rewrite tested (ext4/FAT/exFAT/BTRFS/none/root); left: BBB findmnt, EnableRouting, TetherSSID, EnableScheduling, no-curl backup
 www/api/controllers/settings.php	ResetFanThermalTrips	422	4	4	todo		auto: not examined yet
 www/api/controllers/settings.php	UpdateJSONValueSetting	499	2	16	todo		auto: not examined yet
 www/api/controllers/stats.php	(top level)	0	1	2	todo		auto: not examined yet
