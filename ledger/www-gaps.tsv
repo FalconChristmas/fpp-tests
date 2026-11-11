@@ -390,7 +390,7 @@ www/api/controllers/plugin.php	PluginCurrentBranch	3603	2	16	todo		auto: not exa
 www/api/controllers/plugin.php	PluginFetchBranch	3633	6	6	todo		auto: not examined yet
 www/api/controllers/plugin.php	PluginPendingPrivacy	3657	4	41	todo		auto: not examined yet
 www/api/controllers/plugin.php	GetPluginPrivacyStatus	3769	3	21	todo		auto: not examined yet
-www/api/controllers/plugin.php	FetchURLWithGitHubCredentials	3840	23	82	todo		auto: not examined yet
+www/api/controllers/plugin.php	FetchURLWithGitHubCredentials	3840	23	82	test	plugin-github-fetches.spec.ts plugin-info-fetch-guards.spec.ts	non-http infoURL refused, refs/heads Contents API fallback, 401 hint without PAT, >1MB refused; stream_context branch needs no curl (not reachable on FPP images)
 www/api/controllers/plugin.php	BuildSlimPluginPopularity	4027	10	10	todo		auto: not examined yet
 www/api/controllers/plugin.php	GetPluginPopularity	4052	12	30	todo		auto: not examined yet
 www/api/controllers/plugin.php	GitHubStatsSearchPage	4126	11	27	todo		auto: not examined yet
