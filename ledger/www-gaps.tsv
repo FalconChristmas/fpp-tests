@@ -983,7 +983,7 @@ www/js/fpp.js	GetPlaylistEntry	3854	10	76	todo		auto: not examined yet
 www/js/fpp.js	AddPlaylist	3939	8	8	todo		auto: not examined yet
 www/js/fpp.js	SavePlaylist	3948	3	8	todo		auto: not examined yet
 www/js/fpp.js	updateAddGlobalPauseIndicator	3998	11	11	todo		auto: not examined yet
-www/js/fpp.js	updateMainPageGlobalPauseIndicator	4011	60	107	todo		auto: not examined yet
+www/js/fpp.js	updateMainPageGlobalPauseIndicator	4011	60	107	test	web/tests/status-page-idle-playlist-indicators.spec.ts	idle page: the picked playlist's pause and random mode, verbose off, after another playlist was stopped; the player-status branches are dead (api/player/status has neither field, FUTURE.md)
 www/js/fpp.js	updateRandomizeFromPlaylist	4042	6	12	todo		auto: not examined yet
 www/js/fpp.js	RandomizePlaylistEntries	4290	14	14	todo		auto: not examined yet
 www/js/fpp.js	ApplyGeoIPSettings	4326	4	15	todo		auto: not examined yet
