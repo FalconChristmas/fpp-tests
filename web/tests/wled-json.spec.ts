@@ -54,8 +54,12 @@ test("/json/info describes the player as a WLED node: its name, version, address
   expect(info.mac).toBe(mac.replace(/:/g, '').toLowerCase());
   expect(info.ip).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
   // Named by the host description when there is a real one, else by the
-  // host name: the default description, "FPP", says less.
-  expect(status.host_description).toBe('FPP');
+  // host name: the default description, "FPP", says less, and so does none.
+  // Which of the two fppd reports depends on the shard: the player's settings
+  // file comes to hold HostDescription = "", but fppd reads it once (the
+  // static in GetCurrentFPPDStatus) and says "FPP" until a spec earlier in
+  // the shard restarts it.
+  expect(['', 'FPP']).toContain(status.host_description);
   expect(info.name).toBe(status.host_name);
 });
 
