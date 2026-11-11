@@ -494,7 +494,7 @@ www/api/controllers/system.php	StartFPPD	73	9	9	todo		auto: not examined yet
 www/api/controllers/system.php	StopFPPDNoStatus	94	9	9	todo		auto: not examined yet
 www/api/controllers/system.php	StopFPPD	129	3	3	todo		auto: not examined yet
 www/api/controllers/system.php	RestartFPPD	149	2	9	todo		auto: not examined yet
-www/api/controllers/system.php	GetUpdateStatus	230	68	117	todo		auto: not examined yet
+www/api/controllers/system.php	GetUpdateStatus	230	68	117	skip		unreached lines are the ?test= UI simulation branches (fixed JSON); real path covered
 www/api/controllers/system.php	UpdateActivityLogFile	475	5	7	todo		auto: not examined yet
 www/api/controllers/system.php	UpdateActivityLockFile	509	3	7	todo		auto: not examined yet
 www/api/controllers/system.php	UpdateActivityLockHolder	546	2	16	todo		auto: not examined yet
@@ -532,7 +532,7 @@ www/backup.php	doRestore	304	11	47	todo		auto: not examined yet
 www/backup.php	ParseIniConfigForBackup	465	1	4	todo		auto: not examined yet
 www/backup.php	BackupProvenance	553	1	14	todo		auto: not examined yet
 www/backup.php	GetSettingsNotCarriedByRestore	622	1	13	todo		auto: not examined yet
-www/backup.php	processRestoreData	701	78	282	todo	backup-restore-areas.spec.ts	outputProcessors, gpio-input, plugins, channelmemorymaps restores tested; left: email settings restore, area_data/system_settings wrapper
+www/backup.php	processRestoreData	701	78	282	todo	backup-restore-areas.spec.ts; backup-restore-areas.spec.ts backup-restore-v7-channel-inputs.spec.ts	outputProcessors, gpio-input, plugins, channelmemorymaps, pre-8.0 channelInputs restores tested; left: email settings restore, area_data/system_settings wrapper
 www/backup.php	processRestoreDataArray	1397	11	74	todo		auto: not examined yet
 www/backup.php	IsSafeRestoreFilename	1611	4	9	todo		auto: not examined yet
 www/backup.php	BackupConfigFolderConfigs	1648	2	53	todo		auto: not examined yet
