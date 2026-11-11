@@ -11,18 +11,18 @@ scripts/genXlightsSubmodels.php	normName	51	1	1	todo		auto: not examined yet
 scripts/genXlightsSubmodels.php	sanitizeName	59	1	1	todo		auto: not examined yet
 scripts/genXlightsSubmodels.php	expandToken	82	16	16	todo		auto: not examined yet
 scripts/genXlightsSubmodels.php	expandLine	110	5	5	todo		auto: not examined yet
-scripts/generateEEPROM	(top level)	0	33	33	todo		auto: not examined yet
-scripts/generateEEPROM	GenerateEEPROM	60	16	16	todo		auto: not examined yet
-scripts/generateEEPROM	CloneEEPROM	87	10	10	todo		auto: not examined yet
-scripts/generateEEPROM	DumpEEPROMInfo	105	8	8	todo		auto: not examined yet
-scripts/generateEEPROM	ExtractFiles	119	7	7	todo		auto: not examined yet
-scripts/generateEEPROM	ParseJSONConfig	133	22	22	todo		auto: not examined yet
-scripts/generateEEPROM	CheckSerialNumber	170	12	12	todo		auto: not examined yet
-scripts/generateEEPROM	CheckOutputFilename	193	6	6	todo		auto: not examined yet
-scripts/generateEEPROM	SanityCheckOptions	206	16	16	todo		auto: not examined yet
-scripts/generateEEPROM	GetOptions	235	11	11	todo		auto: not examined yet
-scripts/generateEEPROM	UsageJSON	272	17	17	todo		auto: not examined yet
-scripts/generateEEPROM	Usage	291	53	53	todo		auto: not examined yet
+scripts/generateEEPROM	(top level)	0	33	33	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+scripts/generateEEPROM	GenerateEEPROM	60	16	16	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+scripts/generateEEPROM	CloneEEPROM	87	10	10	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+scripts/generateEEPROM	DumpEEPROMInfo	105	8	8	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+scripts/generateEEPROM	ExtractFiles	119	7	7	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+scripts/generateEEPROM	ParseJSONConfig	133	22	22	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+scripts/generateEEPROM	CheckSerialNumber	170	12	12	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+scripts/generateEEPROM	CheckOutputFilename	193	6	6	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+scripts/generateEEPROM	SanityCheckOptions	206	16	16	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+scripts/generateEEPROM	GetOptions	235	11	11	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+scripts/generateEEPROM	UsageJSON	272	17	17	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+scripts/generateEEPROM	Usage	291	53	53	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
 scripts/handle_boot_actions	(top level)	0	4	19	todo		auto: not examined yet
 scripts/handle_boot_actions	HandleSettings	7	9	35	todo		auto: not examined yet
 scripts/handle_boot_actions	HandleExpandFS	53	8	8	todo		auto: not examined yet
@@ -779,36 +779,36 @@ www/effects.php	PrintEffectRows	149	2	13	todo		auto: not examined yet
 www/filemanager.php	(inline script)	0	151	420	todo		auto: not examined yet
 www/filemanager.php	(top level)	0	1	83	todo		auto: not examined yet
 www/flash-storage.php	(top level)	0	5	33	todo		auto: not examined yet
-www/fppEEPROM.php	(top level)	0	2	2	todo		auto: not examined yet
-www/fppEEPROM.php	parseData	30	60	60	todo		auto: not examined yet
-www/fppEEPROM.php	generateData	118	81	81	todo		auto: not examined yet
-www/fppEEPROM.php	verifySignature	251	23	23	todo		auto: not examined yet
-www/fppEEPROM.php	setLocation	292	12	12	todo		auto: not examined yet
-www/fppEEPROM.php	insertFile	312	15	15	todo		auto: not examined yet
-www/fppEEPROM.php	insertVariable	334	4	4	todo		auto: not examined yet
-www/fppEEPROM.php	replaceVariable	341	15	15	todo		auto: not examined yet
-www/fppEEPROM.php	getSetting	366	4	4	todo		auto: not examined yet
-www/fppEEPROM.php	read	376	5	5	todo		auto: not examined yet
-www/fppEEPROM.php	write	387	6	6	todo		auto: not examined yet
-www/fppEEPROM.php	clone	398	17	17	todo		auto: not examined yet
-www/fppEEPROM.php	sigStatusText	426	6	6	todo		auto: not examined yet
-www/fppEEPROM.php	dumpInfo	437	38	38	todo		auto: not examined yet
-www/fppEEPROM.php	dumpTable	489	41	41	todo		auto: not examined yet
-www/fppEEPROM.php	extractFiles	545	26	26	todo		auto: not examined yet
-www/fppEEPROM.php	setKeyDir	585	4	4	todo		auto: not examined yet
-www/fppEEPROM.php	setCapeName	592	2	2	todo		auto: not examined yet
-www/fppEEPROM.php	setCapeVersion	596	2	2	todo		auto: not examined yet
-www/fppEEPROM.php	setCapeSerial	600	2	2	todo		auto: not examined yet
-www/fppEEPROM.php	setDeviceSerial	604	2	2	todo		auto: not examined yet
-www/fppEEPROM.php	setSigningKey	608	2	2	todo		auto: not examined yet
-www/fppEEPROM.php	checkSignature	612	1	1	todo		auto: not examined yet
-www/fppEEPROM.php	getSize	616	1	1	todo		auto: not examined yet
-www/fppEEPROM.php	getData	620	1	1	todo		auto: not examined yet
-www/fppEEPROM.php	getCapeName	624	1	1	todo		auto: not examined yet
-www/fppEEPROM.php	getCapeVersion	628	1	1	todo		auto: not examined yet
-www/fppEEPROM.php	getCapeSerial	632	1	1	todo		auto: not examined yet
-www/fppEEPROM.php	getDeviceSerial	636	1	1	todo		auto: not examined yet
-www/fppEEPROM.php	getVariable	640	11	11	todo		auto: not examined yet
+www/fppEEPROM.php	(top level)	0	2	2	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	parseData	30	60	60	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	generateData	118	81	81	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	verifySignature	251	23	23	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	setLocation	292	12	12	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	insertFile	312	15	15	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	insertVariable	334	4	4	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	replaceVariable	341	15	15	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	getSetting	366	4	4	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	read	376	5	5	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	write	387	6	6	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	clone	398	17	17	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	sigStatusText	426	6	6	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	dumpInfo	437	38	38	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	dumpTable	489	41	41	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	extractFiles	545	26	26	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	setKeyDir	585	4	4	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	setCapeName	592	2	2	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	setCapeVersion	596	2	2	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	setCapeSerial	600	2	2	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	setDeviceSerial	604	2	2	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	setSigningKey	608	2	2	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	checkSignature	612	1	1	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	getSize	616	1	1	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	getData	620	1	1	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	getCapeName	624	1	1	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	getCapeVersion	628	1	1	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	getCapeSerial	632	1	1	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	getDeviceSerial	636	1	1	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
+www/fppEEPROM.php	getVariable	640	11	11	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
 www/fppdefines.php	(top level)	0	10	39	todo		auto: not examined yet
 www/fppdefines_unknown.php	(top level)	0	1	8	todo		auto: not examined yet
 www/fppunknown_versions.php	(top level)	0	1	2	todo		auto: not examined yet
