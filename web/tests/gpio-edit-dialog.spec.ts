@@ -41,6 +41,11 @@ async function openEdit(page: Page) {
   await card.locator('button', { hasText: 'Edit' }).click();
   const modal = page.locator('#gpioEditModal');
   await expect(modal).toBeVisible();
+  // A Bootstrap .fade modal is visible while its dialog is still sliding
+  // down 50px into place (0.3s); anything measured before then is off by
+  // the rest of the slide.
+  await expect.poll(() => modal.locator('.modal-dialog').evaluate((e) => getComputedStyle(e).transform))
+    .toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/);
   return modal;
 }
 
