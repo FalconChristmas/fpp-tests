@@ -560,7 +560,7 @@ www/capeLicense.inc	capeLicenseDueURL	109	9	11	todo		auto: not examined yet
 www/capeLicense.inc	capeLicenseRecord	133	8	8	todo		auto: not examined yet
 www/changebranch.php	(inline script)	0	2	19	todo		auto: not examined yet
 www/changebranch.php	(top level)	0	71	132	test	changebranch-pr-and-fork.spec.ts	PR fetch, config-migration warning and ackcfg, PR number checks, fork remote add/set-url/fetch
-www/changebranch.php	PendingConfigMigrations	128	29	29	todo		auto: not examined yet
+www/changebranch.php	PendingConfigMigrations	128	29	29	test	web/tests/changebranch-pr-and-fork.spec.ts	pending migrations listed with their descriptions, none pending, no config version; left: ls-tree failing
 www/changelog.php	(inline script)	0	47	160	todo		auto: not examined yet
 www/changelog.php	(top level)	0	10	98	todo		auto: not examined yet
 www/channelinputs.php	(inline script)	0	36	243	todo		auto: not examined yet
@@ -929,7 +929,7 @@ www/js/fpp.js	CopyTextToClipboard	219	2	6	todo		auto: not examined yet
 www/js/fpp.js	fallback	220	2	12	todo		auto: not examined yet
 www/js/fpp.js	common_PageLoad_PostDOMLoad_ActionsSetup	365	2	75	todo		auto: not examined yet
 www/js/fpp.js	findPrefixedVariable	660	12	12	todo		auto: not examined yet
-www/js/fpp.js	sortHTMLSelectByText	673	33	33	todo		auto: not examined yet
+www/js/fpp.js	sortHTMLSelectByText	673	33	33	skip		dead: no caller in the fpp tree
 www/js/fpp.js	DoModalDialog	822	1	110	todo		auto: not examined yet
 www/js/fpp.js	handleKeypress	1185	3	36	todo		auto: not examined yet
 www/js/fpp.js	KeyBindingsNormalizeKeyName	1316	4	30	todo		auto: not examined yet
@@ -973,7 +973,7 @@ www/js/fpp.js	BranchItemToString	3159	17	17	todo		auto: not examined yet
 www/js/fpp.js	PlaylistTypeChanged	3178	2	54	todo		auto: not examined yet
 www/js/fpp.js	PlaylistNameOK	3246	6	11	todo		auto: not examined yet
 www/js/fpp.js	LoadPlaylistDetails	3298	1	19	todo		auto: not examined yet
-www/js/fpp.js	CreateNewPlaylist	3319	36	36	todo		auto: not examined yet
+www/js/fpp.js	CreateNewPlaylist	3319	36	36	skip		dead: its only caller is #txtNewPlaylistName in playlists.php's .playlistCreateContainer, which is hidden and never shown (New Playlist uses the #playlistAdd dialog)
 www/js/fpp.js	UpdatePlaylistDurations	3443	4	46	todo		auto: not examined yet
 www/js/fpp.js	GetSequenceDuration	3503	7	43	todo		auto: not examined yet
 www/js/fpp.js	SetPlaylistItemMetaData	3551	46	122	todo		auto: not examined yet
@@ -998,7 +998,7 @@ www/js/fpp.js	GetGeoLocation	4586	1	11	todo		auto: not examined yet
 www/js/fpp.js	GeoIPTestQuery	4611	2	6	todo		auto: not examined yet
 www/js/fpp.js	ViewLatLon	4618	6	6	todo		auto: not examined yet
 www/js/fpp.js	RemoveIllegalChars	4634	7	7	todo		auto: not examined yet
-www/js/fpp.js	AssignPlaylistEditorFPPCommandArgsFromList	4655	37	37	todo		auto: not examined yet
+www/js/fpp.js	AssignPlaylistEditorFPPCommandArgsFromList	4655	37	37	skip		dead: no caller in the fpp tree
 www/js/fpp.js	EditPlaylistEntry	4693	28	76	todo		auto: not examined yet
 www/js/fpp.js	RevealAdvancedArgsWithValues	4795	1	17	todo		auto: not examined yet
 www/js/fpp.js	RemovePlaylistEntry	4816	6	14	todo		auto: not examined yet
@@ -1045,7 +1045,7 @@ www/js/fpp.js	SetPluginSetting	7787	16	47	todo		auto: not examined yet
 www/js/fpp.js	ReloadSettingOptions	7849	34	34	todo		auto: not examined yet
 www/js/fpp.js	SetRebootFlag	7925	1	9	todo		auto: not examined yet
 www/js/fpp.js	SkipBootDelay	8032	11	11	todo		auto: not examined yet
-www/js/fpp.js	RestartFPPD	8044	30	52	todo		auto: not examined yet
+www/js/fpp.js	RestartFPPD	8044	30	52	test	web/tests/restart-fppd-quick-request.spec.ts web/tests/restart-fppd-lost-answer.spec.ts	quick and full requests; no answer to the restart: the rebooting notice once, waiting while fppd is down, success and the flag cleared once it runs, the error after the last try
 www/js/fpp.js	zeroPad	8115	4	4	todo		auto: not examined yet
 www/js/fpp.js	ControlFPPD	8120	1	20	todo		auto: not examined yet
 www/js/fpp.js	PlayPlaylist	8273	4	17	todo		auto: not examined yet
