@@ -12,6 +12,8 @@
 #   installed   name -> {"version", "auto": bool, "hold": bool}
 #   available   names apt could install (version 1.0)
 #   listFails   true: dpkg-query's full listing fails (exit 1)
+#   depends     name -> [names it depends on]: removing a package removes
+#               every installed package that depends on it, as apt does
 # Calls, one JSON array of argv per line: /tmp/fpp-tests-apt/calls.log.
 import json
 import os
@@ -49,6 +51,19 @@ def save(s):
 
 def known(s, name):
     return name in s['installed'] or name in s['available']
+
+
+def removed_with(s, pkgs):
+    # The packages named, and every installed one that depends on them, in turn.
+    out = [p for p in pkgs if p in s['installed']]
+    grew = True
+    while grew:
+        grew = False
+        for n, ds in s.get('depends', {}).items():
+            if n in s['installed'] and n not in out and any(d in out for d in ds):
+                out.append(n)
+                grew = True
+    return out
 
 
 def real(tool, args):
@@ -135,9 +150,9 @@ def apt_get(s, args):
                     sys.exit(100)
                 if p not in s['installed']:
                     print('Inst %s (1.0 fpp-tests [all])' % p)
-            elif cmd in ('remove', 'purge'):
-                if p in s['installed']:
-                    print('Remv %s [%s]' % (p, s['installed'][p].get('version', '1.0')))
+        if cmd in ('remove', 'purge'):
+            for p in removed_with(s, pkgs):
+                print('Remv %s [%s]' % (p, s['installed'][p].get('version', '1.0')))
         sys.exit(0)
     if cmd == 'install':
         for p in pkgs:
@@ -149,7 +164,7 @@ def apt_get(s, args):
                 s['installed'][p] = {'version': '1.0', 'auto': False, 'hold': False}
         save(s)
     elif cmd in ('remove', 'purge'):
-        for p in pkgs:
+        for p in removed_with(s, pkgs):
             s['installed'].pop(p, None)
         save(s)
     sys.exit(0)
@@ -166,6 +181,9 @@ def apt_cache(s, args):
         if names and all(known(s, n) for n in names):
             for n in names:
                 print('%s\nReverse Depends:' % n)
+                for r, ds in sorted(s.get('depends', {}).items()):
+                    if n in ds and r in s['installed']:
+                        print('  %s' % r)
             sys.exit(0)
     real('apt-cache', args)
 
