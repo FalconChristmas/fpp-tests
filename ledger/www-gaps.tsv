@@ -167,7 +167,7 @@ www/api/controllers/git.php	GitOSReleaseNotes	278	2	22	todo		auto: not examined 
 www/api/controllers/git.php	GitOSReleaseSizes	328	1	20	todo		auto: not examined yet
 www/api/controllers/git.php	GitHubForkBranchNames	372	4	37	todo		auto: not examined yet
 www/api/controllers/git.php	GitBranches	434	7	51	todo		auto: not examined yet
-www/api/controllers/git.php	GitForkBranches	553	64	118	todo		auto: not examined yet
+www/api/controllers/git.php	GitForkBranches	553	64	118	test	web/tests/git-fork-branches-fallbacks.spec.ts	the three local-checkout fallbacks (GitHub out of reach, 404, branches refused), the hidden branches, a bad user name, a token with a carriage return; a line feed in the token cannot reach the guard (the settings file is line based)
 www/api/controllers/git.php	GitPullRequests	762	6	59	todo		auto: not examined yet
 www/api/controllers/help.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/help.php	help_help	12	41	41	todo		auto: not examined yet
