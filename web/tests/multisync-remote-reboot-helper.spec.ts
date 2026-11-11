@@ -60,7 +60,12 @@ async function remote(actionStatus: number, statusDownFor = 0) {
   docker('run', '-d', '--rm', '--network', playerAddress().network, '--name', name,
     '-e', `ACTION_STATUS=${actionStatus}`, '-e', `STATUS_DOWN_FOR=${statusDownFor}`, image, 'python3', '-c', REMOTE);
   const ip = docker('inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', name).trim();
-  const asked = () => JSON.parse(inPlayer('curl', '-s', `http://${ip}/fpp-tests-log`)) as string[];
+  // What the helper asked. The player's fppd may also fetch the remote's
+  // system info and cape (MultiSync's info sweep) when an earlier spec's
+  // peer had this address -- Docker hands the same one out again -- so
+  // those two are not the helper's and are left out.
+  const asked = () => (JSON.parse(inPlayer('curl', '-s', `http://${ip}/fpp-tests-log`)) as string[])
+    .filter((r) => r !== 'GET /api/system/info' && r !== 'GET /api/cape');
   await expect.poll(() => {
     try {
       return asked();
