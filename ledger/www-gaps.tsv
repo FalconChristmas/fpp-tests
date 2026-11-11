@@ -1037,7 +1037,7 @@ www/js/fpp.js	updateWarnings	6700	2	130	todo		auto: not examined yet
 www/js/fpp.js	modeToString	6930	3	13	todo		auto: not examined yet
 www/js/fpp.js	ResetMultiSyncStats	7455	5	5	todo		auto: not examined yet
 www/js/fpp.js	ResetUniverseBytesReceived	7467	12	12	todo		auto: not examined yet
-www/js/fpp.js	GetUniverseBytesReceived	7480	59	92	todo		auto: not examined yet
+www/js/fpp.js	GetUniverseBytesReceived	7480	59	92	test	web/tests/status-page-bridge-stats-table.spec.ts	rows, the Suppressed column, the split into two and three tables, tables emptied, the refusal and failure messages; 100 universes in one table is a test.fail() (FUTURE.md)
 www/js/fpp.js	ToggleSequencePause	7613	1	9	todo		auto: not examined yet
 www/js/fpp.js	SingleStepSequence	7623	10	10	todo		auto: not examined yet
 www/js/fpp.js	SetSetting	7690	10	67	todo		auto: not examined yet
