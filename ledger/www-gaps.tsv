@@ -88,8 +88,8 @@ www/api/controllers/cape.php	GetCapeOptions	260	2	12	todo		auto: not examined ye
 www/api/controllers/cape.php	GetEEPROMFilename	292	1	15	todo		auto: not examined yet
 www/api/controllers/cape.php	GetSigningDataHelper	333	17	64	todo		auto: not examined yet
 www/api/controllers/cape.php	GetSigningFile	470	6	6	todo		auto: not examined yet
-www/api/controllers/cape.php	SignEEPROMHelper	493	6	23	todo		auto: not examined yet
-www/api/controllers/cape.php	SignEEPROM	547	30	30	todo		auto: not examined yet
+www/api/controllers/cape.php	SignEEPROMHelper	493	6	23	test	cape-signing-eeprom-data.spec.ts cape-signing-online.spec.ts	write back, backup, detect_cape; empty eeprom wipe test.fail
+www/api/controllers/cape.php	SignEEPROM	547	30	30	test	cape-signing-online.spec.ts	online sign success, refusal, 502/unreachable, unreadable EEPROM; empty-reply wipe test.fail
 www/api/controllers/cape.php	PostSigningData	610	6	15	todo		auto: not examined yet
 www/api/controllers/cape.php	RedeemVoucher	656	4	45	todo		auto: not examined yet
 www/api/controllers/cape.php	RecordCapeLicenseCheck	848	11	11	todo		auto: not examined yet
