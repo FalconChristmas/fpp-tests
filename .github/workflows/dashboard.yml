@@ -16,7 +16,7 @@ on:
         description: Scenarios run with the TSan results (results-tsan)
         default: ""
       coverage_run:
-        description: Scenarios run with the coverage results and report (results-coverage, coverage-report; and results-pi5, results-am62x and results-am62x-panel if it ran the device job)
+        description: Scenarios run with the coverage results and report (results-coverage, coverage-report; results-pi5, results-am62x, results-am62x-panel and results-am335x-* if it ran the device jobs; www-coverage-report if it ran the web UI coverage)
         default: ""
       web_run:
         description: Scenarios run with the web UI results (results-web)
@@ -70,6 +70,9 @@ jobs:
           fetch "$COVERAGE" results-pi5 results/results-pi5 || true
           fetch "$COVERAGE" results-am62x results/results-am62x || true
           fetch "$COVERAGE" results-am62x-panel results/results-am62x-panel || true
+          fetch "$COVERAGE" results-am335x-bbb results/results-am335x-bbb || true
+          fetch "$COVERAGE" results-am335x-pb1 results/results-am335x-pb1 || true
+          fetch "$COVERAGE" www-coverage-report site/coverage/www || true
           fetch "$WEB" results-web results/results-web
           ls results
 
