@@ -20,9 +20,12 @@
 
 #include "fseq/FSEQFile.h"
 
-// libfpp.so takes this one symbol from fppd's executable. Defining it lets
-// the helper link the real library, so the writer runs exactly as built.
+// libfpp.so takes these symbols from fppd's executable (src/fppd.cpp).
+// Defining them lets the helper link the real library, so the writer runs
+// exactly as built. Only the names matter to the linker; nothing here reads
+// them.
 volatile int runMainFPPDLoop = 1;
+volatile int fppdStopSignalled = 0;
 
 static void usage() {
     fprintf(stderr, "usage: fseqgen OUT VERSION none|zstd|zlib LEVEL STEP_MS CHANNEL_SPACE "

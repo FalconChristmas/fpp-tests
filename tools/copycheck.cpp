@@ -7,8 +7,9 @@
 
 #include <cstdio>
 
-// libfpp.so takes this one symbol from fppd's executable (see fseqgen.cpp).
+// libfpp.so takes these symbols from fppd's executable (see fseqgen.cpp).
 volatile int runMainFPPDLoop = 1;
+volatile int fppdStopSignalled = 0;
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
