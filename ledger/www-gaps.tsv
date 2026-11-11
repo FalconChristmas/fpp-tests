@@ -559,7 +559,7 @@ www/capeLicense.inc	capeLicenseNotifyURL	74	17	17	todo		auto: not examined yet
 www/capeLicense.inc	capeLicenseDueURL	109	9	11	todo		auto: not examined yet
 www/capeLicense.inc	capeLicenseRecord	133	8	8	todo		auto: not examined yet
 www/changebranch.php	(inline script)	0	2	19	todo		auto: not examined yet
-www/changebranch.php	(top level)	0	71	132	todo		auto: not examined yet
+www/changebranch.php	(top level)	0	71	132	test	changebranch-pr-and-fork.spec.ts	PR fetch, config-migration warning and ackcfg, PR number checks, fork remote add/set-url/fetch
 www/changebranch.php	PendingConfigMigrations	128	29	29	todo		auto: not examined yet
 www/changelog.php	(inline script)	0	47	160	todo		auto: not examined yet
 www/changelog.php	(top level)	0	10	98	todo		auto: not examined yet
