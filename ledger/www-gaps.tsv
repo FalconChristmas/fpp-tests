@@ -1330,7 +1330,7 @@ www/troubleshootingText.php	(top level)	0	13	67	todo		auto: not examined yet
 www/universeentry.php	(top level)	0	1	2	todo		auto: not examined yet
 www/universeentry.php	__construct	13	10	10	todo		auto: not examined yet
 www/upgradeCapeFirmware.php	(top level)	0	8	77	todo		auto: not examined yet
-www/upgradeCapeFirmware.php	capeFirmwareUrlIsPublic	17	38	73	todo		auto: not examined yet
+www/upgradeCapeFirmware.php	capeFirmwareUrlIsPublic	17	38	73	test	cape-firmware-url-guard.spec.ts	every refusal rule, public accepted; test.fail NAT64/6to4
 www/upgradeCapeFirmware.php	capeFirmwareResolveUrl	141	3	18	todo		auto: not examined yet
 www/upgradeOS.php	(top level)	0	24	140	todo		auto: not examined yet
 www/upgradeOS.php	downloadImage	69	25	25	skip		dead: only caller commented out (wget replaced PHP curl)
