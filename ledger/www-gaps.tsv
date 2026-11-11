@@ -1055,7 +1055,7 @@ www/js/fpp.js	GetRunningEffects	8341	12	56	todo		auto: not examined yet
 www/js/fpp.js	GetRunningOverlayEffects	8400	7	59	todo		auto: not examined yet
 www/js/fpp.js	RebootFPP	8506	6	25	todo		auto: not examined yet
 www/js/fpp.js	ShutdownFPP	8568	5	18	todo		auto: not examined yet
-www/js/fpp.js	UpgradePlaylist	8588	58	106	todo		auto: not examined yet
+www/js/fpp.js	UpgradePlaylist	8588	58	106	test	playlist-upgrade-old-entries.spec.ts	branch compInfo/branchType, dynamic data, mqtt, volume, Overlay Model Text conversions saved; AutoEnable bug test.fail
 www/js/fpp.js	PopulatePlaylistDetails	8755	8	116	todo		auto: not examined yet
 www/js/fpp.js	PopulatePlaylistDetailsEntries	8897	2	24	todo		auto: not examined yet
 www/js/fpp.js	SetVolume	8926	1	25	todo		auto: not examined yet
