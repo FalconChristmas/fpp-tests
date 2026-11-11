@@ -1011,8 +1011,8 @@ www/js/fpp.js	ChangeGitBranch	4983	30	47	todo		auto: not examined yet
 www/js/fpp.js	RebuildFPPSource	5032	3	3	todo		auto: not examined yet
 www/js/fpp.js	SetUniverseCount	5093	9	108	todo		auto: not examined yet
 www/js/fpp.js	IPOutputTypeChanged	5214	6	74	todo		auto: not examined yet
-www/js/fpp.js	CloneUniverses	5719	44	44	todo		auto: not examined yet
-www/js/fpp.js	CloneUniverse	5768	8	8	todo		auto: not examined yet
+www/js/fpp.js	CloneUniverses	5719	44	44	test	web/tests/e131-universe-clone.spec.ts	rows overwritten and renumbered, saved, from the middle, not a number / 0 / cancelled, refused when too many; one too many and no row selected are test.fail() (FUTURE.md)
+www/js/fpp.js	CloneUniverse	5768	8	8	test	web/tests/e131-universe-clone.spec.ts	the prompt, answered and cancelled
 www/js/fpp.js	UpdateSendingModeOptions	5777	8	20	todo		auto: not examined yet
 www/js/fpp.js	CalculatePacingMaxFPS	5800	5	79	todo		auto: not examined yet
 www/js/fpp.js	PacingRateChanged	5893	4	4	todo		auto: not examined yet
