@@ -12,6 +12,11 @@ test.skip(!container, 'seeds files inside the run-web.sh container');
 const MUSIC = '/home/fpp/media/music';
 const A = 'fpp-tests-badge-a.mp3'; // 1000 bytes
 const B = 'fpp-tests-badge-b.mp3'; // 3000 bytes
+// One the filters leave out. Without it a music directory holding only A and
+// B already shows the two rows the first filter should leave, so that wait
+// passes before the filter has run (it runs searchTimeOut after the Enter),
+// and the first filter's redraw then puts its text back over the second's.
+const C = 'fpp-tests-other-c.mp3'; // 2000 bytes
 
 // formatBytes() in js/fpp-filemanager.js.
 function formatBytes(bytes: number): string {
@@ -32,12 +37,12 @@ async function filterNames(page: Page, text: string) {
 }
 
 test.beforeEach(async ({ request }) => {
-  inPlayer('sh', '-c', `head -c 1000 /dev/zero > ${MUSIC}/${A}; head -c 3000 /dev/zero > ${MUSIC}/${B}`);
+  inPlayer('sh', '-c', `head -c 1000 /dev/zero > ${MUSIC}/${A}; head -c 3000 /dev/zero > ${MUSIC}/${B}; head -c 2000 /dev/zero > ${MUSIC}/${C}`);
   await setSetting(request, 'fileManagerTableFilter', '1');
 });
 
 test.afterEach(async ({ request }) => {
-  inPlayer('rm', '-f', `${MUSIC}/${A}`, `${MUSIC}/${B}`);
+  inPlayer('rm', '-f', `${MUSIC}/${A}`, `${MUSIC}/${B}`, `${MUSIC}/${C}`);
   await setSetting(request, 'fileManagerTableFilter', '0');
 });
 
@@ -52,6 +57,7 @@ test('the Items and Size badges count the rows the table shows', async ({ page, 
   // The control: the listing has the test's files at their sizes.
   expect(files.find((f) => f.name === A)?.sizeBytes).toBe(1000);
   expect(files.find((f) => f.name === B)?.sizeBytes).toBe(3000);
+  expect(files.find((f) => f.name === C)?.sizeBytes).toBe(2000);
 
   await page.goto('/filemanager.php#tab-audio');
   await page.locator('#tab-audio-tab').click();
@@ -59,7 +65,11 @@ test('the Items and Size badges count the rows the table shows', async ({ page, 
   await expect(page.locator('#fileCount_Music')).toHaveText(String(files.length));
   await expect(page.locator('#fileSize_Music')).toHaveText(formatBytes(total));
 
+  // The control for the filters below: C is a row until they leave it out.
+  await expect(page.locator('#tblMusic tbody tr:visible').filter({ hasText: C })).toHaveCount(1);
+
   await filterNames(page, 'fpp-tests-badge');
+  await expect(page.locator('#tblMusic tbody tr:visible').filter({ hasText: C })).toHaveCount(0);
   await expect(page.locator('#tblMusic tbody tr:visible')).toHaveCount(2);
   await expect(page.locator('#fileCount_Music')).toHaveText('2');
   await expect(page.locator('#fileSize_Music')).toHaveText(formatBytes(4000));
