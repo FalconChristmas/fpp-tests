@@ -1082,12 +1082,12 @@ www/js/fpp.js	startTailFollowStream	9971	19	38	todo		auto: not examined yet
 www/js/fpp.js	ViewFileImpl	10021	3	38	todo		auto: not examined yet
 www/js/fpp.js	DeleteFile	10073	14	36	todo		auto: not examined yet
 www/js/fpp.js	UploadAndDeleteCrashReports	10146	1	10	todo		auto: not examined yet
-www/js/fpp.js	ShowCrashUploadDialog	10160	57	141	todo		auto: not examined yet
-www/js/fpp.js	UploadCrashReportsSequentially	10326	38	38	todo		auto: not examined yet
+www/js/fpp.js	ShowCrashUploadDialog	10160	57	141	todo	crash-upload-dialog.spec.ts crash-upload-delivery.spec.ts	Yes/No paths and recipients tested; left: manual-report wording variants, popover placement
+www/js/fpp.js	UploadCrashReportsSequentially	10326	38	38	test	crash-upload-delivery.spec.ts	player send, browser fallback once, unconfirmed/refused/missing kept, delete only after delivery, results wording
 www/js/fpp.js	next	10338	3	3	todo		auto: not examined yet
-www/js/fpp.js	UploadCrashReportViaBrowser	10394	51	51	todo		auto: not examined yet
-www/js/fpp.js	DeleteUploadedCrashReport	10456	19	19	todo		auto: not examined yet
-www/js/fpp.js	ReportCrashUploadResults	10476	53	53	todo		auto: not examined yet
+www/js/fpp.js	UploadCrashReportViaBrowser	10394	51	51	test	crash-upload-delivery.spec.ts	player send, browser fallback once, unconfirmed/refused/missing kept, delete only after delivery, results wording
+www/js/fpp.js	DeleteUploadedCrashReport	10456	19	19	test	crash-upload-delivery.spec.ts	player send, browser fallback once, unconfirmed/refused/missing kept, delete only after delivery, results wording
+www/js/fpp.js	ReportCrashUploadResults	10476	53	53	test	crash-upload-delivery.spec.ts	player send, browser fallback once, unconfirmed/refused/missing kept, delete only after delivery, results wording
 www/js/fpp.js	SetupSelectableTableRow	10531	8	50	todo		auto: not examined yet
 www/js/fpp.js	handleVisibilityChange	10665	6	15	todo		auto: not examined yet
 www/js/fpp.js	syntaxHighlight	10690	3	24	todo		auto: not examined yet
