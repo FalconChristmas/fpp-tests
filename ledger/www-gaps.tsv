@@ -1067,9 +1067,9 @@ www/js/fpp.js	ErGoToStep	9236	4	4	todo		auto: not examined yet
 www/js/fpp.js	ErNext	9252	6	16	todo		auto: not examined yet
 www/js/fpp.js	DisplayErrorReportDialog	9320	23	135	todo		auto: not examined yet
 www/js/fpp.js	close	9369	1	3	todo		auto: not examined yet
-www/js/fpp.js	ErBuildCrashReport	9476	24	54	todo		auto: not examined yet
+www/js/fpp.js	ErBuildCrashReport	9476	24	54	test	diagnostics-privacy.spec.ts diagnostic-report-send-step.spec.ts	build, busy/rate-limited/build-failed/unavailable wording, fppd not running
 www/js/fpp.js	showError	9484	4	6	todo		auto: not examined yet
-www/js/fpp.js	ErSendCrashReport	9538	62	62	todo		auto: not examined yet
+www/js/fpp.js	ErSendCrashReport	9538	62	62	test	diagnostic-report-send-step.spec.ts	sent/not deleted/cancelled/unconfirmed/refused/missing outcomes on the wizard
 www/js/fpp.js	ErOpenGitHubPrefilled	9607	26	26	todo		auto: not examined yet
 www/js/fpp.js	PlayFileInBrowser	9683	5	55	todo		auto: not examined yet
 www/js/fpp.js	CopyFile	9760	2	20	todo		auto: not examined yet
