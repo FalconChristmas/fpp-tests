@@ -498,13 +498,13 @@ www/api/controllers/system.php	GetUpdateStatus	230	68	117	skip		unreached lines 
 www/api/controllers/system.php	UpdateActivityLogFile	475	5	7	todo		auto: not examined yet
 www/api/controllers/system.php	UpdateActivityLockFile	509	3	7	todo		auto: not examined yet
 www/api/controllers/system.php	UpdateActivityLockHolder	546	2	16	todo		auto: not examined yet
-www/api/controllers/system.php	UpdateActivityRequestedLines	573	8	8	todo		auto: not examined yet
+www/api/controllers/system.php	UpdateActivityRequestedLines	573	8	8	test	web/tests/update-activity-log-tail.spec.ts	the default and the 1..500 clamp
 www/api/controllers/system.php	UpdateActivityWorkersActive	595	4	14	todo		auto: not examined yet
 www/api/controllers/system.php	UpdateActivityReadTail	632	2	20	todo		auto: not examined yet
-www/api/controllers/system.php	UpdateActivityLastLines	673	35	35	todo		auto: not examined yet
+www/api/controllers/system.php	UpdateActivityLastLines	673	35	35	test	web/tests/update-activity-log-tail.spec.ts	the last N lines exact: a multi-megabyte log, the 1 MB cap, CRLF, trailing blank lines, no final line break; left: an unreadable file
 www/api/controllers/system.php	UpdateActivityReadCache	745	4	16	todo		auto: not examined yet
 www/api/controllers/system.php	UpdateActivityWriteCache	773	2	11	todo		auto: not examined yet
-www/api/controllers/system.php	GetUpdateActivityInternal	806	34	154	todo		auto: not examined yet
+www/api/controllers/system.php	GetUpdateActivityInternal	806	34	154	test	web/tests/update-activity.spec.ts web/tests/update-activity-finalizing.spec.ts web/tests/update-activity-log-tail.spec.ts	runs from the log, failure, the idle cache, the finishing request; the log tail trimmed to the run, a continuation's first START; left: the 4 MB retry when START is outside the 512 KB window, stale runs
 www/api/controllers/system.php	GetUpdateActivity	1131	7	12	todo		auto: not examined yet
 www/api/controllers/system.php	SystemSetAudio	1163	4	20	todo		auto: not examined yet
 www/api/controllers/system.php	SystemParseVolumeTarget	1208	6	8	todo		auto: not examined yet
