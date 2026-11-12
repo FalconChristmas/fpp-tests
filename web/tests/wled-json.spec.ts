@@ -55,20 +55,14 @@ test("/json/info describes the player as a WLED node: its name, version, address
   expect(info.ip).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
   // Named by the host description when there is a real one, else by the
   // host name: the default description, "FPP", says less, and so does none.
-  // Which of the two fppd reports depends on the shard: the player's settings
-  // file comes to hold HostDescription = "", but fppd reads it once (the
-  // static in GetCurrentFPPDStatus) and says "FPP" until a spec earlier in
-  // the shard restarts it.
-  expect(['', 'FPP']).toContain(status.host_description);
+  // fppd reports the current setting, which the player holds as "".
+  expect(status.host_description).toBe('');
   expect(info.name).toBe(status.host_name);
 });
 
 test('/json/info is named by a host description set since fppd started', async ({ request }) => {
-  // The description comes from fppd's status, which reads HostDescription
-  // once (a static in GetCurrentFPPDStatus) although the setting needs no
-  // restart: a new one shows only after fppd restarts, there and here.
-  // In FUTURE.md.
-  test.fail(true, "fppd's status keeps the HostDescription it started with (FUTURE.md)");
+  // The description comes from fppd's status, which reports the current
+  // HostDescription, so a new one shows without a restart.
   await request.put('/api/settings/HostDescription?skipBackup=1', { data: 'Stage Left' });
   await expect.poll(async () => (await json(request, '/json/info')).name, { timeout: 3000 }).toBe('Stage Left');
 });
