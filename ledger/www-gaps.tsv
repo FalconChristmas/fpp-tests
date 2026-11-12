@@ -980,7 +980,7 @@ www/js/fpp.js	LoadPlaylistDetails	3298	1	19	todo		auto: not examined yet
 www/js/fpp.js	CreateNewPlaylist	3319	36	36	skip		dead: its only caller is #txtNewPlaylistName in playlists.php's .playlistCreateContainer, which is hidden and never shown (New Playlist uses the #playlistAdd dialog)
 www/js/fpp.js	UpdatePlaylistDurations	3443	4	46	todo		auto: not examined yet
 www/js/fpp.js	GetSequenceDuration	3503	7	43	todo		auto: not examined yet
-www/js/fpp.js	SetPlaylistItemMetaData	3551	46	122	todo		auto: not examined yet
+www/js/fpp.js	SetPlaylistItemMetaData	3551	46	122	test	web/tests/playlist-entry-measured.spec.ts	media, Seq+Media and sub-playlist lengths, every not-found line, the image list failing; a name with markup rendered as HTML is a test.fail() (FUTURE.md)
 www/js/fpp.js	PopulatePlaylistItemDuration	3685	3	16	todo		auto: not examined yet
 www/js/fpp.js	AddPlaylistEntry	3705	24	127	todo		auto: not examined yet
 www/js/fpp.js	GetPlaylistEntry	3854	10	76	todo		auto: not examined yet
