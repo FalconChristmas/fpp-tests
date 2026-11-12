@@ -54,13 +54,13 @@ test('a unicast remote that is not in the list is kept in the extra remotes', as
 // 255.255.255.255 and 239.70.80.80.  They are never a system in the list, so
 // the page moves them into MultiSyncExtraRemotes too, where no checkbox
 // reaches them: unticking Broadcast afterwards leaves fppd sending sync to
-// 255.255.255.255 for good.  In FUTURE.md.
+// 255.255.255.255 for good. The page leaves those two addresses out of
+// MultiSyncExtraRemotes.
 test("an old settings file's broadcast and multicast entries are not made extra remotes", async ({ page }) => {
   await open(page, '255.255.255.255,239.70.80.80,192.168.0.99');
   // The page reads them as the two send methods.
   await expect(page.locator('#MultiSyncBroadcast')).toBeChecked();
   await expect.poll(() => get(page, 'MultiSyncExtraRemotes')).toContain('192.168.0.99');
-  test.fail(true, 'broadcast/multicast addresses are folded into MultiSyncExtraRemotes (FUTURE.md)');
   const extra = String(await get(page, 'MultiSyncExtraRemotes'));
   expect(extra.split(',')).not.toContain('255.255.255.255');
   expect(extra.split(',')).not.toContain('239.70.80.80');
