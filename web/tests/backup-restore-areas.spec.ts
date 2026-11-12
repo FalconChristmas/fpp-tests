@@ -85,10 +85,8 @@ test("restoring Plugins puts each of a plugin's config files back as it was", as
   expect(after[json]).toBe('{\n    "fppTests": [1, 2, 3]\n}\n');
 });
 
-// The Channel Memory Maps branch writes the map's lines back, then writes the
-// same lines, JSON encoded, over model-overlays.json: restoring the old area
-// replaces the Pixel Overlay Models with a list of strings, which the models
-// page and fppd no longer read as models.  In FUTURE.md.
+// The Channel Memory Maps branch writes the map's lines back and leaves
+// model-overlays.json, the Pixel Overlay Models, as it was.
 test('restoring the old Channel Memory Maps puts the map back and leaves the overlay models alone', async ({ request }) => {
   const maps = `${MEDIA}/channelmemorymaps`;
   const models = `${CONFIG}/model-overlays.json`;
@@ -101,6 +99,5 @@ test('restoring the old Channel Memory Maps puts the map back and leaves the ove
     [models]: { original: model, changed: model },
   });
   expect(after[maps]).toBe('fpp-tests-map,1,30,horizontal,TL,1,1\n');
-  test.fail(true, 'the Channel Memory Maps restore writes its lines over model-overlays.json (FUTURE.md)');
   expect(JSON.parse(after[models]!), 'the overlay models').toEqual(JSON.parse(model));
 });
