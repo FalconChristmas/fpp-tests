@@ -77,8 +77,8 @@ www/api/controllers/backups.php	UnmountDevice	443	7	34	todo		auto: not examined 
 www/api/controllers/backups.php	process_jsonbackup_file_data_helper	582	0	81	covered		auto: every line reached
 www/api/controllers/backups.php	MakeJSONBackup	766	3	23	todo		auto: not examined yet
 www/api/controllers/backups.php	GetAvailableJSONBackupsOnDevice	855	9	9	todo		auto: not examined yet
-www/api/controllers/backups.php	RestoreJsonBackup	903	17	39	todo		auto: not examined yet
-www/api/controllers/backups.php	DownloadJsonBackup	1026	18	41	todo		auto: not examined yet
+www/api/controllers/backups.php	RestoreJsonBackup	903	17	39	test	web/tests/backup-api-drive-download-restore.spec.ts	from the backup drive, with no drive chosen, a missing or undecodable file, an unknown area and directory; left: an empty body restoring every area
+www/api/controllers/backups.php	DownloadJsonBackup	1026	18	41	test	web/tests/backup-api-drive-download-restore.spec.ts	from the backup drive with its attachment header, not found on the drive and with no drive chosen; left: a backup whose out-of-line blobs cannot be rebuilt
 www/api/controllers/backups.php	DeleteJsonBackup	1123	2	32	todo		auto: not examined yet
 www/api/controllers/backups.php	MountReturnCodeMap	1214	7	17	todo		auto: not examined yet
 www/api/controllers/cape.php	(top level)	0	16	54	todo		auto: not examined yet
@@ -529,7 +529,7 @@ www/api/index.php	(top level)	0	1	315	todo		auto: not examined yet
 www/audio-card-aliases.php	(inline script)	0	54	205	todo		auto: not examined yet
 www/backup.php	(inline script)	0	162	592	todo		auto: not examined yet
 www/backup.php	(top level)	0	48	268	todo		auto: not examined yet
-www/backup.php	doRestore	304	11	47	todo		auto: not examined yet
+www/backup.php	doRestore	304	11	47	test	web/tests/backup-api-drive-download-restore.spec.ts	the undecodable-backup and invalid-area errors; left: channelOutputs restored with the backup's system settings
 www/backup.php	ParseIniConfigForBackup	465	1	4	todo		auto: not examined yet
 www/backup.php	BackupProvenance	553	1	14	todo		auto: not examined yet
 www/backup.php	GetSettingsNotCarriedByRestore	622	1	13	todo		auto: not examined yet
