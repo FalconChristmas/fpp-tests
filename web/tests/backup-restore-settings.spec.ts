@@ -247,3 +247,84 @@ test("restoring a backup's volume applies it", async ({ request }) => {
     await request.post('/api/system/volume', { data: { volume: before } });
   }
 });
+
+// The email area with a password in the backup: the relay, its port and its
+// login are written back and the mail configuration is rebuilt from them
+// (ApplyEmailConfig), so a restored player can send mail without a visit to
+// the Email settings page.
+test.describe('the email area of a backup that holds the relay password', () => {
+  const EXIM = `${MEDIA}/exim4`;
+  const made = ['/etc/exim4', '/etc/aliases', '/etc/email-addresses', EXIM];
+  let had: boolean[] = [];
+  const there = (p: string) => inPlayer('sh', '-c', `test -e ${p} && echo y || echo n`).trim() === 'y';
+  test.beforeEach(() => {
+    had = made.map(there);
+    inPlayer('mkdir', '-p', EXIM, '/etc/exim4');
+  });
+  test.afterEach(() => {
+    made.forEach((p, i) => { if (!had[i]) inPlayer('rm', '-rf', p); });
+  });
+  const staged = (name: string) => inPlayer('sh', '-c', `cat ${EXIM}/${name} 2>/dev/null || true`);
+
+  const mail = {
+    emailenable: '1', emailserver: 'mail.fpp-tests.example', emailport: '465', emailuser: 'relay-user',
+    emailpass: 'fpp-tests-relay-pw', emailfromuser: 'show@fpp-tests.example', emailfromtext: 'Show Player',
+    emailtoemail: 'owner@fpp-tests.example',
+  };
+  const cleared = Object.fromEntries(Object.keys(mail).map((k) => [k, '""']));
+
+  test("this player's own backup brings every email setting back and rebuilds the mail config", async ({ request }) => {
+    setLines(cleared);
+    await restore(request, backupOf({ ...mail, privacyConsent: consentFrom(ownUUID()) }), 'settings/email');
+    for (const [key, value] of Object.entries(mail)) expect(line(key)).toBe(`${key} = "${value}"`);
+
+    expect(staged('update-exim4.conf.conf')).toContain("dc_smarthost='mail.fpp-tests.example::465'");
+    expect(staged('passwd.client')).toContain('mail.fpp-tests.example:relay-user:fpp-tests-relay-pw');
+    expect(staged('aliases')).toContain('fpp: owner@fpp-tests.example');
+    expect(staged('email-addresses')).toContain('fpp: show@fpp-tests.example');
+    // Port 465 is implicit TLS, which the relay transport has to be told.
+    expect(staged('99_fpp_smarthost')).toBe('REMOTE_SMTP_SMARTHOST_PROTOCOL=smtps\n');
+  });
+
+  test('a backup with no port or enable switch leaves those two as they are', async ({ request }) => {
+    setLines({ ...cleared, emailport: '"2525"', emailenable: '"0"' });
+    const { emailport: _p, emailenable: _e, ...rest } = mail;
+    await restore(request, backupOf({ ...rest, privacyConsent: consentFrom(ownUUID()) }), 'settings/email');
+    expect(line('emailserver')).toBe('emailserver = "mail.fpp-tests.example"');
+    expect(line('emailpass')).toBe('emailpass = "fpp-tests-relay-pw"');
+    expect(line('emailport')).toBe('emailport = "2525"');
+    expect(line('emailenable')).toBe('emailenable = "0"');
+  });
+
+  test('a backup missing one of the relay settings restores none of them', async ({ request }) => {
+    setLines(cleared);
+    const { emailuser: _u, ...rest } = mail;
+    await restore(request, backupOf({ ...rest, privacyConsent: consentFrom(ownUUID()) }), 'settings/email');
+    for (const key of Object.keys(mail)) expect(line(key), key).toBe(`${key} = ""`);
+    expect(staged('update-exim4.conf.conf')).toBe('');
+  });
+
+  test.describe("another player's backup", () => {
+    const theirs = { ...mail, emailtoemail: 'previous-owner@elsewhere.example', privacyConsent: consentFrom(OTHER_UUID) };
+
+    test("restores the relay and keeps this player's own destination in the settings (the control)", async ({ request }) => {
+      setLines({ ...cleared, emailtoemail: '"me@fpp-tests.example"' });
+      await restore(request, backupOf(theirs), 'settings/email');
+      expect(line('emailserver')).toBe('emailserver = "mail.fpp-tests.example"');
+      expect(line('emailpass')).toBe('emailpass = "fpp-tests-relay-pw"');
+      expect(line('emailtoemail')).toBe('emailtoemail = "me@fpp-tests.example"');
+      expect(staged('update-exim4.conf.conf')).toContain("dc_smarthost='mail.fpp-tests.example::465'");
+    });
+
+    test("does not point this player's mail at the backup's owner", async ({ request }) => {
+      // The setting is withheld, but the mail config is then built from the
+      // backup's own address: the aliases file sends fpp's mail to the
+      // previous owner until the Email settings are next saved.  In FUTURE.md.
+      test.fail(true, "the mail aliases are built with the foreign backup's destination address (FUTURE.md)");
+      setLines({ ...cleared, emailtoemail: '"me@fpp-tests.example"' });
+      await restore(request, backupOf(theirs), 'settings/email');
+      expect(staged('aliases')).toContain('fpp: ');
+      expect(staged('aliases')).not.toContain('previous-owner@elsewhere.example');
+    });
+  });
+});

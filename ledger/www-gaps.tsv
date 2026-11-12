@@ -533,7 +533,7 @@ www/backup.php	doRestore	304	11	47	todo		auto: not examined yet
 www/backup.php	ParseIniConfigForBackup	465	1	4	todo		auto: not examined yet
 www/backup.php	BackupProvenance	553	1	14	todo		auto: not examined yet
 www/backup.php	GetSettingsNotCarriedByRestore	622	1	13	todo		auto: not examined yet
-www/backup.php	processRestoreData	701	37	280	todo	backup-restore-areas.spec.ts; backup-restore-areas.spec.ts backup-restore-v7-channel-inputs.spec.ts	outputProcessors, gpio-input, plugins, channelmemorymaps, pre-8.0 channelInputs restores tested; left: email settings restore, area_data/system_settings wrapper
+www/backup.php	processRestoreData	701	37	280	test	web/tests/backup-restore-*.spec.ts	the email area with a relay password (enable, port, ApplyEmailConfig) added 2026-11-12; a foreign backup's address reaching the mail aliases is a test.fail() (FUTURE.md); left: the save_result=false lines of unwritable files, own-device pluginPrivacyAccepted
 www/backup.php	processRestoreDataArray	1391	11	72	todo		auto: not examined yet
 www/backup.php	IsSafeRestoreFilename	1605	3	6	todo		auto: not examined yet
 www/backup.php	BackupConfigFolderConfigs	1642	2	52	todo		auto: not examined yet
