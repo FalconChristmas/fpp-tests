@@ -10,7 +10,7 @@ test('a failed model list still leaves the page with its start-channel choice', 
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.goto('/outputprocessors.php');
-  await expect.poll(() => page.evaluate(() => JSON.stringify((window as any).models))).toBe('["&lt;Use Start Channel&gt;"]');
+  await expect.poll(() => page.evaluate(() => JSON.stringify((window as any).models))).toBe('["<Use Start Channel>"]');
   // the page is set up: its table can take a new row
   await expect(page.locator('#outputProcessorsBody')).toBeAttached();
   expect(errors).toEqual([]);
