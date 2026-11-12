@@ -449,12 +449,12 @@ www/api/controllers/scripts.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/scripts.php	script_save	79	6	24	todo		auto: not examined yet
 www/api/controllers/sequence.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/sequence.php	GetSequence	42	2	21	todo		auto: not examined yet
-www/api/controllers/sequence.php	GetSequenceMetaData	97	3	26	todo		auto: not examined yet
-www/api/controllers/sequence.php	PostSequence	144	19	19	todo		auto: not examined yet
-www/api/controllers/sequence.php	DeleteSequences	185	3	15	todo		auto: not examined yet
+www/api/controllers/sequence.php	GetSequenceMetaData	97	3	26	test	web/tests/sequence-api-upload.spec.ts	meta of a real fseq
+www/api/controllers/sequence.php	PostSequence	144	19	19	test	web/tests/sequence-api-upload.spec.ts	upload stored byte for byte, eseq to effects, bare names only; 3 test.fail (locked file rewritten, empty body empties, fopen unchecked)
+www/api/controllers/sequence.php	DeleteSequences	185	3	15	test	web/tests/sequence-api-upload.spec.ts	delete of fseq and eseq; the 400 for a non-bare name is the same findFile refusal PostSequence tests
 www/api/controllers/sequence.php	GetSequenceStart	231	1	14	todo		auto: not examined yet
 www/api/controllers/sequence.php	GetSequenceStep	272	3	3	todo		auto: not examined yet
-www/api/controllers/sequence.php	FSeqOrEseqDirectory	332	1	5	todo		auto: not examined yet
+www/api/controllers/sequence.php	FSeqOrEseqDirectory	332	1	5	test	web/tests/sequence-api-upload.spec.ts	eseq branch
 www/api/controllers/settings.php	(top level)	0	3	8	todo		auto: not examined yet
 www/api/controllers/settings.php	GetSetting	41	3	36	todo		auto: not examined yet
 www/api/controllers/settings.php	PutSetting	123	27	138	test	web/tests/settings-put-applies.spec.ts	EnableRouting into sysctl.conf (one line, rest kept, nothing but 0 or 1), skipApply, EnableTethering's default name and key, refused names; the 'scheduling' branch is dead (fppd has no EnableScheduling command; DisableScheduler is the setting); left: storageDevice on a Beagle, the no-curl backup fallback, Simple PipeWire re-apply
