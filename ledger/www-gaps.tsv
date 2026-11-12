@@ -1345,7 +1345,7 @@ www/upgradeOS.php	logStage	85	3	3	todo		auto: not examined yet
 www/upgradeOS.php	downloadImage	92	6	15	skip		dead: only caller commented out (wget replaced PHP curl)
 www/upgradeOS.php	progress	400	7	8	skip		dead: curl progress callback of downloadImage
 www/upgradefpp.php	(top level)	0	11	43	test	upgradefpp-run.spec.ts	run, verdicts, log, version filter, lock; the non-wrapped HTML half is dead ($wrapped starts at 1)
-www/variables.php	(inline script)	0	96	402	todo		auto: not examined yet
+www/variables.php	(inline script)	0	96	402	test	web/tests/variables-page-row-actions.spec.ts	Clear, Delete (confirm and cancel), odd names, eye popup with fresh value, load error; sorting and MQTT table left
 www/vban-config.php	(inline script)	0	201	351	todo		auto: not examined yet
 www/virtualdisplay.php	(inline script)	0	50	278	todo		auto: not examined yet
 www/virtualdisplaybody.php	(top level)	0	9	71	todo		auto: not examined yet
