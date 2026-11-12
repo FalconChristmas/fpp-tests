@@ -527,7 +527,7 @@ www/api/controllers/validate.php	validate_commands	242	1	8	todo		auto: not exami
 www/api/index.php	(inline script)	0	25	67	todo		auto: not examined yet
 www/api/index.php	(top level)	0	1	315	todo		auto: not examined yet
 www/audio-card-aliases.php	(inline script)	0	54	205	todo		auto: not examined yet
-www/backup.php	(inline script)	0	162	592	todo	web/tests/backup-file-copy-refusals.spec.ts	partly done 2026-11-12: list actions (backup-page-list-actions.spec.ts); File Copy refusals and restore confirms (backup-file-copy-refusals.spec.ts). Left: storage-location failure dialogs (lines 3066, 3110, 3358, 3389), alternate-drive list rows
+www/backup.php	(inline script)	0	162	592	todo	web/tests/backup-storage-location-failures.spec.ts	partly done 2026-11-12: list actions (backup-page-list-actions.spec.ts); File Copy refusals and restore confirms (backup-file-copy-refusals.spec.ts); storage-location save/read failures (backup-storage-location-failures.spec.ts). Left: alternate-drive list rows (3151-3255)
 www/backup.php	(top level)	0	48	268	todo		auto: not examined yet
 www/backup.php	doRestore	304	11	47	test	web/tests/backup-api-drive-download-restore.spec.ts	the undecodable-backup and invalid-area errors; left: channelOutputs restored with the backup's system settings
 www/backup.php	ParseIniConfigForBackup	465	1	4	todo		auto: not examined yet
