@@ -83,11 +83,9 @@ test('a dialog closed after it is shown closes at once, and closing one that is 
 });
 
 test('an fppDialog closed while it is still fading in closes once it is shown', async ({ page }) => {
-  // $.fn.fppDialog('close') still calls Bootstrap's hide() straight away, so
-  // the dialogs closed that way (the If editor's Edit Condition and its
-  // evaluation popup, among others) stay open when closed inside the fade.
-  // In FUTURE.md.
-  test.fail(true, "fppDialog('close') does not wait for the fade (FUTURE.md)");
+  // $.fn.fppDialog('close') waits for the fade, so the dialogs closed that way
+  // (the If editor's Edit Condition and its evaluation popup, among others)
+  // close when closed inside it.
   await page.evaluate(() => {
     const $ = (window as any).$;
     $("<div id='fppTestsJqFade'>quick</div>").appendTo('body').fppDialog({ title: 'fpp-tests', modal: true, buttons: {} });
