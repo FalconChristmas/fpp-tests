@@ -100,9 +100,7 @@ test('an EEPROM that cannot be read is not sent to be signed', async ({ request 
 });
 
 // A reply that says OK but carries no EEPROM (a service fault, a proxy's
-// page) is written to the cape as it is: nothing.  dd truncates the virtual
-// EEPROM to empty, and the cape comes up as no cape (its strings, panels and
-// settings gone) until the backup is put back by hand.  In FUTURE.md.
+// page) is refused, and the cape's EEPROM is left as it was.
 for (const [what, reply] of [
   ['no EEPROM', { Status: 'OK' }],
   ['an EEPROM that is not base64', { Status: 'OK', eeprom: '%%%' }],
@@ -112,7 +110,6 @@ for (const [what, reply] of [
     const got = await sign(request);
     // The control: the service was asked, so this is its reply being judged.
     expect(fake.requests().filter((q) => q.path === SIGN)).toHaveLength(1);
-    test.fail(true, 'an empty signed EEPROM is written over the cape (FUTURE.md)');
     expect(eeprom()).toBe(UNSIGNED);
     expect(got.Status).toBe('ERROR');
     // Nothing was written, so no backup is left behind, as for a refusal.
