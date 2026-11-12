@@ -75,8 +75,7 @@ test('an Overlay Model Text command is saved as Overlay Model Effect Text with i
 
 // fppd runs an unconverted entry with its own AutoEnable (TextOverlayCommand
 // passes args[7] on), so a text entry that left its model alone keeps doing
-// so; the editor's conversion always writes 'Enabled', so after a save the
-// model is switched on (and off) around the text.  In FUTURE.md.
+// so; the editor's conversion keeps that AutoEnable too.
 test("an Overlay Model Text command that did not auto-enable its model still doesn't", async ({ page }) => {
   const args = [...TEXT_ARGS];
   args[7] = 'false';
@@ -84,6 +83,5 @@ test("an Overlay Model Text command that did not auto-enable its model still doe
   const [e] = await openAndSave(page);
   expect(e.command).toBe('Overlay Model Effect');
   expect(e.args[10]).toBe('Merry Christmas');
-  test.fail(true, "the conversion writes 'Enabled' whatever AutoEnable was (FUTURE.md)");
   expect(e.args[1]).toBe('False');
 });
