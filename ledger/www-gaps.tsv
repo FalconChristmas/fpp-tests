@@ -200,7 +200,7 @@ www/api/controllers/pipewire.php	pw_find_combine_streams	75	1	19	todo		auto: not
 www/api/controllers/pipewire.php	pw_node_channel_count	107	1	5	todo		auto: not examined yet
 www/api/controllers/pipewire.php	RestartPipeWireServices	302	2	13	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetPipeWireAudioGroups	332	1	7	todo		auto: not examined yet
-www/api/controllers/pipewire.php	SavePipeWireAudioGroups	351	6	24	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SavePipeWireAudioGroups	351	6	24	test	web/tests/pw-config-save-refusals.spec.ts	bad bodies refused, ids filled in; test.fail: a non-object element is a fatal with a 200
 www/api/controllers/pipewire.php	ApplyPipeWireAudioGroups	401	15	183	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetPipeWireSinks	753	9	14	todo		auto: not examined yet
 www/api/controllers/pipewire.php	QueryAlsaCardBestRate	815	2	27	todo		auto: not examined yet
@@ -218,7 +218,7 @@ www/api/controllers/pipewire.php	GetSyncCalibrationSinkForGroup	1854	3	13	todo		
 www/api/controllers/pipewire.php	StartSyncCalibration	1882	6	18	todo		auto: not examined yet
 www/api/controllers/pipewire.php	StartSyncCalibrationPlayback	1965	4	27	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetPipeWireInputGroups	2133	1	7	todo		auto: not examined yet
-www/api/controllers/pipewire.php	SavePipeWireInputGroups	2152	6	24	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SavePipeWireInputGroups	2152	6	24	test	web/tests/pw-config-save-refusals.spec.ts	bad bodies refused, ids filled in; test.fail: a non-object element is a fatal with a 200
 www/api/controllers/pipewire.php	ApplyPipeWireInputGroups	2202	16	94	todo		auto: not examined yet
 www/api/controllers/pipewire.php	SetInputGroupVolume	2455	4	42	todo		auto: not examined yet
 www/api/controllers/pipewire.php	RestorePipeWireInputGroupVolumes	2532	2	18	todo		auto: not examined yet
@@ -263,10 +263,10 @@ www/api/controllers/pipewire.php	GetRTSPOutputs	7117	7	7	test	web/tests/pw-video
 www/api/controllers/pipewire.php	SaveRTSPOutputs	7131	15	15	test	web/tests/pw-video-config-saves.spec.ts	posted for real and read back from the config folder; test.fail for unchecked element types (FUTURE.md)
 www/api/controllers/pipewire.php	ApplyRTSPOutputs	7161	2	2	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetRTSPOutputsStatus	7172	6	11	todo		auto: not examined yet
-www/api/controllers/pipewire.php	SaveOpusRTPInstances	7215	8	41	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SaveOpusRTPInstances	7215	8	41	test	web/tests/pw-config-save-refusals.spec.ts	bad bodies refused, ids filled in; test.fail: a non-object element is a fatal with a 200
 www/api/controllers/pipewire.php	ApplyOpusRTPInstances	7271	12	12	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetOpusRTPStatus	7306	2	7	todo		auto: not examined yet
-www/api/controllers/pipewire.php	SaveVBANInstances	7392	7	83	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SaveVBANInstances	7392	7	83	test	web/tests/pw-config-save-refusals.spec.ts	bad bodies refused, ids filled in; test.fail: a non-object element is a fatal with a 200
 www/api/controllers/pipewire.php	GenerateVBANConfig	7539	5	119	todo		auto: not examined yet
 www/api/controllers/pipewire.php	ApplyVBANInstances	7709	4	35	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetVBANStatus	7781	4	39	todo		auto: not examined yet
@@ -277,7 +277,7 @@ www/api/controllers/pipewire.php	GetVideoOverlayModels	8813	4	19	todo		auto: not
 www/api/controllers/pipewire.php	GetPipeWireVideoGroups	8854	1	7	todo		auto: not examined yet
 www/api/controllers/pipewire.php	SavePipeWireVideoGroups	8873	21	21	test	web/tests/pw-video-config-saves.spec.ts	posted for real and read back from the config folder; test.fail for unchecked element types (FUTURE.md)
 www/api/controllers/pipewire.php	GetPipeWireVideoInputSources	9216	1	14	todo		auto: not examined yet
-www/api/controllers/pipewire.php	SavePipeWireVideoInputSources	9247	9	22	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SavePipeWireVideoInputSources	9247	9	22	test	web/tests/pw-config-save-refusals.spec.ts	bad bodies refused, ids filled in; test.fail: a non-object element is a fatal with a 200
 www/api/controllers/pipewire.php	GetV4L2Devices	9433	31	39	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetV4L2DeviceModes	9517	27	27	todo		auto: not examined yet
 www/api/controllers/pipewire.php	FetchFppdVideoPreview	9563	1	6	todo		auto: not examined yet
