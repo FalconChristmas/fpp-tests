@@ -566,7 +566,7 @@ www/changelog.php	(inline script)	0	47	160	todo		auto: not examined yet
 www/changelog.php	(top level)	0	10	98	todo		auto: not examined yet
 www/channelinputs.php	(inline script)	0	36	243	todo		auto: not examined yet
 www/channelinputs.php	(top level)	0	2	30	todo		auto: not examined yet
-www/channeloutputs.php	(inline script)	0	844	5245	todo	web/tests/pixel-strings-clone-refusals.spec.ts	partly done 2026-11-12: co-other.php legacy types (other-outputs-legacy-types.spec.ts); co-pixelStrings.php clone refusals, save failure, virtual string removal and same-port overlap (pixel-strings-clone-refusals.spec.ts). Left: co-ledPanels.php (266), co-other-modules.php (166), co-pwm.php (56); unreached.py --inline www/channeloutputs.php www/co-X.php lists them
+www/channeloutputs.php	(inline script)	0	844	5245	todo	web/tests/other-outputs-gpio-mqtt-modules.spec.ts	partly done 2026-11-12: co-other.php legacy types (other-outputs-legacy-types.spec.ts); co-pixelStrings.php clone refusals etc (pixel-strings-clone-refusals.spec.ts); co-other-modules.php GPIO, GPIO-595, MQTT, PCF8574, 3D display (other-outputs-gpio-mqtt-modules.spec.ts). Left: co-ledPanels.php (266), co-pwm.php (56), PCA9685 and AutoFB modules; unreached.py --inline www/channeloutputs.php www/co-X.php lists them
 www/channeloutputs.php	(top level)	0	6	154	todo		auto: not examined yet
 www/co-ledPanels.php	(top level)	0	20	363	todo		auto: not examined yet
 www/co-other-modules.php	(top level)	0	34	119	todo		auto: not examined yet
