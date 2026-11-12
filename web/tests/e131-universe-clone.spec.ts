@@ -136,19 +136,16 @@ test('Clone asked for two more rows than follow the selected one changes nothing
 });
 
 test('Clone asked for one more row than follow the selected one changes nothing', async ({ page, request }) => {
-  // FUTURE.md: the check is one short (selected + count - 1 >= rows), so four
-  // is let through: the three rows there are overwritten, then the script
-  // dies on the row that isn't.
-  test.fail();
+  // Four is refused too, as it runs one row past the last, and nothing is
+  // overwritten.
   const errors = await cloneCollectingErrors(page, request, '4', 0);
   expect(await shown(page)).toEqual(UNTOUCHED);
   expect(errors).toEqual([]);
 });
 
 test('Clone with no row selected does nothing, without a script error', async ({ page, request }) => {
-  // FUTURE.md: nothing checks for a selected row (Delete does), so the
-  // script dies reading row -1, after asking how many.
-  test.fail();
+  // Clone checks for a selected row, as Delete does, so there is no script
+  // error.
   const errors = await cloneCollectingErrors(page, request, '1', null);
   expect(await shown(page)).toEqual(UNTOUCHED);
   expect(errors).toEqual([]);
