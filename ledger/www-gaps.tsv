@@ -223,7 +223,7 @@ www/api/controllers/pipewire.php	ApplyPipeWireInputGroups	2202	16	94	todo		auto:
 www/api/controllers/pipewire.php	SetInputGroupVolume	2455	4	42	todo		auto: not examined yet
 www/api/controllers/pipewire.php	RestorePipeWireInputGroupVolumes	2532	2	18	todo		auto: not examined yet
 www/api/controllers/pipewire.php	RestoreInputGroupSendAndPathLevels	2567	3	34	todo		auto: not examined yet
-www/api/controllers/pipewire.php	SetInputGroupMemberVolume	2647	17	64	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SetInputGroupMemberVolume	2647	17	64	test	web/tests/pw-input-member-volume-refusals.spec.ts	missing fields, no/invalid file, group/member not found, no PipeWire, no loopback, direct-to-bus stream; test.fail non-numeric index is member 0 (FUTURE.md)
 www/api/controllers/pipewire.php	SaveStreamSlotVolume	2780	1	11	todo		auto: not examined yet
 www/api/controllers/pipewire.php	SetStreamSlotVolume	2822	3	21	todo		auto: not examined yet
 www/api/controllers/pipewire.php	PipeWireEntityStates	2924	2	64	todo		auto: not examined yet
