@@ -278,8 +278,8 @@ www/api/controllers/pipewire.php	GetPipeWireVideoGroups	8854	1	7	todo		auto: not
 www/api/controllers/pipewire.php	SavePipeWireVideoGroups	8873	21	21	test	web/tests/pw-video-config-saves.spec.ts	posted for real and read back from the config folder; test.fail for unchecked element types (FUTURE.md)
 www/api/controllers/pipewire.php	GetPipeWireVideoInputSources	9216	1	14	todo		auto: not examined yet
 www/api/controllers/pipewire.php	SavePipeWireVideoInputSources	9247	9	22	test	web/tests/pw-config-save-refusals.spec.ts	bad bodies refused, ids filled in; test.fail: a non-object element is a fatal with a 200
-www/api/controllers/pipewire.php	GetV4L2Devices	9433	31	39	todo		auto: not examined yet
-www/api/controllers/pipewire.php	GetV4L2DeviceModes	9517	27	27	todo		auto: not examined yet
+www/api/controllers/pipewire.php	GetV4L2Devices	9433	31	39	test	web/tests/pw-v4l2-device-list.spec.ts	stand-in v4l2-ctl and /dev/video9x: capture nodes only, name, bus, flicker, exposure
+www/api/controllers/pipewire.php	GetV4L2DeviceModes	9517	27	27	test	web/tests/pw-v4l2-device-list.spec.ts	sizes and rates parsed; test.fail last size of a format lost at the next format (FUTURE.md)
 www/api/controllers/pipewire.php	FetchFppdVideoPreview	9563	1	6	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetVideoInputPreview	9573	42	103	todo		auto: not examined yet
 www/api/controllers/pipewire.php	SaveVideoRoutingMatrix	9844	24	24	test	web/tests/pw-video-config-saves.spec.ts	posted for real and read back from the config folder; test.fail for unchecked element types (FUTURE.md)
