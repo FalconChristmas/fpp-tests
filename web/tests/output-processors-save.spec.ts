@@ -138,11 +138,8 @@ for (const [what, fix] of [
   });
 }
 
-// The model list is written into each row's select without escaping
-// (HTMLForOutputProcessorConfig: "<option value='" + model + "'"), so a model
-// named with an apostrophe has its value cut at it ("Tom"), and a save
-// writes that.  fppd finds no such model and applies the processor to the
-// absolute channels from its start, not to the model.  In FUTURE.md.
+// The model list is escaped when written into each row's select, so a model
+// named with an apostrophe keeps its whole name, and a save writes that.
 test("a processor on a model named with an apostrophe keeps its model when saved", async ({ page, request }) => {
   const name = "Tom's tree";
   await page.route((u) => u.pathname.endsWith('/api/models') && u.search.includes('simple'), (r) =>
@@ -152,7 +149,6 @@ test("a processor on a model named with an apostrophe keeps its model when saved
   putFile(FILE, JSON.stringify({ outputProcessors: p }));
   await open(page, 2);
   await expect(rows(page).nth(1).locator('select.model'), 'the control').toHaveValue(MODEL);
-  test.fail(true, 'model names are not escaped in the select (FUTURE.md)');
   await expect(rows(page).nth(0).locator('select.model')).toHaveValue(name, { timeout: 2000 });
   await save(page);
   expect((await saved(request))[0].model).toBe(name);
