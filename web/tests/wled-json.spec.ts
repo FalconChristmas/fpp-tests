@@ -147,3 +147,56 @@ test("/json/palx gives its palettes as WLED does, keyed by the palette's id", as
   expect(Array.isArray(palx.p)).toBe(false);
   expect(palx.p['0']).toEqual([[0, 255, 255, 255], [255, 255, 255, 255]]);
 });
+
+// /win: WLED's older HTTP API (www/win/index.php), which answers every
+// request with an XML status frame and takes the power from T=.
+test('/win answers with the XML status frame, and T= turns every model off, on or over', async ({ request }) => {
+  const win = async (query = '') => {
+    const r = await request.get(`/win${query}`);
+    expect(r.ok()).toBe(true);
+    expect(r.headers()['content-type']).toBe('text/xml; charset=utf-8');
+    expect(r.headers()['access-control-allow-origin']).toBe('*');
+    expect(r.headers()['cache-control']).toContain('no-store');
+    return r.text();
+  };
+  const field = (xml: string, tag: string) => [...xml.matchAll(new RegExp(`<${tag}>([^<]*)</${tag}>`, 'g'))].map((m) => m[1]);
+
+  // Off: no brightness, the one segment's colours, the node's name.
+  let xml = await win();
+  expect(xml.startsWith('<?xml version="1.0" ?>\n<vs>\n')).toBe(true);
+  expect(xml.trimEnd().endsWith('</vs>')).toBe(true);
+  const status = await (await request.get('/api/system/status')).json();
+  expect(field(xml, 'ac')).toEqual(['0']);
+  expect(field(xml, 'cl')).toEqual(['255', '255', '255']);
+  expect(field(xml, 'cs')).toEqual(['0', '0', '0']);
+  expect(field(xml, 'fx')).toEqual(['0']);
+  expect(field(xml, 'ds')).toEqual([status.host_name]);
+
+  // T=1 is on; the frame in the same answer already says so.
+  xml = await win('?T=1');
+  expect(field(xml, 'ac')).toEqual(['255']);
+  expect(await modelState(request)).toBe(1);
+  // T=2 is the other way from wherever it is.
+  xml = await win('?T=2');
+  expect(field(xml, 'ac')).toEqual(['0']);
+  expect(await modelState(request)).toBe(0);
+  xml = await win('?T=2');
+  expect(field(xml, 'ac')).toEqual(['255']);
+  expect(await modelState(request)).toBe(1);
+  // A brightness alone is accepted and changes nothing.
+  xml = await win('?A=10');
+  expect(field(xml, 'ac')).toEqual(['255']);
+  expect(await modelState(request)).toBe(1);
+  // T=0 is off, by POST too.
+  const posted = await request.post('/win', { form: { T: '0' } });
+  expect(posted.ok()).toBe(true);
+  expect(field(await posted.text(), 'ac')).toEqual(['0']);
+  expect(await modelState(request)).toBe(0);
+
+  // A model running an effect counts as on, and its effect is the frame's.
+  const effects = await json(request, '/json/eff');
+  const desc = await (await request.get('/api/overlays/effects/Bars')).json();
+  await command(request, 'Overlay Model Effect', MODEL, 'Enabled', 'Bars', ...desc.args.map((a: any) => String(a.default ?? '')));
+  await expect.poll(async () => field(await win(), 'fx')).toEqual([String(effects.indexOf('Bars'))]);
+  expect(field(await win(), 'ac')).toEqual(['255']);
+});

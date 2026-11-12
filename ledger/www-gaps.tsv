@@ -1353,5 +1353,5 @@ www/virtualdisplaybody3d.php	(top level)	0	118	169	todo		auto: not examined yet
 www/virtualdisplaywrapper.php	(inline script)	0	79	303	todo		auto: not examined yet
 www/virtualdisplaywrapper3d.php	(top level)	0	8	42	todo		auto: not examined yet
 www/warningHelper.php	(top level)	0	1	3	todo		auto: not examined yet
-www/win/index.php	(top level)	0	47	47	todo		auto: not examined yet
+www/win/index.php	(top level)	0	47	47	test	web/tests/wled-json.spec.ts	the XML frame and its headers; T=0, 1 and 2 by GET and POST; a running effect counts as on
 www/wled/index.php	(top level)	0	3	3	todo		auto: not examined yet
