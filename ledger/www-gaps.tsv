@@ -419,7 +419,7 @@ www/api/controllers/plugin.php	PluginUpdateStartSweep	5401	6	17	todo		auto: not 
 www/api/controllers/plugin.php	GetPluginUpdateStatus	5446	7	56	todo		auto: not examined yet
 www/api/controllers/plugin.php	RefreshPluginUpdateStatus	5550	2	14	todo		auto: not examined yet
 www/api/controllers/plugin.php	PluginGetSetting	5590	2	9	todo		auto: not examined yet
-www/api/controllers/plugin.php	PluginSetSetting	5624	8	15	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginSetSetting	5624	8	15	test	web/tests/plugin-setting-api.spec.ts	stored in config/plugin.<name>, others kept, line break 500, bad setting and plugin names 400; test.fail trailing quote lost (FUTURE.md)
 www/api/controllers/plugin.php	GetPluginPageUrl	5667	1	4	todo		auto: not examined yet
 www/api/controllers/plugin.php	_PluginGetBestPageUrl	5698	1	18	todo		auto: not examined yet
 www/api/controllers/plugin.php	_PluginScanMenuPagesRaw	5755	2	24	todo		auto: not examined yet
