@@ -25,8 +25,14 @@ let uiLevel = '0';
 test.beforeEach(async ({ request }) => {
   restoreSettings = snapshotSettings();
   uiLevel = String((await (await request.get('/api/settings/uiLevel')).json()).value ?? '0');
-  inPlayer('sh', '-c', `rm -rf ${SAVED} && mkdir -p ${SAVED}/config && cd ${MEDIA} && ` +
-    `for f in ${NET.join(' ')} ${CONFIG_FILE} ${MARKER}; do [ -e "$f" ] && cp -a "$f" "${SAVED}/$f"; done; true`);
+  // The Configuration area takes more than the test's own files: the overlay
+  // models, the UI password, fpp-info.json, exim4 and the rest of
+  // resetConfig.php's list. Save all of config/ and the others, or every test
+  // after this one runs on a player with those gone (no overlay models once
+  // fppd next restarts).
+  inPlayer('sh', '-c', `rm -rf ${SAVED} && mkdir -p ${SAVED}/exim4 && cd ${MEDIA} && ` +
+    `cp -a config ${SAVED}/config && { [ ! -e fpp-info.json ] || cp -a fpp-info.json ${SAVED}/; } && ` +
+    `{ [ ! -d exim4 ] || cp -a exim4/. ${SAVED}/exim4/; }`);
   inPlayer('sh', '-c', `cd ${MEDIA} && echo 'iface' > ${NET[0]} && echo 'lease' > ${NET[1]} && echo '[]' > ${CONFIG_FILE}`);
 });
 test.afterEach(async ({ request }) => {
