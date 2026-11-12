@@ -95,7 +95,7 @@ www/api/controllers/cape.php	RedeemVoucher	674	4	38	todo		auto: not examined yet
 www/api/controllers/cape.php	RecordCapeLicenseCheck	866	2	3	todo		auto: not examined yet
 www/api/controllers/channel.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/channel.php	channel_input_get_stats	27	2	9	todo		auto: not examined yet
-www/api/controllers/channel.php	channel_input_delete_stats	55	11	11	todo		auto: not examined yet
+www/api/controllers/channel.php	channel_input_delete_stats	55	11	11	test	web/tests/api-effects-all-and-input-stats.spec.ts	passed to fppd; the stats still read
 www/api/controllers/channel.php	channel_get_output	214	2	32	todo		auto: not examined yet
 www/api/controllers/configfile.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/configfile.php	ConfigFileWithinBase	7	11	20	test	web/tests/configfile-delete-and-nested.spec.ts	folders made by an upload, and refused when an existing ancestor is a link out of the config directory
@@ -116,7 +116,7 @@ www/api/controllers/docs.php	ServeOpenApiSpec	21	1	19	todo		auto: not examined y
 www/api/controllers/docs.php	MergePluginApiDocs	112	3	38	todo		auto: not examined yet
 www/api/controllers/docs.php	MergeUndocumentedFppdRoutes	193	3	42	todo		auto: not examined yet
 www/api/controllers/effects.php	(top level)	0	1	2	todo		auto: not examined yet
-www/api/controllers/effects.php	effects_list_ALL	44	15	15	todo		auto: not examined yet
+www/api/controllers/effects.php	effects_list_ALL	44	15	15	test	web/tests/api-effects-all-and-input-stats.spec.ts	effects and sequences by name, sorted
 www/api/controllers/email.php	(top level)	0	1	3	todo		auto: not examined yet
 www/api/controllers/errorReport.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/errorReport.php	GetErrorReportPreview	26	5	35	todo		auto: not examined yet
