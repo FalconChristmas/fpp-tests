@@ -321,13 +321,13 @@ www/api/controllers/playlist.php	validatePlaylistByName	308	1	25	test	playlist-v
 www/api/controllers/playlist.php	playlistIssueText	358	0	4	covered		auto: every line reached
 www/api/controllers/playlist.php	playlist_list_validate	402	0	37	covered		auto: every line reached
 www/api/controllers/playlist.php	playlist_playable	475	1	17	todo		auto: not examined yet
-www/api/controllers/playlist.php	playlist_insert	580	2	16	todo		auto: not examined yet
+www/api/controllers/playlist.php	playlist_insert	580	2	16	test	web/tests/playlist-save-refusals.spec.ts	name refusals, missing playlist; 4 test.fail (an empty or malformed save empties the playlist or is a fatal); write failures cannot be staged as root
 www/api/controllers/playlist.php	LoadSubPlaylist	620	0	16	test	playlist-merge-subs.spec.ts	mergeSubs merge; test.fail loop recursion
 www/api/controllers/playlist.php	LoadPlayListDetails	669	0	25	test	playlist-merge-subs.spec.ts	mergeSubs merge; test.fail loop recursion
 www/api/controllers/playlist.php	GetPlaylist	721	0	0	gone		auto: no longer in the tree
 www/api/controllers/playlist.php	playlist_get	772	2	7	todo		auto: not examined yet
-www/api/controllers/playlist.php	playlist_update	820	2	26	todo		auto: not examined yet
-www/api/controllers/playlist.php	playlist_delete	893	2	11	todo		auto: not examined yet
+www/api/controllers/playlist.php	playlist_update	820	2	26	test	web/tests/playlist-save-refusals.spec.ts	name refusals, missing playlist; 4 test.fail (an empty or malformed save empties the playlist or is a fatal); write failures cannot be staged as root
+www/api/controllers/playlist.php	playlist_delete	893	2	11	test	web/tests/playlist-save-refusals.spec.ts	name refusals, missing playlist; 4 test.fail (an empty or malformed save empties the playlist or is a fatal); write failures cannot be staged as root
 www/api/controllers/playlist.php	PlaylistSectionInsertItem	937	8	23	test	web/tests/playlist-item-insert-refusals.spec.ts	new section, missing playlist, bad name; 8 test.fail (any key is a section, any body an item, an unparsable file is replaced); the write-failure branch cannot be staged as root
 www/api/controllers/playlist.php	playlist_repeat	1155	2	7	todo		auto: not examined yet
 www/api/controllers/plugin.php	(top level)	0	1	49	todo		auto: not examined yet
