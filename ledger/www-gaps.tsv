@@ -63,10 +63,10 @@ www/api/api.html	(inline script)	0	1	20	todo		auto: not examined yet
 www/api/api.php	(top level)	0	2	15	todo		auto: not examined yet
 www/api/commandhelp.php	(top level)	0	8	19	todo		auto: not examined yet
 www/api/controllers/audioaliases.php	(top level)	0	1	2	todo		auto: not examined yet
-www/api/controllers/audioaliases.php	LoadAudioCardAliases	22	2	16	test	audio-card-aliases-save.spec.ts	unreadable alias file is no aliases
+www/api/controllers/audioaliases.php	LoadAudioCardAliases	22	2	16	test	web/tests/audio-card-aliases-save.spec.ts	unreadable alias file is no aliases
 www/api/controllers/audioaliases.php	ApplyAudioCardAlias	50	1	5	todo		auto: not examined yet
-www/api/controllers/audioaliases.php	GetAudioCardAliases	64	19	64	test	audio-card-aliases-save.spec.ts	unconnected aliased card listed; rest needs real sound cards
-www/api/controllers/audioaliases.php	SaveAudioCardAliases	179	7	26	test	audio-card-aliases-save.spec.ts	trim, 128 cut, empty removal, replace-all, bad JSON 400; test.fail x4 body without aliases clears them (FUTURE.md)
+www/api/controllers/audioaliases.php	GetAudioCardAliases	64	19	64	test	web/tests/audio-card-aliases-save.spec.ts	unconnected aliased card listed; rest needs real sound cards
+www/api/controllers/audioaliases.php	SaveAudioCardAliases	179	7	26	test	web/tests/audio-card-aliases-save.spec.ts	trim, 128 cut, empty removal, replace-all, bad JSON 400; test.fail x4 body without aliases clears them (FUTURE.md)
 www/api/controllers/backups.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/backups.php	ProxyBackupToRemote	18	6	24	todo		auto: not examined yet
 www/api/controllers/backups.php	GetAvailableBackupsFromDir	69	1	16	todo		auto: not examined yet
@@ -82,12 +82,12 @@ www/api/controllers/backups.php	DownloadJsonBackup	1026	18	41	test	web/tests/bac
 www/api/controllers/backups.php	DeleteJsonBackup	1123	2	32	todo		auto: not examined yet
 www/api/controllers/backups.php	MountReturnCodeMap	1214	7	17	todo		auto: not examined yet
 www/api/controllers/cape.php	(top level)	0	16	54	todo		auto: not examined yet
-www/api/controllers/cape.php	GetCapeDefaultSettings	84	4	28	test	cape-signing-data-refusals.spec.ts	invalid regime 400
+www/api/controllers/cape.php	GetCapeDefaultSettings	84	4	28	test	web/tests/cape-signing-data-refusals.spec.ts	invalid regime 400
 www/api/controllers/cape.php	GetEEPROMVendorLists	166	1	56	todo		auto: not examined yet
 www/api/controllers/cape.php	GetCapeOptions	260	2	12	todo		auto: not examined yet
 www/api/controllers/cape.php	GetEEPROMFilename	292	1	15	todo		auto: not examined yet
-www/api/controllers/cape.php	GetSigningDataHelper	333	16	64	test	cape-signing-data-refusals.spec.ts	invalid key and order refused on signingData and signingFile
-www/api/controllers/cape.php	GetSigningFile	470	6	6	test	cape-signing-data-refusals.spec.ts	refusals carry no download header
+www/api/controllers/cape.php	GetSigningDataHelper	333	16	64	test	web/tests/cape-signing-data-refusals.spec.ts	invalid key and order refused on signingData and signingFile
+www/api/controllers/cape.php	GetSigningFile	470	6	6	test	web/tests/cape-signing-data-refusals.spec.ts	refusals carry no download header
 www/api/controllers/cape.php	SignEEPROMHelper	493	6	24	test	cape-signing-eeprom-data.spec.ts cape-signing-online.spec.ts	write back, backup, detect_cape; empty eeprom wipe test.fail
 www/api/controllers/cape.php	SignEEPROM	565	0	21	test	cape-signing-online.spec.ts	online sign success, refusal, 502/unreachable, unreadable EEPROM; empty-reply wipe test.fail
 www/api/controllers/cape.php	PostSigningData	628	0	3	covered		auto: every line reached
@@ -104,9 +104,9 @@ www/api/controllers/configfile.php	DownloadConfigFile	119	2	10	todo		auto: not e
 www/api/controllers/configfile.php	UploadConfigFile	166	4	27	todo		auto: not examined yet
 www/api/controllers/configfile.php	DeleteConfigFile	236	10	14	test	web/tests/configfile-delete-and-nested.spec.ts	deleted, not a regular file (gone, never there, a folder), refused through a link and for .htpasswd; left: unlink failing (the container's PHP is root)
 www/api/controllers/crashes.php	(top level)	0	1	6	todo		auto: not examined yet
-www/api/controllers/crashes.php	CrashReportPath	58	4	21	test	crash-report-names.spec.ts	bad names, path cut to basename, not-found, symlink out of the folder
-www/api/controllers/crashes.php	PostCrashUpload	187	8	36	test	crash-report-names.spec.ts	refusals only (consent, names); a passing request uploads to the internet, so not tested
-www/api/controllers/crashes.php	PostCrashReport	287	5	37	test	crash-report-names.spec.ts	non-JSON requests refused, no report built; building one is not tested here
+www/api/controllers/crashes.php	CrashReportPath	58	4	21	test	web/tests/crash-report-names.spec.ts	bad names, path cut to basename, not-found, symlink out of the folder
+www/api/controllers/crashes.php	PostCrashUpload	187	8	36	test	web/tests/crash-report-names.spec.ts	refusals only (consent, names); a passing request uploads to the internet, so not tested
+www/api/controllers/crashes.php	PostCrashReport	287	5	37	test	web/tests/crash-report-names.spec.ts	non-JSON requests refused, no report built; building one is not tested here
 www/api/controllers/crashes.php	FppdListening	344	2	5	todo		auto: not examined yet
 www/api/controllers/crashes.php	BuildManualCrashReportWithoutFppd	358	12	52	todo		auto: not examined yet
 www/api/controllers/docs.php	(top level)	0	1	2	todo		auto: not examined yet
@@ -233,7 +233,7 @@ www/api/controllers/pipewire.php	PipeWirePreviewKill	3210	2	8	todo		auto: not ex
 www/api/controllers/pipewire.php	GetPipeWireVolumeTargets	3234	1	43	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetStreamSlotStatus	3305	9	43	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetRoutingMatrix	3379	2	58	todo		auto: not examined yet
-www/api/controllers/pipewire.php	SaveRoutingMatrix	3468	5	36	test	pw-audio-routing-save-refusals.spec.ts	stored routes, clamp, untouched groups, refusals; test.fail x3 non-list routes, non-object route, no output group (FUTURE.md)
+www/api/controllers/pipewire.php	SaveRoutingMatrix	3468	5	36	test	web/tests/pw-audio-routing-save-refusals.spec.ts	stored routes, clamp, untouched groups, refusals; test.fail x3 non-list routes, non-object route, no output group (FUTURE.md)
 www/api/controllers/pipewire.php	SetRoutingPathVolume	3534	5	60	todo		auto: not examined yet
 www/api/controllers/pipewire.php	SaveRoutingPreset	3693	1	46	todo		auto: not examined yet
 www/api/controllers/pipewire.php	LoadRoutingPreset	3775	4	55	todo		auto: not examined yet
@@ -817,7 +817,7 @@ www/fppunknown_versions.php	getFPPVersionTriplet	31	1	1	todo		auto: not examined
 www/fppunknown_versions.php	writeFPPVersionJavascriptFunctions	38	2	2	todo		auto: not examined yet
 www/fppversion.php	(top level)	0	1	2	todo		auto: not examined yet
 www/gitCheckoutVersion.php	(top level)	0	22	30	todo		auto: not examined yet
-www/gpio.php	(inline script)	0	35	544	test	gpio-save-failures-and-led.spec.ts	save refusal/failure alerts, re-enable badges, LED flash label, reserved LED pin, editModalCmd; duplicate-pin alert (775) unreachable from the UI
+www/gpio.php	(inline script)	0	35	544	test	web/tests/gpio-save-failures-and-led.spec.ts	save refusal/failure alerts, re-enable badges, LED flash label, reserved LED pin, editModalCmd; duplicate-pin alert (775) unreachable from the UI
 www/gpio.php	(top level)	0	57	137	todo		auto: not examined yet
 www/growsd.php	(top level)	0	4	21	todo		auto: not examined yet
 www/hdmi_table.json.php	(top level)	0	2	11	todo		auto: not examined yet
