@@ -32,6 +32,9 @@ let description = '';
 test.beforeEach(async ({ request }) => {
   uiLevel = String((await (await request.get('/api/settings/uiLevel')).json()).value ?? '0');
   description = String((await (await request.get('/api/settings/HostDescription')).json()).value ?? '');
+  // No description, whatever an earlier spec left: the node is then named by
+  // the host name.  fppd reports the setting live, so it shows at once.
+  await request.put('/api/settings/HostDescription?skipBackup=1', { data: '' });
   await request.put('/api/settings/uiLevel', { data: '3' });
 });
 test.afterEach(async ({ request }) => {
@@ -55,7 +58,7 @@ test("/json/info describes the player as a WLED node: its name, version, address
   expect(info.ip).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
   // Named by the host description when there is a real one, else by the
   // host name: the default description, "FPP", says less, and so does none.
-  // fppd reports the current setting, which the player holds as "".
+  // fppd reports the current setting.
   expect(status.host_description).toBe('');
   expect(info.name).toBe(status.host_name);
 });
