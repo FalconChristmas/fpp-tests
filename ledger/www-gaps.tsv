@@ -1270,7 +1270,7 @@ www/pipewire-rtsp-outputs.php	(inline script)	0	41	206	todo		auto: not examined 
 www/pipewire-video-inputs.php	(inline script)	0	293	616	todo		auto: not examined yet
 www/pipewire-video-inputs.php	(top level)	0	1	43	todo		auto: not examined yet
 www/pipewire-video.php	(inline script)	0	218	515	todo		auto: not examined yet
-www/pixeloverlaymodels.php	(inline script)	0	155	650	todo		auto: not examined yet
+www/pixeloverlaymodels.php	(inline script)	0	155	650	todo	web/tests/overlay-models-page-save.spec.ts	partly done 2026-11-12: Save round trip for channel, custom, FB and sub models, refusals, auto-created, add, delete, load and save failures (overlay-models-page-save.spec.ts). Left: submodel preview and expander (504-584), polar buffers table (208-225), running effects modal (961-1031), FB DeviceChanged (325-339, needs a framebuffer)
 www/pixeloverlaymodels.php	(top level)	0	15	73	todo		auto: not examined yet
 www/playlistDetails.php	(top level)	0	1	11	todo		auto: not examined yet
 www/playlistEditor.php	(top level)	0	1	18	todo		auto: not examined yet
