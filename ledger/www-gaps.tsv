@@ -817,7 +817,7 @@ www/fppunknown_versions.php	getFPPVersionTriplet	31	1	1	todo		auto: not examined
 www/fppunknown_versions.php	writeFPPVersionJavascriptFunctions	38	2	2	todo		auto: not examined yet
 www/fppversion.php	(top level)	0	1	2	todo		auto: not examined yet
 www/gitCheckoutVersion.php	(top level)	0	22	30	todo		auto: not examined yet
-www/gpio.php	(inline script)	0	35	544	todo		auto: not examined yet
+www/gpio.php	(inline script)	0	35	544	test	gpio-save-failures-and-led.spec.ts	save refusal/failure alerts, re-enable badges, LED flash label, reserved LED pin, editModalCmd; duplicate-pin alert (775) unreachable from the UI
 www/gpio.php	(top level)	0	57	137	todo		auto: not examined yet
 www/growsd.php	(top level)	0	4	21	todo		auto: not examined yet
 www/hdmi_table.json.php	(top level)	0	2	11	todo		auto: not examined yet
