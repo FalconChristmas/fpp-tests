@@ -191,16 +191,13 @@ test('an expansion board set to None hides its ports and saves them as no pixels
   await expect(page.locator('#DifferentialType0')).toHaveCount(0);
 });
 
-// Drawing a saved config, populatePixelStringOutputs() never leaves the
-// board: inExpansion stays set past its last port, so every fourth port after
-// it is drawn as differential too (choosing Differential on the page stops at
-// the board's count, as the first test shows), and a receiver picked there is
-// saved for ports with no receivers.  In FUTURE.md.
+// Drawing a saved config, populatePixelStringOutputs() leaves the board after
+// its last port, so only the board's own ports are drawn as differential, as
+// when choosing Differential on the page.
 test('a saved Differential board is drawn with a receiver choice only on its own ports', async ({ page }) => {
   useCape(V4, stringsConfig(V4, { 0: { expansionType: 1 } }));
   await openStrings(page);
   await expect(page.locator('#DifferentialType0')).toHaveCount(1);
   await expect(page.locator('#DifferentialType4')).toHaveCount(1);
-  test.fail(true, 'the cape ports after a Differential board are drawn as differential (FUTURE.md)');
   await expect(page.locator('#DifferentialType8'), "the cape's own ports past the board").toHaveCount(0);
 });
