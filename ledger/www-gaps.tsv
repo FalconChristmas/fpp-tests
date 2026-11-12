@@ -169,8 +169,8 @@ www/api/controllers/git.php	GitHubForkBranchNames	372	4	37	todo		auto: not exami
 www/api/controllers/git.php	GitBranches	434	7	51	todo		auto: not examined yet
 www/api/controllers/git.php	GitForkBranches	553	64	118	test	web/tests/git-fork-branches-fallbacks.spec.ts	the three local-checkout fallbacks (GitHub out of reach, 404, branches refused), the hidden branches, a bad user name, a token with a carriage return; a line feed in the token cannot reach the guard (the settings file is line based)
 www/api/controllers/git.php	GitPullRequests	762	6	59	todo		auto: not examined yet
-www/api/controllers/help.php	(top level)	0	1	2	todo		auto: not examined yet
-www/api/controllers/help.php	help_help	12	41	41	todo		auto: not examined yet
+www/api/controllers/help.php	(top level)	0	1	2	skip		dead: help_help has no route
+www/api/controllers/help.php	help_help	12	41	41	skip		dead: no route calls it (/api/help is not in api/index.php; the endpoint list is api.html now)
 www/api/controllers/media.php	(top level)	0	1	3	todo		auto: not examined yet
 www/api/controllers/media.php	GetMediaDuration	58	1	7	todo		auto: not examined yet
 www/api/controllers/network.php	(top level)	0	1	3	todo		auto: not examined yet
@@ -508,8 +508,8 @@ www/api/controllers/system.php	UpdateActivityWriteCache	773	2	11	todo		auto: not
 www/api/controllers/system.php	GetUpdateActivityInternal	806	35	154	test	web/tests/update-activity.spec.ts web/tests/update-activity-finalizing.spec.ts web/tests/update-activity-log-tail.spec.ts	runs from the log, failure, the idle cache, the finishing request; the log tail trimmed to the run, a continuation's first START; left: the 4 MB retry when START is outside the 512 KB window, stale runs
 www/api/controllers/system.php	GetUpdateActivity	1131	7	12	todo		auto: not examined yet
 www/api/controllers/system.php	SystemSetAudio	1163	4	20	todo		auto: not examined yet
-www/api/controllers/system.php	SystemParseVolumeTarget	1208	6	8	todo		auto: not examined yet
-www/api/controllers/system.php	SystemGetTargetVolume	1231	44	54	todo		auto: not examined yet
+www/api/controllers/system.php	SystemParseVolumeTarget	1208	6	8	test	web/tests/api-volume-target-read.spec.ts	the flat key and the object form
+www/api/controllers/system.php	SystemGetTargetVolume	1231	44	54	test	web/tests/api-volume-target-read.spec.ts	slots, sinks (group, filter node, node target), input members and routing paths; unknown targets, missing and malformed config
 www/api/controllers/system.php	SystemSetTargetedAudio	1325	16	27	todo		auto: not examined yet
 www/api/controllers/system.php	SystemGetAudio	1379	7	25	todo		auto: not examined yet
 www/api/controllers/system.php	SystemGetStatus	1451	5	95	todo		auto: not examined yet
