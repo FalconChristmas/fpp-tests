@@ -70,17 +70,14 @@ test('a device name is cut to letters and digits before it reaches a command', a
   expect(await choose(request, "sd'b1;/x")).toBe(line('sdb1x', 'defaults,noatime,nodiratime,nofail', '2'));
 });
 
-// The root device is found by a regular expression made of its name
-// (preg_match("/$rootDevice/", $value)), not by comparing names: with the
+// The root device is compared by name, not matched as a pattern: with the
 // root on sda1 (a Pi booted from a USB SSD), choosing that disk's eleventh
-// partition, sda11, comments the media mount out instead of mounting it.
-// And where lsblk finds no root (an empty pattern matches anything), every
-// choice does.  In FUTURE.md.
+// partition, sda11, mounts it. Where lsblk finds no root, every choice is
+// still mounted.
 test('a partition whose name starts with the root device\'s is mounted, not taken for the root', async ({ request }) => {
   standInCommand('lsblk', "echo 'sda1 8:1 0 29G 0 part /'");
   filesystem('Linux rev 1.0 ext4 filesystem data');
   const got = await choose(request, 'sda11');
-  test.fail(true, 'the root device is matched as a pattern, not compared (FUTURE.md)');
   expect(got).toBe(line('sda11', 'defaults,noatime,nodiratime,nofail', '2'));
 });
 
@@ -88,6 +85,5 @@ test('with no root device found, a chosen drive is still mounted', async ({ requ
   standInCommand('lsblk', 'true');
   filesystem('Linux rev 1.0 ext4 filesystem data');
   const got = await choose(request, 'sdb1');
-  test.fail(true, 'an empty root device pattern matches every choice (FUTURE.md)');
   expect(got).toBe(line('sdb1', 'defaults,noatime,nodiratime,nofail', '2'));
 });
