@@ -457,7 +457,7 @@ www/api/controllers/sequence.php	GetSequenceStep	272	3	3	todo		auto: not examine
 www/api/controllers/sequence.php	FSeqOrEseqDirectory	332	1	5	todo		auto: not examined yet
 www/api/controllers/settings.php	(top level)	0	3	8	todo		auto: not examined yet
 www/api/controllers/settings.php	GetSetting	41	3	36	todo		auto: not examined yet
-www/api/controllers/settings.php	PutSetting	123	27	138	todo	settings-storage-fstab.spec.ts	storageDevice fstab rewrite tested (ext4/FAT/exFAT/BTRFS/none/root); left: BBB findmnt, EnableRouting, TetherSSID, EnableScheduling, no-curl backup
+www/api/controllers/settings.php	PutSetting	123	27	138	test	web/tests/settings-put-applies.spec.ts	EnableRouting into sysctl.conf (one line, rest kept, nothing but 0 or 1), skipApply, EnableTethering's default name and key, refused names; the 'scheduling' branch is dead (fppd has no EnableScheduling command; DisableScheduler is the setting); left: storageDevice on a Beagle, the no-curl backup fallback, Simple PipeWire re-apply
 www/api/controllers/settings.php	ResetFanThermalTrips	425	2	2	todo		auto: not examined yet
 www/api/controllers/settings.php	UpdateJSONValueSetting	502	2	15	todo		auto: not examined yet
 www/api/controllers/stats.php	(top level)	0	1	2	todo		auto: not examined yet
