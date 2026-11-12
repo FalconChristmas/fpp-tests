@@ -293,26 +293,26 @@ www/api/controllers/pipewire_control.php	pwctl_live_sinks	133	2	27	todo		auto: n
 www/api/controllers/pipewire_control.php	pwctl_live_node_names	172	10	14	todo		auto: not examined yet
 www/api/controllers/pipewire_control.php	pwctl_clamp	192	2	6	todo		auto: not examined yet
 www/api/controllers/pipewire_control.php	pwctl_resolve_mute	210	2	5	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	pwctl_set_channelmix_volume	241	18	18	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_set_channelmix_volume	241	18	18	test	web/tests/pw-control-setters.spec.ts	no graph, and a running loopback (where it changes nothing: FUTURE.md)
 www/api/controllers/pipewire_control.php	pwctl_persist_input_groups	271	2	2	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	pwctl_not_pipewire_response	276	4	4	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_not_pipewire_response	276	4	4	test	web/tests/pw-control-setters.spec.ts	the 409 from all six setters
 www/api/controllers/pipewire_control.php	PWCtl_GetStatus	299	2	26	todo		auto: not examined yet
 www/api/controllers/pipewire_control.php	PWCtl_GetGroups	400	6	6	todo		auto: not examined yet
 www/api/controllers/pipewire_control.php	PWCtl_GetGroup	424	2	7	todo		auto: not examined yet
 www/api/controllers/pipewire_control.php	PWCtl_SetGroupVolume	454	3	30	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	PWCtl_SetGroupMute	514	35	35	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	PWCtl_SetMemberVolume	583	38	38	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	PWCtl_SetGroupMute	514	35	35	test	web/tests/pw-control-setters.spec.ts	set, toggle, a sink not running, 400, 404, against a real PipeWire
+www/api/controllers/pipewire_control.php	PWCtl_SetMemberVolume	583	38	38	test	web/tests/pw-control-setters.spec.ts	applied to the card's sink, clamped to 0-150, a card with no sink, 400, 404s
 www/api/controllers/pipewire_control.php	PWCtl_SetMemberMute	652	8	48	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	pwctl_input_member_loopback_names	723	8	8	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_input_member_loopback_names	723	8	8	test	web/tests/pw-control-setters.spec.ts	a capture member's and the media stream's names
 www/api/controllers/pipewire_control.php	pwctl_build_input_group_view	737	16	25	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	pwctl_find_input_member	825	6	6	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	PWCtl_SetInputMemberVolume	856	35	35	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	PWCtl_SetInputMemberMute	922	29	29	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_find_input_member	825	6	6	test	web/tests/pw-control-setters.spec.ts	found, no such member, no such group
+www/api/controllers/pipewire_control.php	PWCtl_SetInputMemberVolume	856	35	35	test	web/tests/pw-control-setters.spec.ts	saved and unmuted, both not-applied messages, 400, 404s; applied but not taken by a running loopback is a test.fail() (FUTURE.md)
+www/api/controllers/pipewire_control.php	PWCtl_SetInputMemberMute	922	29	29	test	web/tests/pw-control-setters.spec.ts	set, toggle, level kept, 400, 404s
 www/api/controllers/pipewire_control.php	PWCtl_SetStreamVolume	1036	12	25	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	pwctl_apply_routing_volume	1129	34	34	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	pwctl_persist_routing	1178	14	14	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	PWCtl_SetRoutingVolume	1213	21	21	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	PWCtl_SetRoutingMute	1260	31	31	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_apply_routing_volume	1129	34	34	test	web/tests/pw-control-setters.spec.ts	no graph running; left: the node match, which no real route satisfies (FUTURE.md)
+www/api/controllers/pipewire_control.php	pwctl_persist_routing	1178	14	14	test	web/tests/pw-control-setters.spec.ts	a new path, an existing one, the other group's left alone
+www/api/controllers/pipewire_control.php	PWCtl_SetRoutingVolume	1213	21	21	test	web/tests/pw-control-setters.spec.ts	saved and clamped, 400; unknown groups answered as saved is a test.fail() (FUTURE.md)
+www/api/controllers/pipewire_control.php	PWCtl_SetRoutingMute	1260	31	31	test	web/tests/pw-control-setters.spec.ts	set, toggle, level kept, 400
 www/api/controllers/playlist.php	(top level)	0	6	66	todo		auto: not examined yet
 www/api/controllers/playlist.php	validatePlaylistReference	99	0	11	test	playlist-validate-entries.spec.ts	sub-playlist checks, loop, depth, disabled, entry kinds, unreadable file
 www/api/controllers/playlist.php	validationVideoOutputExists	128	2	23	todo		auto: not examined yet
