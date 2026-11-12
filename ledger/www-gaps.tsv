@@ -1255,7 +1255,7 @@ www/menu.inc	(top level)	0	25	154	todo		auto: not examined yet
 www/menu.inc	list_plugin_entries	33	2	32	todo		auto: not examined yet
 www/multisync.php	(inline script)	0	427	2560	todo		auto: not examined yet
 www/multisync.php	(top level)	0	3	64	todo		auto: not examined yet
-www/networkconfig.php	(inline script)	0	230	1028	todo	web/tests/network-gateway-validation.spec.ts	partly done 2026-11-12: the global gateway (validateGlobalGateway, SaveGlobalGateway, the all-DHCP lock); open: static IP / DHCP pool / lease refusals in validateNetworkFields, the Apply dialog, persistent names dialogs, wifi status rendering
+www/networkconfig.php	(inline script)	0	230	1028	todo	web/tests/network-gateway-validation.spec.ts web/tests/network-interface-validation.spec.ts	partly done 2026-11-12: the global gateway, and Update Interface's refusals and warnings (address, netmask, network/broadcast, DHCP pool, static leases, Check DNS, failed saves); open: the Apply dialog, persistent names dialogs, wifi status rendering and scan list
 www/networkconfig.php	(top level)	0	2	52	todo		auto: not examined yet
 www/newpartitionsd.php	(top level)	0	11	11	todo		auto: not examined yet
 www/opus-rtp-config.php	(inline script)	0	119	431	todo		auto: not examined yet
