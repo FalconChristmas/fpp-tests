@@ -104,9 +104,9 @@ www/api/controllers/configfile.php	DownloadConfigFile	119	2	10	todo		auto: not e
 www/api/controllers/configfile.php	UploadConfigFile	166	4	27	todo		auto: not examined yet
 www/api/controllers/configfile.php	DeleteConfigFile	236	10	14	test	web/tests/configfile-delete-and-nested.spec.ts	deleted, not a regular file (gone, never there, a folder), refused through a link and for .htpasswd; left: unlink failing (the container's PHP is root)
 www/api/controllers/crashes.php	(top level)	0	1	6	todo		auto: not examined yet
-www/api/controllers/crashes.php	CrashReportPath	58	4	21	todo		auto: not examined yet
-www/api/controllers/crashes.php	PostCrashUpload	187	8	36	todo		auto: not examined yet
-www/api/controllers/crashes.php	PostCrashReport	287	5	37	todo		auto: not examined yet
+www/api/controllers/crashes.php	CrashReportPath	58	4	21	test	crash-report-names.spec.ts	bad names, path cut to basename, not-found, symlink out of the folder
+www/api/controllers/crashes.php	PostCrashUpload	187	8	36	test	crash-report-names.spec.ts	refusals only (consent, names); a passing request uploads to the internet, so not tested
+www/api/controllers/crashes.php	PostCrashReport	287	5	37	test	crash-report-names.spec.ts	non-JSON requests refused, no report built; building one is not tested here
 www/api/controllers/crashes.php	FppdListening	344	2	5	todo		auto: not examined yet
 www/api/controllers/crashes.php	BuildManualCrashReportWithoutFppd	358	12	52	todo		auto: not examined yet
 www/api/controllers/docs.php	(top level)	0	1	2	todo		auto: not examined yet
