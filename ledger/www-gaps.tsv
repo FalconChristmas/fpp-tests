@@ -153,10 +153,10 @@ www/api/controllers/files.php	CreateDir	1895	2	17	todo		auto: not examined yet
 www/api/controllers/files.php	DeleteDir	1937	3	16	todo		auto: not examined yet
 www/api/controllers/files.php	TailFollowFile	1990	18	85	todo		auto: not examined yet
 www/api/controllers/geoip.php	(top level)	0	1	3	todo		auto: not examined yet
-www/api/controllers/geoip.php	GetGeoIP	51	8	30	todo		auto: not examined yet
-www/api/controllers/geoip.php	GeoIPLookup	161	3	17	todo		auto: not examined yet
-www/api/controllers/geoip.php	GeoIPFromIpapi	193	1	3	todo		auto: not examined yet
-www/api/controllers/geoip.php	GeoIPFromIpwhois	208	12	12	todo		auto: not examined yet
+www/api/controllers/geoip.php	GetGeoIP	51	8	30	test	web/tests/geoip-proxy.spec.ts	the 400s for a bad country or time zone, the 502, a supplied country with and without nolookup
+www/api/controllers/geoip.php	GeoIPLookup	161	3	17	test	web/tests/geoip-proxy.spec.ts	ipapi.co refusing in four ways, then ipwho.is; left: a timeout ending the chain (6 s of waiting for one line)
+www/api/controllers/geoip.php	GeoIPFromIpapi	193	1	3	test	web/tests/geoip-proxy.spec.ts	an error flag, no country and a non-JSON body are refusals
+www/api/controllers/geoip.php	GeoIPFromIpwhois	208	12	12	test	web/tests/geoip-proxy.spec.ts	ipwho.is's fields renamed to ipapi.co's; its refusals and a country-less answer are no answer
 www/api/controllers/geoip.php	GeoIPSuggestedSettings	250	1	15	todo		auto: not examined yet
 www/api/controllers/geoip.php	GeoIPSuggestedSettingsWithCoords	292	2	9	todo		auto: not examined yet
 www/api/controllers/geoip.php	TimeZoneCoordinates	326	16	18	todo		auto: not examined yet
