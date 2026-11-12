@@ -151,7 +151,7 @@ www/api/controllers/files.php	PostFile	1788	7	36	test	web/tests/file-upload-bloc
 www/api/controllers/files.php	GetFileInfo	1853	4	16	todo		auto: not examined yet
 www/api/controllers/files.php	CreateDir	1895	2	17	todo		auto: not examined yet
 www/api/controllers/files.php	DeleteDir	1937	3	16	todo		auto: not examined yet
-www/api/controllers/files.php	TailFollowFile	1990	18	85	todo		auto: not examined yet
+www/api/controllers/files.php	TailFollowFile	1990	18	85	test	web/tests/tail-follow-refusals.spec.ts	link out of the folder, folder, missing, var/log prefix, line counts that are not counts; a tail that will not start cannot be staged
 www/api/controllers/geoip.php	(top level)	0	1	3	todo		auto: not examined yet
 www/api/controllers/geoip.php	GetGeoIP	51	8	30	test	web/tests/geoip-proxy.spec.ts	the 400s for a bad country or time zone, the 502, a supplied country with and without nolookup
 www/api/controllers/geoip.php	GeoIPLookup	161	3	17	test	web/tests/geoip-proxy.spec.ts	ipapi.co refusing in four ways, then ipwho.is; left: a timeout ending the chain (6 s of waiting for one line)
