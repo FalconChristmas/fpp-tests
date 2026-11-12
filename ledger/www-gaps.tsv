@@ -211,7 +211,7 @@ www/api/controllers/pipewire.php	PipeWireCardHwParams	1030	9	18	todo		auto: not 
 www/api/controllers/pipewire.php	GetPipeWireAudioCards	1078	1	261	todo		auto: not examined yet
 www/api/controllers/pipewire.php	UsbFindTTOwner	1521	15	15	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetUsbAudioBandwidthCheck	1557	47	64	todo		auto: not examined yet
-www/api/controllers/pipewire.php	SetPipeWireGroupVolume	1662	22	53	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SetPipeWireGroupVolume	1662	22	53	test	web/tests/pw-group-volume-persist.spec.ts	live PipeWire: member by fx node and nodeTarget, clamp, mute, refusals, unknown sink; test.fail non-numeric level is 0 (FUTURE.md)
 www/api/controllers/pipewire.php	UpdatePipeWireEQRealtime	1751	3	31	todo		auto: not examined yet
 www/api/controllers/pipewire.php	UpdatePipeWireDelayRealtime	1808	3	25	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetSyncCalibrationSinkForGroup	1854	3	13	todo		auto: not examined yet
