@@ -1330,7 +1330,7 @@ www/streamRemoteJobs.php	(top level)	0	14	50	todo		auto: not examined yet
 www/system-stats.php	(inline script)	0	45	571	todo		auto: not examined yet
 www/system-stats.php	(top level)	0	17	134	todo		auto: not examined yet
 www/system-stats.php	formatMemBytes	788	1	6	todo		auto: not examined yet
-www/testing.php	(inline script)	0	155	771	todo	web/tests/testing-page-patterns-and-strings.spec.ts	partly done 2026-11-12: Channel Testing tab: string range buttons, every pattern's Test Start arguments, RGBW stride, stride notice, range clamping, a running test shown, start/stop failures (testing-page-patterns-and-strings.spec.ts). Left: custom pattern colour picker and Append buttons (716-769), Sequence tab Play/Stop (778-798), Channel Fader model pick and sine (884-1153)
+www/testing.php	(inline script)	0	155	771	todo	web/tests/testing-page-custom-patterns-and-sequence.spec.ts	partly done 2026-11-13: Channel Testing patterns, strings, running test (testing-page-patterns-and-strings.spec.ts); custom pattern pickers, Append, Sequence tab Play/Stop (testing-page-custom-patterns-and-sequence.spec.ts). Left: Channel Fader model pick and sine (884-1153)
 www/testing.php	(top level)	0	8	80	todo		auto: not examined yet
 www/troubleshooting.php	(inline script)	0	132	685	todo		auto: not examined yet
 www/troubleshootingHelper.php	(top level)	0	5	43	todo		auto: not examined yet
