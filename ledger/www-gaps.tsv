@@ -82,12 +82,12 @@ www/api/controllers/backups.php	DownloadJsonBackup	1026	18	41	test	web/tests/bac
 www/api/controllers/backups.php	DeleteJsonBackup	1123	2	32	todo		auto: not examined yet
 www/api/controllers/backups.php	MountReturnCodeMap	1214	7	17	todo		auto: not examined yet
 www/api/controllers/cape.php	(top level)	0	16	54	todo		auto: not examined yet
-www/api/controllers/cape.php	GetCapeDefaultSettings	84	4	28	todo		auto: not examined yet
+www/api/controllers/cape.php	GetCapeDefaultSettings	84	4	28	test	cape-signing-data-refusals.spec.ts	invalid regime 400
 www/api/controllers/cape.php	GetEEPROMVendorLists	166	1	56	todo		auto: not examined yet
 www/api/controllers/cape.php	GetCapeOptions	260	2	12	todo		auto: not examined yet
 www/api/controllers/cape.php	GetEEPROMFilename	292	1	15	todo		auto: not examined yet
-www/api/controllers/cape.php	GetSigningDataHelper	333	16	64	todo		auto: not examined yet
-www/api/controllers/cape.php	GetSigningFile	470	6	6	todo		auto: not examined yet
+www/api/controllers/cape.php	GetSigningDataHelper	333	16	64	test	cape-signing-data-refusals.spec.ts	invalid key and order refused on signingData and signingFile
+www/api/controllers/cape.php	GetSigningFile	470	6	6	test	cape-signing-data-refusals.spec.ts	refusals carry no download header
 www/api/controllers/cape.php	SignEEPROMHelper	493	6	24	test	cape-signing-eeprom-data.spec.ts cape-signing-online.spec.ts	write back, backup, detect_cape; empty eeprom wipe test.fail
 www/api/controllers/cape.php	SignEEPROM	565	0	21	test	cape-signing-online.spec.ts	online sign success, refusal, 502/unreachable, unreadable EEPROM; empty-reply wipe test.fail
 www/api/controllers/cape.php	PostSigningData	628	0	3	covered		auto: every line reached
