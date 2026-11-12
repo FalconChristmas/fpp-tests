@@ -263,10 +263,8 @@ test('groups nest, are named, match ALL or ANY, and move and go as a whole', asy
 });
 
 // Three levels of groups inside the Check is the most the editor offers
-// ("+ Add Group" goes inside the third).  Moving or removing a condition re-renders its group as if
-// it were at the top (RenderConditionLeafRow calls RenderConditionTree with
-// no depth), so the button comes back and a fourth level can be made.
-// In FUTURE.md.
+// ("+ Add Group" goes inside the third).  Moving or removing a condition
+// re-renders its group at the same depth, so the button stays away.
 async function threeDeep(page: Page, request: APIRequestContext) {
   const leaf = { source: 'Expression', name: '1', comparator: 'equal to', value: '1' };
   const dialog = await openIf(page, request, { op: 'AND', conditions: [{ op: 'AND', conditions: [{ op: 'AND', conditions: [
@@ -283,7 +281,6 @@ test('a group three levels deep offers no further group', async ({ page, request
 });
 
 test('a group three levels deep still offers no further group once a condition in it is moved or removed', async ({ page, request }) => {
-  test.fail(true, 'RenderConditionLeafRow re-renders without the depth (FUTURE.md)');
   const body = await threeDeep(page, request);
   await body.locator('.condListRow').first().locator('button[title="Move down"]').click();
   await expect(body.locator('> input[value="+ Add Group"]')).toHaveCount(0, { timeout: 2000 });
