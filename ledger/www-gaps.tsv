@@ -250,7 +250,7 @@ www/api/controllers/pipewire.php	SyncBootAdapterUsbHeadroom	5341	19	40	todo		aut
 www/api/controllers/pipewire.php	SyncBootGraphClock	5432	2	38	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GeneratePipeWireGroupsConfig	5487	47	579	todo		auto: not examined yet
 www/api/controllers/pipewire.php	RestorePipeWireGroupVolumes	6601	1	32	todo		auto: not examined yet
-www/api/controllers/pipewire.php	SaveAES67Instances	6688	22	54	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SaveAES67Instances	6688	22	54	test	web/tests/aes67-save-refusals.spec.ts	defaults filled in, PTP domain/role refusals, bad bodies; test.fail x5 unchecked streams (FUTURE.md)
 www/api/controllers/pipewire.php	RebuildAudioGraphForSenderChange	6796	2	20	todo		auto: not examined yet
 www/api/controllers/pipewire.php	SignalFPPDCommand	6851	2	18	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetAES67Status	6926	2	7	todo		auto: not examined yet
