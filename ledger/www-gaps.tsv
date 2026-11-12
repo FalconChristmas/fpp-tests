@@ -1264,7 +1264,7 @@ www/packages.php	(inline script)	0	78	302	todo		auto: not examined yet
 www/packagesHelper.php	(top level)	0	23	75	todo		auto: not examined yet
 www/pipewire-audio.php	(inline script)	0	333	899	todo		auto: not examined yet
 www/pipewire-graph.php	(inline script)	0	74	699	todo		auto: not examined yet
-www/pipewire-input-mixing.php	(inline script)	0	261	588	todo		auto: not examined yet
+www/pipewire-input-mixing.php	(inline script)	0	261	588	todo	web/tests/pw-input-mixing-page-edit.spec.ts	partly done 2026-11-13: add group/member, capture and PipeWire source pickers, channel mapping, output routing, live mute/volume, remove with confirm, Save, Save & Apply and their refusals (pw-input-mixing-page-edit.spec.ts); test.fail a channel count change keeps the old mapping (FUTURE.md). Left: AES67/Opus/VBAN receive pickers, generic downmix presets (1038-1087 partly), RefreshSources
 www/pipewire-routing-matrix.php	(inline script)	0	207	405	todo		auto: not examined yet
 www/pipewire-rtsp-outputs.php	(inline script)	0	41	206	todo		auto: not examined yet
 www/pipewire-video-inputs.php	(inline script)	0	293	616	todo	web/tests/pw-video-inputs-page-edit.spec.ts	partly done 2026-11-13: Add, name, pattern, resolution presets and Custom, frame rate, type change (RTP, RTSP, URL fields), delete with confirm, Save, refused save, Save & Apply to the generated config (pw-video-inputs-page-edit.spec.ts, no fault). Left: V4L2 device/controls block (529-617), native-mode hint (474-498), preview polling (654-773)
