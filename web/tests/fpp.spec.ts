@@ -174,8 +174,13 @@ test('Plugins Overview', async ({ page }) => {
   await page.locator('#pluginTopTabs').first().waitFor({ state: 'visible', timeout: 10_000 });
 
   // Check for Updates lives on the Installed tab since the page redesign.
-  await page.locator('#pluginTopTabs .nav-link[data-top-tab="installed"]').click();
-  await expect(page.locator('#pane-manage')).toBeVisible();
+  // gotoPage only waits for the response to start, so the tabs can be on
+  // screen before $(document).ready binds their click handler; a click that
+  // early does nothing. Click until the pane shows.
+  await expect(async () => {
+    await page.locator('#pluginTopTabs .nav-link[data-top-tab="installed"]').click();
+    await expect(page.locator('#pane-manage')).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
   await expect(page.locator('#checkAllUpdatesBtn')).toBeVisible();
 });
 
