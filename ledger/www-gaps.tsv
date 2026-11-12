@@ -233,7 +233,7 @@ www/api/controllers/pipewire.php	PipeWirePreviewKill	3210	2	8	todo		auto: not ex
 www/api/controllers/pipewire.php	GetPipeWireVolumeTargets	3234	1	43	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetStreamSlotStatus	3305	9	43	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetRoutingMatrix	3379	2	58	todo		auto: not examined yet
-www/api/controllers/pipewire.php	SaveRoutingMatrix	3468	5	36	todo		auto: not examined yet
+www/api/controllers/pipewire.php	SaveRoutingMatrix	3468	5	36	test	pw-audio-routing-save-refusals.spec.ts	stored routes, clamp, untouched groups, refusals; test.fail x3 non-list routes, non-object route, no output group (FUTURE.md)
 www/api/controllers/pipewire.php	SetRoutingPathVolume	3534	5	60	todo		auto: not examined yet
 www/api/controllers/pipewire.php	SaveRoutingPreset	3693	1	46	todo		auto: not examined yet
 www/api/controllers/pipewire.php	LoadRoutingPreset	3775	4	55	todo		auto: not examined yet
