@@ -54,16 +54,14 @@ test('sub-playlists are merged in place, all their sections, nested ones too', a
   await expect(page.locator('#tblPlaylistLeadOut tr:has(td)')).toHaveCount(5);
 });
 
-// LoadSubPlaylist() has no end: a playlist that leads back to itself (the
-// validator names it a loop; fppd stops at five levels) is merged until PHP
-// runs out of memory, and the reply is PHP's fatal error page, with a 200,
-// so the Status page shows nothing for it.  In FUTURE.md.
+// LoadSubPlaylist() stops at fppd's depth: a playlist that leads back to
+// itself (the validator names it a loop) is merged as far as fppd would play
+// it, and the reply is the merged playlist.
 test('a playlist that leads back to itself still comes back merged, as far as fppd would play it', async ({ request }) => {
   playlist('a', { mainPlaylist: [pause(1), sub('b')] });
   playlist('b', { mainPlaylist: [pause(2), sub('a')] });
   const r = await request.get(`/api/playlist/${P}a?mergeSubs=1`);
   const body = await r.text();
-  test.fail(true, 'mergeSubs recurses through a loop until PHP runs out of memory (FUTURE.md)');
   expect(body, 'the reply is PHP\'s fatal error').not.toContain('Allowed memory size');
   const merged = JSON.parse(body);
   expect(merged.mainPlaylist.length).toBeGreaterThan(1);
