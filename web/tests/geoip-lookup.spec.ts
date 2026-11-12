@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import type { Page, Route } from '@playwright/test';
 
 // The location Lookup buttons when the player cannot reach the internet and the

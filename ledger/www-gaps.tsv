@@ -992,11 +992,11 @@ www/js/fpp.js	updateRandomizeFromPlaylist	4042	6	12	todo		auto: not examined yet
 www/js/fpp.js	RandomizePlaylistEntries	4290	14	14	todo		auto: not examined yet
 www/js/fpp.js	ApplyGeoIPSettings	4326	4	15	todo		auto: not examined yet
 www/js/fpp.js	SetFromGeoIP	4351	2	6	todo		auto: not examined yet
-www/js/fpp.js	BrowserLocaleHints	4376	13	13	todo		auto: not examined yet
-www/js/fpp.js	GeoIPBrowserFallback	4401	18	18	todo		auto: not examined yet
-www/js/fpp.js	GeoIPBrowserLookup	4461	19	19	todo		auto: not examined yet
-www/js/fpp.js	FlagApproximateCoords	4504	19	19	todo		auto: not examined yet
-www/js/fpp.js	GeoIPLocalFallback	4524	36	36	todo		auto: not examined yet
+www/js/fpp.js	BrowserLocaleHints	4376	13	13	test	web/tests/geoip-local-fallback.spec.ts	Intl's zone and region, and the language-tag fallback of a browser without Intl.Locale
+www/js/fpp.js	GeoIPBrowserFallback	4401	18	18	test	web/tests/geoip-lookup.spec.ts	was run without the coverage fixture; both services failing is in geoip-local-fallback.spec.ts
+www/js/fpp.js	GeoIPBrowserLookup	4461	19	19	test	web/tests/geoip-lookup.spec.ts	was run without the coverage fixture; both services failing is in geoip-local-fallback.spec.ts
+www/js/fpp.js	FlagApproximateCoords	4504	19	19	test	web/tests/geoip-local-fallback.spec.ts	the wizard's own note and the one made on the Settings page; hidden once a coordinate is edited
+www/js/fpp.js	GeoIPLocalFallback	4524	36	36	test	web/tests/geoip-local-fallback.spec.ts	every outcome: time-zone coordinates, none (UTC), no country (ZZ), no hints at all, the mapping request failing
 www/js/fpp.js	GetTimeZone	4573	10	10	todo		auto: not examined yet
 www/js/fpp.js	GetGeoLocation	4586	1	11	todo		auto: not examined yet
 www/js/fpp.js	GeoIPTestQuery	4611	2	6	todo		auto: not examined yet
@@ -1046,7 +1046,7 @@ www/js/fpp.js	ToggleSequencePause	7613	1	9	todo		auto: not examined yet
 www/js/fpp.js	SingleStepSequence	7623	10	10	todo		auto: not examined yet
 www/js/fpp.js	SetSetting	7690	10	67	todo		auto: not examined yet
 www/js/fpp.js	SetPluginSetting	7787	16	47	todo		auto: not examined yet
-www/js/fpp.js	ReloadSettingOptions	7849	34	34	todo		auto: not examined yet
+www/js/fpp.js	ReloadSettingOptions	7849	34	34	skip		dead: only a setting with reloadOther calls it, and no setting in settings.json declares one
 www/js/fpp.js	SetRebootFlag	7925	1	9	todo		auto: not examined yet
 www/js/fpp.js	SkipBootDelay	8032	11	11	todo		auto: not examined yet
 www/js/fpp.js	RestartFPPD	8044	30	52	test	web/tests/restart-fppd-quick-request.spec.ts web/tests/restart-fppd-lost-answer.spec.ts	quick and full requests; no answer to the restart: the rebooting notice once, waiting while fppd is down, success and the flag cleared once it runs, the error after the last try
