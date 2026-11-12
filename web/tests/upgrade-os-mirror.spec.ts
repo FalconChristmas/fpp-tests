@@ -53,14 +53,12 @@ test('an image from anywhere but GitHub is not asked of the mirror', async ({ re
   expect(out).not.toContain(MIRROR);
 });
 
-// Each URL gets the full 20 tries meant for a flaky GitHub download, the
-// mirror included: a mirror that is switched off (no answer, so each try
-// waits out the connect timeout, about two minutes) holds the upgrade up for
-// some forty minutes before GitHub is asked.  In FUTURE.md.
+// The mirror gets fewer tries than the 20 meant for a flaky GitHub download,
+// so a mirror that is switched off does not hold the upgrade up before GitHub
+// is asked.
 test('a mirror that fails is not tried 20 times before GitHub', async ({ request }) => {
   const out = await download(request);
   const mirrorTries = (out.split('Mirror download failed')[0].match(/Running command: sudo wget/g) || []).length;
   expect(mirrorTries).toBeGreaterThan(0);
-  test.fail(true, 'the mirror gets the same 20 tries as GitHub (FUTURE.md)');
   expect(mirrorTries).toBeLessThan(20);
 });
