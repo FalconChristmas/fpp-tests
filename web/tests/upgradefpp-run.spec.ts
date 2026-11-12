@@ -110,11 +110,9 @@ test('two upgrades started together: one runs, the other is refused while it doe
 });
 
 // The refusal's 409 (UpdateLockAcquireOrConflict) is only set while no
-// header has gone: these pages call DisableOutputBuffering(), which flushes,
-// before taking the lock, so the refusal comes back as a 200, as
-// changebranch.php's did until ba5d026aa (whose own spec is the control,
-// changebranch-update-lock.spec.ts).  A caller going by the status (a script,
-// another FPP) takes the refused update for one that ran.  In FUTURE.md.
+// header has gone: these pages take the lock before DisableOutputBuffering()
+// flushes, so a caller going by the status (a script, another FPP) sees the
+// refusal (see also changebranch-update-lock.spec.ts).
 for (const [page, url] of [
   ['upgradefpp.php', '/upgradefpp.php?version=v10.1'],
   ['upgradeOS.php', `/upgradeOS.php?os=${encodeURIComponent('https://fpp-tests.invalid/x.fppos')}&wrapped=1&downloadOnly=1`],
@@ -124,7 +122,6 @@ for (const [page, url] of [
     await withLockHeld(async () => {
       const r = await request.get(url, { timeout: 60_000 });
       expect(await r.text()).toContain('Another FPP update is already running');
-      test.fail(true, 'the 409 is lost to headers already sent (FUTURE.md)');
       expect(r.status()).toBe(409);
     });
   });
