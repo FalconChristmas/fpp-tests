@@ -121,9 +121,9 @@ www/api/controllers/email.php	(top level)	0	1	3	todo		auto: not examined yet
 www/api/controllers/errorReport.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/errorReport.php	GetErrorReportPreview	26	5	35	todo		auto: not examined yet
 www/api/controllers/events.php	(top level)	0	1	2	todo		auto: not examined yet
-www/api/controllers/events.php	events_list	20	11	11	todo		auto: not examined yet
-www/api/controllers/events.php	event_get	58	21	21	todo		auto: not examined yet
-www/api/controllers/events.php	event_trigger	110	5	18	todo		auto: not examined yet
+www/api/controllers/events.php	events_list	20	11	11	test	web/tests/events-api-read.spec.ts	list, with an unparsable file and a non-event file
+www/api/controllers/events.php	event_get	58	21	21	test	web/tests/events-api-read.spec.ts	ids, one event, missing and outside names; test.fail: the 404 names the folder path
+www/api/controllers/events.php	event_trigger	110	5	18	test	web/tests/events-api-read.spec.ts	preset gone, no name, bad id
 www/api/controllers/files.php	(top level)	0	1	3	todo		auto: not examined yet
 www/api/controllers/files.php	MapExtention	12	6	24	todo		auto: not examined yet
 www/api/controllers/files.php	FilesValidatePathOrFail	77	6	21	todo		auto: not examined yet
@@ -138,7 +138,7 @@ www/api/controllers/files.php	GetFileImpl	706	2	60	todo		auto: not examined yet
 www/api/controllers/files.php	ServeFileRange	850	5	55	todo		auto: not examined yet
 www/api/controllers/files.php	findFile	949	3	14	todo		auto: not examined yet
 www/api/controllers/files.php	MoveFile	989	18	56	test	upload-move-destinations.spec.ts	every destination, fseq.gz unpack, script CRLF, eeprom; rename-failure branches untested
-www/api/controllers/files.php	GetZipDir	1106	4	32	todo		auto: not examined yet
+www/api/controllers/files.php	GetZipDir	1106	4	32	skip		zip downloads are being deprecated (user, 2026-11-12): no new tests
 www/api/controllers/files.php	ZipLogs	1180	1	28	todo		auto: not examined yet
 www/api/controllers/files.php	ZipConfigs	1277	1	14	todo		auto: not examined yet
 www/api/controllers/files.php	DeleteFile	1393	4	38	test	web/tests/backup-blob-delete-guard.spec.ts	the blob refusal; an unlink that fails cannot be staged as root
