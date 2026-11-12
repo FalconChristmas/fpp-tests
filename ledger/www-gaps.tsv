@@ -522,7 +522,7 @@ www/api/controllers/testmode.php	testMode_Set	43	1	5	todo		auto: not examined ye
 www/api/controllers/validate.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/validate.php	validationFileExists	92	1	4	todo		auto: not examined yet
 www/api/controllers/validate.php	validationMediaExists	105	1	4	todo		auto: not examined yet
-www/api/controllers/validate.php	validateFPPCommand	124	13	67	todo		auto: not examined yet
+www/api/controllers/validate.php	validateFPPCommand	124	13	67	test	web/tests/command-validation-files.spec.ts	sequence, effect, script, media and playlist args found/missing, skipped args, multisync hosts; test.fail a path outside the folder counts as found (FUTURE.md)
 www/api/controllers/validate.php	validate_commands	242	1	8	todo		auto: not examined yet
 www/api/index.php	(inline script)	0	25	67	todo		auto: not examined yet
 www/api/index.php	(top level)	0	1	315	todo		auto: not examined yet
