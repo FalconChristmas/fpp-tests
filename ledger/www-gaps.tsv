@@ -63,10 +63,10 @@ www/api/api.html	(inline script)	0	1	20	todo		auto: not examined yet
 www/api/api.php	(top level)	0	2	15	todo		auto: not examined yet
 www/api/commandhelp.php	(top level)	0	8	19	todo		auto: not examined yet
 www/api/controllers/audioaliases.php	(top level)	0	1	2	todo		auto: not examined yet
-www/api/controllers/audioaliases.php	LoadAudioCardAliases	22	2	16	todo		auto: not examined yet
+www/api/controllers/audioaliases.php	LoadAudioCardAliases	22	2	16	test	audio-card-aliases-save.spec.ts	unreadable alias file is no aliases
 www/api/controllers/audioaliases.php	ApplyAudioCardAlias	50	1	5	todo		auto: not examined yet
-www/api/controllers/audioaliases.php	GetAudioCardAliases	64	19	64	todo		auto: not examined yet
-www/api/controllers/audioaliases.php	SaveAudioCardAliases	179	7	26	todo		auto: not examined yet
+www/api/controllers/audioaliases.php	GetAudioCardAliases	64	19	64	test	audio-card-aliases-save.spec.ts	unconnected aliased card listed; rest needs real sound cards
+www/api/controllers/audioaliases.php	SaveAudioCardAliases	179	7	26	test	audio-card-aliases-save.spec.ts	trim, 128 cut, empty removal, replace-all, bad JSON 400; test.fail x4 body without aliases clears them (FUTURE.md)
 www/api/controllers/backups.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/backups.php	ProxyBackupToRemote	18	6	24	todo		auto: not examined yet
 www/api/controllers/backups.php	GetAvailableBackupsFromDir	69	1	16	todo		auto: not examined yet
