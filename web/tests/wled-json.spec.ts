@@ -134,9 +134,7 @@ test('the palette, node and live endpoints answer as a WLED node with none of th
 
 test("/json/palx gives its palettes as WLED does, keyed by the palette's id", async ({ request }) => {
   // WLED answers {"m":..,"p":{"0":[...],...}}, an object keyed by palette id,
-  // and the shim means to ('0' => ...).  PHP turns a key of "0" into 0, and
-  // json_encode() writes the array as a list: "p":[[...]].  In FUTURE.md.
-  test.fail(true, 'json_encode writes the one palette as a list (FUTURE.md)');
+  // and so does the shim, even for the one palette.
   const palx = await json(request, '/json/palx');
   expect(Array.isArray(palx.p)).toBe(false);
   expect(palx.p['0']).toEqual([[0, 255, 255, 255], [255, 255, 255, 255]]);
