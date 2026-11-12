@@ -33,18 +33,14 @@ test('the AES67 page offers the wired interfaces by name, not the loopback', asy
   expect(await r.json()).toEqual(['eth0', 'eth0.10', 'wlo1']);
 });
 
-// The other lists still filter with `grep -v lo`, which drops every name with
-// "lo" in it, and keep ip's "@<link>" suffix, so a VLAN is offered (and saved)
-// under a name no interface has: Opus RTP hands it to GStreamer's
-// multicast-iface, VBAN's PwConfToken() turns it into no interface at all.
-// In FUTURE.md.
+// The other lists drop only the loopback and ip's "@<link>" suffix, so a VLAN
+// is offered (and saved) under the name the interface has.
 for (const [what, url, expected] of [
   ['Opus RTP', '/api/pipewire/opusrtp/interfaces', ['eth0', 'eth0.10', 'wlo1']],
   ['VBAN', '/api/pipewire/vban/interfaces', ['eth0', 'eth0.10', 'wlo1']],
   ['AES67 Interface setting', '/api/options/AES67Interface', { '(Default)': '', eth0: 'eth0', 'eth0.10': 'eth0.10', wlo1: 'wlo1' }],
 ] as const) {
   test(`the ${what} choices name each interface as it is called, and drop only the loopback`, async ({ request }) => {
-    test.fail(true, 'grep -v lo and the @<link> suffix (FUTURE.md)');
     const r = await request.get(url);
     expect(r.ok()).toBe(true);
     expect(await r.json()).toEqual(expected);
