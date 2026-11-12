@@ -110,10 +110,13 @@ for (const [what, reply] of [
   test(`a "signed" reply with ${what} does not overwrite the cape's EEPROM`, async ({ request }) => {
     fake.routes({ [SIGN]: { json: reply } });
     const got = await sign(request);
-    // The control: the reply was taken for a signature.
-    expect(backups()).toMatch(/cape-eeprom-Backup-/);
+    // The control: the service was asked, so this is its reply being judged.
+    expect(fake.requests().filter((q) => q.path === SIGN)).toHaveLength(1);
     test.fail(true, 'an empty signed EEPROM is written over the cape (FUTURE.md)');
     expect(eeprom()).toBe(UNSIGNED);
     expect(got.Status).toBe('ERROR');
+    // Nothing was written, so no backup is left behind, as for a refusal.
+    expect(backups()).toBe('');
+    expect(detected()).toBe('');
   });
 }
