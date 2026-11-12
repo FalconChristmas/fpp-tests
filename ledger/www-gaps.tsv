@@ -142,12 +142,12 @@ www/api/controllers/files.php	GetZipDir	1106	4	32	todo		auto: not examined yet
 www/api/controllers/files.php	ZipLogs	1180	1	28	todo		auto: not examined yet
 www/api/controllers/files.php	ZipConfigs	1277	1	14	todo		auto: not examined yet
 www/api/controllers/files.php	DeleteFile	1393	4	38	todo		auto: not examined yet
-www/api/controllers/files.php	emulated_fseek_for_big_files	1472	14	14	todo		auto: not examined yet
+www/api/controllers/files.php	emulated_fseek_for_big_files	1472	14	14	test	web/tests/file-upload-blocks.spec.ts	the under-PHP_INT_MAX seek; the loop past it runs only on a 32-bit PHP (offsets over 2 GB), which no test player is
 www/api/controllers/files.php	PatchFile	1520	9	39	todo		auto: not examined yet
 www/api/controllers/files.php	PatchFileReceiveChunk	1592	8	24	todo		auto: not examined yet
 www/api/controllers/files.php	PatchFileAddChunk	1640	5	29	todo		auto: not examined yet
 www/api/controllers/files.php	PatchFileAssemble	1702	13	46	todo		auto: not examined yet
-www/api/controllers/files.php	PostFile	1788	7	36	todo		auto: not examined yet
+www/api/controllers/files.php	PostFile	1788	7	36	test	web/tests/file-upload-blocks.spec.ts	blocks by sb/bs in any order, whole-file replace; 5 test.fail (unchecked sb/bs, locked file emptied before the lock)
 www/api/controllers/files.php	GetFileInfo	1853	4	16	todo		auto: not examined yet
 www/api/controllers/files.php	CreateDir	1895	2	17	todo		auto: not examined yet
 www/api/controllers/files.php	DeleteDir	1937	3	16	todo		auto: not examined yet
