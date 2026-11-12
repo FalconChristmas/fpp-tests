@@ -510,7 +510,7 @@ www/api/controllers/system.php	GetUpdateActivity	1131	7	12	todo		auto: not exami
 www/api/controllers/system.php	SystemSetAudio	1163	4	20	todo		auto: not examined yet
 www/api/controllers/system.php	SystemParseVolumeTarget	1208	6	8	test	web/tests/api-volume-target-read.spec.ts	the flat key and the object form
 www/api/controllers/system.php	SystemGetTargetVolume	1231	44	54	test	web/tests/api-volume-target-read.spec.ts	slots, sinks (group, filter node, node target), input members and routing paths; unknown targets, missing and malformed config
-www/api/controllers/system.php	SystemSetTargetedAudio	1325	16	27	todo		auto: not examined yet
+www/api/controllers/system.php	SystemSetTargetedAudio	1325	16	27	test	web/tests/api-volume-target-write.spec.ts	live PipeWire: sink targets flat and object form, adjust clamp, bad targets 400, master untouched; test.fail x2 no level is 75 (FUTURE.md)
 www/api/controllers/system.php	SystemGetAudio	1379	7	25	todo		auto: not examined yet
 www/api/controllers/system.php	SystemGetStatus	1451	5	95	todo		auto: not examined yet
 www/api/controllers/system.php	GetFPPDRestartBlocked	1669	9	45	todo		auto: not examined yet
