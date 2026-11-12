@@ -148,10 +148,8 @@ test('a mute button writes the mute with the level shown, and turns into Unmute'
   await expect(strip(page, 'pwm_member_0_0').locator('button[title="Unmute Card1"]')).toBeVisible();
 });
 
-// PWMixerSend() keeps the mute it sent in the model only for output groups
-// and cards.  For a bus, a source or a route it writes the mute and redraws
-// from the unchanged model: the button still says Mute, and a second click
-// sends mute again instead of unmuting.  In FUTURE.md.
+// PWMixerSend() keeps the mute it sent in the model for buses, sources and
+// routes too, so the button turns into Unmute and a second click unmutes.
 for (const [id, label, url] of [
   ['pwm_inputgroup_3', 'Mics', 'api/pipewire/audio/input-group/volume'],
   ['pwm_input_3_1', 'Stage Mic', 'api/pipewire/audio/input-groups/volume'],
@@ -163,7 +161,6 @@ for (const [id, label, url] of [
     await expect.poll(() => writes.length).toBe(1);
     expect(writes[0].url).toBe(url);
     expect(writes[0].body.mute).toBe(true);
-    test.fail(true, 'the model keeps the old mute for buses, sources and routes (FUTURE.md)');
     await expect(strip(page, id).locator(`button[title="Unmute ${label}"]`)).toBeVisible({ timeout: 2000 });
     await strip(page, id).locator('button[title^=Unmute]').click();
     await expect.poll(() => writes.length).toBe(2);
