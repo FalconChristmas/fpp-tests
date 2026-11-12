@@ -1303,7 +1303,7 @@ www/schedulePreview.php	getItemInfo	119	3	34	todo		auto: not examined yet
 www/schedulePreview.php	showPlaylistEnds	178	3	31	todo		auto: not examined yet
 www/scheduleentry.php	(top level)	0	2	2	todo		auto: not examined yet
 www/scheduleentry.php	__construct	17	14	14	todo		auto: not examined yet
-www/scheduler.php	(inline script)	0	68	803	todo		auto: not examined yet
+www/scheduler.php	(inline script)	0	68	803	todo	web/tests/scheduler-holiday-rename-and-save-failures.spec.ts	partly done 2026-11-12: holiday rename/delete/save failure, schedule save failure, Specify Date swap. Left: datepicker Holidays button (381), playlist-problem marker (424), sunrise/sunset and day-mask presets (100-167)
 www/scriptbrowser.php	(inline script)	0	24	103	todo		auto: not examined yet
 www/settings-all.php	(top level)	0	28	62	todo		auto: not examined yet
 www/settings-av.php	(top level)	0	9	39	todo		auto: not examined yet
