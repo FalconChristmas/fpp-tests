@@ -328,7 +328,7 @@ www/api/controllers/playlist.php	GetPlaylist	721	0	0	gone		auto: no longer in th
 www/api/controllers/playlist.php	playlist_get	772	2	7	todo		auto: not examined yet
 www/api/controllers/playlist.php	playlist_update	820	2	26	todo		auto: not examined yet
 www/api/controllers/playlist.php	playlist_delete	893	2	11	todo		auto: not examined yet
-www/api/controllers/playlist.php	PlaylistSectionInsertItem	937	8	23	todo		auto: not examined yet
+www/api/controllers/playlist.php	PlaylistSectionInsertItem	937	8	23	test	web/tests/playlist-item-insert-refusals.spec.ts	new section, missing playlist, bad name; 8 test.fail (any key is a section, any body an item, an unparsable file is replaced); the write-failure branch cannot be staged as root
 www/api/controllers/playlist.php	playlist_repeat	1155	2	7	todo		auto: not examined yet
 www/api/controllers/plugin.php	(top level)	0	1	49	todo		auto: not examined yet
 www/api/controllers/plugin.php	DepsRequirePackages	54	1	6	todo		auto: not examined yet
