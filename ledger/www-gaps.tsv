@@ -141,7 +141,7 @@ www/api/controllers/files.php	MoveFile	989	18	56	test	upload-move-destinations.s
 www/api/controllers/files.php	GetZipDir	1106	4	32	todo		auto: not examined yet
 www/api/controllers/files.php	ZipLogs	1180	1	28	todo		auto: not examined yet
 www/api/controllers/files.php	ZipConfigs	1277	1	14	todo		auto: not examined yet
-www/api/controllers/files.php	DeleteFile	1393	4	38	todo		auto: not examined yet
+www/api/controllers/files.php	DeleteFile	1393	4	38	test	web/tests/backup-blob-delete-guard.spec.ts	the blob refusal; an unlink that fails cannot be staged as root
 www/api/controllers/files.php	emulated_fseek_for_big_files	1472	14	14	test	web/tests/file-upload-blocks.spec.ts	the under-PHP_INT_MAX seek; the loop past it runs only on a 32-bit PHP (offsets over 2 GB), which no test player is
 www/api/controllers/files.php	PatchFile	1520	9	39	todo		auto: not examined yet
 www/api/controllers/files.php	PatchFileReceiveChunk	1592	8	24	todo		auto: not examined yet
@@ -665,8 +665,8 @@ www/common.php	ExtractBackupBlobs	5024	4	22	todo		auto: not examined yet
 www/common.php	BackupBlobRefsInJson	5085	2	5	todo		auto: not examined yet
 www/common.php	InlineBackupBlobs	5115	5	32	todo		auto: not examined yet
 www/common.php	CollectUnreferencedBackupBlobs	5189	3	15	todo		auto: not examined yet
-www/common.php	GetBackupBlobReferenceMap	5231	22	22	todo		auto: not examined yet
-www/common.php	DescribeBackupBlobDeletion	5290	21	32	todo		auto: not examined yet
+www/common.php	GetBackupBlobReferenceMap	5231	22	22	test	web/tests/backup-blob-delete-guard.spec.ts	references read from the backups, cached or rewritten
+www/common.php	DescribeBackupBlobDeletion	5290	21	32	test	web/tests/backup-blob-delete-guard.spec.ts	blob file and blob folder refusals, the unreferenced and non-blob deletes
 www/common.php	DescribeBackupList	5354	3	3	todo		auto: not examined yet
 www/common.php	SaveBackupMetadataCache	5421	1	5	todo		auto: not examined yet
 www/common.php	RememberBackupMetadata	5444	1	14	todo		auto: not examined yet
