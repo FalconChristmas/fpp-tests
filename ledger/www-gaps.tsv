@@ -537,7 +537,7 @@ www/backup.php	processRestoreData	701	37	280	test	web/tests/backup-restore-*.spe
 www/backup.php	processRestoreDataArray	1391	11	72	todo		auto: not examined yet
 www/backup.php	IsSafeRestoreFilename	1605	3	6	todo		auto: not examined yet
 www/backup.php	BackupConfigFolderConfigs	1642	2	52	todo		auto: not examined yet
-www/backup.php	RestoreConfigFolderConfigs	1800	10	10	todo		auto: not examined yet
+www/backup.php	RestoreConfigFolderConfigs	1800	10	10	test	web/tests/backup-restore-misc-configs.spec.ts	json written back, path names skipped; 2 test.fail (non-json and other areas' files are written)
 www/backup.php	ConfigAreasForFolder	1928	5	30	todo		auto: not examined yet
 www/backup.php	performBackup	2050	0	20	covered		auto: every line reached
 www/backup.php	doBackupDownload	2106	13	52	todo		auto: not examined yet
