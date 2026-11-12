@@ -82,10 +82,8 @@ test('past 32 universes the rows run on into a second and a third table', async 
 });
 
 test('100 universes are spread over the three tables too', async ({ page }) => {
-  // FUTURE.md: the table length is universes / 3, not rounded, and the row
-  // number is compared to it with ==, so a count over 96 that is not a
-  // multiple of three never starts a second table: one table of 100 rows.
-  test.fail();
+  // A count over 96 that is not a multiple of three still starts the second
+  // and third tables.
   await draw(page, { json: { status: 'OK', universes: universes(100) } });
   await expect.poll(() => lengths(page), { timeout: 3000 }).toEqual([34, 34, 32]);
 });
