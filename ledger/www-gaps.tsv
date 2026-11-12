@@ -1279,7 +1279,7 @@ www/plugin.php	(inline script)	0	43	207	todo		auto: not examined yet
 www/plugin.php	(top level)	0	30	130	todo		auto: not examined yet
 www/plugin.php	pluginRealPath	16	5	21	todo		auto: not examined yet
 www/pluginconfig.php	(top level)	0	1	17	todo		auto: not examined yet
-www/plugins.php	(inline script)	0	467	2005	todo		auto: not examined yet
+www/plugins.php	(inline script)	0	467	2005	todo	web/tests/plugin-page-install-privacy.spec.ts	partly done 2026-11-13: Install from the page, the install refusal review (listing behind the repository: Accept, Cancel, first disclosure) and Update's changed/removed disclosure dialogs (plugin-page-install-privacy.spec.ts). Left: dependency refusal review, post-OS-upgrade reinstall review (1734-1777), release notes rendering (2393-2430), versions text (2801-2822)
 www/plugins.php	(top level)	0	1	23	todo		auto: not examined yet
 www/privacyConsent.inc	(top level)	0	1	4	todo		auto: not examined yet
 www/privacyConsent.inc	RecordPrivacyConsent	108	3	19	todo		auto: not examined yet
