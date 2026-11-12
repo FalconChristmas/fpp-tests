@@ -92,10 +92,8 @@ test('a remote is asked to reboot, then waited for until it answers again', asyn
 });
 
 test('a remote that refuses the reboot is not reported as rebooted', async ({ request }) => {
-  // FUTURE.md: the answer to the reboot request is not looked at, so a
-  // remote that refused it (and so is still up and answering) reads
-  // "System Rebooted" 20 seconds later.
-  test.fail();
+  // The answer to the reboot request is looked at, so a remote that refused
+  // it is not reported as "System Rebooted".
   test.setTimeout(90_000);
   const { ip, asked } = await remote(401);
   const body = await (await request.get(`/rebootRemoteFPP.php?ip=${ip}`, { timeout: 80_000 })).text();
@@ -111,8 +109,7 @@ test('a remote is asked to shut down, once', async ({ request }) => {
 });
 
 test('a remote that refuses the shutdown is not reported as shut down', async ({ request }) => {
-  // FUTURE.md: as for the reboot.
-  test.fail();
+  // As for the reboot: the answer to the request is looked at.
   const { ip, asked } = await remote(401);
   const body = await (await request.get(`/shutdownRemoteFPP.php?ip=${ip}`)).text();
   expect(asked()).toEqual(['POST /api/system/shutdown']);
