@@ -63,3 +63,27 @@ test('Last Rcvd never shows a negative duration', async ({ page }) => {
   const nice = await page.evaluate(() => [0, -5000, 500, 59_000].map((t) => (window as any).niceDuration(t)));
   expect(nice).toEqual(['&lt; 1 min', '&lt; 1 min', '500 ms', '59 sec']);
 });
+
+// fppd writes lastReceiveTime in the player's own zone, with no zone in it
+// (MultiSync.cpp, localtime_r).  The page reads it with new Date() in the
+// browser's zone, so a browser in another zone is off by the difference.
+// The tests above build their stamps in this host's zone, which is the
+// browser's too.
+test.describe('from a browser in another time zone', () => {
+  test.use({ timezoneId: 'Australia/Sydney' });
+
+  test("Last Rcvd counts from the player's clock, not the browser's", async ({ page, request }) => {
+    test.fail(true, "ShowMultiSyncStats parses fppd's zone-less local time in the browser's zone (FUTURE.md)");
+    const zone = String((await (await request.get('/api/settings/TimeZone')).json()).value || 'UTC');
+    expect(zone, 'the player is not in the browser\'s zone').not.toBe('Australia/Sydney');
+    // 90 s ago, written as fppd would: the player's wall clock.
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: zone, hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      .formatToParts(new Date(Date.now() - 90_000)).map((p) => [p.type, p.value]));
+    const stamp = `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+    await lastRcvd(page, [stamp]);
+    const cell = page.locator('#syncStatsTable tbody tr td:nth-child(2) span');
+    await expect(cell).toHaveCount(1);
+    await expect(cell).toHaveText(/^[12] min$/);
+  });
+});
