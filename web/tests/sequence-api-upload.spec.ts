@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import net from 'net';
 import { test, expect } from './fixtures';
 import { container, docker, inPlayer } from './container';
 import { MEDIA, exists, putFile } from './settings-file';
@@ -82,11 +83,9 @@ test('a name that is not a bare file name writes nothing outside the sequence di
   }
 });
 
-// fppd holds a shared flock on the sequence it is playing, and the chunked
-// upload (PATCH /api/file/sequences) honours it: the new version waits as
-// <name>.replace (fseq-upload-while-playing.spec.ts).  A shared lock held by
-// another process stands in for fppd here, so no test rewrites a file fppd is
-// really reading.
+// fppd holds a shared flock on the sequence it is playing and reads it through
+// the descriptor it opened.  A shared lock held by another process stands in
+// for fppd here, so no test rewrites a file fppd is really reading.
 async function withSharedLock(file: string, body: () => Promise<void>) {
   docker('exec', '-d', container, 'flock', '-s', file, 'sleep', '17.31');
   try {
@@ -99,6 +98,11 @@ async function withSharedLock(file: string, body: () => Promise<void>) {
   }
 }
 
+// The contents of the sequence as the lock holder has it open.
+const shaHeldOpen = () => inPlayer('sh', '-c',
+  `for p in $(pgrep -x flock); do for f in /proc/$p/fd/*; do ` +
+  `case "$(readlink "$f")" in *${NAME}.fseq*) sha256sum < "$f" | cut -d' ' -f1;; esac; done; done`).trim();
+
 test('the control: an upload replaces a sequence nothing has open', async ({ request }) => {
   putFile(FILE, 'ORIGINAL');
   const r = await request.post(`/api/sequence/${NAME}`, { data: 'NEW VERSION' });
@@ -107,24 +111,68 @@ test('the control: an upload replaces a sequence nothing has open', async ({ req
   expect(exists(`${FILE}.replace`)).toBe(false);
 });
 
-test('an upload does not rewrite a sequence fppd has locked', async ({ request }) => {
-  test.fail(true, 'PostSequence opens the file with "w" whatever holds it (FUTURE.md)');
+test('an upload over a sequence fppd has open takes its place, and fppd reads on in the old one', async ({ request }) => {
   putFile(FILE, 'ORIGINAL');
   await withSharedLock(FILE, async () => {
     const r = await request.post(`/api/sequence/${NAME}`, { data: 'NEW VERSION' });
-    // Either answer is sound: kept aside as .replace for fppd to swap in (what
-    // the chunked upload does), or refused.  Rewriting the open file is not.
-    expect(shaInPlayer(FILE), 'the locked sequence was rewritten in place').toBe(sha('ORIGINAL'));
-    if (r.status() === 200) {
-      expect(shaInPlayer(`${FILE}.replace`)).toBe(sha('NEW VERSION'));
-    } else {
-      expect(exists(`${FILE}.replace`)).toBe(false);
-    }
+    expect(r.status(), await r.text()).toBe(200);
+    expect(shaHeldOpen(), 'the open sequence was rewritten in place').toBe(sha('ORIGINAL'));
+    expect(shaInPlayer(FILE), 'the next open gets the upload').toBe(sha('NEW VERSION'));
+    expect(exists(`${FILE}.replace`)).toBe(false);
   });
 });
 
+test('a <name>.replace left by an earlier upload is not swapped in over a newer one', async ({ request }) => {
+  // fppd renames <name>.replace over the sequence when it next opens it
+  // (src/Sequence.cpp checkForReplacementFile).
+  putFile(FILE, 'ORIGINAL');
+  putFile(`${FILE}.replace`, 'AN OLDER UPLOAD');
+  const r = await request.post(`/api/sequence/${NAME}`, { data: 'NEW VERSION' });
+  expect(r.status()).toBe(200);
+  expect(shaInPlayer(FILE)).toBe(sha('NEW VERSION'));
+  expect(exists(`${FILE}.replace`), 'the older upload is still waiting to be swapped in').toBe(false);
+});
+
+test('a sequence linked in from other media is replaced there, and keeps its link', async ({ request }) => {
+  // Shows on USB media are often linked into the sequence directory.  fppd
+  // and the chunked upload put a <name>.replace beside the link's name.
+  const REAL = `${MEDIA}/${NAME}-real.fseq`;
+  putFile(REAL, 'ORIGINAL');
+  inPlayer('ln', '-sf', REAL, FILE);
+  putFile(`${FILE}.replace`, 'AN OLDER UPLOAD');
+  const r = await request.post(`/api/sequence/${NAME}`, { data: 'NEW VERSION' });
+  expect(r.status(), await r.text()).toBe(200);
+  expect(inPlayer('sh', '-c', `test -L "${FILE}" && echo link || echo file`).trim(), 'the link was replaced by a file').toBe('link');
+  expect(shaInPlayer(REAL)).toBe(sha('NEW VERSION'));
+  expect(exists(`${FILE}.replace`), 'the older upload is still waiting to be swapped in').toBe(false);
+});
+
+// A POST whose connection closes after `sent` of the bytes it declared, as an
+// uploader that lost the network part way through leaves it.
+function cutOffPost(path: string, declared: number, sent: string): Promise<void> {
+  const base = new URL(test.info().project.use.baseURL!);
+  return new Promise((resolve, reject) => {
+    const s = net.connect(Number(base.port || 80), base.hostname, () => {
+      s.write(
+        `POST ${path} HTTP/1.1\r\nHost: ${base.host}\r\n` +
+        `Content-Type: application/octet-stream\r\nContent-Length: ${declared}\r\n` +
+        `Connection: close\r\n\r\n` + sent,
+        () => setTimeout(() => { s.destroy(); resolve(); }, 300));
+    });
+    s.on('error', reject);
+  });
+}
+
+test('an upload cut off part way does not replace the sequence', async () => {
+  putFile(FILE, 'ORIGINAL');
+  await cutOffPost(`/api/sequence/${NAME}`, 100_000, 'THE FIRST FEW BYTES');
+  // The server finishes the request once it sees the connection close.
+  await expect.poll(() => listed(SEQ_DIR), { timeout: 15_000, message: 'a temporary file was left behind' })
+    .toBe(`${NAME}.fseq`);
+  expect(shaInPlayer(FILE), 'the sequence was replaced by part of an upload').toBe(sha('ORIGINAL'));
+});
+
 test('an upload with no body does not empty the sequence it names', async ({ request }) => {
-  test.fail(true, 'PostSequence truncates before it has read anything, and says OK (FUTURE.md)');
   putFile(FILE, 'ORIGINAL');
   const r = await request.post(`/api/sequence/${NAME}`);
   expect(shaInPlayer(FILE), `the sequence was emptied (answer ${r.status()} ${await r.text()})`).toBe(sha('ORIGINAL'));
@@ -132,7 +180,6 @@ test('an upload with no body does not empty the sequence it names', async ({ req
 });
 
 test('an upload that cannot be written is reported as an error', async ({ request }) => {
-  test.fail(true, 'fopen() is not checked: a PHP fatal goes out with a 200 (FUTURE.md)');
   // A directory where the file would go: the one write failure a root player
   // can stage.
   inPlayer('mkdir', '-p', FILE);

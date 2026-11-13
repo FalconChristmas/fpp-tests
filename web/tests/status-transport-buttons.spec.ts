@@ -107,7 +107,6 @@ test('a stop the player refuses is reported, not silently dropped', async ({ pag
   // StopNow / StopGracefully / Next / Previous post with an empty .fail():
   // with fppd busy or gone, the press does nothing and the page says nothing,
   // while the show plays on.
-  test.fail(true, 'the transport buttons ignore a failed request (FUTURE.md)');
   await store(request, [pause(300)]);
   await play(page, request);
   await page.route('**/api/playlists/stop', (r) => r.fulfill({ status: 500, body: 'fpp-tests: refused' }));
