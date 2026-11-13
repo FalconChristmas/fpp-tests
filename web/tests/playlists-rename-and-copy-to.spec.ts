@@ -97,7 +97,6 @@ test.describe('Rename Playlist', () => {
   });
 
   test('a rename whose save fails keeps the playlist under its old name', async ({ page, request }) => {
-    test.fail(true, 'SavePlaylistAs answers 1 before the save is known, so Rename deletes the original after a failed save (FUTURE.md)');
     await store(request, A, { mainPlaylist: [pause(2), pause(3)] });
     await page.route(`**/api/playlist/${B}`, (r) =>
       r.request().method() === 'POST' ? r.fulfill({ status: 500, body: 'fpp-tests save refusal' }) : r.fallback());
@@ -112,8 +111,32 @@ test.describe('Rename Playlist', () => {
     expect(await names(request), 'the original is gone').toContain(A);
   });
 
+  test('a save the player could not write (answered 200 with Status Error) keeps the playlist under its old name', async ({ page, request }) => {
+    await store(request, A, { mainPlaylist: [pause(2), pause(3)] });
+    // What a player from before the 500 answers when file_put_contents fails.
+    await page.route(`**/api/playlist/${B}`, (r) => r.request().method() === 'POST'
+      ? r.fulfill({ json: { Status: 'Error', Message: 'Unable to open file for writing' } }) : r.fallback());
+    await openEditor(page, A);
+    await rename(page, B);
+    await expect(errorDialog(page)).toContainText('Unable to open file for writing');
+    await page.waitForTimeout(1500);
+    expect(await names(request)).toContain(A);
+    expect(durations((await stored(request, A)).mainPlaylist)).toEqual([['pause', 2], ['pause', 3]]);
+  });
+
+  test('a rename that changes only the case is refused, and the playlist stays', async ({ page, request }) => {
+    // On a case-folding media drive (FAT/exFAT, macOS) the save under the new
+    // name is the same file, which the delete of the old name then removes.
+    await store(request, A, { mainPlaylist: [pause(2)] });
+    await openEditor(page, A);
+    await rename(page, A.toUpperCase());
+    await expect(errorDialog(page)).toContainText('only upper/lower case');
+    await page.waitForTimeout(1000);
+    expect(await names(request)).toContain(A);
+    expect(await names(request)).not.toContain(A.toUpperCase());
+  });
+
   test('an empty name is refused and the playlist stays', async ({ page, request }) => {
-    test.fail(true, 'Rename has no empty-name check (Copy has), and the original is deleted (FUTURE.md)');
     await store(request, A, { mainPlaylist: [pause(2)] });
     await openEditor(page, A);
     page.on('dialog', (d) => d.accept());
@@ -124,7 +147,6 @@ test.describe('Rename Playlist', () => {
   });
 
   test('a rename onto another playlist does not replace it unasked', async ({ page, request }) => {
-    test.fail(true, 'Rename onto an existing name overwrites that playlist and deletes this one without a word (FUTURE.md)');
     await store(request, A, { mainPlaylist: [pause(2)] });
     await store(request, B, { mainPlaylist: [pause(7), pause(8), pause(9)] });
     await openEditor(page, A);
@@ -154,7 +176,6 @@ test.describe('Copy Playlist', () => {
   });
 
   test('a copy onto another playlist does not replace it unasked', async ({ page, request }) => {
-    test.fail(true, 'Copy onto an existing name overwrites that playlist without a word (FUTURE.md)');
     await store(request, A, { mainPlaylist: [pause(2)] });
     await store(request, B, { mainPlaylist: [pause(7), pause(8)] });
     await openEditor(page, A);

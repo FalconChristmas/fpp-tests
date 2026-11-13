@@ -45,7 +45,6 @@ test('the plain commits are listed by both dialogs', async ({ page }) => {
 });
 
 test("the System Upgrade page shows a commit's author and message as text", async ({ page }) => {
-  test.fail(true, 'buildGitLogTableHtml writes author and msg as HTML (FUTURE.md)');
   await answer(page);
   await page.goto('/about.php');
   await page.evaluate(() => (window as any).GetGitOriginLog());
@@ -53,7 +52,6 @@ test("the System Upgrade page shows a commit's author and message as text", asyn
 });
 
 test("the shared Git Changes dialog shows a commit's author and message as text", async ({ page }) => {
-  test.fail(true, 'fpp.js GetGitOriginLog writes author and msg as HTML (FUTURE.md)');
   await answer(page);
   await page.goto('/index.php');
   await page.evaluate(() => (window as any).GetGitOriginLog());

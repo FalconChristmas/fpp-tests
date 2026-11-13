@@ -64,7 +64,6 @@ test('the control: Rename and Copy to a name nothing has', async ({ page }) => {
 });
 
 test('Rename to another file\'s name does not replace that file', async ({ page }) => {
-  test.fail(true, 'rename() over an existing file, no check and no question (FUTURE.md)');
   await press(page, 'Rename', B);
   expect(readFile(`${DIR}/${B}`), 'the other file was replaced').toBe(B_BODY);
   expect(exists(`${DIR}/${A}`), 'the file that was to be renamed').toBe(true);
@@ -72,7 +71,6 @@ test('Rename to another file\'s name does not replace that file', async ({ page 
 });
 
 test('Copy to another file\'s name does not replace that file', async ({ page }) => {
-  test.fail(true, 'copy() over an existing file, no check and no question (FUTURE.md)');
   await press(page, 'Copy', B);
   expect(readFile(`${DIR}/${B}`), 'the other file was replaced').toBe(B_BODY);
   await expect(errorDialog(page)).toBeVisible();

@@ -59,7 +59,6 @@ test('a .json file of the area is written back to the config folder, and a name 
 });
 
 test('a name that is not a .json file is not written to the config folder', async ({ request }) => {
-  test.fail(true, 'the restore writes any bare name; only the backup side keeps to *.json (FUTURE.md)');
   // The backup never holds these: BackupConfigFolderConfigs keeps *.json only,
   // "no .htaccess, .htpassword or .db files".  The config folder also holds
   // .htaccess, .htpasswd and the saved interface.* files.
@@ -73,8 +72,20 @@ test('a name that is not a .json file is not written to the config folder', asyn
   expect(exists(`${CONFIG}/.fpp-tests-misc`), 'a dot-file was written').toBe(false);
 });
 
+test('another area\'s file named in other case is not written either', async ({ request }) => {
+  // On a case-insensitive filesystem (macOS) GPIO.json is gpio.json.
+  await restoreMisc(request, { 'fpp-tests-misc.json': { ok: true }, 'GPIO.json': [{ pin: 'fpp-tests' }] });
+  expect(exists(`${CONFIG}/fpp-tests-misc.json`), 'the control: the .json file is restored').toBe(true);
+  expect(exists(`${CONFIG}/GPIO.json`), 'GPIO.json was written').toBe(false);
+});
+
+test('an area whose every name is skipped is not reported as failed', async ({ request }) => {
+  const answer = await restoreMisc(request, { 'fpp-tests-misc.conf': 'password = x' });
+  expect(answer).toEqual({ Success: true, Message: { misc_configs: { configs: { VALID_DATA: true, ATTEMPT: true, SUCCESS: true } } } });
+  expect(exists(`${CONFIG}/fpp-tests-misc.conf`)).toBe(false);
+});
+
 test('a file that belongs to another area is not written by restoring only this one', async ({ request }) => {
-  test.fail(true, 'the restore does not leave out the files other areas own, as the backup does (FUTURE.md)');
   // gpio.json is the "GPIO Input Triggers" area, which was not asked for.
   const mine = '[\n\t{ "pin": "fpp-tests: the triggers this player had" }\n]';
   putFile(GPIO, mine);

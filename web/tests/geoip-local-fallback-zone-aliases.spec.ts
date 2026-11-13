@@ -34,17 +34,22 @@ async function lookup(page: Page) {
 test('the API places a link name where it places the zone it links to', async ({ request }) => {
   const at = async (tz: string) => (await (await request.get(`/api/geoip?nolookup=1&country=IN&timezone=${tz}`)).json()).fpp;
   expect(await at('Asia/Kolkata')).toMatchObject({ Latitude: '22.5333', Longitude: '88.3667' });
-  test.fail(true, 'TimeZoneCoordinates reads only zone.tab, which has no link names (FUTURE.md)');
   for (const [alias, lat] of [['Asia/Calcutta', '22.5333'], ['Europe/Kiev', '50.4333'], ['Asia/Saigon', '10.75']]) {
     expect((await at(alias)).Latitude, alias).toBe(lat);
   }
+});
+
+test('a link name that zone.tab lists keeps its own coordinates, not those of the zone it links to', async ({ request }) => {
+  // Arctic/Longyearbyen links to Europe/Oslo (60 N) but zone.tab places it at 78 N.
+  const r = await (await request.get('/api/geoip?nolookup=1&country=NO&timezone=Arctic/Longyearbyen')).json();
+  expect(r.timezone).toBe('Arctic/Longyearbyen');
+  expect(r.fpp).toMatchObject({ Latitude: '78', Longitude: '16' });
 });
 
 test.describe('in India', () => {
   test.use({ timezoneId: 'Asia/Kolkata', locale: 'en-IN' });
 
   test("a browser in India is placed at its time zone's city", async ({ page }) => {
-    test.fail(true, 'Chromium reports Asia/Calcutta, which zone.tab does not list (FUTURE.md)');
     await lookup(page);
     await expect(page.locator('#Latitude')).toHaveValue('22.5333');
     await expect(page.locator('#Longitude')).toHaveValue('88.3667');
@@ -57,7 +62,6 @@ test.describe('in India', () => {
     // select, and its change PUTs "null" (which the real API refuses with
     // 400, leaving the stored zone; '' would be accepted).  The saves are
     // answered here.
-    test.fail(true, 'SetFromGeoIP sets a value the select does not have and fires change: TimeZone is sent as "null" (FUTURE.md)');
     await isolated(page);
     const saved: Record<string, string> = {};
     await page.route('**/api/settings/*', (route) => {
@@ -94,10 +98,8 @@ test.describe('in India', () => {
       restore();
     });
 
-    test('after the lookup, Finish completes and keeps a real time zone', async ({ page }) => {
+    test('after the lookup, Finish completes and stores the zone the lookup found', async ({ page }) => {
       test.setTimeout(180_000);
-      test.fail(true, 'the emptied Time Zone is tracked as null and Finish sends it (FUTURE.md)');
-      const zone = settingInFile('TimeZone');
       // Every save but the time zone is answered here; the time zone goes to
       // the real API, which refuses "null" and would take "".
       const sent: Record<string, string> = {};
@@ -128,8 +130,10 @@ test.describe('in India', () => {
       await expect.poll(async () => /index\.php/.test(page.url()) ? 'status page'
         : (await page.locator('.modal.show, .ui-dialog:visible').allInnerTexts()).join(' ').replace(/\s+/g, ' ').trim() || 'still waiting',
       { timeout: 60_000 }).toBe('status page');
-      expect(sent.TimeZone ?? zone, 'the time zone sent').toMatch(/^[A-Z][A-Za-z]+\/[A-Za-z_\/+-]+$/);
-      expect(settingInFile('TimeZone')).toBe(zone);
+      // The lookup puts the browser's zone in the list under the name the
+      // list has (Asia/Calcutta -> Asia/Kolkata), and Finish stores it.
+      expect(sent.TimeZone, 'the time zone sent').toBe('Asia/Kolkata');
+      expect(settingInFile('TimeZone')).toBe('Asia/Kolkata');
     });
   });
 });

@@ -95,7 +95,6 @@ test('at Advanced level the saved route metric, forwarding and DHCP server are s
 });
 
 test('an Update at Basic level keeps the route metric, forwarding and DHCP server it cannot show', async ({ page, request }) => {
-  test.fail(true, 'the fields are only on the page at Advanced level, and the save writes only what it is sent (FUTURE.md)');
   setSettingInFile('uiLevel', '0');
   const posted = await openEth0(page, SAVED);
   await expect(page.locator('#eth_route_metric_eth0')).toHaveCount(0);
@@ -105,6 +104,21 @@ test('an Update at Basic level keeps the route metric, forwarding and DHCP serve
   const conf = await writtenFor(request, body);
   expect(conf).toMatch(/^ADDRESS="192\.168\.60\.2"$/m);
   expect(conf, 'the DHCP server was turned off').toMatch(/^DHCPSERVER=1$/m);
+  expect(conf).toMatch(/^ROUTEMETRIC=50$/m);
+  expect(conf).toMatch(/^IPFORWARDING=2$/m);
+});
+
+test('switching to DHCP at Basic level turns the DHCP server off and keeps the route metric', async ({ page, request }) => {
+  // fppinit reads DHCPSERVER before PROTO: kept on a DHCP interface it wrote a
+  // proxy rule for an empty address, and came back on a later switch to Static.
+  setSettingInFile('uiLevel', '0');
+  const posted = await openEth0(page, SAVED);
+  await page.click('#eth_dhcp_eth0');
+  const body = await update(page, posted);
+  expect(body.PROTO).toBe('dhcp');
+  const conf = await writtenFor(request, body);
+  expect(conf).toMatch(/^PROTO=dhcp$/m);
+  expect(conf).not.toMatch(/^DHCPSERVER=1$/m);
   expect(conf).toMatch(/^ROUTEMETRIC=50$/m);
   expect(conf).toMatch(/^IPFORWARDING=2$/m);
 });
