@@ -29,7 +29,8 @@ def boot_sync_commands():
     assert start >= 0 and end > start, "upgradeOS-part2.sh has no boot sync"
     section = src[start:end]
     keep = re.search(r"^BOOT_KEEP=\(.*?\)$", section, re.M | re.S)
-    lines = re.findall(r"^\s*(rsync [^\n]*/boot/ /mnt/boot/[^\n]*)$", section, re.M)
+    # Newer trees group each rsync, "{ rsync ...; } 2> >(tee ...)", to keep its errors.
+    lines = re.findall(r"^\s*((?:\{ )?rsync [^\n]*/boot/ /mnt/boot/[^\n]*)$", section, re.M)
     assert len(lines) == 2, f"expected the two boot rsyncs, found {lines}"
     return (keep.group(0) if keep else ""), lines
 
@@ -45,7 +46,7 @@ def sync_boot(tmp_path, line, layout):
     script = (f"set -e\nmount -t tmpfs tmpfs {root}/firmware\n"
               f"cp -a {tmp_path}/seed/. {root}/\n"
               f"{keep}\n"
-              + line.replace("/boot/ /mnt/boot/", f"{image}/ {root}/") + "\n"
+              + line.replace("/boot/ /mnt/boot/", f"{image}/ {root}/").replace("/tmp/rsync-", f"{tmp_path}/rsync-") + "\n"
               f"cp -a {root}/. {tmp_path}/after/\n")
     for rel, (new, old) in layout.items():
         if new is not None:

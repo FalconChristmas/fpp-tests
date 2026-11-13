@@ -218,13 +218,19 @@ def test_the_kiosk_state_survives_the_upgrade_only_when_it_was_on(tmp_path):
         assert (root / "mnt" / "fpp_kiosk").exists() is expect_marked, f"Kiosk={setting}"
 
 
+def root_rsync():
+    """part2's root rsync line; newer trees wrap it in "{ ...; } 2> >(tee ...)"."""
+    return next((l for l in part2().splitlines()
+                 if re.match(r"(\{ )?stdbuf ", l) and " rsync " in l and " /mnt " in l), None)
+
+
 def test_the_root_rsync_keeps_roots_ssh_keys(tmp_path):
     """part2's root rsync (--delete-during) leaves /root/.ssh of the running
     system alone, though the image has no such directory.
 
     Regression: e8e484455. The root rsync deleted root's .ssh with the rest
     of what the image lacks, and the upgraded system lost its root keys."""
-    line = next((l for l in part2().splitlines() if l.startswith("stdbuf") and " rsync " in l and " /mnt " in l), None)
+    line = root_rsync()
     assert line, "no root rsync in upgradeOS-part2.sh"
     image, root = tmp_path / "image", tmp_path / "root"
     write(str(image / "root" / ".profile"), "image\n")
@@ -233,7 +239,8 @@ def test_the_root_rsync_keeps_roots_ssh_keys(tmp_path):
     write(str(image / "etc" / "new"), "image\n")
     write(str(root / "root" / ".ssh" / "authorized_keys"), "ssh-ed25519 AAAA key\n")
     write(str(root / "root" / "stale"), "gone\n")
-    cmd = line.replace(" /mnt ", f" {root} ").replace("${SKIPFPP}", "").replace("-aAXxv", "-av")
+    cmd = line.replace(" /mnt ", f" {root} ").replace("${SKIPFPP}", "").replace("-aAXxv", "-av") \
+        .replace("/tmp/rsync-", f"{tmp_path}/rsync-")
     bash(f"cd {image} && {cmd}", image)
     assert (root / "etc" / "new").exists(), "the rsync copied nothing"
     assert not (root / "root" / "stale").exists(), "the rsync deleted nothing (the control)"
@@ -248,7 +255,7 @@ def test_the_root_rsync_keeps_the_php_sessions(tmp_path):
     Regression: 6d17dd317 ("Don't delete wifi connection or php sessions
     during fppos upgrade"). The rsync deleted /var/lib/php/sessions with the
     rest of what the image lacks. (Its connman half went with connman.)"""
-    line = next((l for l in part2().splitlines() if l.startswith("stdbuf") and " rsync " in l and " /mnt " in l), None)
+    line = root_rsync()
     assert line, "no root rsync in upgradeOS-part2.sh"
     image, root = tmp_path / "image", tmp_path / "root"
     for d in ("bin", "etc", "lib", "opt", "root", "sbin", "usr"):
