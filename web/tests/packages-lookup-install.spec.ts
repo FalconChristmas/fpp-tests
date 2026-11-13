@@ -73,6 +73,9 @@ test('an installed package offers Reinstall, and an unknown one says so with no 
   await expect.poll(() => helper.length).toBe(1);
   expect(Object.fromEntries(helper[0])).toEqual({ action: 'reinstall', package: 'fpp-tests-other' });
 
+  // The progress dialog is modal: start again from a fresh page.
+  await page.goto('/packages.php');
+  await expect(page.locator('#packageInput')).toBeVisible({ timeout: 15_000 });
   await page.fill('#packageInput', 'fpp-tests-missing');
   await lookup(page).click();
   await expect(info).toContainText("Error: Package 'fpp-tests-missing' not found");
