@@ -81,7 +81,6 @@ for (const [what, opts] of [
 }
 
 test('a playlist file that cannot be read as JSON is not replaced by the one new item', async ({ request }) => {
-  test.fail(true, 'json_decode failing is not checked: the file is rewritten from nothing (FUTURE.md)');
   // A file cut short, as a full disk or a pulled plug leaves one.
   const cut = SEEDED.slice(0, SEEDED.indexOf('"mainPlaylist"') + 30);
   putFile(FILE, cut);

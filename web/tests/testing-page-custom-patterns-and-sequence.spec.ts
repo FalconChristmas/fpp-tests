@@ -165,7 +165,6 @@ test('a sequence fppd will not start or stop is reported', async ({ page }) => {
 });
 
 test('Play with no start time asks for the start of the sequence', async ({ page }) => {
-  test.fail(true, 'an empty Start Time is put in the URL as it is: ".../start/", which is no route (FUTURE.md)');
   const { sequence } = await open(page);
   await page.locator('#tab-sequence-tab').click();
   await page.locator('#selSequence').selectOption(SEQ);
