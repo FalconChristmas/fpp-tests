@@ -5,8 +5,9 @@ import type { APIRequestContext, Page } from '@playwright/test';
 // in fpp.js): what it shows for a real schedule, which fppd expands over the
 // span on screen (api/fppd/schedule/range).  The List view is read here: one
 // row per occurrence, with the entry's title.  Entries run at midday, so the
-// browser's and the player's time zones can differ by hours and each still
-// lands on the same day: a week shows exactly seven of a daily entry.
+// browser's and the player's time zones can differ by up to 10 hours and each
+// still lands on the same day: a week shows exactly seven of a daily entry.
+// (A list shows an entry that crosses midnight on both days.)
 // (schedule-calendar-event-text.spec.ts: the event text colour.)
 
 const A = 'fpp-tests-cal-a';
@@ -131,4 +132,16 @@ test('showing disabled entries does not hide a playlist that will play', async (
   await expect(rows(calendar, A)).toHaveCount(7);
   await expect(rows(calendar, B)).toHaveCount(7, { timeout: 3000 });
   await expect(rows(calendar, B).first()).not.toHaveClass(/sch-cal-event-overridden/);
+});
+
+test('a command late in the evening is listed once a day', async ({ page, request }) => {
+  // A command has no length (its end is its start), and FullCalendar draws a
+  // timed event without one an hour long (defaultTimedEventDuration): a
+  // command at 23:30 runs on to 00:30 on screen, so the list shows it again
+  // at 12:00 AM the next day.  The first test above is the control, at 12:30.
+  test.fail(true, 'a zero-length command in the last hour of the day is drawn into the next day (FUTURE.md)');
+  await useSchedule(request, [entry('', { type: 'command', command: 'All Lights Off', startTime: '23:30:00', endTime: '23:30:00' })]);
+  const calendar = await openCalendar(page);
+  await expect(rows(calendar, 'All Lights Off').first()).toBeVisible();
+  await expect(rows(calendar, 'All Lights Off')).toHaveCount(7);
 });
