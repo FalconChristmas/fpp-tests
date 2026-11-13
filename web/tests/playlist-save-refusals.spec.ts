@@ -65,7 +65,6 @@ for (const [what, opts] of [
   ['a body that is a number', raw('7')],
 ] as const) {
   test(`a save with ${what} does not empty the playlist`, async ({ request }) => {
-    test.fail(true, 'whatever $_POST holds is written: an empty playlist with fresh totals, answer 200 (FUTURE.md)');
     const r = await request.post(`/api/playlist/${NAME}`, opts);
     expect(readFile(FILE), `the playlist was replaced (answer ${r.status()} ${(await r.text()).slice(0, 120)})`).toBe(SEEDED);
     expect(r.status()).toBeGreaterThanOrEqual(400);
@@ -73,7 +72,6 @@ for (const [what, opts] of [
 }
 
 test('a save whose sections are not lists is refused as a bad playlist', async ({ request }) => {
-  test.fail(true, 'the totals are counted before anything is checked: a PHP fatal with a 200 (FUTURE.md)');
   const r = await request.post(`/api/playlist/${NAME}`, { data: { name: NAME, leadIn: 5, mainPlaylist: 'all of it' } });
   const text = await r.text();
   expect(readFile(FILE), 'the control: this one is not written').toBe(SEEDED);

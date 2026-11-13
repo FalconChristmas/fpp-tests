@@ -189,7 +189,6 @@ test.describe("a missing file's name is shown as it is written", () => {
     // error line as HTML, so the file's <u> becomes an element.  The same is
     // done with a missing sequence's name and a missing playlist's.  In
     // FUTURE.md.
-    test.fail(true, "a missing media file's name is written into the row as HTML (FUTURE.md)");
     await store(request, NAME, [entry({ type: 'media', mediaName: MARKUP })]);
     await gone(page);
     await openAndResave(page);

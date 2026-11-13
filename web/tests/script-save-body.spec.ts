@@ -80,7 +80,6 @@ for (const [what, body] of [
   ['null', 'null'],
 ] as const) {
   test(`${what} does not empty the script`, async ({ request }) => {
-    test.fail(true, 'what json_decode() cannot read is null, and null is written as an empty file with "OK" (FUTURE.md)');
     const r = await request.post(`/api/scripts/${NAME}`, raw(body));
     expect(readFile(FILE), `the script was replaced (answer ${r.status()} ${await r.text()})`).toBe(ORIGINAL);
     expect(r.status()).toBeGreaterThanOrEqual(400);
@@ -93,7 +92,6 @@ for (const [what, body] of [
   ['a number', '42'],
 ] as const) {
   test(`${what} in place of the text is refused, and the script stays`, async ({ request }) => {
-    test.fail(true, 'anything json_decode() returns is handed to file_put_contents() (FUTURE.md)');
     const r = await request.post(`/api/scripts/${NAME}`, raw(body));
     expect(readFile(FILE), `the script was replaced (answer ${r.status()} ${await r.text()})`).toBe(ORIGINAL);
     expect(r.status()).toBeGreaterThanOrEqual(400);

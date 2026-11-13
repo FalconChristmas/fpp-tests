@@ -146,7 +146,6 @@ test.describe("a backup's restore button", () => {
     // The error handler passes DialogError the request's .Message, which a
     // failed request does not have: no dialog opens, and a restore that never
     // happened looks like a button that did nothing.  In FUTURE.md.
-    test.fail(true, 'a restore request that fails shows no error (FUTURE.md)');
     await restoring(page, { status: 500, json: {} });
     await button(page).click();
     await expect(page.locator('.modal.show .modal-title')).toHaveText('Error occurred attempting to restore data');
@@ -196,7 +195,6 @@ test.describe("what a backup says was changed is shown as it is written", () => 
     // The comment is put into the row as HTML.  It is whatever the backup
     // file says: a backup brought from another player, or made by a change
     // whose description holds a name (a config file, a plugin).  In FUTURE.md.
-    test.fail(true, "a backup's comment is written into the list as HTML (FUTURE.md)");
     const comment = 'fpp-tests list <u id="fpp-tests-list-markup">marked</u> up';
     putFile(`${BACKUPS}/${ONE}`, JSON.stringify(backup(comment, AHEAD + 86400)));
     await page.goto('/backup.php');

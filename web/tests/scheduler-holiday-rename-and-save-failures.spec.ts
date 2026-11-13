@@ -107,7 +107,6 @@ test('a holiday renamed when the schedule cannot be rewritten is still saved, an
 
 test('...and the warning that the entries were not updated can be read', async ({ page }) => {
   await renameWithScheduleRefused(page);
-  test.fail(true, 'the page reloads straight after raising the warning, which takes it away (FUTURE.md)');
   await expect(notice(page, 'Could not update schedule entries')).toBeVisible({ timeout: 3000 });
 });
 

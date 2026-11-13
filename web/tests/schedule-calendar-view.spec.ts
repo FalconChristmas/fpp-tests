@@ -139,7 +139,6 @@ test('a command late in the evening is listed once a day', async ({ page, reques
   // timed event without one an hour long (defaultTimedEventDuration): a
   // command at 23:30 runs on to 00:30 on screen, so the list shows it again
   // at 12:00 AM the next day.  The first test above is the control, at 12:30.
-  test.fail(true, 'a zero-length command in the last hour of the day is drawn into the next day (FUTURE.md)');
   await useSchedule(request, [entry('', { type: 'command', command: 'All Lights Off', startTime: '23:30:00', endTime: '23:30:00' })]);
   const calendar = await openCalendar(page);
   await expect(rows(calendar, 'All Lights Off').first()).toBeVisible();

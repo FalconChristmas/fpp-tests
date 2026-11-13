@@ -53,7 +53,7 @@ test('the next playlist is named, with when it starts', async ({ page, request }
   // Its start, in 12- or 24-hour form as the player is set.
   const [h, m] = start.split(':').map(Number);
   const h12 = ((h + 11) % 12) + 1;
-  await expect(next).toContainText(new RegExp(`(${String(h).padStart(2, '0')}|\\b${h12}):${String(m).padStart(2, '0')}`));
+  await expect(next).toContainText(new RegExp(`(${String(h).padStart(2, '0')}|\\b0?${h12}):${String(m).padStart(2, '0')}`));
 });
 
 test('with every entry disabled the page says no playlist is scheduled', async ({ page, request }) => {

@@ -135,7 +135,6 @@ test.describe('a GPIO-595 output', () => {
     const now = (await stored(request))['GPIO-595'];
     // The rest of the row does survive.
     expect(now).toMatchObject({ description: 'relays', startChannel: 20, channelCount: 16 });
-    test.fail(true, 'the pins are read with parseInt() of their names and saved as null (FUTURE.md)');
     expect({ clockPin: now.clockPin, dataPin: now.dataPin, latchPin: now.latchPin }).toEqual({ clockPin: 'TF-1', dataPin: 'TF-2', latchPin: 'TF-3' });
   });
 });
@@ -193,7 +192,6 @@ test.describe('an MQTT output', () => {
     await tab(page, 'ControlSignal').click();
     await save(page, 'ControlSignal');
     const now = (await stored(request))['MQTTOutput'];
-    test.fail(true, "topic and payload are written into value='...' unescaped, so they are cut at the apostrophe (FUTURE.md)");
     expect({ topic: now.topic, payload: now.payload }).toEqual({ topic: odd.topic, payload: odd.payload });
   });
 });
@@ -249,7 +247,6 @@ test.describe('a PCF8574 expander', () => {
     await save(page, 'GPIO');
     const now = (await stored(request))['PCF8574'];
     expect(now.ports[1].hysteresisUpper).toBe(200);
-    test.fail(true, 'the saved level is looked for under a misspelt name ("hystersisLower"), so 64 is shown and saved (FUTURE.md)');
     expect(now.ports[1].hysteresisLower).toBe(20);
   });
 });

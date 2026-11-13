@@ -169,7 +169,6 @@ test.describe('a model that cannot work', () => {
     await expect.poll(() => alerts.length).toBe(1);
     // The control: its channels are named.
     expect(alerts[0]).toContain("starting at channel '200' containing '150' channel(s)");
-    test.fail(true, "the message reads model.BlockName, which no model has: \"MemMap 'undefined'\" (FUTURE.md)");
     expect(alerts[0]).toContain('porch-roof');
   });
 });
@@ -291,7 +290,6 @@ test('models that cannot be read are reported, and the empty table is not there 
   await expect(rows(page)).toHaveCount(0);
   await save(page);
   await settle(page);
-  test.fail(true, 'Save stays live after a failed load and posts an empty model list over the saved models (FUTURE.md)');
   expect(posts).toEqual([]);
 });
 

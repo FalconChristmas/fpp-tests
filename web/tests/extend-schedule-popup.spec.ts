@@ -19,7 +19,7 @@ async function extend(page: Page, answer: string | null) {
   await page.waitForTimeout(700);
   return sent;
 }
-const refused = (page: Page) => expect(page.locator('#dialogOKPopup')).toContainText('Minutes is not between the minimum -180 and maximum 720');
+const refused = (page: Page) => expect(page.locator('#dialogOKPopup')).toContainText('Minutes must be a number between -180 and 720.');
 
 test('minutes in range are sent as seconds, and out of range or cancelled sends nothing', async ({ page }) => {
   expect(await extend(page, '30')).toEqual([{ command: 'Extend Schedule', args: [1800] }]);
@@ -32,7 +32,6 @@ test('minutes in range are sent as seconds, and out of range or cancelled sends 
 });
 
 test('an answer that is not a number is refused, not sent', async ({ page }) => {
-  test.fail(true, 'Number("ten") is NaN, which is neither above nor below the limits, so [NaN * 60] is sent as [null] (FUTURE.md)');
   expect(await extend(page, 'ten')).toEqual([]);
   await refused(page);
 });
