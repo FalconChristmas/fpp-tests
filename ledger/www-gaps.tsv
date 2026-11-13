@@ -1053,7 +1053,7 @@ www/js/fpp.js	RestartFPPD	8044	30	52	test	web/tests/restart-fppd-quick-request.s
 www/js/fpp.js	zeroPad	8115	4	4	todo		auto: not examined yet
 www/js/fpp.js	ControlFPPD	8120	1	20	todo		auto: not examined yet
 www/js/fpp.js	PlayPlaylist	8273	4	17	todo		auto: not examined yet
-www/js/fpp.js	StartPlaylistNow	8294	4	22	todo		auto: not examined yet
+www/js/fpp.js	StartPlaylistNow	8294	4	22	test	web/tests/status-start-at-entry.spec.ts	row picked after a lead-in and entry 110 of 120: fppd starts at that entry
 www/js/fpp.js	StopEffect	8322	2	14	todo		auto: not examined yet
 www/js/fpp.js	GetRunningEffects	8341	12	56	todo		auto: not examined yet
 www/js/fpp.js	GetRunningOverlayEffects	8400	7	59	todo		auto: not examined yet
