@@ -102,17 +102,22 @@ test('AES67 and fppd stream nodes are labelled for what they are, not "fppd"', a
   // every AES67 stream and media stream as a box called "fppd".
   startPipeWire({ objects: [nullSink('aes67_my_stream_send', { 'node.description': 'fppd' })] });
   // A live media stream: a playback stream named as fppd's slot 2, playing silence.
+  // The silence comes in on stdin: given /dev/zero as a file, pw-cat takes its
+  // size (0) as the length, drains and exits within a second, and the node is
+  // gone before the graph is read.
   pw(`setsid nohup pw-cat --playback --raw --format s16 --rate 48000 --channels 2 ` +
-    `-P '{ node.name = fppd_stream_2 node.description = fppd media.class = Stream/Output/Audio }' /dev/zero ` +
-    `> /dev/null 2>&1 < /dev/null &`);
-  await expect.poll(async () => named(await graph(request), 'fppd_stream_2').filter((n) => n.factory !== 'virtual').length,
+    `-P '{ node.name = fppd_stream_2 node.description = fppd media.class = Stream/Output/Audio }' - ` +
+    `< /dev/zero > /dev/null 2>&1 &`);
+  // The checks are on the graph the poll saw the live stream in, not a
+  // second pw-dump.
+  let g = { nodes: [] as any[], ports: [] as any[], links: [] as any[] };
+  // The live node, not the placeholder the graph adds for an idle slot.
+  const live = () => named(g, 'fppd_stream_2').filter((n) => n.factory !== 'virtual');
+  await expect.poll(async () => { g = await graph(request); return live().length; },
     { timeout: 10_000 }).toBe(1);
 
-  const g = await graph(request);
   expect(named(g, 'aes67_my_stream_send')[0].description).toBe('AES67: My Stream (send)');
-  // The live node, not the placeholder the graph adds for an idle slot.
-  const live = named(g, 'fppd_stream_2').filter((n) => n.factory !== 'virtual');
-  expect(live.map((n) => n.description)).toEqual(['FPP Media Stream 2']);
+  expect(live().map((n) => n.description)).toEqual(['FPP Media Stream 2']);
 });
 
 test("an input group's loopback halves are tied to the group and drawn as part of it", async ({ request, page }) => {

@@ -8,8 +8,13 @@ import { sh, writeFile, PLUGINS } from './plugin-backfill';
 
 test.skip(!container, 'seeds a plugin inside the run-web.sh container');
 
-const PLUGIN = `${PLUGINS}/fpp-tests-theme`;
+// A new directory for each test: php-fpm's opcache keeps a file it has
+// compiled for a few seconds without looking at it again, so a second test
+// writing the same theme.inc.php path straight after the first is served the
+// first test's theme.  A path it has not seen is always read fresh.
+let PLUGIN = '';
 
+test.beforeEach(() => { PLUGIN = `${PLUGINS}/fpp-tests-theme-${Date.now()}`; });
 test.afterEach(() => sh(`rm -rf ${PLUGIN}`));
 
 test('a plugin theme sets the footer link and adds stylesheets and a script to the page', async ({ page }) => {
