@@ -15,6 +15,8 @@ export type FakeAptState = {
   available?: string[];
   listFails?: boolean;
   depends?: Record<string, string[]>;
+  removeFails?: boolean;
+  removeInstalls?: Record<string, string[]>;
 };
 
 export function installFakeApt(state: FakeAptState) {

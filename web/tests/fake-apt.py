@@ -14,6 +14,9 @@
 #   listFails   true: dpkg-query's full listing fails (exit 1)
 #   depends     name -> [names it depends on]: removing a package removes
 #               every installed package that depends on it, as apt does
+#   removeFails     true: a real (not -s) apt-get remove fails (exit 100)
+#   removeInstalls  name -> [names]: removing it makes apt install those
+#               (an alternative dependency it satisfied), so -s prints Inst
 # Calls, one JSON array of argv per line: /tmp/fpp-tests-apt/calls.log.
 import json
 import os
@@ -153,6 +156,9 @@ def apt_get(s, args):
         if cmd in ('remove', 'purge'):
             for p in removed_with(s, pkgs):
                 print('Remv %s [%s]' % (p, s['installed'][p].get('version', '1.0')))
+            for p in pkgs:
+                for n in s.get('removeInstalls', {}).get(p, []):
+                    print('Inst %s (1.0 fpp-tests [all])' % n)
         sys.exit(0)
     if cmd == 'install':
         for p in pkgs:
@@ -164,6 +170,9 @@ def apt_get(s, args):
                 s['installed'][p] = {'version': '1.0', 'auto': False, 'hold': False}
         save(s)
     elif cmd in ('remove', 'purge'):
+        if s.get('removeFails'):
+            print('E: Sub-process /usr/bin/dpkg returned an error code (1)')
+            sys.exit(100)
         for p in removed_with(s, pkgs):
             s['installed'].pop(p, None)
         save(s)

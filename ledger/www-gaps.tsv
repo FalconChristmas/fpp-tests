@@ -712,7 +712,7 @@ www/common/packages.inc.php	WithUserPackagesLock	115	5	17	todo		auto: not examin
 www/common/packages.inc.php	LoadUserPackages	157	9	35	todo		auto: not examined yet
 www/common/packages.inc.php	SaveUserPackages	249	5	22	todo		auto: not examined yet
 www/common/packages.inc.php	AddPackageRequesters	312	1	16	todo		auto: not examined yet
-www/common/packages.inc.php	PackagesInstalledVia	339	5	5	todo		auto: not examined yet
+www/common/packages.inc.php	PackagesInstalledVia	339	5	5	test	web/tests/packages-uninstall.spec.ts	Package Manager Uninstall: deps together, shared claims, rdeps keep user row, Inst refusal (user kept/plugin dropped), remove failure + retry
 www/common/packages.inc.php	PackagesNativeArch	371	4	4	todo		auto: not examined yet
 www/common/packages.inc.php	PackageIsForeignArch	382	1	3	todo		auto: not examined yet
 www/common/packages.inc.php	InstalledReverseDependencies	404	1	13	todo		auto: not examined yet
@@ -724,7 +724,7 @@ www/common/packages.inc.php	FinishInterruptedDpkg	603	7	11	todo		auto: not exami
 www/common/packages.inc.php	InstallSystemPackage	640	13	47	todo		auto: not examined yet
 www/common/packages.inc.php	ReinstallSystemPackage	726	10	20	todo		auto: not examined yet
 www/common/packages.inc.php	RemoveSystemPackageRequester	758	2	2	todo		auto: not examined yet
-www/common/packages.inc.php	ReleasePackageClaims	774	28	87	todo	plugin-packages-shared.spec.ts	shared by two plugins, by the Package Manager, kept for an outside reverse dependency, removed together; left: simulation failure, apt would remove others with no rdeps, apt remove failing, no-apt platform
+www/common/packages.inc.php	ReleasePackageClaims	774	28	87	test	web/tests/packages-uninstall.spec.ts	Package Manager Uninstall: deps together, shared claims, rdeps keep user row, Inst refusal (user kept/plugin dropped), remove failure + retry
 www/common/pluginhistory.inc.php	(top level)	0	1	3	todo		auto: not examined yet
 www/common/pluginhistory.inc.php	PluginHistoryURL	76	3	9	todo		auto: not examined yet
 www/common/pluginhistory.inc.php	AppendPluginHistory	97	6	27	todo		auto: not examined yet
@@ -1261,7 +1261,7 @@ www/newpartitionsd.php	(top level)	0	11	11	todo		auto: not examined yet
 www/opus-rtp-config.php	(inline script)	0	119	431	todo		auto: not examined yet
 www/outputprocessors.php	(inline script)	0	21	388	todo		auto: not examined yet
 www/packages.php	(inline script)	0	78	302	test	web/tests/packages-lookup-install.spec.ts	2026-11-13: search suggestions (2-letter start, 50 cap, pick), lookup of a not-installed / installed / unknown package, Install and Reinstall stream packagesHelper.php for that package, blank name refused (packages-lookup-install.spec.ts, no fault). Left: list load failures (175-192), status Unknown (341)
-www/packagesHelper.php	(top level)	0	23	75	todo		auto: not examined yet
+www/packagesHelper.php	(top level)	0	23	75	test	web/tests/packages-uninstall.spec.ts	uninstall (removed, shared, kept, refused, failed+retry, not-from-this-page, unmanaged); reinstall in plugin-packages.spec.ts, installmissing in packages-page.spec.ts
 www/pipewire-audio.php	(inline script)	0	333	899	todo	web/tests/pw-output-groups-page-edit.spec.ts	partly done 2026-11-13: group name/channels/latency, member card/channels/map/rate/period/delay, channel-count map rewrite, EQ panel (bands, live push), empty-name refusal, Save, Save & Apply (apply and restart stubbed), group fader on a live PipeWire (pw-output-groups-page-edit.spec.ts); test.fail non-ASCII group name's sink (FUTURE.md). Left: sync calibration (1575-1673), member fader fallback (1478-1513), USB bandwidth warnings (595-618)
 www/pipewire-graph.php	(inline script)	0	74	699	todo		auto: not examined yet
 www/pipewire-input-mixing.php	(inline script)	0	261	588	todo	web/tests/pw-input-mixing-page-edit.spec.ts	partly done 2026-11-13: add group/member, capture and PipeWire source pickers, channel mapping, output routing, live mute/volume, remove with confirm, Save, Save & Apply and their refusals (pw-input-mixing-page-edit.spec.ts); test.fail a channel count change keeps the old mapping (FUTURE.md). Left: AES67/Opus/VBAN receive pickers, generic downmix presets (1038-1087 partly), RefreshSources
