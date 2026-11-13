@@ -550,7 +550,7 @@ www/backup.php	collectFppMajorVersion	2613	0	4	covered		auto: every line reached
 www/backup.php	setBackupMaxAge	2642	0	0	gone		auto: no longer in the tree
 www/backup.php	setMinimumBackupCount	2655	0	0	gone		auto: no longer in the tree
 www/backup.php	is_array_empty	2658	4	6	todo		auto: not examined yet
-www/cape-info.php	(inline script)	0	145	665	todo		auto: not examined yet
+www/cape-info.php	(inline script)	0	145	665	test	web/tests/cape-firmware-restore-and-force.spec.ts	partly done 2026-11-13 (25+ older cape-*.spec.ts cover voucher/signing; stale count): backup list and Restore, Reset-to-defaults flag, cape/firmware mismatch confirm then force (restore and vendor upgrade), declined mismatch, Upgrade with nothing chosen (cape-firmware-restore-and-force.spec.ts, no fault). Note: .html('') does not clear the textarea, so a forced flash's log starts with the refused attempt's text (cosmetic). Left: offline signing file/packet upload (859-1051)
 www/cape-info.php	(top level)	0	43	273	todo		auto: not examined yet
 www/capeLicense.inc	(top level)	0	1	4	todo		auto: not examined yet
 www/capeLicense.inc	capeLicenseStateFile	31	1	1	todo		auto: not examined yet
