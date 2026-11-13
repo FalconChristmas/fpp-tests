@@ -453,7 +453,7 @@ www/api/controllers/sequence.php	GetSequenceMetaData	97	3	26	test	web/tests/sequ
 www/api/controllers/sequence.php	PostSequence	144	19	19	test	web/tests/sequence-api-upload.spec.ts	upload stored byte for byte, eseq to effects, bare names only; 3 test.fail (locked file rewritten, empty body empties, fopen unchecked)
 www/api/controllers/sequence.php	DeleteSequences	185	3	15	test	web/tests/sequence-api-upload.spec.ts	delete of fseq and eseq; the 400 for a non-bare name is the same findFile refusal PostSequence tests
 www/api/controllers/sequence.php	GetSequenceStart	231	1	14	todo		auto: not examined yet
-www/api/controllers/sequence.php	GetSequenceStep	272	3	3	todo		auto: not examined yet
+www/api/controllers/sequence.php	GetSequenceStep	272	3	3	test	web/tests/sequence-step-method.spec.ts	2026-11-13: FAULT step is GET-only, missed by 77efc7561 (FUTURE.md); togglePause control
 www/api/controllers/sequence.php	FSeqOrEseqDirectory	332	1	5	test	web/tests/sequence-api-upload.spec.ts	eseq branch
 www/api/controllers/settings.php	(top level)	0	3	8	todo		auto: not examined yet
 www/api/controllers/settings.php	GetSetting	41	3	36	todo		auto: not examined yet
@@ -1043,7 +1043,7 @@ www/js/fpp.js	ResetMultiSyncStats	7455	5	5	todo		auto: not examined yet
 www/js/fpp.js	ResetUniverseBytesReceived	7467	12	12	todo		auto: not examined yet
 www/js/fpp.js	GetUniverseBytesReceived	7480	59	92	test	web/tests/status-page-bridge-stats-table.spec.ts	rows, the Suppressed column, the split into two and three tables, tables emptied, the refusal and failure messages; 100 universes in one table is a test.fail() (FUTURE.md)
 www/js/fpp.js	ToggleSequencePause	7613	1	9	todo		auto: not examined yet
-www/js/fpp.js	SingleStepSequence	7623	10	10	todo		auto: not examined yet
+www/js/fpp.js	SingleStepSequence	7623	10	10	test	web/tests/sequence-step-method.spec.ts	2026-11-13: FAULT step is GET-only, missed by 77efc7561 (FUTURE.md); togglePause control
 www/js/fpp.js	SetSetting	7690	10	67	todo		auto: not examined yet
 www/js/fpp.js	SetPluginSetting	7787	16	47	todo		auto: not examined yet
 www/js/fpp.js	ReloadSettingOptions	7849	34	34	skip		dead: only a setting with reloadOther calls it, and no setting in settings.json declares one
