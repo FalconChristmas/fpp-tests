@@ -886,7 +886,7 @@ www/js/fpp-filemanager.js	LoadSequenceFPS	495	6	42	todo		auto: not examined yet
 www/js/fpp-filemanager.js	FileManagerHideEmptyTabsToggled	686	5	5	todo		auto: not examined yet
 www/js/fpp-filemanager.js	RemoveFileManagerRow	706	25	80	todo		auto: not examined yet
 www/js/fpp-filemanager.js	GetVideoInfo	830	6	23	todo		auto: not examined yet
-www/js/fpp-filemanager.js	ButtonHandler	854	99	246	todo		auto: not examined yet
+www/js/fpp-filemanager.js	ButtonHandler	854	99	246	test	web/tests/filemanager-play-and-view.spec.ts	Play/Play Here (real fppd) and View added 2026-11-13; still unreached: the 'multiple files' DialogErrors, which the page cannot reach (single-file buttons are disabled with 2+ selected), and the crash-report Upload
 www/js/fpp-filemanager.js	ClearSelections	1129	5	5	todo		auto: not examined yet
 www/js/fpp-filemanager.js	pageSpecific_PageLoad_PostDOMLoad_ActionsSetup	1160	10	111	todo		auto: not examined yet
 www/js/fpp-filemanager.js	BuildRows	1366	5	95	todo		auto: not examined yet
