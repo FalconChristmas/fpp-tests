@@ -264,12 +264,36 @@ def test_the_root_rsync_keeps_the_php_sessions(tmp_path):
     write(str(image / "var" / "new"), "image\n")
     write(str(root / "var" / "lib" / "php" / "sessions" / "sess_fpptests"), "login|b:1;\n")
     write(str(root / "var" / "stale"), "gone\n")
-    cmd = line.replace(" /mnt ", f" {root} ").replace("${SKIPFPP}", "").replace("-aAXxv", "-av")
+    cmd = line.replace(" /mnt ", f" {root} ").replace("${SKIPFPP}", "").replace("-aAXxv", "-av") \
+        .replace("/tmp/rsync-", f"{tmp_path}/rsync-")
     bash(f"cd {image} && {cmd}", image)
     assert (root / "var" / "new").exists(), "the rsync copied nothing"
     assert not (root / "var" / "stale").exists(), "the rsync deleted nothing (the control)"
     assert (root / "var" / "lib" / "php" / "sessions" / "sess_fpptests").read_text() == "login|b:1;\n"
 
+
+def test_the_root_rsync_keeps_a_pending_root_resize(tmp_path):
+    """part2's root rsync leaves the running system's fpp-expand-rootfs.service
+    link alone, though the image has none: a box whose root partition was
+    grown but not yet resized still gets its resize2fs on the next boot.
+
+    Regression: 96395cb55."""
+    line = root_rsync()
+    assert line, "no root rsync in upgradeOS-part2.sh"
+    link = "etc/systemd/system/sysinit.target.wants/fpp-expand-rootfs.service"
+    image, root = tmp_path / "image", tmp_path / "root"
+    for d in ("bin", "lib", "opt", "root", "sbin", "usr", "var"):
+        (image / d).mkdir(parents=True)
+    write(str(image / "etc" / "new"), "image\n")
+    write(str(root / "etc" / "stale"), "gone\n")
+    (root / link).parent.mkdir(parents=True)
+    os.symlink("/opt/fpp/etc/systemd/fpp-expand-rootfs.service", root / link)
+    cmd = line.replace(" /mnt ", f" {root} ").replace("${SKIPFPP}", "").replace("-aAXxv", "-av") \
+        .replace("/tmp/rsync-", f"{tmp_path}/rsync-")
+    bash(f"cd {image} && {cmd}", image)
+    assert (root / "etc" / "new").exists(), "the rsync copied nothing"
+    assert not (root / "etc" / "stale").exists(), "the rsync deleted nothing (the control)"
+    assert os.path.lexists(root / link), "the pending root resize was dropped"
 
 def part1():
     with open(os.path.join(TREE, "SD", "upgradeOS-part1.sh")) as f:

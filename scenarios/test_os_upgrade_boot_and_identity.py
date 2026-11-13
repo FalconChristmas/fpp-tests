@@ -204,3 +204,95 @@ def test_a_beagle_upgrade_without_the_keys_says_so(tmp_path):
     Regression: 949ff22e0 (the warning is new there)."""
     mnt, out = upgrade_identity(tmp_path, device_keys=(), image_keys=())
     assert "SSH host keys were not restored" in out, out
+
+
+def test_the_boot_sync_leaves_the_images_expand_marker_behind(tmp_path, rsync):
+    """Neither boot sync copies the image's fpp_expand_rootfs, the marker
+    that has a new card grow its root partition on first boot.
+
+    Regression: 96395cb55. The marker came through on every upgrade, and
+    the next boot rewrote the card's partition table (and took any space
+    left free on purpose)."""
+    _, (pi, bbb) = boot_sync_commands()
+    got, line = sync_boot(tmp_path / "pi", pi, {
+        "firmware/kernel8.img": ("new kernel", "old kernel"),
+        "firmware/fpp_expand_rootfs": ("", None),
+    })
+    assert got["firmware/kernel8.img"] == "new kernel", f"{got}\n{line}"
+    assert got["firmware/fpp_expand_rootfs"] is None, f"the Pi/BB64 sync copied the expand marker:\n{line}"
+    got, line = sync_boot(tmp_path / "bbb", bbb, {
+        "uEnv.txt": ("new uEnv\n", "old uEnv\n"),
+        "fpp_expand_rootfs": ("", None),
+    })
+    assert got["uEnv.txt"] == "new uEnv\n", f"{got}\n{line}"
+    assert got["fpp_expand_rootfs"] is None, f"the Beagle sync copied the expand marker:\n{line}"
+
+
+def test_a_beagle_downgrade_to_an_image_without_a_fat_leaves_the_fat_alone(tmp_path, rsync):
+    """The BeagleBone Black's boot sync from an image with no /boot/firmware
+    (9.x) leaves the running system's FAT at /boot/firmware as it is,
+    while /boot itself is synced.
+
+    Regression: 96395cb55. Since b192176ca dropped -x, such a downgrade
+    deleted everything on the box's FAT the image lacked."""
+    keep, (_, bbb) = boot_sync_commands()
+    src = part2()
+    # The guard ahead of the Beagle rsync, where the tree has one.
+    guard = src[src.find("BBB_KEEP=()"):src.find(bbb)] if "BBB_KEEP=()" in src else ""
+    image, root = tmp_path / "image" / "boot", tmp_path / "root" / "boot"
+    write(str(image / "uEnv.txt"), "9.x uEnv\n")
+    write(str(tmp_path / "seed" / "uEnv.txt"), "10.x uEnv\n")
+    write(str(tmp_path / "seed" / "firmware" / "ID.txt"), "10.x id\n")
+    (root / "firmware").mkdir(parents=True)
+    script = (f"set -e\nmount -t tmpfs tmpfs {root}/firmware\n"
+              f"cp -a {tmp_path}/seed/. {root}/\n{keep}\n"
+              + guard.replace("/boot/firmware", f"{image}/firmware")
+              # rc 23 is expected: rsync cannot remove the FAT's mount point itself.
+              + bbb.replace("/boot/ /mnt/boot/", f"{image}/ {root}/").replace("/tmp/rsync-", f"{tmp_path}/rsync-")
+              + f" || :\ncat {root}/uEnv.txt; cat {root}/firmware/ID.txt || :\n")
+    r = subprocess.run(["unshare", "--mount", "--propagation", "private", "bash", "-c", script],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, f"{r.stdout[-2000:]}{r.stderr[-2000:]}"
+    assert "9.x uEnv" in r.stdout, f"the control: /boot was synced\n{r.stdout}{r.stderr}"
+    assert "10.x id" in r.stdout, f"the box's FAT was emptied:\n{r.stdout}{r.stderr}"
+
+
+SSH_LINK = "etc/systemd/system/multi-user.target.wants/ssh.service"
+SSH_UNIT_FILE = "/usr/lib/systemd/system/ssh.service"
+
+
+def upgrade_ssh(tmp_path, enabled):
+    """part2's save, a stand-in for the root rsync from a Pi image (which
+    does not enable sshd: a new card does that from the boot partition's
+    flag) and part2's restore, on a running system with ssh enabled or not.
+    Returns (mnt, output)."""
+    mnt = tmp_path / "mnt"
+    write(str(mnt / "etc/ssh/ssh_host_ed25519_key"), "key")
+    write(str(mnt / SSH_UNIT_FILE.lstrip("/")), "[Unit]\n")
+    if enabled:
+        (mnt / SSH_LINK).parent.mkdir(parents=True)
+        os.symlink(SSH_UNIT_FILE, mnt / SSH_LINK)
+    (tmp_path / "tmp").mkdir()
+    save = between("# temporarily copy the ssh keys", "# --- Reconcile")
+    rsync = "rm -rf mnt/etc && mkdir -p mnt/etc/ssh mnt/etc/systemd/system/multi-user.target.wants\n"
+    restore = between("#restore the ssh keys", "#create a file in root")
+    r = subprocess.run(["bash", "-c", save + "\n" + rsync + restore], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=60)
+    assert "syntax error" not in r.stderr, r.stderr
+    return mnt, r.stdout + r.stderr
+
+
+def test_an_upgrade_keeps_ssh_enabled(tmp_path):
+    """A system with sshd enabled has it enabled after the upgrade too
+    (and its sshd.service alias), without waiting on the first boot.
+
+    Regression: abc1bc5f9. The root rsync deleted the enable link, and ssh
+    came back only if the image's first-boot sshswitch step completed."""
+    mnt, out = upgrade_ssh(tmp_path, enabled=True)
+    assert os.readlink(mnt / SSH_LINK) == SSH_UNIT_FILE, f"ssh is no longer enabled:\n{out}"
+    assert os.readlink(mnt / "etc/systemd/system/sshd.service") == SSH_UNIT_FILE, out
+
+
+def test_an_upgrade_leaves_ssh_disabled_when_it_was(tmp_path):
+    mnt, out = upgrade_ssh(tmp_path, enabled=False)
+    assert not os.path.lexists(mnt / SSH_LINK), f"ssh was enabled on a system that had it off:\n{out}"
