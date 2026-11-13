@@ -863,7 +863,7 @@ www/help/virtualdisplaywrapper.php	(top level)	0	2	2	todo		auto: not examined ye
 www/help/virtualdisplaywrapper3d.php	(top level)	0	2	2	todo		auto: not examined yet
 www/index.php	(inline script)	0	90	774	todo		auto: not examined yet
 www/index.php	(top level)	0	4	52	todo		auto: not examined yet
-www/initialSetup.php	(inline script)	0	176	841	todo		auto: not examined yet
+www/initialSetup.php	(inline script)	0	176	841	test	web/tests/initial-setup-step-checks-and-save-failure.spec.ts	partly done 2026-11-13 (15 older initial-setup-*.spec.ts; stale count): per-step refusals (privacy rules, lat/lon, host name, UI password choice and mismatch), Back keeps values, a failed setting save stops Finish before initialSetup-02 and the UI password (initial-setup-step-checks-and-save-failure.spec.ts, no fault). Left: restore drag-drop and upload errors (311-384), USB/remote restore refusals (439-464), SSH keys save
 www/initialSetup.php	(top level)	0	20	154	todo		auto: not examined yet
 www/installKiosk.php	(top level)	0	14	14	todo		auto: not examined yet
 www/jqupload.php	(top level)	0	8	23	todo		auto: not examined yet
@@ -1290,7 +1290,7 @@ www/privacyTable.inc	(top level)	0	1	3	todo		auto: not examined yet
 www/proxies.php	(inline script)	0	21	278	todo		auto: not examined yet
 www/rebootRemoteFPP.php	(top level)	0	28	36	test	web/tests/multisync-remote-reboot-helper.spec.ts	the reboot request, the 20 second wait and the status polls until the remote answers; a refused reboot reported as done is a test.fail() (FUTURE.md); left: the 180 second timeout message (too slow to wait for)
 www/rebuildfpp.php	(top level)	0	5	51	todo		auto: not examined yet
-www/recurringtasks.php	(inline script)	0	103	406	todo		auto: not examined yet
+www/recurringtasks.php	(inline script)	0	103	406	test	web/tests/recurring-tasks-page.spec.ts	save, refusals, unreadable file guard and reload failure are tested (recurring-tasks-page.spec.ts, recurring-tasks-presets.spec.ts). Left: Test Run popup and the result Variable viewer (241-388), low value
 www/resetConfig.php	(top level)	0	2	99	todo		auto: not examined yet
 www/restartRemoteFPPD.php	(top level)	0	5	46	todo		auto: not examined yet
 www/runEventScript.php	(top level)	0	1	32	todo		auto: not examined yet
