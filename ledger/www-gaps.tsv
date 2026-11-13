@@ -1,11 +1,11 @@
 file	function	line	unreached	lines	status	test	note
 scripts/apply_pipewire_simple_config	(top level)	0	8	44	todo		auto: not examined yet
-scripts/genXlightsModelGroups.php	(top level)	0	133	133	todo		auto: not examined yet
+scripts/genXlightsModelGroups.php	(top level)	0	133	133	skip		dev bridge tool run by hand (docs/PixelOverlaySubModels.md): no UI, API or script calls it
 scripts/genXlightsModelGroups.php	configDir	25	6	6	todo		auto: not examined yet
 scripts/genXlightsModelGroups.php	normName	51	1	1	todo		auto: not examined yet
 scripts/genXlightsModelGroups.php	sanitizeName	55	1	1	todo		auto: not examined yet
 scripts/genXlightsModelGroups.php	resolveMember	133	23	23	todo		auto: not examined yet
-scripts/genXlightsSubmodels.php	(top level)	0	103	103	todo		auto: not examined yet
+scripts/genXlightsSubmodels.php	(top level)	0	103	103	skip		dev bridge tool run by hand: no UI, API or script calls it
 scripts/genXlightsSubmodels.php	configDir	22	6	6	todo		auto: not examined yet
 scripts/genXlightsSubmodels.php	normName	51	1	1	todo		auto: not examined yet
 scripts/genXlightsSubmodels.php	sanitizeName	59	1	1	todo		auto: not examined yet
@@ -146,7 +146,7 @@ www/api/controllers/files.php	emulated_fseek_for_big_files	1472	14	14	test	web/t
 www/api/controllers/files.php	PatchFile	1520	9	39	todo		auto: not examined yet
 www/api/controllers/files.php	PatchFileReceiveChunk	1592	8	24	todo		auto: not examined yet
 www/api/controllers/files.php	PatchFileAddChunk	1640	5	29	todo		auto: not examined yet
-www/api/controllers/files.php	PatchFileAssemble	1702	13	46	todo		auto: not examined yet
+www/api/controllers/files.php	PatchFileAssemble	1702	13	46	test	web/tests/chunked-upload-locked-file.spec.ts	locked non-sequence target refused and untouched, retry after the lock assembles (chunked-upload-locked-file.spec.ts); the .replace path is fseq-upload-while-playing.spec.ts. Left: read/write/disk-full errors (cannot be staged as root)
 www/api/controllers/files.php	PostFile	1788	7	36	test	web/tests/file-upload-blocks.spec.ts	blocks by sb/bs in any order, whole-file replace; 5 test.fail (unchecked sb/bs, locked file emptied before the lock)
 www/api/controllers/files.php	GetFileInfo	1853	4	16	todo		auto: not examined yet
 www/api/controllers/files.php	CreateDir	1895	2	17	todo		auto: not examined yet
