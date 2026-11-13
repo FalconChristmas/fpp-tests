@@ -9,7 +9,8 @@ import { standInCommand } from './pw-helpers';
 // FAT and exFAT have no owners on disk, so they are mounted as the fpp user,
 // BTRFS compressed, and only those that have a check are checked -- or, for
 // the root device or --none--, commented out so the media stays on the root
-// filesystem.  Get it wrong and the player comes up without its show.
+// filesystem.  A name that sanitizes to nothing is refused rather than written
+// as /dev/.  Get it wrong and the player comes up without its show.
 // lsblk (the root device) and file (the filesystem) are stand-ins; /etc/fstab
 // is the container's own, put back after.
 
@@ -68,6 +69,14 @@ test('the root device, or --none--, comments the media mount out', async ({ requ
 test('a device name is cut to letters and digits before it reaches a command', async ({ request }) => {
   filesystem('Linux rev 1.0 ext4 filesystem data');
   expect(await choose(request, "sd'b1;/x")).toBe(line('sdb1x', 'defaults,noatime,nodiratime,nofail', '2'));
+});
+
+// Regression: a value that sanitized to nothing used to be rewritten into the
+// media line as /dev/, which the kernel cannot mount.  It now leaves the line
+// alone.
+test('a device name that sanitizes to nothing leaves the media line alone', async ({ request }) => {
+  filesystem('Linux rev 1.0 ext4 filesystem data');
+  expect(await choose(request, '!!!')).toBe(MEDIA_LINE.trim());
 });
 
 // The root device is compared by name, not matched as a pattern: with the
