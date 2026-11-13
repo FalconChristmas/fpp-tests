@@ -893,7 +893,7 @@ www/js/fpp-filemanager.js	RunScript	1612	1	32	todo		auto: not examined yet
 www/js/fpp-filemanager.js	EditScript	1647	1	37	todo		auto: not examined yet
 www/js/fpp-filemanager.js	SaveScript	1687	1	17	todo		auto: not examined yet
 www/js/fpp-filemanager.js	SaveConfigFile	1756	6	27	todo		auto: not examined yet
-www/js/fpp-privacy-lights.js	isPublicIp6	250	6	16	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	isPublicIp6	250	6	16	test	web/tests/plugin-privacy-lights-rules.spec.ts	2026-11-13: colour table per light, undeclared/no block, escaping; FAULT .sh/.py hosts not internet (FUTURE.md)
 www/js/fpp-privacy-lights.js	lineHtml	762	9	12	todo		auto: not examined yet
 www/js/fpp-privacy-lights.js	headlineFor	782	1	37	todo		auto: not examined yet
 www/js/fpp-privacy-lights.js	stateDotHtml	948	1	6	todo		auto: not examined yet
@@ -902,9 +902,9 @@ www/js/fpp-privacy-lights.js	stripHtml	998	16	73	todo		auto: not examined yet
 www/js/fpp-privacy-lights.js	lightChanges	1094	24	24	todo		auto: not examined yet
 www/js/fpp-privacy-lights.js	changeLineHtml	1127	9	9	todo		auto: not examined yet
 www/js/fpp-privacy-lights.js	changesSummaryHtml	1142	24	24	todo		auto: not examined yet
-www/js/fpp-privacy-lights.js	headlineHtml	1174	16	16	todo		auto: not examined yet
-www/js/fpp-privacy-lights.js	summaryHtml	1193	1	4	todo		auto: not examined yet
-www/js/fpp-privacy-lights.js	detailsHtml	1204	6	21	todo		auto: not examined yet
+www/js/fpp-privacy-lights.js	headlineHtml	1174	16	16	test	web/tests/plugin-privacy-lights-rules.spec.ts	2026-11-13: colour table per light, undeclared/no block, escaping; FAULT .sh/.py hosts not internet (FUTURE.md)
+www/js/fpp-privacy-lights.js	summaryHtml	1193	1	4	test	web/tests/plugin-privacy-lights-rules.spec.ts	2026-11-13: colour table per light, undeclared/no block, escaping; FAULT .sh/.py hosts not internet (FUTURE.md)
+www/js/fpp-privacy-lights.js	detailsHtml	1204	6	21	test	web/tests/plugin-privacy-lights-rules.spec.ts	2026-11-13: colour table per light, undeclared/no block, escaping; FAULT .sh/.py hosts not internet (FUTURE.md)
 www/js/fpp-privacy-lights.js	bind	1228	6	22	todo		auto: not examined yet
 www/js/fpp-privacy-table.js	(top level)	0	9	130	todo		auto: not examined yet
 www/js/fpp-update.js	UpdateActivityBusySide	76	0	9	covered		auto: every line reached
