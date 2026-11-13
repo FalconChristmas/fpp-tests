@@ -1026,8 +1026,8 @@ www/js/fpp.js	validateEmail	6042	5	5	todo		auto: not examined yet
 www/js/fpp.js	validateUniverseData	6048	10	56	todo		auto: not examined yet
 www/js/fpp.js	validateNumber	6143	9	17	todo		auto: not examined yet
 www/js/fpp.js	StartNextScheduledItemNow	6161	3	11	todo		auto: not examined yet
-www/js/fpp.js	ExtendSchedule	6173	1	10	todo		auto: not examined yet
-www/js/fpp.js	ExtendSchedulePopup	6184	24	24	todo		auto: not examined yet
+www/js/fpp.js	ExtendSchedule	6173	1	10	test	web/tests/extend-schedule-popup.spec.ts	via ExtendSchedulePopup
+www/js/fpp.js	ExtendSchedulePopup	6184	24	24	test	web/tests/extend-schedule-popup.spec.ts	2026-11-13: seconds sent, range refusals, cancel; FAULT non-number sent as [null] (FUTURE.md)
 www/js/fpp.js	GetPlaylistArray	6213	2	19	todo		auto: not examined yet
 www/js/fpp.js	GetSequenceArray	6234	5	16	todo		auto: not examined yet
 www/js/fpp.js	GetMediaArray	6252	13	13	todo		auto: not examined yet
