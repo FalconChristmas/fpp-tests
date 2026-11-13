@@ -92,7 +92,7 @@ www/api/controllers/cape.php	SignEEPROMHelper	493	6	24	test	cape-signing-eeprom-
 www/api/controllers/cape.php	SignEEPROM	565	0	21	test	cape-signing-online.spec.ts	online sign success, refusal, 502/unreachable, unreadable EEPROM; empty-reply wipe test.fail
 www/api/controllers/cape.php	PostSigningData	628	0	3	covered		auto: every line reached
 www/api/controllers/cape.php	RedeemVoucher	674	4	38	todo		auto: not examined yet
-www/api/controllers/cape.php	RecordCapeLicenseCheck	866	2	3	todo		auto: not examined yet
+www/api/controllers/cape.php	RecordCapeLicenseCheck	866	2	3	test	web/tests/cape-license-check-notice.spec.ts	2026-11-13: notice URL/params, 7-day quiet, 24h retry, logo fallback, non-http/no marker, 404 without marker; FAULT stale lastSuccess on new cape / failed weekly (FUTURE.md)
 www/api/controllers/channel.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/channel.php	channel_input_get_stats	27	2	9	todo		auto: not examined yet
 www/api/controllers/channel.php	channel_input_delete_stats	55	11	11	test	web/tests/api-effects-all-and-input-stats.spec.ts	passed to fppd; the stats still read
@@ -552,13 +552,13 @@ www/backup.php	setMinimumBackupCount	2655	0	0	gone		auto: no longer in the tree
 www/backup.php	is_array_empty	2658	4	6	todo		auto: not examined yet
 www/cape-info.php	(inline script)	0	145	665	test	web/tests/cape-firmware-restore-and-force.spec.ts	partly done 2026-11-13 (25+ older cape-*.spec.ts cover voucher/signing; stale count): backup list and Restore, Reset-to-defaults flag, cape/firmware mismatch confirm then force (restore and vendor upgrade), declined mismatch, Upgrade with nothing chosen (cape-firmware-restore-and-force.spec.ts, no fault). Note: .html('') does not clear the textarea, so a forced flash's log starts with the refused attempt's text (cosmetic). Left: offline signing file/packet upload (859-1051)
 www/cape-info.php	(top level)	0	43	273	todo		auto: not examined yet
-www/capeLicense.inc	(top level)	0	1	4	todo		auto: not examined yet
-www/capeLicense.inc	capeLicenseStateFile	31	1	1	todo		auto: not examined yet
-www/capeLicense.inc	capeLicenseReadState	37	6	6	todo		auto: not examined yet
-www/capeLicense.inc	capeLicenseIdentity	54	5	5	todo		auto: not examined yet
-www/capeLicense.inc	capeLicenseNotifyURL	74	17	17	todo		auto: not examined yet
-www/capeLicense.inc	capeLicenseDueURL	109	9	11	todo		auto: not examined yet
-www/capeLicense.inc	capeLicenseRecord	133	8	8	todo		auto: not examined yet
+www/capeLicense.inc	(top level)	0	1	4	test	web/tests/cape-license-check-notice.spec.ts	2026-11-13: notice URL/params, 7-day quiet, 24h retry, logo fallback, non-http/no marker, 404 without marker; FAULT stale lastSuccess on new cape / failed weekly (FUTURE.md)
+www/capeLicense.inc	capeLicenseStateFile	31	1	1	test	web/tests/cape-license-check-notice.spec.ts	2026-11-13: notice URL/params, 7-day quiet, 24h retry, logo fallback, non-http/no marker, 404 without marker; FAULT stale lastSuccess on new cape / failed weekly (FUTURE.md)
+www/capeLicense.inc	capeLicenseReadState	37	6	6	test	web/tests/cape-license-check-notice.spec.ts	2026-11-13: notice URL/params, 7-day quiet, 24h retry, logo fallback, non-http/no marker, 404 without marker; FAULT stale lastSuccess on new cape / failed weekly (FUTURE.md)
+www/capeLicense.inc	capeLicenseIdentity	54	5	5	test	web/tests/cape-license-check-notice.spec.ts	2026-11-13: notice URL/params, 7-day quiet, 24h retry, logo fallback, non-http/no marker, 404 without marker; FAULT stale lastSuccess on new cape / failed weekly (FUTURE.md)
+www/capeLicense.inc	capeLicenseNotifyURL	74	17	17	test	web/tests/cape-license-check-notice.spec.ts	2026-11-13: notice URL/params, 7-day quiet, 24h retry, logo fallback, non-http/no marker, 404 without marker; FAULT stale lastSuccess on new cape / failed weekly (FUTURE.md)
+www/capeLicense.inc	capeLicenseDueURL	109	9	11	test	web/tests/cape-license-check-notice.spec.ts	2026-11-13: notice URL/params, 7-day quiet, 24h retry, logo fallback, non-http/no marker, 404 without marker; FAULT stale lastSuccess on new cape / failed weekly (FUTURE.md)
+www/capeLicense.inc	capeLicenseRecord	133	8	8	test	web/tests/cape-license-check-notice.spec.ts	2026-11-13: notice URL/params, 7-day quiet, 24h retry, logo fallback, non-http/no marker, 404 without marker; FAULT stale lastSuccess on new cape / failed weekly (FUTURE.md)
 www/changebranch.php	(inline script)	0	2	19	todo		auto: not examined yet
 www/changebranch.php	(top level)	0	5	132	test	changebranch-pr-and-fork.spec.ts	PR fetch, config-migration warning and ackcfg, PR number checks, fork remote add/set-url/fetch
 www/changebranch.php	PendingConfigMigrations	128	1	29	test	web/tests/changebranch-pr-and-fork.spec.ts	pending migrations listed with their descriptions, none pending, no config version; left: ls-tree failing
