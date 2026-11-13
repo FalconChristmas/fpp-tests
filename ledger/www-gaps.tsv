@@ -56,9 +56,9 @@ scripts/upgradeCapeFirmware	find_eeprom_offsets	25	14	17	todo		auto: not examine
 scripts/upgradeCapeFirmware	mintCapeSerial	70	1	1	todo		auto: not examined yet
 scripts/upgradeCapeFirmware	blankCapeChecksum	79	17	17	todo		auto: not examined yet
 www/CSP_regeneration_script.php	(top level)	0	1	7	todo		auto: not examined yet
-www/about.php	(inline script)	0	122	993	test	web/tests/git-origin-log-escaped.spec.ts	partly done 2026-11-13: pending Git changes dialog (buildGitLogTableHtml, GetGitOriginLog) (git-origin-log-escaped.spec.ts); test.fail author/msg written as HTML (FUTURE.md). Left: OS image download (1314-1331), release notes fallbacks (1340-1432), in-progress refusals (1056, 1091, 1253)
+www/about.php	(inline script)	0	122	995	test	web/tests/git-origin-log-escaped.spec.ts	partly done 2026-11-13: pending Git changes dialog (buildGitLogTableHtml, GetGitOriginLog) (git-origin-log-escaped.spec.ts); test.fail author/msg written as HTML (FUTURE.md). Left: OS image download (1314-1331), release notes fallbacks (1340-1432), in-progress refusals (1056, 1091, 1253)
 www/about.php	(top level)	0	10	93	todo		auto: not examined yet
-www/aes67-config.php	(inline script)	0	298	622	test	web/tests/aes67-page-edit.spec.ts	2026-11-13: Add, every stream field, PTP enable/interface/domain/role and fallbacks, channels vs ptime, delete with confirm (last one too), Save & Apply and refused save / failed apply / restart dialogs, idle notice both wordings, status line and PTP detail, SDP dialog (stale fields, disabled, download bytes, not applied) (aes67-page-edit.spec.ts); test.fail failed load then Save wipes the instances, non-ASCII badge slug, two names on one node (FUTURE.md)
+www/aes67-config.php	(inline script)	0	296	622	test	web/tests/aes67-page-edit.spec.ts	2026-11-13: Add, every stream field, PTP enable/interface/domain/role and fallbacks, channels vs ptime, delete with confirm (last one too), Save & Apply and refused save / failed apply / restart dialogs, idle notice both wordings, status line and PTP detail, SDP dialog (stale fields, disabled, download bytes, not applied) (aes67-page-edit.spec.ts); test.fail failed load then Save wipes the instances, non-ASCII badge slug, two names on one node (FUTURE.md)
 www/api/api.html	(inline script)	0	1	20	todo		auto: not examined yet
 www/api/api.php	(top level)	0	2	15	todo		auto: not examined yet
 www/api/commandhelp.php	(top level)	0	8	19	todo		auto: not examined yet
@@ -74,35 +74,35 @@ www/api/controllers/backups.php	GetAvailableBackupsOnDevice	163	1	9	todo		auto: 
 www/api/controllers/backups.php	DriveMountHelper	202	10	75	todo		auto: not examined yet
 www/api/controllers/backups.php	MountDevice	369	6	29	todo		auto: not examined yet
 www/api/controllers/backups.php	UnmountDevice	443	7	34	todo		auto: not examined yet
-www/api/controllers/backups.php	process_jsonbackup_file_data_helper	582	0	81	covered		auto: every line reached
+www/api/controllers/backups.php	process_jsonbackup_file_data_helper	582	1	81	todo		auto: not examined yet
 www/api/controllers/backups.php	MakeJSONBackup	766	3	23	todo		auto: not examined yet
 www/api/controllers/backups.php	GetAvailableJSONBackupsOnDevice	855	9	9	todo		auto: not examined yet
-www/api/controllers/backups.php	RestoreJsonBackup	903	17	39	test	web/tests/backup-api-drive-download-restore.spec.ts	from the backup drive, with no drive chosen, a missing or undecodable file, an unknown area and directory; left: an empty body restoring every area
-www/api/controllers/backups.php	DownloadJsonBackup	1026	18	41	test	web/tests/backup-api-drive-download-restore.spec.ts	from the backup drive with its attachment header, not found on the drive and with no drive chosen; left: a backup whose out-of-line blobs cannot be rebuilt
+www/api/controllers/backups.php	RestoreJsonBackup	903	6	39	test	web/tests/backup-api-drive-download-restore.spec.ts	from the backup drive, with no drive chosen, a missing or undecodable file, an unknown area and directory; left: an empty body restoring every area
+www/api/controllers/backups.php	DownloadJsonBackup	1026	5	41	test	web/tests/backup-api-drive-download-restore.spec.ts	from the backup drive with its attachment header, not found on the drive and with no drive chosen; left: a backup whose out-of-line blobs cannot be rebuilt
 www/api/controllers/backups.php	DeleteJsonBackup	1123	2	32	todo		auto: not examined yet
 www/api/controllers/backups.php	MountReturnCodeMap	1214	7	17	todo		auto: not examined yet
-www/api/controllers/cape.php	(top level)	0	16	54	todo		auto: not examined yet
+www/api/controllers/cape.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/cape.php	GetCapeDefaultSettings	84	4	28	test	web/tests/cape-signing-data-refusals.spec.ts	invalid regime 400
 www/api/controllers/cape.php	GetEEPROMVendorLists	166	1	56	todo		auto: not examined yet
 www/api/controllers/cape.php	GetCapeOptions	260	2	12	todo		auto: not examined yet
 www/api/controllers/cape.php	GetEEPROMFilename	292	1	15	todo		auto: not examined yet
 www/api/controllers/cape.php	GetSigningDataHelper	333	16	64	test	web/tests/cape-signing-data-refusals.spec.ts	invalid key and order refused on signingData and signingFile
 www/api/controllers/cape.php	GetSigningFile	470	6	6	test	web/tests/cape-signing-data-refusals.spec.ts	refusals carry no download header
-www/api/controllers/cape.php	SignEEPROMHelper	493	6	24	test	cape-signing-eeprom-data.spec.ts cape-signing-online.spec.ts	write back, backup, detect_cape; empty eeprom wipe test.fail
-www/api/controllers/cape.php	SignEEPROM	565	0	21	test	cape-signing-online.spec.ts	online sign success, refusal, 502/unreachable, unreadable EEPROM; empty-reply wipe test.fail
-www/api/controllers/cape.php	PostSigningData	628	0	3	covered		auto: every line reached
-www/api/controllers/cape.php	RedeemVoucher	674	4	38	todo		auto: not examined yet
-www/api/controllers/cape.php	RecordCapeLicenseCheck	866	2	3	test	web/tests/cape-license-check-notice.spec.ts	2026-11-13: notice URL/params, 7-day quiet, 24h retry, logo fallback, non-http/no marker, 404 without marker; FAULT stale lastSuccess on new cape / failed weekly (FUTURE.md)
+www/api/controllers/cape.php	SignEEPROMHelper	493	6	23	test	cape-signing-eeprom-data.spec.ts cape-signing-online.spec.ts	write back, backup, detect_cape; empty eeprom wipe test.fail
+www/api/controllers/cape.php	SignEEPROM	547	0	30	test	cape-signing-online.spec.ts	online sign success, refusal, 502/unreachable, unreadable EEPROM; empty-reply wipe test.fail
+www/api/controllers/cape.php	PostSigningData	610	6	15	todo		auto: not examined yet
+www/api/controllers/cape.php	RedeemVoucher	656	4	45	todo		auto: not examined yet
+www/api/controllers/cape.php	RecordCapeLicenseCheck	848	11	11	test	web/tests/cape-license-check-notice.spec.ts	2026-11-13: notice URL/params, 7-day quiet, 24h retry, logo fallback, non-http/no marker, 404 without marker; FAULT stale lastSuccess on new cape / failed weekly (FUTURE.md)
 www/api/controllers/channel.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/channel.php	channel_input_get_stats	27	2	9	todo		auto: not examined yet
 www/api/controllers/channel.php	channel_input_delete_stats	55	11	11	test	web/tests/api-effects-all-and-input-stats.spec.ts	passed to fppd; the stats still read
 www/api/controllers/channel.php	channel_get_output	214	2	32	todo		auto: not examined yet
 www/api/controllers/configfile.php	(top level)	0	1	2	todo		auto: not examined yet
-www/api/controllers/configfile.php	ConfigFileWithinBase	7	11	20	test	web/tests/configfile-delete-and-nested.spec.ts	folders made by an upload, and refused when an existing ancestor is a link out of the config directory
-www/api/controllers/configfile.php	GetConfigFileList	86	1	10	todo		auto: not examined yet
-www/api/controllers/configfile.php	DownloadConfigFile	119	2	10	todo		auto: not examined yet
+www/api/controllers/configfile.php	ConfigFileWithinBase	7	0	20	test	web/tests/configfile-delete-and-nested.spec.ts	folders made by an upload, and refused when an existing ancestor is a link out of the config directory
+www/api/controllers/configfile.php	GetConfigFileList	86	0	10	covered		auto: every line reached
+www/api/controllers/configfile.php	DownloadConfigFile	119	0	10	covered		auto: every line reached
 www/api/controllers/configfile.php	UploadConfigFile	166	4	27	todo		auto: not examined yet
-www/api/controllers/configfile.php	DeleteConfigFile	236	10	14	test	web/tests/configfile-delete-and-nested.spec.ts	deleted, not a regular file (gone, never there, a folder), refused through a link and for .htpasswd; left: unlink failing (the container's PHP is root)
+www/api/controllers/configfile.php	DeleteConfigFile	236	2	14	test	web/tests/configfile-delete-and-nested.spec.ts	deleted, not a regular file (gone, never there, a folder), refused through a link and for .htpasswd; left: unlink failing (the container's PHP is root)
 www/api/controllers/crashes.php	(top level)	0	1	6	todo		auto: not examined yet
 www/api/controllers/crashes.php	CrashReportPath	58	4	21	test	web/tests/crash-report-names.spec.ts	bad names, path cut to basename, not-found, symlink out of the folder
 www/api/controllers/crashes.php	PostCrashUpload	187	8	36	test	web/tests/crash-report-names.spec.ts	refusals only (consent, names); a passing request uploads to the internet, so not tested
@@ -153,13 +153,13 @@ www/api/controllers/files.php	CreateDir	1895	2	17	todo		auto: not examined yet
 www/api/controllers/files.php	DeleteDir	1937	3	16	todo		auto: not examined yet
 www/api/controllers/files.php	TailFollowFile	1990	18	85	test	web/tests/tail-follow-refusals.spec.ts	link out of the folder, folder, missing, var/log prefix, line counts that are not counts; a tail that will not start cannot be staged
 www/api/controllers/geoip.php	(top level)	0	1	3	todo		auto: not examined yet
-www/api/controllers/geoip.php	GetGeoIP	51	8	30	test	web/tests/geoip-proxy.spec.ts	the 400s for a bad country or time zone, the 502, a supplied country with and without nolookup
-www/api/controllers/geoip.php	GeoIPLookup	161	3	17	test	web/tests/geoip-proxy.spec.ts	ipapi.co refusing in four ways, then ipwho.is; left: a timeout ending the chain (6 s of waiting for one line)
-www/api/controllers/geoip.php	GeoIPFromIpapi	193	1	3	test	web/tests/geoip-proxy.spec.ts	an error flag, no country and a non-JSON body are refusals
-www/api/controllers/geoip.php	GeoIPFromIpwhois	208	12	12	test	web/tests/geoip-proxy.spec.ts	ipwho.is's fields renamed to ipapi.co's; its refusals and a country-less answer are no answer
+www/api/controllers/geoip.php	GetGeoIP	51	0	30	test	web/tests/geoip-proxy.spec.ts	the 400s for a bad country or time zone, the 502, a supplied country with and without nolookup
+www/api/controllers/geoip.php	GeoIPLookup	161	2	17	test	web/tests/geoip-proxy.spec.ts	ipapi.co refusing in four ways, then ipwho.is; left: a timeout ending the chain (6 s of waiting for one line)
+www/api/controllers/geoip.php	GeoIPFromIpapi	193	0	3	test	web/tests/geoip-proxy.spec.ts	an error flag, no country and a non-JSON body are refusals
+www/api/controllers/geoip.php	GeoIPFromIpwhois	208	0	12	test	web/tests/geoip-proxy.spec.ts	ipwho.is's fields renamed to ipapi.co's; its refusals and a country-less answer are no answer
 www/api/controllers/geoip.php	GeoIPSuggestedSettings	250	1	15	todo		auto: not examined yet
-www/api/controllers/geoip.php	GeoIPSuggestedSettingsWithCoords	292	2	9	todo		auto: not examined yet
-www/api/controllers/geoip.php	TimeZoneCoordinates	326	16	18	test	web/tests/geoip-local-fallback-zone-aliases.spec.ts	2026-11-13: canonical zone placed; FAULT link names (Asia/Calcutta from Chromium) get no coordinates, and the Settings lookup saves TimeZone "null" (FUTURE.md)
+www/api/controllers/geoip.php	GeoIPSuggestedSettingsWithCoords	292	0	9	covered		auto: every line reached
+www/api/controllers/geoip.php	TimeZoneCoordinates	326	2	18	test	web/tests/geoip-local-fallback-zone-aliases.spec.ts	2026-11-13: canonical zone placed; FAULT link names (Asia/Calcutta from Chromium) get no coordinates, and the lookup sends TimeZone as null, so the setup wizard cannot finish (FUTURE.md)
 www/api/controllers/geoip.php	SettingOptions	362	2	7	todo		auto: not examined yet
 www/api/controllers/git.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/git.php	GitOSReleases	144	3	79	todo		auto: not examined yet
@@ -167,7 +167,7 @@ www/api/controllers/git.php	GitOSReleaseNotes	278	2	22	todo		auto: not examined 
 www/api/controllers/git.php	GitOSReleaseSizes	328	1	20	todo		auto: not examined yet
 www/api/controllers/git.php	GitHubForkBranchNames	372	4	37	todo		auto: not examined yet
 www/api/controllers/git.php	GitBranches	434	7	51	todo		auto: not examined yet
-www/api/controllers/git.php	GitForkBranches	553	64	118	test	web/tests/git-fork-branches-fallbacks.spec.ts	the three local-checkout fallbacks (GitHub out of reach, 404, branches refused), the hidden branches, a bad user name, a token with a carriage return; a line feed in the token cannot reach the guard (the settings file is line based)
+www/api/controllers/git.php	GitForkBranches	553	0	118	test	web/tests/git-fork-branches-fallbacks.spec.ts	the three local-checkout fallbacks (GitHub out of reach, 404, branches refused), the hidden branches, a bad user name, a token with a carriage return; a line feed in the token cannot reach the guard (the settings file is line based)
 www/api/controllers/git.php	GitPullRequests	762	6	59	todo		auto: not examined yet
 www/api/controllers/help.php	(top level)	0	1	2	skip		dead: help_help has no route
 www/api/controllers/help.php	help_help	12	41	41	skip		dead: no route calls it (/api/help is not in api/index.php; the endpoint list is api.html now)
@@ -291,29 +291,30 @@ www/api/controllers/pipewire_control.php	pwctl_load_input_groups	98	1	7	todo		au
 www/api/controllers/pipewire_control.php	pwctl_backend_mode	109	5	8	todo		auto: not examined yet
 www/api/controllers/pipewire_control.php	pwctl_live_sinks	133	2	27	todo		auto: not examined yet
 www/api/controllers/pipewire_control.php	pwctl_live_node_names	172	10	14	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	pwctl_clamp	192	2	6	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	pwctl_resolve_mute	210	2	5	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	pwctl_set_channelmix_volume	241	18	18	test	web/tests/pw-control-setters.spec.ts	no graph, and a running loopback (where it changes nothing: FUTURE.md)
-www/api/controllers/pipewire_control.php	pwctl_persist_input_groups	271	2	2	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	pwctl_not_pipewire_response	276	4	4	test	web/tests/pw-control-setters.spec.ts	the 409 from all six setters
+www/api/controllers/pipewire_control.php	pwctl_clamp	192	0	6	covered		auto: every line reached
+www/api/controllers/pipewire_control.php	pwctl_resolve_mute	210	0	5	covered		auto: every line reached
+www/api/controllers/pipewire_control.php	pwctl_set_channelmix_volume	241	1	18	test	web/tests/pw-control-setters.spec.ts	no graph, and a running loopback (where it changes nothing: FUTURE.md)
+www/api/controllers/pipewire_control.php	pwctl_persist_input_groups	271	0	2	covered		auto: every line reached
+www/api/controllers/pipewire_control.php	pwctl_not_pipewire_response	276	0	4	test	web/tests/pw-control-setters.spec.ts	the 409 from all six setters
 www/api/controllers/pipewire_control.php	PWCtl_GetStatus	299	2	26	todo		auto: not examined yet
 www/api/controllers/pipewire_control.php	PWCtl_GetGroups	400	6	6	todo		auto: not examined yet
 www/api/controllers/pipewire_control.php	PWCtl_GetGroup	424	2	7	todo		auto: not examined yet
 www/api/controllers/pipewire_control.php	PWCtl_SetGroupVolume	454	3	30	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	PWCtl_SetGroupMute	514	35	35	test	web/tests/pw-control-setters.spec.ts	set, toggle, a sink not running, 400, 404, against a real PipeWire
-www/api/controllers/pipewire_control.php	PWCtl_SetMemberVolume	583	38	38	test	web/tests/pw-control-setters.spec.ts	applied to the card's sink, clamped to 0-150, a card with no sink, 400, 404s
+www/api/controllers/pipewire_control.php	PWCtl_SetGroupMute	514	0	35	test	web/tests/pw-control-setters.spec.ts	set, toggle, a sink not running, 400, 404, against a real PipeWire
+www/api/controllers/pipewire_control.php	PWCtl_SetMemberVolume	583	0	38	test	web/tests/pw-control-setters.spec.ts	applied to the card's sink, clamped to 0-150, a card with no sink, 400, 404s
 www/api/controllers/pipewire_control.php	PWCtl_SetMemberMute	652	8	48	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	pwctl_input_member_loopback_names	723	8	8	test	web/tests/pw-control-setters.spec.ts	a capture member's and the media stream's names
+www/api/controllers/pipewire_control.php	pwctl_input_member_loopback_names	723	0	8	test	web/tests/pw-control-setters.spec.ts	a capture member's and the media stream's names
 www/api/controllers/pipewire_control.php	pwctl_build_input_group_view	737	16	25	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	pwctl_find_input_member	825	6	6	test	web/tests/pw-control-setters.spec.ts	found, no such member, no such group
-www/api/controllers/pipewire_control.php	PWCtl_SetInputMemberVolume	856	35	35	test	web/tests/pw-control-setters.spec.ts	saved and unmuted, both not-applied messages, 400, 404s; applied but not taken by a running loopback is a test.fail() (FUTURE.md)
-www/api/controllers/pipewire_control.php	PWCtl_SetInputMemberMute	922	29	29	test	web/tests/pw-control-setters.spec.ts	set, toggle, level kept, 400, 404s
+www/api/controllers/pipewire_control.php	pwctl_find_input_member	825	0	6	test	web/tests/pw-control-setters.spec.ts	found, no such member, no such group
+www/api/controllers/pipewire_control.php	PWCtl_SetInputMemberVolume	856	0	35	test	web/tests/pw-control-setters.spec.ts	saved and unmuted, both not-applied messages, 400, 404s; applied but not taken by a running loopback is a test.fail() (FUTURE.md)
+www/api/controllers/pipewire_control.php	PWCtl_SetInputMemberMute	922	0	29	test	web/tests/pw-control-setters.spec.ts	set, toggle, level kept, 400, 404s
+www/api/controllers/pipewire_control.php	PWCtl_GetStreams	983	6	22	todo		auto: not examined yet
 www/api/controllers/pipewire_control.php	PWCtl_SetStreamVolume	1036	12	25	todo		auto: not examined yet
-www/api/controllers/pipewire_control.php	pwctl_apply_routing_volume	1129	34	34	test	web/tests/pw-control-setters.spec.ts	no graph running; left: the node match, which no real route satisfies (FUTURE.md)
-www/api/controllers/pipewire_control.php	pwctl_persist_routing	1178	14	14	test	web/tests/pw-control-setters.spec.ts	a new path, an existing one, the other group's left alone
-www/api/controllers/pipewire_control.php	PWCtl_SetRoutingVolume	1213	21	21	test	web/tests/pw-control-setters.spec.ts	saved and clamped, 400; unknown groups answered as saved is a test.fail() (FUTURE.md)
-www/api/controllers/pipewire_control.php	PWCtl_SetRoutingMute	1260	31	31	test	web/tests/pw-control-setters.spec.ts	set, toggle, level kept, 400
-www/api/controllers/playlist.php	(top level)	0	6	66	todo		auto: not examined yet
+www/api/controllers/pipewire_control.php	pwctl_apply_routing_volume	1129	16	34	test	web/tests/pw-control-setters.spec.ts	no graph running; left: the node match, which no real route satisfies (FUTURE.md)
+www/api/controllers/pipewire_control.php	pwctl_persist_routing	1178	0	14	test	web/tests/pw-control-setters.spec.ts	a new path, an existing one, the other group's left alone
+www/api/controllers/pipewire_control.php	PWCtl_SetRoutingVolume	1213	0	21	test	web/tests/pw-control-setters.spec.ts	saved and clamped, 400; unknown groups answered as saved is a test.fail() (FUTURE.md)
+www/api/controllers/pipewire_control.php	PWCtl_SetRoutingMute	1260	0	31	test	web/tests/pw-control-setters.spec.ts	set, toggle, level kept, 400
+www/api/controllers/playlist.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/playlist.php	validatePlaylistReference	99	0	11	test	playlist-validate-entries.spec.ts	sub-playlist checks, loop, depth, disabled, entry kinds, unreadable file
 www/api/controllers/playlist.php	validationVideoOutputExists	128	2	23	todo		auto: not examined yet
 www/api/controllers/playlist.php	validatePlaylistEntry	169	1	88	test	playlist-validate-entries.spec.ts	sub-playlist checks, loop, depth, disabled, entry kinds, unreadable file
@@ -323,13 +324,13 @@ www/api/controllers/playlist.php	playlist_list_validate	402	0	37	covered		auto: 
 www/api/controllers/playlist.php	playlist_playable	475	1	17	todo		auto: not examined yet
 www/api/controllers/playlist.php	playlist_insert	580	2	16	test	web/tests/playlist-save-refusals.spec.ts	name refusals, missing playlist; 4 test.fail (an empty or malformed save empties the playlist or is a fatal); write failures cannot be staged as root
 www/api/controllers/playlist.php	LoadSubPlaylist	620	0	16	test	playlist-merge-subs.spec.ts	mergeSubs merge; test.fail loop recursion
-www/api/controllers/playlist.php	LoadPlayListDetails	669	0	25	test	playlist-merge-subs.spec.ts	mergeSubs merge; test.fail loop recursion
-www/api/controllers/playlist.php	GetPlaylist	721	0	0	gone		auto: no longer in the tree
-www/api/controllers/playlist.php	playlist_get	772	2	7	todo		auto: not examined yet
-www/api/controllers/playlist.php	playlist_update	820	2	26	test	web/tests/playlist-save-refusals.spec.ts	name refusals, missing playlist; 4 test.fail (an empty or malformed save empties the playlist or is a fatal); write failures cannot be staged as root
-www/api/controllers/playlist.php	playlist_delete	893	2	11	test	web/tests/playlist-save-refusals.spec.ts	name refusals, missing playlist; 4 test.fail (an empty or malformed save empties the playlist or is a fatal); write failures cannot be staged as root
-www/api/controllers/playlist.php	PlaylistSectionInsertItem	937	8	23	test	web/tests/playlist-item-insert-refusals.spec.ts	new section, missing playlist, bad name; 8 test.fail (any key is a section, any body an item, an unparsable file is replaced); the write-failure branch cannot be staged as root
-www/api/controllers/playlist.php	playlist_repeat	1155	2	7	todo		auto: not examined yet
+www/api/controllers/playlist.php	LoadPlayListDetails	660	0	30	test	playlist-merge-subs.spec.ts	mergeSubs merge; test.fail loop recursion
+www/api/controllers/playlist.php	GetPlaylist	721	1	5	todo		auto: not examined yet
+www/api/controllers/playlist.php	playlist_get	763	2	12	todo		auto: not examined yet
+www/api/controllers/playlist.php	playlist_update	811	4	32	test	web/tests/playlist-save-refusals.spec.ts	name refusals, missing playlist; 4 test.fail (an empty or malformed save empties the playlist or is a fatal); write failures cannot be staged as root
+www/api/controllers/playlist.php	playlist_delete	884	4	17	test	web/tests/playlist-save-refusals.spec.ts	name refusals, missing playlist; 4 test.fail (an empty or malformed save empties the playlist or is a fatal); write failures cannot be staged as root
+www/api/controllers/playlist.php	PlaylistSectionInsertItem	928	8	29	test	web/tests/playlist-item-insert-refusals.spec.ts	new section, missing playlist, bad name; 8 test.fail (any key is a section, any body an item, an unparsable file is replaced); the write-failure branch cannot be staged as root
+www/api/controllers/playlist.php	playlist_repeat	1146	2	14	todo		auto: not examined yet
 www/api/controllers/plugin.php	(top level)	0	1	49	todo		auto: not examined yet
 www/api/controllers/plugin.php	DepsRequirePackages	54	1	6	todo		auto: not examined yet
 www/api/controllers/plugin.php	DepsRequirePython	68	1	6	todo		auto: not examined yet
@@ -455,11 +456,11 @@ www/api/controllers/sequence.php	DeleteSequences	185	3	15	test	web/tests/sequenc
 www/api/controllers/sequence.php	GetSequenceStart	231	1	14	todo		auto: not examined yet
 www/api/controllers/sequence.php	GetSequenceStep	272	3	3	test	web/tests/sequence-step-method.spec.ts	2026-11-13: FAULT step is GET-only, missed by 77efc7561 (FUTURE.md); togglePause control
 www/api/controllers/sequence.php	FSeqOrEseqDirectory	332	1	5	test	web/tests/sequence-api-upload.spec.ts	eseq branch
-www/api/controllers/settings.php	(top level)	0	3	8	todo		auto: not examined yet
+www/api/controllers/settings.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/settings.php	GetSetting	41	3	36	todo		auto: not examined yet
-www/api/controllers/settings.php	PutSetting	123	27	138	test	web/tests/settings-put-applies.spec.ts	EnableRouting into sysctl.conf (one line, rest kept, nothing but 0 or 1), skipApply, EnableTethering's default name and key, refused names; the 'scheduling' branch is dead (fppd has no EnableScheduling command; DisableScheduler is the setting); left: storageDevice on a Beagle, the no-curl backup fallback, Simple PipeWire re-apply
-www/api/controllers/settings.php	ResetFanThermalTrips	425	2	2	todo		auto: not examined yet
-www/api/controllers/settings.php	UpdateJSONValueSetting	502	2	15	todo		auto: not examined yet
+www/api/controllers/settings.php	PutSetting	123	13	138	test	web/tests/settings-put-applies.spec.ts	EnableRouting into sysctl.conf (one line, rest kept, nothing but 0 or 1), skipApply, EnableTethering's default name and key, refused names; the 'scheduling' branch is dead (fppd has no EnableScheduling command; DisableScheduler is the setting); left: storageDevice on a Beagle, the no-curl backup fallback, Simple PipeWire re-apply
+www/api/controllers/settings.php	ResetFanThermalTrips	422	4	4	todo		auto: not examined yet
+www/api/controllers/settings.php	UpdateJSONValueSetting	499	2	16	todo		auto: not examined yet
 www/api/controllers/stats.php	(top level)	0	1	2	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_generate	10	2	11	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_get_last_file	94	1	14	todo		auto: not examined yet
@@ -468,15 +469,16 @@ www/api/controllers/stats.php	stats_memory	274	27	45	todo		auto: not examined ye
 www/api/controllers/stats.php	stats_significantSubset	371	1	23	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_publish_stats_file	537	1	30	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_getOutputProcessors	696	6	11	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_getFiles	722	2	12	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_getFiles	722	0	12	covered		auto: every line reached
 www/api/controllers/stats.php	stats_addressClass	754	8	12	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_stackOf	781	3	10	todo		auto: not examined yet
 www/api/controllers/stats.php	localPeerIdentity	810	1	1	todo		auto: not examined yet
 www/api/controllers/stats.php	peerMacIdentity	830	1	4	todo		auto: not examined yet
 www/api/controllers/stats.php	addMultiSyncUUID	851	2	11	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_multiSyncCollect	891	4	63	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_getSchedule	1080	5	14	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_getPlugins	1126	5	10	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_getSequenceShape	1156	27	64	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_getSequenceShape	1156	36	64	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_universeRowChannels	1480	1	4	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_universeRowUniverses	1497	1	4	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_universe_in	1506	1	33	todo		auto: not examined yet
@@ -498,20 +500,20 @@ www/api/controllers/system.php	GetUpdateStatus	230	68	117	skip		unreached lines 
 www/api/controllers/system.php	UpdateActivityLogFile	475	5	7	todo		auto: not examined yet
 www/api/controllers/system.php	UpdateActivityLockFile	509	3	7	todo		auto: not examined yet
 www/api/controllers/system.php	UpdateActivityLockHolder	546	2	16	todo		auto: not examined yet
-www/api/controllers/system.php	UpdateActivityRequestedLines	573	8	8	test	web/tests/update-activity-log-tail.spec.ts	the default and the 1..500 clamp
+www/api/controllers/system.php	UpdateActivityRequestedLines	573	0	8	test	web/tests/update-activity-log-tail.spec.ts	the default and the 1..500 clamp
 www/api/controllers/system.php	UpdateActivityWorkersActive	595	14	14	todo		auto: not examined yet
 www/api/controllers/system.php	UpdateActivityAnyAlive	620	1	3	todo		auto: not examined yet
 www/api/controllers/system.php	UpdateActivityReadTail	632	2	20	todo		auto: not examined yet
-www/api/controllers/system.php	UpdateActivityLastLines	673	35	35	test	web/tests/update-activity-log-tail.spec.ts	the last N lines exact: a multi-megabyte log, the 1 MB cap, CRLF, trailing blank lines, no final line break; left: an unreadable file
+www/api/controllers/system.php	UpdateActivityLastLines	673	8	35	test	web/tests/update-activity-log-tail.spec.ts	the last N lines exact: a multi-megabyte log, the 1 MB cap, CRLF, trailing blank lines, no final line break; left: an unreadable file
 www/api/controllers/system.php	UpdateActivityReadCache	745	4	16	todo		auto: not examined yet
 www/api/controllers/system.php	UpdateActivityWriteCache	773	2	11	todo		auto: not examined yet
-www/api/controllers/system.php	GetUpdateActivityInternal	806	35	154	test	web/tests/update-activity.spec.ts web/tests/update-activity-finalizing.spec.ts web/tests/update-activity-log-tail.spec.ts	runs from the log, failure, the idle cache, the finishing request; the log tail trimmed to the run, a continuation's first START; left: the 4 MB retry when START is outside the 512 KB window, stale runs
+www/api/controllers/system.php	GetUpdateActivityInternal	806	11	154	test	web/tests/update-activity.spec.ts web/tests/update-activity-finalizing.spec.ts web/tests/update-activity-log-tail.spec.ts	runs from the log, failure, the idle cache, the finishing request; the log tail trimmed to the run, a continuation's first START; left: the 4 MB retry when START is outside the 512 KB window, stale runs
 www/api/controllers/system.php	GetUpdateActivity	1131	7	12	todo		auto: not examined yet
-www/api/controllers/system.php	SystemSetAudio	1163	4	20	todo		auto: not examined yet
-www/api/controllers/system.php	SystemParseVolumeTarget	1208	6	8	test	web/tests/api-volume-target-read.spec.ts	the flat key and the object form
-www/api/controllers/system.php	SystemGetTargetVolume	1231	44	54	test	web/tests/api-volume-target-read.spec.ts	slots, sinks (group, filter node, node target), input members and routing paths; unknown targets, missing and malformed config
+www/api/controllers/system.php	SystemSetAudio	1163	2	20	todo		auto: not examined yet
+www/api/controllers/system.php	SystemParseVolumeTarget	1208	0	8	test	web/tests/api-volume-target-read.spec.ts	the flat key and the object form
+www/api/controllers/system.php	SystemGetTargetVolume	1231	0	54	test	web/tests/api-volume-target-read.spec.ts	slots, sinks (group, filter node, node target), input members and routing paths; unknown targets, missing and malformed config
 www/api/controllers/system.php	SystemSetTargetedAudio	1325	16	27	test	web/tests/api-volume-target-write.spec.ts	live PipeWire: sink targets flat and object form, adjust clamp, bad targets 400, master untouched; test.fail x2 no level is 75 (FUTURE.md)
-www/api/controllers/system.php	SystemGetAudio	1379	7	25	todo		auto: not examined yet
+www/api/controllers/system.php	SystemGetAudio	1379	2	25	todo		auto: not examined yet
 www/api/controllers/system.php	SystemGetStatus	1451	5	95	todo		auto: not examined yet
 www/api/controllers/system.php	GetFPPDRestartBlocked	1669	9	45	todo		auto: not examined yet
 www/api/controllers/system.php	finalizeStatusJson	1772	9	44	todo		auto: not examined yet
@@ -526,30 +528,30 @@ www/api/controllers/validate.php	validateFPPCommand	124	13	67	test	web/tests/com
 www/api/controllers/validate.php	validate_commands	242	1	8	todo		auto: not examined yet
 www/api/index.php	(inline script)	0	25	67	todo		auto: not examined yet
 www/api/index.php	(top level)	0	1	315	todo		auto: not examined yet
-www/audio-card-aliases.php	(inline script)	0	54	205	todo		auto: not examined yet
-www/backup.php	(inline script)	0	162	592	todo	web/tests/backup-storage-location-failures.spec.ts	partly done 2026-11-12: list actions (backup-page-list-actions.spec.ts); File Copy refusals and restore confirms (backup-file-copy-refusals.spec.ts); storage-location save/read failures (backup-storage-location-failures.spec.ts). Left: alternate-drive list rows (3151-3255)
-www/backup.php	(top level)	0	48	268	todo		auto: not examined yet
-www/backup.php	doRestore	304	11	47	test	web/tests/backup-api-drive-download-restore.spec.ts	the undecodable-backup and invalid-area errors; left: channelOutputs restored with the backup's system settings
+www/audio-card-aliases.php	(inline script)	0	52	205	todo		auto: not examined yet
+www/backup.php	(inline script)	0	118	623	todo	web/tests/backup-storage-location-failures.spec.ts	partly done 2026-11-12: list actions (backup-page-list-actions.spec.ts); File Copy refusals and restore confirms (backup-file-copy-refusals.spec.ts); storage-location save/read failures (backup-storage-location-failures.spec.ts). Left: alternate-drive list rows (3151-3255)
+www/backup.php	(top level)	0	26	203	todo		auto: not examined yet
+www/backup.php	doRestore	304	5	47	test	web/tests/backup-api-drive-download-restore.spec.ts	the undecodable-backup and invalid-area errors; left: channelOutputs restored with the backup's system settings
 www/backup.php	ParseIniConfigForBackup	465	1	4	todo		auto: not examined yet
 www/backup.php	BackupProvenance	553	1	14	todo		auto: not examined yet
 www/backup.php	GetSettingsNotCarriedByRestore	622	1	13	todo		auto: not examined yet
-www/backup.php	processRestoreData	701	37	280	test	web/tests/backup-restore-*.spec.ts	the email area with a relay password (enable, port, ApplyEmailConfig) added 2026-11-12; a foreign backup's address reaching the mail aliases is a test.fail() (FUTURE.md); left: the save_result=false lines of unwritable files, own-device pluginPrivacyAccepted
-www/backup.php	processRestoreDataArray	1391	11	72	todo		auto: not examined yet
-www/backup.php	IsSafeRestoreFilename	1605	3	6	todo		auto: not examined yet
-www/backup.php	BackupConfigFolderConfigs	1642	2	52	todo		auto: not examined yet
-www/backup.php	RestoreConfigFolderConfigs	1800	10	10	test	web/tests/backup-restore-misc-configs.spec.ts	json written back, path names skipped; 2 test.fail (non-json and other areas' files are written)
-www/backup.php	ConfigAreasForFolder	1928	5	30	todo		auto: not examined yet
-www/backup.php	performBackup	2050	0	20	covered		auto: every line reached
-www/backup.php	doBackupDownload	2106	13	52	todo		auto: not examined yet
-www/backup.php	genSelectList	2241	0	19	covered		auto: every line reached
-www/backup.php	ListExtraNetworkInterfaceFiles	2314	0	6	covered		auto: every line reached
-www/backup.php	moveBackupFiles_ToBackupDirectory	2422	0	2	covered		auto: every line reached
-www/backup.php	changeLocalFPPBackupFileLocation	2449	0	0	gone		auto: no longer in the tree
-www/backup.php	pruneOrRemoveAgedBackupFiles	2454	3	57	todo		auto: not examined yet
-www/backup.php	collectFppMajorVersion	2613	0	4	covered		auto: every line reached
-www/backup.php	setBackupMaxAge	2642	0	0	gone		auto: no longer in the tree
-www/backup.php	setMinimumBackupCount	2655	0	0	gone		auto: no longer in the tree
-www/backup.php	is_array_empty	2658	4	6	todo		auto: not examined yet
+www/backup.php	processRestoreData	701	24	282	test	web/tests/backup-restore-*.spec.ts	the email area with a relay password (enable, port, ApplyEmailConfig) added 2026-11-12; a foreign backup's address reaching the mail aliases is a test.fail() (FUTURE.md); left: the save_result=false lines of unwritable files, own-device pluginPrivacyAccepted
+www/backup.php	processRestoreDataArray	1397	11	74	todo		auto: not examined yet
+www/backup.php	IsSafeRestoreFilename	1611	4	9	todo		auto: not examined yet
+www/backup.php	BackupConfigFolderConfigs	1648	2	53	todo		auto: not examined yet
+www/backup.php	RestoreConfigFolderConfigs	1806	11	11	test	web/tests/backup-restore-misc-configs.spec.ts	json written back, path names skipped; 2 test.fail (non-json and other areas' files are written)
+www/backup.php	ConfigAreasForFolder	1934	5	32	todo		auto: not examined yet
+www/backup.php	performBackup	2056	4	24	todo		auto: not examined yet
+www/backup.php	doBackupDownload	2112	16	55	todo		auto: not examined yet
+www/backup.php	genSelectList	2247	0	21	covered		auto: every line reached
+www/backup.php	ListExtraNetworkInterfaceFiles	2320	1	9	todo		auto: not examined yet
+www/backup.php	moveBackupFiles_ToBackupDirectory	2428	1	5	todo		auto: not examined yet
+www/backup.php	changeLocalFPPBackupFileLocation	2449	3	3	todo		auto: not examined yet
+www/backup.php	pruneOrRemoveAgedBackupFiles	2460	4	61	todo		auto: not examined yet
+www/backup.php	collectFppMajorVersion	2619	2	7	todo		auto: not examined yet
+www/backup.php	setBackupMaxAge	2642	3	3	todo		auto: not examined yet
+www/backup.php	setMinimumBackupCount	2655	3	3	todo		auto: not examined yet
+www/backup.php	is_array_empty	2664	2	6	todo		auto: not examined yet
 www/cape-info.php	(inline script)	0	145	665	test	web/tests/cape-firmware-restore-and-force.spec.ts	partly done 2026-11-13 (25+ older cape-*.spec.ts cover voucher/signing; stale count): backup list and Restore, Reset-to-defaults flag, cape/firmware mismatch confirm then force (restore and vendor upgrade), declined mismatch, Upgrade with nothing chosen (cape-firmware-restore-and-force.spec.ts, no fault). Note: .html('') does not clear the textarea, so a forced flash's log starts with the refused attempt's text (cosmetic). Left: offline signing file/packet upload (859-1051)
 www/cape-info.php	(top level)	0	43	273	todo		auto: not examined yet
 www/capeLicense.inc	(top level)	0	1	4	test	web/tests/cape-license-check-notice.spec.ts	2026-11-13: notice URL/params, 7-day quiet, 24h retry, logo fallback, non-http/no marker, 404 without marker; FAULT stale lastSuccess on new cape / failed weekly (FUTURE.md)
@@ -562,17 +564,17 @@ www/capeLicense.inc	capeLicenseRecord	133	8	8	test	web/tests/cape-license-check-
 www/changebranch.php	(inline script)	0	2	19	todo		auto: not examined yet
 www/changebranch.php	(top level)	0	5	132	test	changebranch-pr-and-fork.spec.ts	PR fetch, config-migration warning and ackcfg, PR number checks, fork remote add/set-url/fetch
 www/changebranch.php	PendingConfigMigrations	128	1	29	test	web/tests/changebranch-pr-and-fork.spec.ts	pending migrations listed with their descriptions, none pending, no config version; left: ls-tree failing
-www/changelog.php	(inline script)	0	47	160	todo		auto: not examined yet
+www/changelog.php	(inline script)	0	47	155	todo		auto: not examined yet
 www/changelog.php	(top level)	0	10	98	todo		auto: not examined yet
 www/channelinputs.php	(inline script)	0	36	243	todo		auto: not examined yet
 www/channelinputs.php	(top level)	0	2	30	todo		auto: not examined yet
-www/channeloutputs.php	(inline script)	0	844	5245	todo	web/tests/led-panels-pwm-register-profile.spec.ts	partly done 2026-11-12: co-other.php legacy types; co-pixelStrings.php clone refusals etc; co-other-modules.php GPIO, GPIO-595, MQTT, PCF8574, 3D display; co-ledPanels.php PWM register profiles and OE timing (led-panels-pwm-register-profile.spec.ts). Left: co-ledPanels.php orientation clicks (817-832), auto-layout output overflow (1085), advanced canvas; co-pwm.php (56); PCA9685 and AutoFB modules
+www/channeloutputs.php	(inline script)	0	533	5405	todo	web/tests/led-panels-pwm-register-profile.spec.ts	partly done 2026-11-12: co-other.php legacy types; co-pixelStrings.php clone refusals etc; co-other-modules.php GPIO, GPIO-595, MQTT, PCF8574, 3D display; co-ledPanels.php PWM register profiles and OE timing (led-panels-pwm-register-profile.spec.ts). Left: co-ledPanels.php orientation clicks (817-832), auto-layout output overflow (1085), advanced canvas; co-pwm.php (56); PCA9685 and AutoFB modules
 www/channeloutputs.php	(top level)	0	6	154	todo		auto: not examined yet
 www/co-ledPanels.php	(top level)	0	20	363	todo		auto: not examined yet
 www/co-other-modules.php	(top level)	0	34	119	todo		auto: not examined yet
-www/co-pixelStrings.php	(top level)	0	11	166	todo		auto: not examined yet
+www/co-pixelStrings.php	(top level)	0	11	162	todo		auto: not examined yet
 www/co-pixelStrings.php	readCapes	7	2	21	todo		auto: not examined yet
-www/co-pixelStrings.php	getLicensedOutputs	2268	1	4	todo		auto: not examined yet
+www/co-pixelStrings.php	getLicensedOutputs	2247	1	8	todo		auto: not examined yet
 www/co-pwm.php	(top level)	0	1	28	todo		auto: not examined yet
 www/co-pwm.php	outputTypeSelect	3	3	14	todo		auto: not examined yet
 www/co-pwm.php	outputPortRow	25	2	21	todo		auto: not examined yet
@@ -580,7 +582,7 @@ www/co-universes.php	(top level)	0	1	16	todo		auto: not examined yet
 www/commandPresets.php	(inline script)	0	28	251	todo		auto: not examined yet
 www/commandhelp.php	(inline script)	0	95	222	todo		auto: not examined yet
 www/commandsocket.php	(top level)	0	1	3	todo		auto: not examined yet
-www/commandsocket.php	SendCommand	15	23	51	todo		auto: not examined yet
+www/commandsocket.php	SendCommand	15	19	51	todo		auto: not examined yet
 www/common.php	(top level)	0	1	7	todo		auto: not examined yet
 www/common.php	check	4	2	5	todo		auto: not examined yet
 www/common.php	GetFPPUserIds	29	1	4	todo		auto: not examined yet
@@ -644,7 +646,7 @@ www/common.php	MatchesDeviceOSImage	3512	8	24	todo		auto: not examined yet
 www/common.php	check_fppstats_updates	3590	2	80	todo		auto: not examined yet
 www/common.php	getFPPVersionDisplay	3778	1	7	todo		auto: not examined yet
 www/common.php	ReplaceIllegalCharacters	3795	5	5	todo		auto: not examined yet
-www/common.php	ApplyEmailConfig	3828	11	79	todo		auto: not examined yet
+www/common.php	ApplyEmailConfig	3828	10	79	todo		auto: not examined yet
 www/common.php	DisableOutputBuffering	4051	3	16	todo		auto: not examined yet
 www/common.php	PrintToolTip	4089	1	9	todo		auto: not examined yet
 www/common.php	PrintAwesomeFree	4107	5	5	todo		auto: not examined yet
@@ -675,7 +677,7 @@ www/common.php	DoJsonBackupToUSB	5510	9	18	todo		auto: not examined yet
 www/common.php	GenerateBackupComment	5562	4	9	todo		auto: not examined yet
 www/common.php	GetAvailableBackupsDevices	5590	7	36	todo		auto: not examined yet
 www/common.php	CheckIfDeviceIsUsable	5662	2	12	todo		auto: not examined yet
-www/common.php	GetFlashTargetDevices	5702	6	51	todo		auto: not examined yet
+www/common.php	GetFlashTargetDevices	5702	4	51	todo		auto: not examined yet
 www/common.php	json_validate	5795	6	6	todo		auto: not examined yet
 www/common.php	json_array_validate	5824	1	6	todo		auto: not examined yet
 www/common.php	fetch_api_with_limit	5845	2	16	todo		auto: not examined yet
@@ -766,16 +768,16 @@ www/common/settings.php	setVolume	599	7	23	todo		auto: not examined yet
 www/common/updateLock.inc.php	(top level)	0	1	2	todo		auto: not examined yet
 www/common/updateLock.inc.php	UpdateLockFile	42	3	9	todo		auto: not examined yet
 www/common/updateLock.inc.php	UpdateLockAcquireOrConflict	71	4	34	todo		auto: not examined yet
-www/config.php	(top level)	0	180	517	todo	web/tests/settings-file-legacy.spec.ts	the settings parser's master/bridge migration and Directory slash are tested. Left: platform and variant detection (/proc/device-tree, per board: device only), the container/OS logo branches, the debug error_logs
+www/config.php	(top level)	0	178	517	todo	web/tests/settings-file-legacy.spec.ts	the settings parser's master/bridge migration and Directory slash are tested. Left: platform and variant detection (/proc/device-tree, per board: device only), the container/OS logo branches, the debug error_logs
 www/config.php	LoadLocale	98	1	17	todo		auto: not examined yet
 www/config.php	ApprovedCape	131	9	9	todo		auto: not examined yet
 www/config.php	GetDirSetting	760	1	41	todo		auto: not examined yet
 www/copystorage.php	(top level)	0	18	162	todo		auto: not examined yet
-www/credits.php	(inline script)	0	24	109	todo		auto: not examined yet
-www/currentmonitor.php	(inline script)	0	19	207	todo		auto: not examined yet
+www/credits.php	(inline script)	0	24	106	todo		auto: not examined yet
+www/currentmonitor.php	(inline script)	0	19	214	todo		auto: not examined yet
 www/currentmonitor.php	(top level)	0	1	19	todo		auto: not examined yet
 www/disableKiosk.php	(top level)	0	1	19	todo		auto: not examined yet
-www/effects.php	(inline script)	0	22	215	todo		auto: not examined yet
+www/effects.php	(inline script)	0	22	207	todo		auto: not examined yet
 www/effects.php	PrintEffectRows	149	2	13	todo		auto: not examined yet
 www/filemanager.php	(inline script)	0	151	420	todo		auto: not examined yet
 www/filemanager.php	(top level)	0	1	83	todo		auto: not examined yet
@@ -810,12 +812,12 @@ www/fppEEPROM.php	getCapeVersion	628	1	1	skip		CLI (scripts/generateEEPROM), not
 www/fppEEPROM.php	getCapeSerial	632	1	1	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
 www/fppEEPROM.php	getDeviceSerial	636	1	1	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
 www/fppEEPROM.php	getVariable	640	11	11	skip		CLI (scripts/generateEEPROM), not web: covered by scenarios/test_cape_eeprom_*.py and test_shipped_virtual_eeproms.py
-www/fppdefines.php	(top level)	0	10	39	todo		auto: not examined yet
+www/fppdefines.php	(top level)	0	0	0	gone		auto: no longer in the tree
 www/fppdefines_unknown.php	(top level)	0	1	8	todo		auto: not examined yet
 www/fppunknown_versions.php	(top level)	0	1	2	todo		auto: not examined yet
 www/fppunknown_versions.php	getFPPVersionTriplet	31	1	1	todo		auto: not examined yet
 www/fppunknown_versions.php	writeFPPVersionJavascriptFunctions	38	2	2	todo		auto: not examined yet
-www/fppversion.php	(top level)	0	1	2	todo		auto: not examined yet
+www/fppversion.php	(top level)	0	0	0	gone		auto: no longer in the tree
 www/gitCheckoutVersion.php	(top level)	0	22	30	todo		auto: not examined yet
 www/gpio.php	(inline script)	0	35	544	test	web/tests/gpio-save-failures-and-led.spec.ts	save refusal/failure alerts, re-enable badges, LED flash label, reserved LED pin, editModalCmd; duplicate-pin alert (775) unreachable from the UI
 www/gpio.php	(top level)	0	57	137	todo		auto: not examined yet
@@ -824,7 +826,7 @@ www/hdmi_table.json.php	(top level)	0	2	11	todo		auto: not examined yet
 www/healthCheck.php	(inline script)	0	18	128	todo		auto: not examined yet
 www/healthCheckHelper.php	(top level)	0	1	6	todo		auto: not examined yet
 www/healthCheckSSE.php	(top level)	0	1	10	todo		auto: not examined yet
-www/help.php	(inline script)	0	24	121	todo		auto: not examined yet
+www/help.php	(inline script)	0	24	119	todo		auto: not examined yet
 www/help/about.php	(top level)	0	2	2	todo		auto: not examined yet
 www/help/backup.php	(top level)	0	2	2	todo		auto: not examined yet
 www/help/channelinputs.php	(top level)	0	2	2	todo		auto: not examined yet
@@ -861,9 +863,9 @@ www/help/variables.php	(top level)	0	2	2	todo		auto: not examined yet
 www/help/vban-config.php	(top level)	0	2	2	todo		auto: not examined yet
 www/help/virtualdisplaywrapper.php	(top level)	0	2	2	todo		auto: not examined yet
 www/help/virtualdisplaywrapper3d.php	(top level)	0	2	2	todo		auto: not examined yet
-www/index.php	(inline script)	0	90	774	todo		auto: not examined yet
+www/index.php	(inline script)	0	91	794	todo		auto: not examined yet
 www/index.php	(top level)	0	4	52	todo		auto: not examined yet
-www/initialSetup.php	(inline script)	0	176	841	test	web/tests/initial-setup-step-checks-and-save-failure.spec.ts	partly done 2026-11-13 (15 older initial-setup-*.spec.ts; stale count): per-step refusals (privacy rules, lat/lon, host name, UI password choice and mismatch), Back keeps values, a failed setting save stops Finish before initialSetup-02 and the UI password (initial-setup-step-checks-and-save-failure.spec.ts, no fault). Left: restore drag-drop and upload errors (311-384), USB/remote restore refusals (439-464), SSH keys save
+www/initialSetup.php	(inline script)	0	176	863	test	web/tests/initial-setup-step-checks-and-save-failure.spec.ts	partly done 2026-11-13 (15 older initial-setup-*.spec.ts; stale count): per-step refusals (privacy rules, lat/lon, host name, UI password choice and mismatch), Back keeps values, a failed setting save stops Finish before initialSetup-02 and the UI password (initial-setup-step-checks-and-save-failure.spec.ts, no fault). Left: restore drag-drop and upload errors (311-384), USB/remote restore refusals (439-464), SSH keys save
 www/initialSetup.php	(top level)	0	20	154	todo		auto: not examined yet
 www/installKiosk.php	(top level)	0	14	14	todo		auto: not examined yet
 www/jqupload.php	(top level)	0	8	23	todo		auto: not examined yet
@@ -877,12 +879,12 @@ www/js/fpp-bootstrap-table.js	GetBootstrapTableSelectedItems	760	5	5	todo		auto:
 www/js/fpp-bootstrap-table.js	ClearBootstrapTableSelection	771	5	5	todo		auto: not examined yet
 www/js/fpp-bootstrap-table.js	RefreshBootstrapTable	783	6	6	todo		auto: not examined yet
 www/js/fpp-filemanager.js	IsFppOwnLog	96	3	3	todo		auto: not examined yet
-www/js/fpp-filemanager.js	GetFiles	143	2	155	todo		auto: not examined yet
+www/js/fpp-filemanager.js	GetFiles	143	14	155	todo		auto: not examined yet
 www/js/fpp-filemanager.js	next	430	2	24	todo		auto: not examined yet
 www/js/fpp-filemanager.js	QueueGetAllFiles	481	2	9	todo		auto: not examined yet
 www/js/fpp-filemanager.js	LoadSequenceFPS	495	6	42	todo		auto: not examined yet
 www/js/fpp-filemanager.js	FileManagerHideEmptyTabsToggled	686	5	5	todo		auto: not examined yet
-www/js/fpp-filemanager.js	RemoveFileManagerRow	706	18	80	todo		auto: not examined yet
+www/js/fpp-filemanager.js	RemoveFileManagerRow	706	25	80	todo		auto: not examined yet
 www/js/fpp-filemanager.js	GetVideoInfo	830	6	23	todo		auto: not examined yet
 www/js/fpp-filemanager.js	ButtonHandler	854	99	246	todo		auto: not examined yet
 www/js/fpp-filemanager.js	ClearSelections	1129	5	5	todo		auto: not examined yet
@@ -925,7 +927,7 @@ www/js/fpp-update.js	FPPUpdate_Acknowledge	793	6	15	todo		auto: not examined yet
 www/js/fpp-update.js	FPPUpdate_AcknowledgeOnClose	818	2	13	todo		auto: not examined yet
 www/js/fpp-update.js	FPPUpdate_AddHideButton	836	8	17	todo		auto: not examined yet
 www/js/fpp-update.js	FPPUpdate_Init	869	8	26	todo		auto: not examined yet
-www/js/fpp.js	(top level)	0	90	1143	todo		auto: not examined yet
+www/js/fpp.js	(top level)	0	82	1143	todo		auto: not examined yet
 www/js/fpp.js	CopyTextToClipboard	219	2	6	todo		auto: not examined yet
 www/js/fpp.js	fallback	220	2	12	todo		auto: not examined yet
 www/js/fpp.js	common_PageLoad_PostDOMLoad_ActionsSetup	365	2	75	todo		auto: not examined yet
@@ -979,26 +981,26 @@ www/js/fpp.js	PlaylistNameOK	3246	6	11	todo		auto: not examined yet
 www/js/fpp.js	LoadPlaylistDetails	3298	1	19	todo		auto: not examined yet
 www/js/fpp.js	CreateNewPlaylist	3319	36	36	skip		dead: its only caller is #txtNewPlaylistName in playlists.php's .playlistCreateContainer, which is hidden and never shown (New Playlist uses the #playlistAdd dialog)
 www/js/fpp.js	UpdatePlaylistDurations	3443	4	46	todo		auto: not examined yet
-www/js/fpp.js	GetSequenceDuration	3503	7	43	todo		auto: not examined yet
-www/js/fpp.js	SetPlaylistItemMetaData	3551	46	122	test	web/tests/playlist-entry-measured.spec.ts	media, Seq+Media and sub-playlist lengths, every not-found line, the image list failing; a name with markup rendered as HTML is a test.fail() (FUTURE.md)
+www/js/fpp.js	GetSequenceDuration	3503	5	43	todo		auto: not examined yet
+www/js/fpp.js	SetPlaylistItemMetaData	3551	0	122	test	web/tests/playlist-entry-measured.spec.ts	media, Seq+Media and sub-playlist lengths, every not-found line, the image list failing; a name with markup rendered as HTML is a test.fail() (FUTURE.md)
 www/js/fpp.js	PopulatePlaylistItemDuration	3685	3	16	todo		auto: not examined yet
 www/js/fpp.js	AddPlaylistEntry	3705	24	127	todo		auto: not examined yet
 www/js/fpp.js	GetPlaylistEntry	3854	10	76	todo		auto: not examined yet
 www/js/fpp.js	AddPlaylist	3939	8	8	todo		auto: not examined yet
 www/js/fpp.js	SavePlaylist	3948	3	8	todo		auto: not examined yet
 www/js/fpp.js	updateAddGlobalPauseIndicator	3998	11	11	todo		auto: not examined yet
-www/js/fpp.js	updateMainPageGlobalPauseIndicator	4011	60	107	test	web/tests/status-page-idle-playlist-indicators.spec.ts	idle page: the picked playlist's pause and random mode, verbose off, after another playlist was stopped; the player-status branches are dead (api/player/status has neither field, FUTURE.md)
-www/js/fpp.js	updateRandomizeFromPlaylist	4042	6	12	todo		auto: not examined yet
+www/js/fpp.js	updateMainPageGlobalPauseIndicator	4011	54	107	test	web/tests/status-page-idle-playlist-indicators.spec.ts	idle page: the picked playlist's pause and random mode, verbose off, after another playlist was stopped; the player-status branches are dead (api/player/status has neither field, FUTURE.md)
+www/js/fpp.js	updateRandomizeFromPlaylist	4042	0	12	covered		auto: every line reached
 www/js/fpp.js	RandomizePlaylistEntries	4290	14	14	todo		auto: not examined yet
 www/js/fpp.js	ApplyGeoIPSettings	4326	4	15	todo		auto: not examined yet
-www/js/fpp.js	SetFromGeoIP	4351	2	6	test	web/tests/geoip-local-fallback-zone-aliases.spec.ts	FAULT sets a select to a missing option and fires change (FUTURE.md)
-www/js/fpp.js	BrowserLocaleHints	4376	13	13	test	web/tests/geoip-local-fallback.spec.ts	Intl's zone and region, and the language-tag fallback of a browser without Intl.Locale
-www/js/fpp.js	GeoIPBrowserFallback	4401	18	18	test	web/tests/geoip-lookup.spec.ts	was run without the coverage fixture; both services failing is in geoip-local-fallback.spec.ts
-www/js/fpp.js	GeoIPBrowserLookup	4461	19	19	test	web/tests/geoip-lookup.spec.ts	was run without the coverage fixture; both services failing is in geoip-local-fallback.spec.ts
-www/js/fpp.js	FlagApproximateCoords	4504	19	19	test	web/tests/geoip-local-fallback.spec.ts	the wizard's own note and the one made on the Settings page; hidden once a coordinate is edited
-www/js/fpp.js	GeoIPLocalFallback	4524	36	36	test	web/tests/geoip-local-fallback.spec.ts	every outcome: time-zone coordinates, none (UTC), no country (ZZ), no hints at all, the mapping request failing
-www/js/fpp.js	GetTimeZone	4573	10	10	todo		auto: not examined yet
-www/js/fpp.js	GetGeoLocation	4586	1	11	todo		auto: not examined yet
+www/js/fpp.js	SetFromGeoIP	4351	0	6	test	web/tests/geoip-local-fallback-zone-aliases.spec.ts	FAULT sets a select to a missing option and fires change (FUTURE.md)
+www/js/fpp.js	BrowserLocaleHints	4376	0	13	test	web/tests/geoip-local-fallback.spec.ts	Intl's zone and region, and the language-tag fallback of a browser without Intl.Locale
+www/js/fpp.js	GeoIPBrowserFallback	4401	0	18	test	web/tests/geoip-lookup.spec.ts	was run without the coverage fixture; both services failing is in geoip-local-fallback.spec.ts
+www/js/fpp.js	GeoIPBrowserLookup	4461	2	19	test	web/tests/geoip-lookup.spec.ts	was run without the coverage fixture; both services failing is in geoip-local-fallback.spec.ts
+www/js/fpp.js	FlagApproximateCoords	4504	0	19	test	web/tests/geoip-local-fallback.spec.ts	the wizard's own note and the one made on the Settings page; hidden once a coordinate is edited
+www/js/fpp.js	GeoIPLocalFallback	4524	0	36	test	web/tests/geoip-local-fallback.spec.ts	every outcome: time-zone coordinates, none (UTC), no country (ZZ), no hints at all, the mapping request failing
+www/js/fpp.js	GetTimeZone	4573	2	10	todo		auto: not examined yet
+www/js/fpp.js	GetGeoLocation	4586	0	11	covered		auto: every line reached
 www/js/fpp.js	GeoIPTestQuery	4611	2	6	todo		auto: not examined yet
 www/js/fpp.js	ViewLatLon	4618	6	6	todo		auto: not examined yet
 www/js/fpp.js	RemoveIllegalChars	4634	7	7	todo		auto: not examined yet
@@ -1015,12 +1017,12 @@ www/js/fpp.js	ChangeGitBranch	4983	30	47	todo		auto: not examined yet
 www/js/fpp.js	RebuildFPPSource	5032	3	3	todo		auto: not examined yet
 www/js/fpp.js	SetUniverseCount	5093	9	108	todo		auto: not examined yet
 www/js/fpp.js	IPOutputTypeChanged	5214	6	74	todo		auto: not examined yet
-www/js/fpp.js	CloneUniverses	5719	44	44	test	web/tests/e131-universe-clone.spec.ts	rows overwritten and renumbered, saved, from the middle, not a number / 0 / cancelled, refused when too many; one too many and no row selected are test.fail() (FUTURE.md)
-www/js/fpp.js	CloneUniverse	5768	8	8	test	web/tests/e131-universe-clone.spec.ts	the prompt, answered and cancelled
+www/js/fpp.js	CloneUniverses	5719	0	44	test	web/tests/e131-universe-clone.spec.ts	rows overwritten and renumbered, saved, from the middle, not a number / 0 / cancelled, refused when too many; one too many and no row selected are test.fail() (FUTURE.md)
+www/js/fpp.js	CloneUniverse	5768	0	8	test	web/tests/e131-universe-clone.spec.ts	the prompt, answered and cancelled
 www/js/fpp.js	UpdateSendingModeOptions	5777	8	20	todo		auto: not examined yet
 www/js/fpp.js	CalculatePacingMaxFPS	5800	5	79	todo		auto: not examined yet
 www/js/fpp.js	PacingRateChanged	5893	4	4	todo		auto: not examined yet
-www/js/fpp.js	postUniverseJSON	5898	4	91	todo		auto: not examined yet
+www/js/fpp.js	postUniverseJSON	5898	3	91	todo		auto: not examined yet
 www/js/fpp.js	disableTestModeIfActive	6010	2	29	todo		auto: not examined yet
 www/js/fpp.js	validateEmail	6042	5	5	todo		auto: not examined yet
 www/js/fpp.js	validateUniverseData	6048	10	56	todo		auto: not examined yet
@@ -1041,7 +1043,7 @@ www/js/fpp.js	updateWarnings	6700	2	130	todo		auto: not examined yet
 www/js/fpp.js	modeToString	6930	3	13	todo		auto: not examined yet
 www/js/fpp.js	ResetMultiSyncStats	7455	5	5	todo		auto: not examined yet
 www/js/fpp.js	ResetUniverseBytesReceived	7467	12	12	todo		auto: not examined yet
-www/js/fpp.js	GetUniverseBytesReceived	7480	59	92	test	web/tests/status-page-bridge-stats-table.spec.ts	rows, the Suppressed column, the split into two and three tables, tables emptied, the refusal and failure messages; 100 universes in one table is a test.fail() (FUTURE.md)
+www/js/fpp.js	GetUniverseBytesReceived	7480	0	92	test	web/tests/status-page-bridge-stats-table.spec.ts	rows, the Suppressed column, the split into two and three tables, tables emptied, the refusal and failure messages; 100 universes in one table is a test.fail() (FUTURE.md)
 www/js/fpp.js	ToggleSequencePause	7613	1	9	todo		auto: not examined yet
 www/js/fpp.js	SingleStepSequence	7623	10	10	test	web/tests/sequence-step-method.spec.ts	2026-11-13: FAULT step is GET-only, missed by 77efc7561 (FUTURE.md); togglePause control
 www/js/fpp.js	SetSetting	7690	10	67	todo		auto: not examined yet
@@ -1049,7 +1051,7 @@ www/js/fpp.js	SetPluginSetting	7787	16	47	todo		auto: not examined yet
 www/js/fpp.js	ReloadSettingOptions	7849	34	34	skip		dead: only a setting with reloadOther calls it, and no setting in settings.json declares one
 www/js/fpp.js	SetRebootFlag	7925	1	9	todo		auto: not examined yet
 www/js/fpp.js	SkipBootDelay	8032	11	11	todo		auto: not examined yet
-www/js/fpp.js	RestartFPPD	8044	30	52	test	web/tests/restart-fppd-quick-request.spec.ts web/tests/restart-fppd-lost-answer.spec.ts	quick and full requests; no answer to the restart: the rebooting notice once, waiting while fppd is down, success and the flag cleared once it runs, the error after the last try
+www/js/fpp.js	RestartFPPD	8044	0	52	test	web/tests/restart-fppd-quick-request.spec.ts web/tests/restart-fppd-lost-answer.spec.ts	quick and full requests; no answer to the restart: the rebooting notice once, waiting while fppd is down, success and the flag cleared once it runs, the error after the last try
 www/js/fpp.js	zeroPad	8115	4	4	todo		auto: not examined yet
 www/js/fpp.js	ControlFPPD	8120	1	20	todo		auto: not examined yet
 www/js/fpp.js	PlayPlaylist	8273	4	17	todo		auto: not examined yet
@@ -1060,7 +1062,7 @@ www/js/fpp.js	GetRunningOverlayEffects	8400	7	59	todo		auto: not examined yet
 www/js/fpp.js	RebootFPP	8506	6	25	todo		auto: not examined yet
 www/js/fpp.js	ShutdownFPP	8568	5	18	todo		auto: not examined yet
 www/js/fpp.js	UpgradePlaylist	8588	0	106	test	playlist-upgrade-old-entries.spec.ts	branch compInfo/branchType, dynamic data, mqtt, volume, Overlay Model Text conversions saved; AutoEnable bug test.fail
-www/js/fpp.js	PopulatePlaylistDetails	8755	8	116	todo		auto: not examined yet
+www/js/fpp.js	PopulatePlaylistDetails	8755	6	116	todo		auto: not examined yet
 www/js/fpp.js	PopulatePlaylistDetailsEntries	8897	2	24	todo		auto: not examined yet
 www/js/fpp.js	SetVolume	8926	1	25	todo		auto: not examined yet
 www/js/fpp.js	SetFPPDmode	8968	1	10	todo		auto: not examined yet
@@ -1164,7 +1166,7 @@ www/js/fpp.js	valFunc	13573	32	148	test	web/tests/command-args-editable.spec.ts	
 www/js/fpp.js	subCommandInitFunc	13622	0	6	test	web/tests/command-args-editable.spec.ts	the editable printer's subcommand select
 www/js/fpp.js	InitArgHelpTooltips	13759	4	16	todo		auto: not examined yet
 www/js/fpp.js	PrintArgInputs	13776	72	713	todo	web/tests/command-editor-subcommand.spec.ts	the subcommand select, range and colour args are tested now. Left: Adjustable checkboxes (configAdjustable is true only for playlist entry types' own args, which have none: plugin-only), date and time args (no command has them), onChange without children, the playlistEntryCommandOptions children hook
-www/js/fpp.js	SyncMultistringChecks	14531	8	31	todo		auto: not examined yet
+www/js/fpp.js	SyncMultistringChecks	14531	6	31	todo		auto: not examined yet
 www/js/fpp.js	ReloadContentList	14563	7	105	todo		auto: not examined yet
 www/js/fpp.js	addItem	14610	1	8	todo		auto: not examined yet
 www/js/fpp.js	PopulateExistingCommand	14693	6	96	todo		auto: not examined yet
@@ -1173,7 +1175,7 @@ www/js/fpp.js	EditCommandTemplateCanceled	14904	5	5	todo		auto: not examined yet
 www/js/fpp.js	EditCommandTemplateSaved	14910	3	3	todo		auto: not examined yet
 www/js/fpp.js	EditCommandTemplate	14914	4	27	todo		auto: not examined yet
 www/js/fpp.js	GetCommandTemplateData	14944	6	10	todo		auto: not examined yet
-www/js/fpp.js	FillInCommandTemplate	14958	5	139	todo		auto: not examined yet
+www/js/fpp.js	FillInCommandTemplate	14958	0	139	covered		auto: every line reached
 www/js/fpp.js	ValidateCommands	15122	2	22	todo		auto: not examined yet
 www/js/fpp.js	ShowCommandEditor	15270	2	43	todo		auto: not examined yet
 www/js/fpp.js	ScheduleCalendar	15362	3	43	todo		auto: not examined yet
@@ -1189,10 +1191,10 @@ www/js/fpp.js	PreviewStatistics	16667	15	15	todo		auto: not examined yet
 www/js/fpp.js	isValidIpAddress	16684	2	8	todo		auto: not examined yet
 www/js/fpp.js	isValidHostname	16695	4	24	todo		auto: not examined yet
 www/js/fpp.js	bytesToHuman	16728	2	20	todo		auto: not examined yet
-www/js/fpp.js	CreateSelect	16749	8	43	todo		auto: not examined yet
-www/js/fpp.js	checkForFppUpdate	16875	13	133	todo		auto: not examined yet
-www/js/fpp.js	checkForPluginUpdates	17059	15	40	todo		auto: not examined yet
-www/js/fpp.js	finished	17069	3	21	todo		auto: not examined yet
+www/js/fpp.js	CreateSelect	16749	0	43	covered		auto: every line reached
+www/js/fpp.js	checkForFppUpdate	16875	19	133	todo		auto: not examined yet
+www/js/fpp.js	checkForPluginUpdates	17059	18	40	todo		auto: not examined yet
+www/js/fpp.js	finished	17069	7	21	todo		auto: not examined yet
 www/js/fpp.js	requestPluginUpdateCheck	17129	7	18	todo		auto: not examined yet
 www/js/fpp.js	applyPluginUpdateStatus	17163	2	24	todo		auto: not examined yet
 www/js/fpp.js	pluginUpdateCheckedAgo	17203	6	14	todo		auto: not examined yet
@@ -1225,14 +1227,14 @@ www/js/pipewire-mixer.js	PWMixerStartMeter	1107	35	35	todo		the browser preview:
 www/js/pipewire-mixer.js	tick	1148	14	14	todo		the browser preview: needs the preview stream endpoint (pipewire.php) and an <audio> that plays; Chromium can with --autoplay-policy, untried
 www/js/pipewire-mixer.js	PWMixerStopMeter	1178	13	13	todo		the browser preview: needs the preview stream endpoint (pipewire.php) and an <audio> that plays; Chromium can with --autoplay-policy, untried
 www/js/pipewire-mixer.js	PWMixerStopPreview	1193	14	14	todo		the browser preview: needs the preview stream endpoint (pipewire.php) and an <audio> that plays; Chromium can with --autoplay-policy, untried
-www/json/eff/index.php	(top level)	0	1	4	test	web/tests/wled-json.spec.ts	every line
-www/json/index.php	(top level)	0	1	7	test	web/tests/wled-json.spec.ts	every line
+www/json/eff/index.php	(top level)	0	4	4	test	web/tests/wled-json.spec.ts	every line
+www/json/index.php	(top level)	0	7	7	test	web/tests/wled-json.spec.ts	every line
 www/json/info/index.php	(top level)	0	1	4	test	web/tests/wled-json.spec.ts	every line
 www/json/live/index.php	(top level)	0	1	4	test	web/tests/wled-json.spec.ts	every line
 www/json/nodes/index.php	(top level)	0	1	4	test	web/tests/wled-json.spec.ts	every line
 www/json/pal/index.php	(top level)	0	1	4	test	web/tests/wled-json.spec.ts	every line
 www/json/palx/index.php	(top level)	0	1	5	test	web/tests/wled-json.spec.ts	answered, but its one palette comes out as a list (test.fail(), FUTURE.md)
-www/json/state/index.php	(top level)	0	1	44	test	web/tests/wled-json.spec.ts	GET, OPTIONS, POST per segment and for the whole node, a missing segment, a body that is not JSON
+www/json/state/index.php	(top level)	0	30	44	test	web/tests/wled-json.spec.ts	GET, OPTIONS, POST per segment and for the whole node, a missing segment, a body that is not JSON
 www/json/wled_common.inc.php	(top level)	0	1	2	test	web/tests/wled-json.spec.ts	the shim's requires
 www/json/wled_common.inc.php	fpp_curl_json	7	1	10	test	web/tests/wled-json.spec.ts	segments per model, on and fx from fppd's state, CORS headers
 www/json/wled_common.inc.php	fpp_primary_mac	22	6	12	test	web/tests/wled-json.spec.ts	eth0's address; the fallbacks (wlan0, end0, the status, 02:00:..) need an interface the container lacks
@@ -1240,46 +1242,46 @@ www/json/wled_common.inc.php	fpp_primary_ip	46	6	9	test	web/tests/wled-json.spec
 www/json/wled_common.inc.php	fpp_overlay_models	65	0	2	test	web/tests/wled-json.spec.ts	segments per model, on and fx from fppd's state, CORS headers
 www/json/wled_common.inc.php	fpp_overlay_effects	71	0	2	test	web/tests/wled-json.spec.ts	segments per model, on and fx from fppd's state, CORS headers
 www/json/wled_common.inc.php	fpp_overlay_running	77	0	2	test	web/tests/wled-json.spec.ts	segments per model, on and fx from fppd's state, CORS headers
-www/json/wled_common.inc.php	build_wled_info	85	2	50	test	web/tests/wled-json.spec.ts	the host-description branch is reached only after an fppd restart (fppd's status caches it, a test.fail(), FUTURE.md)
-www/json/wled_common.inc.php	build_wled_state	170	2	55	test	web/tests/wled-json.spec.ts	segments per model, on and fx from fppd's state, CORS headers
+www/json/wled_common.inc.php	build_wled_info	85	4	50	test	web/tests/wled-json.spec.ts	the host-description branch is reached only after an fppd restart (fppd's status caches it, a test.fail(), FUTURE.md)
+www/json/wled_common.inc.php	build_wled_state	170	36	55	test	web/tests/wled-json.spec.ts	segments per model, on and fx from fppd's state, CORS headers
 www/json/wled_common.inc.php	send_wled_json	263	0	7	test	web/tests/wled-json.spec.ts	segments per model, on and fx from fppd's state, CORS headers
 www/jurisdiction.inc	(top level)	0	1	2	todo		auto: not examined yet
 www/jurisdiction.inc	jurisdictionOptions	52	1	8	todo		auto: not examined yet
 www/jurisdiction.inc	jurisdictionRequiresPriorOptIn	111	2	12	todo		auto: not examined yet
 www/jurisdiction.inc	jurisdictionPriorOptInMap	145	1	7	todo		auto: not examined yet
-www/jurisdiction.inc	jurisdictionForCountry	171	4	10	todo		auto: not examined yet
-www/jurisdiction.inc	localeForCountry	200	2	11	todo		auto: not examined yet
+www/jurisdiction.inc	jurisdictionForCountry	171	2	10	todo		auto: not examined yet
+www/jurisdiction.inc	localeForCountry	200	1	11	todo		auto: not examined yet
 www/localonly/cleanedphpinfo.php	(top level)	0	1	48	todo		auto: not examined yet
 www/manualUpdate.php	(top level)	0	6	74	todo		auto: not examined yet
 www/menu.inc	(top level)	0	25	154	test	web/tests/menu-pages-load.spec.ts	every menu page at Basic and Advanced answers 200 with no script error
 www/menu.inc	list_plugin_entries	33	2	32	todo		auto: not examined yet
-www/multisync.php	(inline script)	0	427	2560	test	web/tests/multisync-batch-power-mode-copy.spec.ts	partly done 2026-11-13 (60+ older multisync-*.spec.ts cover most of the page; stale count): Reboot, Shutdown, Remote/Player mode and Copy Files on ticked systems reach only those, filtered-out rows left alone, nothing ticked / no action (multisync-batch-power-mode-copy.spec.ts, no fault). Left: ESPixelStick websocket status (2717-2894), OS-file copy refusals (4001-4044), clearDisplayOrder
+www/multisync.php	(inline script)	0	427	2561	test	web/tests/multisync-batch-power-mode-copy.spec.ts	partly done 2026-11-13 (60+ older multisync-*.spec.ts cover most of the page; stale count): Reboot, Shutdown, Remote/Player mode and Copy Files on ticked systems reach only those, filtered-out rows left alone, nothing ticked / no action (multisync-batch-power-mode-copy.spec.ts, no fault). Left: ESPixelStick websocket status (2717-2894), OS-file copy refusals (4001-4044), clearDisplayOrder
 www/multisync.php	(top level)	0	3	64	todo		auto: not examined yet
-www/networkconfig.php	(inline script)	0	230	1028	test	web/tests/network-interface-advanced-fields-kept.spec.ts	partly done 2026-11-13: also route metric / IP forwarding / DHCP server shown, sent and written at Advanced level, DHCP/Static switch keeps the typed address (network-interface-advanced-fields-kept.spec.ts); test.fail Basic-level Update drops DHCP server/metric/forwarding, WEP key never stored (FUTURE.md). setHostName/setHostDescription (1778-1835) are dead: no caller. Left: scan list signal/security badges (1575-1691), No Interface Selected
+www/networkconfig.php	(inline script)	0	124	1082	test	web/tests/network-interface-advanced-fields-kept.spec.ts	partly done 2026-11-13: also route metric / IP forwarding / DHCP server shown, sent and written at Advanced level, DHCP/Static switch keeps the typed address (network-interface-advanced-fields-kept.spec.ts); test.fail Basic-level Update drops DHCP server/metric/forwarding, WEP key never stored (FUTURE.md). setHostName/setHostDescription (1778-1835) are dead: no caller. Left: scan list signal/security badges (1575-1691), No Interface Selected
 www/networkconfig.php	(top level)	0	2	52	todo		auto: not examined yet
 www/newpartitionsd.php	(top level)	0	11	11	todo		auto: not examined yet
-www/opus-rtp-config.php	(inline script)	0	119	431	todo		auto: not examined yet
+www/opus-rtp-config.php	(inline script)	0	119	433	todo		auto: not examined yet
 www/outputprocessors.php	(inline script)	0	21	388	todo		auto: not examined yet
-www/packages.php	(inline script)	0	78	302	test	web/tests/packages-lookup-install.spec.ts	2026-11-13: search suggestions (2-letter start, 50 cap, pick), lookup of a not-installed / installed / unknown package, Install and Reinstall stream packagesHelper.php for that package, blank name refused (packages-lookup-install.spec.ts, no fault). Left: list load failures (175-192), status Unknown (341)
+www/packages.php	(inline script)	0	78	297	test	web/tests/packages-lookup-install.spec.ts	2026-11-13: search suggestions (2-letter start, 50 cap, pick), lookup of a not-installed / installed / unknown package, Install and Reinstall stream packagesHelper.php for that package, blank name refused (packages-lookup-install.spec.ts, no fault). Left: list load failures (175-192), status Unknown (341)
 www/packagesHelper.php	(top level)	0	23	75	test	web/tests/packages-uninstall.spec.ts	uninstall (removed, shared, kept, refused, failed+retry, not-from-this-page, unmanaged); reinstall in plugin-packages.spec.ts, installmissing in packages-page.spec.ts
-www/pipewire-audio.php	(inline script)	0	333	899	todo	web/tests/pw-output-groups-page-edit.spec.ts	partly done 2026-11-13: group name/channels/latency, member card/channels/map/rate/period/delay, channel-count map rewrite, EQ panel (bands, live push), empty-name refusal, Save, Save & Apply (apply and restart stubbed), group fader on a live PipeWire (pw-output-groups-page-edit.spec.ts); test.fail non-ASCII group name's sink (FUTURE.md). Left: sync calibration (1575-1673), member fader fallback (1478-1513), USB bandwidth warnings (595-618)
-www/pipewire-graph.php	(inline script)	0	74	699	todo		auto: not examined yet
-www/pipewire-input-mixing.php	(inline script)	0	261	588	todo	web/tests/pw-input-mixing-page-edit.spec.ts	partly done 2026-11-13: add group/member, capture and PipeWire source pickers, channel mapping, output routing, live mute/volume, remove with confirm, Save, Save & Apply and their refusals (pw-input-mixing-page-edit.spec.ts); test.fail a channel count change keeps the old mapping (FUTURE.md). Left: AES67/Opus/VBAN receive pickers, generic downmix presets (1038-1087 partly), RefreshSources
-www/pipewire-routing-matrix.php	(inline script)	0	207	405	todo		auto: not examined yet
-www/pipewire-rtsp-outputs.php	(inline script)	0	41	206	todo		auto: not examined yet
-www/pipewire-video-inputs.php	(inline script)	0	293	616	todo	web/tests/pw-video-inputs-page-edit.spec.ts	partly done 2026-11-13: Add, name, pattern, resolution presets and Custom, frame rate, type change (RTP, RTSP, URL fields), delete with confirm, Save, refused save, Save & Apply to the generated config (pw-video-inputs-page-edit.spec.ts, no fault). Left: V4L2 device/controls block (529-617), native-mode hint (474-498), preview polling (654-773)
+www/pipewire-audio.php	(inline script)	0	333	901	todo	web/tests/pw-output-groups-page-edit.spec.ts	partly done 2026-11-13: group name/channels/latency, member card/channels/map/rate/period/delay, channel-count map rewrite, EQ panel (bands, live push), empty-name refusal, Save, Save & Apply (apply and restart stubbed), group fader on a live PipeWire (pw-output-groups-page-edit.spec.ts); test.fail non-ASCII group name's sink (FUTURE.md). Left: sync calibration (1575-1673), member fader fallback (1478-1513), USB bandwidth warnings (595-618)
+www/pipewire-graph.php	(inline script)	0	74	702	todo		auto: not examined yet
+www/pipewire-input-mixing.php	(inline script)	0	261	590	todo	web/tests/pw-input-mixing-page-edit.spec.ts	partly done 2026-11-13: add group/member, capture and PipeWire source pickers, channel mapping, output routing, live mute/volume, remove with confirm, Save, Save & Apply and their refusals (pw-input-mixing-page-edit.spec.ts); test.fail a channel count change keeps the old mapping (FUTURE.md). Left: AES67/Opus/VBAN receive pickers, generic downmix presets (1038-1087 partly), RefreshSources
+www/pipewire-routing-matrix.php	(inline script)	0	207	407	todo		auto: not examined yet
+www/pipewire-rtsp-outputs.php	(inline script)	0	41	208	todo		auto: not examined yet
+www/pipewire-video-inputs.php	(inline script)	0	293	611	todo	web/tests/pw-video-inputs-page-edit.spec.ts	partly done 2026-11-13: Add, name, pattern, resolution presets and Custom, frame rate, type change (RTP, RTSP, URL fields), delete with confirm, Save, refused save, Save & Apply to the generated config (pw-video-inputs-page-edit.spec.ts, no fault). Left: V4L2 device/controls block (529-617), native-mode hint (474-498), preview polling (654-773)
 www/pipewire-video-inputs.php	(top level)	0	1	43	todo		auto: not examined yet
-www/pipewire-video.php	(inline script)	0	218	515	todo		auto: not examined yet
-www/pixeloverlaymodels.php	(inline script)	0	155	650	todo	web/tests/overlay-models-page-save.spec.ts	partly done 2026-11-12: Save round trip for channel, custom, FB and sub models, refusals, auto-created, add, delete, load and save failures (overlay-models-page-save.spec.ts). Left: submodel preview and expander (504-584), polar buffers table (208-225), running effects modal (961-1031), FB DeviceChanged (325-339, needs a framebuffer)
+www/pipewire-video.php	(inline script)	0	218	518	todo		auto: not examined yet
+www/pixeloverlaymodels.php	(inline script)	0	87	680	todo	web/tests/overlay-models-page-save.spec.ts	partly done 2026-11-12: Save round trip for channel, custom, FB and sub models, refusals, auto-created, add, delete, load and save failures (overlay-models-page-save.spec.ts). Left: submodel preview and expander (504-584), polar buffers table (208-225), running effects modal (961-1031), FB DeviceChanged (325-339, needs a framebuffer)
 www/pixeloverlaymodels.php	(top level)	0	15	73	todo		auto: not examined yet
 www/playlistDetails.php	(top level)	0	1	11	todo		auto: not examined yet
 www/playlistEditor.php	(top level)	0	1	18	todo		auto: not examined yet
-www/playlists.php	(inline script)	0	107	777	test	web/tests/playlists-rename-and-copy-to.spec.ts	partly done 2026-11-13: Rename Playlist (move, same/invalid name refusals), Copy Playlist, select mode Copy to... (section, empty target, refusals, load/save failures) (playlists-rename-and-copy-to.spec.ts); test.fail rename deletes the original after a failed save or on an empty name, rename/copy overwrite an existing playlist (FUTURE.md). Left: export summary text (210-290), LoadInitialPlaylist, history back
+www/playlists.php	(inline script)	0	107	801	test	web/tests/playlists-rename-and-copy-to.spec.ts	partly done 2026-11-13: Rename Playlist (move, same/invalid name refusals), Copy Playlist, select mode Copy to... (section, empty target, refusals, load/save failures) (playlists-rename-and-copy-to.spec.ts); test.fail rename deletes the original after a failed save or on an empty name, rename/copy overwrite an existing playlist (FUTURE.md). Left: export summary text (210-290), LoadInitialPlaylist, history back
 www/plugin.php	(inline script)	0	43	207	todo		auto: not examined yet
 www/plugin.php	(top level)	0	30	130	todo		auto: not examined yet
 www/plugin.php	pluginRealPath	16	5	21	todo		auto: not examined yet
 www/pluginconfig.php	(top level)	0	1	17	todo		auto: not examined yet
-www/plugins.php	(inline script)	0	467	2005	todo	web/tests/plugin-page-install-privacy.spec.ts	partly done 2026-11-13: Install from the page, the install refusal review (listing behind the repository: Accept, Cancel, first disclosure) and Update's changed/removed disclosure dialogs (plugin-page-install-privacy.spec.ts). Left: dependency refusal review, post-OS-upgrade reinstall review (1734-1777), release notes rendering (2393-2430), versions text (2801-2822)
+www/plugins.php	(inline script)	0	467	2009	todo	web/tests/plugin-page-install-privacy.spec.ts	partly done 2026-11-13: Install from the page, the install refusal review (listing behind the repository: Accept, Cancel, first disclosure) and Update's changed/removed disclosure dialogs (plugin-page-install-privacy.spec.ts). Left: dependency refusal review, post-OS-upgrade reinstall review (1734-1777), release notes rendering (2393-2430), versions text (2801-2822)
 www/plugins.php	(top level)	0	1	23	todo		auto: not examined yet
 www/privacyConsent.inc	(top level)	0	1	4	todo		auto: not examined yet
 www/privacyConsent.inc	RecordPrivacyConsent	108	3	19	todo		auto: not examined yet
@@ -1287,10 +1289,10 @@ www/privacyConsent.inc	PrivacyConsentDrift	181	2	12	todo		auto: not examined yet
 www/privacyConsent.inc	PrivacyConsentFor	209	1	9	todo		auto: not examined yet
 www/privacyDisclosures.inc	(top level)	0	1	3	todo		auto: not examined yet
 www/privacyTable.inc	(top level)	0	1	3	todo		auto: not examined yet
-www/proxies.php	(inline script)	0	21	278	todo		auto: not examined yet
-www/rebootRemoteFPP.php	(top level)	0	28	36	test	web/tests/multisync-remote-reboot-helper.spec.ts	the reboot request, the 20 second wait and the status polls until the remote answers; a refused reboot reported as done is a test.fail() (FUTURE.md); left: the 180 second timeout message (too slow to wait for)
+www/proxies.php	(inline script)	0	21	285	todo		auto: not examined yet
+www/rebootRemoteFPP.php	(top level)	0	4	36	test	web/tests/multisync-remote-reboot-helper.spec.ts	the reboot request, the 20 second wait and the status polls until the remote answers; a refused reboot reported as done is a test.fail() (FUTURE.md); left: the 180 second timeout message (too slow to wait for)
 www/rebuildfpp.php	(top level)	0	5	51	todo		auto: not examined yet
-www/recurringtasks.php	(inline script)	0	103	406	test	web/tests/recurring-tasks-page.spec.ts	save, refusals, unreadable file guard and reload failure are tested (recurring-tasks-page.spec.ts, recurring-tasks-presets.spec.ts). Left: Test Run popup and the result Variable viewer (241-388), low value
+www/recurringtasks.php	(inline script)	0	103	410	test	web/tests/recurring-tasks-page.spec.ts	save, refusals, unreadable file guard and reload failure are tested (recurring-tasks-page.spec.ts, recurring-tasks-presets.spec.ts). Left: Test Run popup and the result Variable viewer (241-388), low value
 www/resetConfig.php	(top level)	0	2	99	todo		auto: not examined yet
 www/restartRemoteFPPD.php	(top level)	0	5	46	todo		auto: not examined yet
 www/runEventScript.php	(top level)	0	1	32	todo		auto: not examined yet
@@ -1303,7 +1305,7 @@ www/schedulePreview.php	getItemInfo	119	3	34	todo		auto: not examined yet
 www/schedulePreview.php	showPlaylistEnds	178	3	31	todo		auto: not examined yet
 www/scheduleentry.php	(top level)	0	2	2	todo		auto: not examined yet
 www/scheduleentry.php	__construct	17	14	14	todo		auto: not examined yet
-www/scheduler.php	(inline script)	0	68	803	todo	web/tests/scheduler-holiday-rename-and-save-failures.spec.ts	partly done 2026-11-12: holiday rename/delete/save failure, schedule save failure, Specify Date swap. Left: datepicker Holidays button (381), playlist-problem marker (424), sunrise/sunset and day-mask presets (100-167)
+www/scheduler.php	(inline script)	0	55	810	todo	web/tests/scheduler-holiday-rename-and-save-failures.spec.ts	partly done 2026-11-12: holiday rename/delete/save failure, schedule save failure, Specify Date swap. Left: datepicker Holidays button (381), playlist-problem marker (424), sunrise/sunset and day-mask presets (100-167)
 www/scriptbrowser.php	(inline script)	0	24	103	skip		deprecated page (says so; scripts live in File Manager > Scripts); script-repository.spec.ts covers the notice
 www/settings-all.php	(top level)	0	28	62	todo		auto: not examined yet
 www/settings-av.php	(top level)	0	9	39	todo		auto: not examined yet
@@ -1323,14 +1325,14 @@ www/settings-storage.php	(top level)	0	33	84	todo		auto: not examined yet
 www/settings-storage.php	PrintStorageDeviceSelect	107	4	62	todo		auto: not examined yet
 www/settings-system.php	(top level)	0	1	28	todo		auto: not examined yet
 www/settings-ui.php	(top level)	0	1	26	todo		auto: not examined yet
-www/settings.php	(inline script)	0	121	717	todo		auto: not examined yet
+www/settings.php	(inline script)	0	116	720	todo		auto: not examined yet
 www/settings.php	(top level)	0	9	96	todo		auto: not examined yet
 www/shutdownRemoteFPP.php	(top level)	0	3	16	test	web/tests/multisync-remote-reboot-helper.spec.ts	asked once by POST, by GET when the remote has no POST route; a refused shutdown reported as done is a test.fail() (FUTURE.md)
 www/streamRemoteJobs.php	(top level)	0	14	50	todo		auto: not examined yet
 www/system-stats.php	(inline script)	0	45	571	todo		auto: not examined yet
 www/system-stats.php	(top level)	0	17	134	todo		auto: not examined yet
 www/system-stats.php	formatMemBytes	788	1	6	todo		auto: not examined yet
-www/testing.php	(inline script)	0	155	771	test	web/tests/testing-page-channel-fader.spec.ts	Channel Testing (testing-page-patterns-and-strings, testing-page-custom-patterns-and-sequence), Channel Fader (testing-page-channel-fader): model pick, fader bytes, clamps, sine, takeover, failure
+www/testing.php	(inline script)	0	180	770	test	web/tests/testing-page-channel-fader.spec.ts	Channel Testing (testing-page-patterns-and-strings, testing-page-custom-patterns-and-sequence), Channel Fader (testing-page-channel-fader): model pick, fader bytes, clamps, sine, takeover, failure
 www/testing.php	(top level)	0	8	80	todo		auto: not examined yet
 www/troubleshooting.php	(inline script)	0	132	685	todo		auto: not examined yet
 www/troubleshootingHelper.php	(top level)	0	5	43	todo		auto: not examined yet
@@ -1340,10 +1342,10 @@ www/universeentry.php	__construct	13	10	10	todo		auto: not examined yet
 www/upgradeCapeFirmware.php	(top level)	0	8	77	todo		auto: not examined yet
 www/upgradeCapeFirmware.php	capeFirmwareUrlIsPublic	17	8	73	test	cape-firmware-url-guard.spec.ts	every refusal rule, public accepted; test.fail NAT64/6to4
 www/upgradeCapeFirmware.php	capeFirmwareResolveUrl	141	1	18	todo		auto: not examined yet
-www/upgradeOS.php	(top level)	0	44	157	todo		auto: not examined yet
-www/upgradeOS.php	logStage	85	3	3	todo		auto: not examined yet
-www/upgradeOS.php	downloadImage	92	6	15	skip		dead: only caller commented out (wget replaced PHP curl)
-www/upgradeOS.php	progress	400	7	8	skip		dead: curl progress callback of downloadImage
+www/upgradeOS.php	(top level)	0	20	140	todo		auto: not examined yet
+www/upgradeOS.php	logStage	62	0	3	covered		auto: every line reached
+www/upgradeOS.php	downloadImage	69	25	25	skip		dead: only caller commented out (wget replaced PHP curl)
+www/upgradeOS.php	progress	385	15	15	skip		dead: curl progress callback of downloadImage
 www/upgradefpp.php	(top level)	0	11	43	test	upgradefpp-run.spec.ts	run, verdicts, log, version filter, lock; the non-wrapped HTML half is dead ($wrapped starts at 1)
 www/variables.php	(inline script)	0	96	402	test	web/tests/variables-page-row-actions.spec.ts	Clear, Delete (confirm and cancel), odd names, eye popup with fresh value, load error; sorting and MQTT table left
 www/vban-config.php	(inline script)	0	201	351	todo		auto: not examined yet
@@ -1353,5 +1355,5 @@ www/virtualdisplaybody3d.php	(top level)	0	118	169	todo		auto: not examined yet
 www/virtualdisplaywrapper.php	(inline script)	0	79	303	todo		auto: not examined yet
 www/virtualdisplaywrapper3d.php	(top level)	0	8	42	todo		auto: not examined yet
 www/warningHelper.php	(top level)	0	1	3	todo		auto: not examined yet
-www/win/index.php	(top level)	0	47	47	test	web/tests/wled-json.spec.ts	the XML frame and its headers; T=0, 1 and 2 by GET and POST; a running effect counts as on
+www/win/index.php	(top level)	0	16	47	test	web/tests/wled-json.spec.ts	the XML frame and its headers; T=0, 1 and 2 by GET and POST; a running effect counts as on
 www/wled/index.php	(top level)	0	3	3	todo		auto: not examined yet
