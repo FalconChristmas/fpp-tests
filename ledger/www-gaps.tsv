@@ -58,7 +58,7 @@ scripts/upgradeCapeFirmware	blankCapeChecksum	79	17	17	todo		auto: not examined 
 www/CSP_regeneration_script.php	(top level)	0	1	7	todo		auto: not examined yet
 www/about.php	(inline script)	0	122	993	todo		auto: not examined yet
 www/about.php	(top level)	0	10	93	todo		auto: not examined yet
-www/aes67-config.php	(inline script)	0	298	622	todo		auto: not examined yet
+www/aes67-config.php	(inline script)	0	298	622	test	web/tests/aes67-page-edit.spec.ts	2026-11-13: Add, every stream field, PTP enable/interface/domain/role and fallbacks, channels vs ptime, delete with confirm (last one too), Save & Apply and refused save / failed apply / restart dialogs, idle notice both wordings, status line and PTP detail, SDP dialog (stale fields, disabled, download bytes, not applied) (aes67-page-edit.spec.ts); test.fail failed load then Save wipes the instances, non-ASCII badge slug, two names on one node (FUTURE.md)
 www/api/api.html	(inline script)	0	1	20	todo		auto: not examined yet
 www/api/api.php	(top level)	0	2	15	todo		auto: not examined yet
 www/api/commandhelp.php	(top level)	0	8	19	todo		auto: not examined yet
