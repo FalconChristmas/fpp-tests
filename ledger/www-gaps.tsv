@@ -1274,7 +1274,7 @@ www/pixeloverlaymodels.php	(inline script)	0	155	650	todo	web/tests/overlay-mode
 www/pixeloverlaymodels.php	(top level)	0	15	73	todo		auto: not examined yet
 www/playlistDetails.php	(top level)	0	1	11	todo		auto: not examined yet
 www/playlistEditor.php	(top level)	0	1	18	todo		auto: not examined yet
-www/playlists.php	(inline script)	0	107	777	todo		auto: not examined yet
+www/playlists.php	(inline script)	0	107	777	test	web/tests/playlists-rename-and-copy-to.spec.ts	partly done 2026-11-13: Rename Playlist (move, same/invalid name refusals), Copy Playlist, select mode Copy to... (section, empty target, refusals, load/save failures) (playlists-rename-and-copy-to.spec.ts); test.fail rename deletes the original after a failed save or on an empty name, rename/copy overwrite an existing playlist (FUTURE.md). Left: export summary text (210-290), LoadInitialPlaylist, history back
 www/plugin.php	(inline script)	0	43	207	todo		auto: not examined yet
 www/plugin.php	(top level)	0	30	130	todo		auto: not examined yet
 www/plugin.php	pluginRealPath	16	5	21	todo		auto: not examined yet
