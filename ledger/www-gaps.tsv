@@ -1253,7 +1253,7 @@ www/localonly/cleanedphpinfo.php	(top level)	0	1	48	todo		auto: not examined yet
 www/manualUpdate.php	(top level)	0	6	74	todo		auto: not examined yet
 www/menu.inc	(top level)	0	25	154	todo		auto: not examined yet
 www/menu.inc	list_plugin_entries	33	2	32	todo		auto: not examined yet
-www/multisync.php	(inline script)	0	427	2560	todo		auto: not examined yet
+www/multisync.php	(inline script)	0	427	2560	test	web/tests/multisync-batch-power-mode-copy.spec.ts	partly done 2026-11-13 (60+ older multisync-*.spec.ts cover most of the page; stale count): Reboot, Shutdown, Remote/Player mode and Copy Files on ticked systems reach only those, filtered-out rows left alone, nothing ticked / no action (multisync-batch-power-mode-copy.spec.ts, no fault). Left: ESPixelStick websocket status (2717-2894), OS-file copy refusals (4001-4044), clearDisplayOrder
 www/multisync.php	(top level)	0	3	64	todo		auto: not examined yet
 www/networkconfig.php	(inline script)	0	230	1028	todo	web/tests/network-dns-save-failures.spec.ts	partly done 2026-11-12: gateway and interface validation; Restart Network, persistent names, WiFi status (network-apply-and-status-dialogs.spec.ts); DNS refusals and save failures, ping with no address (network-dns-save-failures.spec.ts). Left: No Interface Selected (748, 957), scan list rows (1575-1631)
 www/networkconfig.php	(top level)	0	2	52	todo		auto: not examined yet
