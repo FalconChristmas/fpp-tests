@@ -615,7 +615,7 @@ www/common.php	filterForPlatformControls	1211	7	7	todo		auto: not examined yet
 www/common.php	LoadTroubleShootingCommands	1231	1	9	todo		auto: not examined yet
 www/common.php	ParseBooleanValue	1306	1	1	todo		auto: not examined yet
 www/common.php	GetFanThermalZones	1348	38	41	todo		auto: not examined yet
-www/common.php	PrintFanThermalSettings	1418	48	51	todo		auto: not examined yet
+www/common.php	PrintFanThermalSettings	1418	48	51	skip		renders only from /sys/class/thermal fan-bound trip points; container has none and sysfs is read-only
 www/common.php	ShouldPrintSetting	1483	5	60	todo		auto: not examined yet
 www/common.php	PrintSetting	1580	9	172	todo		auto: not examined yet
 www/common.php	PrintPluginSettingGroup	1836	2	2	todo		auto: not examined yet
@@ -1317,7 +1317,7 @@ www/settings-mqtt.php	(inline script)	0	60	60	todo		auto: not examined yet
 www/settings-mqtt.php	(top level)	0	1	6	todo		auto: not examined yet
 www/settings-output.php	(top level)	0	1	7	todo		auto: not examined yet
 www/settings-playback.php	(top level)	0	1	8	todo		auto: not examined yet
-www/settings-privacy.php	(top level)	0	1	12	todo		auto: not examined yet
+www/settings-privacy.php	(top level)	0	1	12	test	web/tests/settings-privacy-save-failures.spec.ts	2026-11-13: failed PUT (message, no consent, re-sent next change), consent POST failure message; FAULT partial failure leaves a saved withdrawal unstamped (FUTURE.md)
 www/settings-services.php	(top level)	0	2	16	todo		auto: not examined yet
 www/settings-storage.php	(top level)	0	33	84	todo		auto: not examined yet
 www/settings-storage.php	PrintStorageDeviceSelect	107	4	62	todo		auto: not examined yet
