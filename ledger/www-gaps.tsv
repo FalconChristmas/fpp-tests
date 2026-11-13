@@ -1094,7 +1094,7 @@ www/js/fpp.js	UploadCrashReportViaBrowser	10394	2	51	test	crash-upload-delivery.
 www/js/fpp.js	DeleteUploadedCrashReport	10456	2	19	test	crash-upload-delivery.spec.ts	player send, browser fallback once, unconfirmed/refused/missing kept, delete only after delivery, results wording
 www/js/fpp.js	ReportCrashUploadResults	10476	0	53	test	crash-upload-delivery.spec.ts	player send, browser fallback once, unconfirmed/refused/missing kept, delete only after delivery, results wording
 www/js/fpp.js	SetupSelectableTableRow	10531	8	50	todo		auto: not examined yet
-www/js/fpp.js	handleVisibilityChange	10665	6	15	todo		auto: not examined yet
+www/js/fpp.js	handleVisibilityChange	10665	6	15	test	web/tests/status-socket-client.spec.ts	socket closed by fppd / hidden tab / held snapshot drawn when shown
 www/js/fpp.js	syntaxHighlight	10690	3	24	todo		auto: not examined yet
 www/js/fpp.js	CommandToJSON	10715	18	70	todo		auto: not examined yet
 www/js/fpp.js	UpdateChildVisibility	10884	2	37	todo		auto: not examined yet

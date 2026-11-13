@@ -145,3 +145,109 @@ test('a replaced socket closing late does not stop the page noticing the new one
     clearInterval(timer);
   }
 });
+
+// A snapshot the page can be seen to draw: the status page's "Next
+// Playlist" line names the marker.  (fpp.js also writes jsonStatus.time to
+// a #fppTime that no page has.)
+function marked(base: Status, marker: string): string {
+  return snapshot({ ...base, scheduler: { ...(base.scheduler || {}),
+    nextPlaylist: { playlistName: marker, scheduledStartTimeStr: 'fpp-tests' } } });
+}
+const nextPlaylist = (page: Page) => page.locator('#nextPlaylist');
+
+test('a socket fppd closes (a restart) falls back to the full poll, reconnects, and shows the new data', async ({ page }) => {
+  test.setTimeout(60_000);
+  const base = await fppdStatus(page);
+  const polls = statusPolls(page);
+  const sockets: WebSocketRoute[] = [];
+  await page.routeWebSocket('**/fppdws', (ws) => { sockets.push(ws); });
+  let time = 'fpp-tests 09:00:01';
+  const timer = setInterval(() => {
+    const live = sockets[sockets.length - 1];
+    if (live) live.send(marked(base, time));
+  }, 1000);
+  try {
+    await page.goto('/index.php');
+    await expect(nextPlaylist(page)).toContainText(time, { timeout: 15_000 });
+    await page.waitForTimeout(1500);
+    const before = polls.length;
+    const closedAt = Date.now();
+    // fppd restarting closes the socket from its end.
+    await sockets[0].close({ code: 1001, reason: 'fpp-tests restart' });
+    // The full status (not ?systemonly=1) is asked for at once.
+    await expect.poll(() => polls.slice(before).filter((p) => !p.url.includes('systemonly')).length, { timeout: 5_000 }).toBeGreaterThan(0);
+    // A new socket within a couple of seconds, and what it sends is shown.
+    await expect.poll(() => sockets.length, { timeout: 10_000 }).toBe(2);
+    expect(Date.now() - closedAt).toBeLessThan(5_000);
+    time = 'fpp-tests 09:05:42';
+    await expect(nextPlaylist(page)).toContainText(time, { timeout: 10_000 });
+  } finally {
+    clearInterval(timer);
+  }
+});
+
+// A phone switching to another app hides the tab; document.hidden is played
+// by the test.
+async function setHidden(page: Page, hidden: boolean) {
+  await page.evaluate((h) => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => h });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (h ? 'hidden' : 'visible') });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+}
+
+test('a hidden tab stops drawing and polling, and is current the moment it is shown again', async ({ page }) => {
+  test.setTimeout(90_000);
+  const base = await fppdStatus(page);
+  const polls = statusPolls(page);
+  const sockets: WebSocketRoute[] = [];
+  await page.routeWebSocket('**/fppdws', (ws) => { sockets.push(ws); });
+  let time = 'fpp-tests 10:00:01';
+  const timer = setInterval(() => {
+    const live = sockets[sockets.length - 1];
+    if (live) live.send(marked(base, time));
+  }, 1000);
+  try {
+    await page.goto('/index.php');
+    await expect(nextPlaylist(page)).toContainText(time, { timeout: 15_000 });
+    await setHidden(page, true);
+    const hiddenAt = polls.length;
+    time = 'fpp-tests 10:07:30';
+    await page.waitForTimeout(3000);
+    // Received, but not drawn while nobody is looking.
+    await expect(nextPlaylist(page)).not.toContainText(time);
+    // The socket closes while hidden: still no poll in a hidden tab.
+    await sockets[0].close({ code: 1001 });
+    await page.waitForTimeout(3000);
+    expect(polls.slice(hiddenAt), 'polled while hidden').toEqual([]);
+
+    // The page reconnects in a hidden tab too (1 s), so it is current when shown.
+    await expect.poll(() => sockets.length, { timeout: 10_000 }).toBeGreaterThan(1);
+    expect(polls.slice(hiddenAt), 'polled while hidden').toEqual([]);
+
+    // Shown again: the new socket's data is drawn, and polling resumes (the
+    // PHP half, as the socket is live again).
+    await setHidden(page, false);
+    await expect(nextPlaylist(page)).toContainText(time, { timeout: 2_000 });
+    await expect.poll(() => polls.slice(hiddenAt).length, { timeout: 5_000 }).toBeGreaterThan(0);
+  } finally {
+    clearInterval(timer);
+  }
+});
+
+test('a snapshot received while hidden is drawn as soon as the tab is shown', async ({ page }) => {
+  const base = await fppdStatus(page);
+  const sockets: WebSocketRoute[] = [];
+  await page.routeWebSocket('**/fppdws', (ws) => { sockets.push(ws); });
+  await page.goto('/index.php');
+  await expect.poll(() => sockets.length, { timeout: 15_000 }).toBe(1);
+  sockets[0].send(marked(base, 'fpp-tests 11:00:00'));
+  await expect(nextPlaylist(page)).toContainText('fpp-tests 11:00:00', { timeout: 10_000 });
+  await setHidden(page, true);
+  sockets[0].send(marked(base, 'fpp-tests 11:00:05'));
+  await page.waitForTimeout(500);
+  await expect(nextPlaylist(page)).toContainText('fpp-tests 11:00:00');
+  await setHidden(page, false);
+  // No new frame needed: the one held while hidden is applied.
+  await expect(nextPlaylist(page)).toContainText('fpp-tests 11:00:05', { timeout: 2_000 });
+});
