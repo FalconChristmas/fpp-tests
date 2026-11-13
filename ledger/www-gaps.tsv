@@ -1251,7 +1251,7 @@ www/jurisdiction.inc	jurisdictionForCountry	171	4	10	todo		auto: not examined ye
 www/jurisdiction.inc	localeForCountry	200	2	11	todo		auto: not examined yet
 www/localonly/cleanedphpinfo.php	(top level)	0	1	48	todo		auto: not examined yet
 www/manualUpdate.php	(top level)	0	6	74	todo		auto: not examined yet
-www/menu.inc	(top level)	0	25	154	todo		auto: not examined yet
+www/menu.inc	(top level)	0	25	154	test	web/tests/menu-pages-load.spec.ts	every menu page at Basic and Advanced answers 200 with no script error
 www/menu.inc	list_plugin_entries	33	2	32	todo		auto: not examined yet
 www/multisync.php	(inline script)	0	427	2560	test	web/tests/multisync-batch-power-mode-copy.spec.ts	partly done 2026-11-13 (60+ older multisync-*.spec.ts cover most of the page; stale count): Reboot, Shutdown, Remote/Player mode and Copy Files on ticked systems reach only those, filtered-out rows left alone, nothing ticked / no action (multisync-batch-power-mode-copy.spec.ts, no fault). Left: ESPixelStick websocket status (2717-2894), OS-file copy refusals (4001-4044), clearDisplayOrder
 www/multisync.php	(top level)	0	3	64	todo		auto: not examined yet
@@ -1304,7 +1304,7 @@ www/schedulePreview.php	showPlaylistEnds	178	3	31	todo		auto: not examined yet
 www/scheduleentry.php	(top level)	0	2	2	todo		auto: not examined yet
 www/scheduleentry.php	__construct	17	14	14	todo		auto: not examined yet
 www/scheduler.php	(inline script)	0	68	803	todo	web/tests/scheduler-holiday-rename-and-save-failures.spec.ts	partly done 2026-11-12: holiday rename/delete/save failure, schedule save failure, Specify Date swap. Left: datepicker Holidays button (381), playlist-problem marker (424), sunrise/sunset and day-mask presets (100-167)
-www/scriptbrowser.php	(inline script)	0	24	103	todo		auto: not examined yet
+www/scriptbrowser.php	(inline script)	0	24	103	skip		deprecated page (says so; scripts live in File Manager > Scripts); script-repository.spec.ts covers the notice
 www/settings-all.php	(top level)	0	28	62	todo		auto: not examined yet
 www/settings-av.php	(top level)	0	9	39	todo		auto: not examined yet
 www/settings-developer.php	(top level)	0	13	40	todo		auto: not examined yet
