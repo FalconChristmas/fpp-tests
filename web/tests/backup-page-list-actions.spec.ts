@@ -192,6 +192,7 @@ test.describe("what a backup says was changed is shown as it is written", () => 
   });
 
   test('text with markup in it', async ({ page }) => {
+    // Regression: c22365699 ("fix(backup): a backup's comment is shown as text in the backup lists").
     // The comment is put into the row as HTML.  It is whatever the backup
     // file says: a backup brought from another player, or made by a change
     // whose description holds a name (a config file, a plugin).  In FUTURE.md.
