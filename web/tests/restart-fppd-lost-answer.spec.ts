@@ -10,6 +10,9 @@ import type { Page } from '@playwright/test';
 type Mode = 'down' | 'stopped' | 'running';
 
 async function restartWithNoAnswer(page: Page, state: { mode: Mode }, tries?: number) {
+  // On the player too: a status the test lets through carries the player's
+  // flag, and the page takes it.
+  await page.request.put('/api/settings/restartFlag', { data: '1', headers: { 'Content-Type': 'text/plain' } });
   await page.goto('/index.php');
   await page.waitForFunction(() => typeof (window as any).RestartFPPD === 'function' && (window as any).settings);
   const restarts: string[] = [];
