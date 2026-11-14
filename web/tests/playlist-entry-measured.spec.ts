@@ -185,6 +185,7 @@ test.describe("a missing file's name is shown as it is written", () => {
   });
 
   test('a name with markup in it', async ({ page, request }) => {
+    // Regression: 8bd77868b ("fix(ui): a missing item's name is shown as text in the playlist editor").
     // The editor decodes the name it reads off the row and puts it into the
     // error line as HTML, so the file's <u> becomes an element.  The same is
     // done with a missing sequence's name and a missing playlist's.  In
