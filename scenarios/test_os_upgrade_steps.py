@@ -324,3 +324,32 @@ def test_an_upgrade_hands_over_to_the_images_part2_not_the_running_systems(tmp_p
     out = bash(prelude + block, tmp_path)
     assert "part2 from the image" in out, out
     assert "running system" not in out, out
+
+
+def part2_head(tmp_path, functions):
+    """part2 up to its first step, sourcing an image's scripts/common and
+    scripts/functions (`functions` is the latter's text) from tmp_path."""
+    block = between("#!/bin/bash", "\ncd /\n")
+    scripts = tmp_path / "scripts"
+    write(str(scripts / "common"), "")
+    write(str(scripts / "functions"), functions)
+    return block.replace("/opt/fpp/scripts/", f"{scripts}/")
+
+
+def test_part2s_stage_headers_work_over_an_image_older_than_fpp_10(tmp_path):
+    """part2 takes its helpers from the image it runs in, and on some
+    downgrades (part1 running the box's newer part2 over a 9.x image) that
+    image's scripts/functions has no logStage.
+
+    Regression: f0b52854f. Every stage header failed with "logStage:
+    command not found" and the upgrade dialog's status line stopped moving.
+    part2 now defines it when the image does not."""
+    out = bash(part2_head(tmp_path, "") + 'logStage "Copying files"\n', tmp_path)
+    assert "Copying files" in out, out
+    assert "not found" not in out, out
+
+
+def test_part2_uses_the_images_own_logstage_when_it_has_one(tmp_path):
+    """The control: an image that has logStage keeps its own."""
+    out = bash(part2_head(tmp_path, 'logStage() { echo "IMAGE STAGE: $1"; }\n') + 'logStage "Copying files"\n', tmp_path)
+    assert out.strip() == "IMAGE STAGE: Copying files", out
