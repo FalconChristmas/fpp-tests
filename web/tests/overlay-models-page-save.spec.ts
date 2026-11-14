@@ -163,6 +163,7 @@ test.describe('a model that cannot work', () => {
   }
 
   test('is named in the message that stops the save', async ({ page }) => {
+    // Regression: bb1592d80 ("fix(ui): Pixel Overlay Models can't be saved over when they failed to load").
     const { alerts } = await open(page, [channel('good'), channel('porch-roof', { StartChannel: 200 })]);
     await row(page, 'porch-roof').locator('input.strcnt').fill('0');
     await save(page);
@@ -282,6 +283,7 @@ test('a save the player does not take is reported, with no restart asked for and
 });
 
 test('models that cannot be read are reported, and the empty table is not there to be saved over them', async ({ page }) => {
+  // Regression: bb1592d80 ("fix(ui): Pixel Overlay Models can't be saved over when they failed to load").
   const { posts } = await open(page, [], { loadStatus: 500 });
   const dialog = page.locator('#dialogOKPopup');
   await expect(dialog).toContainText('Load Failed, is fppd running?');
