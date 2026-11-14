@@ -62,3 +62,35 @@ test('cancelling the Rename prompt leaves the image alone', async ({ page }) => 
   expect(exists(`${IMAGES}/${NAME}`), 'the image keeps its name').toBe(true);
   expect(exists(`${IMAGES}/null`), 'no image called null').toBe(false);
 });
+
+test('Rename is off with nothing selected when the image listing arrives before the page has set up', async ({ page }) => {
+  // Regression: f824f1fbb.  The selection buttons are written with only the
+  // disableButtons class; the disabled state came only from a table redraw
+  // or a row click, through a handler bound as the page finishes setting up.
+  // A listing that came back first (a slow board, a busy browser) rendered
+  // its table before that handler was there, so Rename looked off but still
+  // worked with nothing selected.  Here the page's set-up (jQuery's ready)
+  // is held until the Images listing has rendered.
+  await page.addInitScript(() => {
+    let jq: any;
+    let held = false;
+    Object.defineProperty(window, 'jQuery', {
+      configurable: true,
+      get: () => jq,
+      set: (v) => { jq = v; if (!held && v && v.holdReady) { held = true; v.holdReady(true); } },
+    });
+  });
+  // Answered once the document has loaded, so it renders at once.
+  await page.route('**/api/files/Images*', async (r) => {
+    await page.waitForFunction(() => document.readyState !== 'loading');
+    await r.continue();
+  });
+  await page.goto(`/filemanager.php?fpp-tests=${Date.now()}#tab-images`);
+  const row = page.locator('#tblImages tbody tr').filter({ has: page.locator('td', { hasText: new RegExp(`^${NAME.replace('.', '\\.')}$`) }) });
+  await expect(row).toHaveCount(1);
+  await page.evaluate(() => (window as any).jQuery.holdReady(false));
+  await page.waitForLoadState('load');
+  await page.locator('#tab-images-tab').click();
+  await expect(row).toBeVisible();
+  await expect(page.locator('#tab-images input[value="Rename"]')).toBeDisabled();
+});
