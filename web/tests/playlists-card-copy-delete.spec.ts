@@ -34,6 +34,9 @@ test('a copy made in the editor is in the card list without a reload', async ({ 
   await page.goto('/playlists.php');
   await card(page, NAME).locator('h3').click();
   await expect(page.locator('#playlistEditor')).toHaveClass(/hasPlaylistDetailsLoaded/);
+  // EditPlaylist() sets the class as the load starts; Copy names the copy
+  // from the loaded name.
+  await expect(page.locator('#txtPlaylistName')).toHaveValue(NAME);
   await page.evaluate(() => (window as any).CopyPlaylist());
   const dialog = page.locator('#CopyPlaylistDialog');
   await expect(dialog.locator('.newPlaylistName')).toHaveValue(`${NAME} - Copy`);
