@@ -27,7 +27,6 @@ test.describe('schedule preview scrolling', () => {
   });
 
   test('the preview scrolls inside the dialog with its column headings in view', async ({ page, request }) => {
-    test.fail(true, 'the headings float against the window, not the preview\'s scrolling box (FUTURE.md)');
     // Regression: 09ef4ef6a.  The whole dialog body scrolled, and once the
     // rows had scrolled the headings floated over them were pinned above
     // the body's top edge, partly over the dialog's title bar.  Now the
