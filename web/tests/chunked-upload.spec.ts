@@ -2,7 +2,7 @@ import net from 'net';
 import { createHash } from 'crypto';
 import { test, expect } from './fixtures';
 import type { APIRequestContext } from '@playwright/test';
-import { container, inPlayer } from './container';
+import { container, docker, inPlayer } from './container';
 
 // FilePond's chunked upload, as the File Manager sends it: a POST to
 // api/file/upload for a transfer id, then one PATCH per chunk with
@@ -57,8 +57,9 @@ async function start(request: APIRequestContext): Promise<string> {
   return (await r.text()).trim();
 }
 
-function chunk(request: APIRequestContext, id: string, name: string, offset: number | string, length: number, body: Buffer) {
-  return request.patch(`/api/file/upload?patch=${encodeURIComponent(id)}`, {
+function chunk(request: APIRequestContext, id: string, name: string, offset: number | string, length: number, body: Buffer,
+  dir = 'upload') {
+  return request.patch(`/api/file/${dir}?patch=${encodeURIComponent(id)}`, {
     headers: {
       'Content-Type': 'application/offset+octet-stream',
       'Upload-Name': name,
@@ -202,5 +203,78 @@ test('a late retry of the final chunk is answered OK and leaves nothing behind',
     }
   } finally {
     clean(name);
+  }
+});
+
+// Every name created in, or renamed into, a directory while body() runs, as
+// "CREATE <name>" or "MOVED_TO <name>", from inotify inside the player.
+const WATCH_LOG = '/tmp/fpp-tests-inotify.log';
+const WATCHER = `
+import ctypes, os, struct, sys
+libc = ctypes.CDLL(None, use_errno=True)
+fd = libc.inotify_init()
+libc.inotify_add_watch(fd, sys.argv[1].encode(), 0x100 | 0x80)  # IN_CREATE | IN_MOVED_TO
+out = open(sys.argv[2], 'w', buffering=1)
+out.write('READY\\n')
+while True:
+    buf = os.read(fd, 65536)
+    i = 0
+    while i < len(buf):
+        _, mask, _, n = struct.unpack_from('iIII', buf, i)
+        name = buf[i + 16:i + 16 + n].rstrip(b'\\0').decode(errors='replace')
+        out.write(('CREATE ' if mask & 0x100 else 'MOVED_TO ') + name + '\\n')
+        i += 16 + n
+`;
+async function namesMadeIn(dir: string, body: () => Promise<void>): Promise<string[]> {
+  inPlayer('rm', '-f', WATCH_LOG);
+  // "fpp-tests-inotify" in its arguments, so the pkill below finds only it.
+  docker('exec', '-d', container, 'python3', '-c', WATCHER, dir, WATCH_LOG, 'fpp-tests-inotify');
+  try {
+    await expect.poll(() => inPlayer('sh', '-c', `cat ${WATCH_LOG} 2>/dev/null || true`).trim(), { timeout: 5_000 }).toBe('READY');
+    await body();
+    return inPlayer('cat', WATCH_LOG).split('\n').filter((l) => l && l !== 'READY');
+  } finally {
+    inPlayer('sh', '-c', `pkill -f "fpp-tests-inotify[ ]*$" || true; rm -f ${WATCH_LOG}`);
+  }
+}
+
+test('a sequence fppd is playing is replaced by a whole upload, never a part of one', async ({ request }) => {
+  // Regression: 478e1ae26.  A chunked upload over a sequence fppd has open
+  // (and so locked) is written to <name>.replace, which fppd swaps in over
+  // the sequence whenever it opens or closes one, without checking that it is
+  // complete.  It was written there chunk by chunk, so it existed empty from
+  // the first write on: a sequence that stopped or started part way through
+  // the upload was swapped for part of it.  Now it is put together as
+  // <name>.replace.part and renamed to <name>.replace once it is all there.
+  const SEQ = '/home/fpp/media/sequences';
+  const name = 'fpp-tests-chunk-playing.fseq';
+  const file = `${SEQ}/${name}`;
+  const data = payload(3);
+  const rmAll = () => inPlayer('sh', '-c', `cd ${SEQ} && rm -f -- "${name}" "${name}".*`);
+  rmAll();
+  inPlayer('sh', '-c', `printf ORIGINAL > "${file}"`);
+  // fppd holds a shared flock on the sequence it plays; another process's
+  // shared lock stands in for it, so fppd never reads the test's file.
+  docker('exec', '-d', container, 'flock', '-s', file, 'sleep', '17.37');
+  try {
+    await expect.poll(() => inPlayer('sh', '-c', `flock -n -x "${file}" true && echo free || echo held`).trim(),
+      { timeout: 5_000 }).toBe('held');
+    const made = await namesMadeIn(SEQ, async () => {
+      const id = await start(request);
+      for (const i of [0, 1, 2]) {
+        const r = await chunk(request, id, name, i * CHUNK, data.length, data.subarray(i * CHUNK, (i + 1) * CHUNK), 'sequences');
+        expect(r.ok(), `chunk ${i}: ${await r.text()}`).toBe(true);
+      }
+    });
+    // The control: the upload went where fppd will swap it in, whole.
+    expect(inPlayer('sh', '-c', `sha256sum "${file}.replace" | cut -d' ' -f1`).trim()).toBe(sha(data));
+    expect(inPlayer('cat', file), 'the locked sequence was written to in place').toBe('ORIGINAL');
+    // A <name>.replace that is created, rather than renamed into place,
+    // exists empty, and grows as the chunks are copied into it.
+    expect(made.filter((l) => l.endsWith(`${name}.replace`)),
+      `${name}.replace existed before it was complete`).toEqual([`MOVED_TO ${name}.replace`]);
+  } finally {
+    inPlayer('sh', '-c', 'pkill -f "sleep 17[.]37" || true');
+    rmAll();
   }
 });
