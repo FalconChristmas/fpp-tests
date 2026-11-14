@@ -375,10 +375,13 @@ test.describe('media entries', () => {
       const rows = page.locator('#tblPlaylistMainPlaylist tr.playlistRow');
       await expect(rows).toHaveCount(4);
       await expect(rows.nth(0)).toHaveClass(/playlistRowWarning/);
-      await expect(rows.nth(0)).toHaveAttribute('title', /fpp-tests-gone\.fseq/);
       await expect(rows.nth(0).locator('.playlistEntryWarningIcon')).toHaveCount(1);
       await expect(rows.nth(1)).toHaveClass(/playlistRowWarning/);
-      await expect(rows.nth(1)).toHaveAttribute('title', /fpp-tests-gone\.mp3/);
+      // The ⚠ says what is wrong, in a tooltip a hover (or a tap) opens (4cd2c63f6).
+      await rows.nth(0).locator('.playlistEntryWarningIcon').hover();
+      await expect(page.locator('.tooltip.show')).toContainText('fpp-tests-gone.fseq');
+      await rows.nth(1).locator('.playlistEntryWarningIcon').hover();
+      await expect(page.locator('.tooltip.show')).toContainText('fpp-tests-gone.mp3');
       // The control: entries whose files are there are not marked.
       for (const i of [2, 3]) {
         await expect(rows.nth(i)).not.toHaveClass(/playlistRowWarning/);
