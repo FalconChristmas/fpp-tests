@@ -112,6 +112,7 @@ test('the control: an upload replaces a sequence nothing has open', async ({ req
 });
 
 test('an upload over a sequence fppd has open takes its place, and fppd reads on in the old one', async ({ request }) => {
+  // Regression: cbc274128 ("fix(api): a sequence upload replaces the old file only once it has all arrived").
   putFile(FILE, 'ORIGINAL');
   await withSharedLock(FILE, async () => {
     const r = await request.post(`/api/sequence/${NAME}`, { data: 'NEW VERSION' });
@@ -123,6 +124,7 @@ test('an upload over a sequence fppd has open takes its place, and fppd reads on
 });
 
 test('a <name>.replace left by an earlier upload is not swapped in over a newer one', async ({ request }) => {
+  // Regression: cbc274128 ("fix(api): a sequence upload replaces the old file only once it has all arrived").
   // fppd renames <name>.replace over the sequence when it next opens it
   // (src/Sequence.cpp checkForReplacementFile).
   putFile(FILE, 'ORIGINAL');
@@ -134,6 +136,7 @@ test('a <name>.replace left by an earlier upload is not swapped in over a newer 
 });
 
 test('a sequence linked in from other media is replaced there, and keeps its link', async ({ request }) => {
+  // Regression: cbc274128 ("fix(api): a sequence upload replaces the old file only once it has all arrived").
   // Shows on USB media are often linked into the sequence directory.  fppd
   // and the chunked upload put a <name>.replace beside the link's name.
   const REAL = `${MEDIA}/${NAME}-real.fseq`;
@@ -164,6 +167,7 @@ function cutOffPost(path: string, declared: number, sent: string): Promise<void>
 }
 
 test('an upload cut off part way does not replace the sequence', async () => {
+  // Regression: cbc274128 ("fix(api): a sequence upload replaces the old file only once it has all arrived").
   putFile(FILE, 'ORIGINAL');
   await cutOffPost(`/api/sequence/${NAME}`, 100_000, 'THE FIRST FEW BYTES');
   // The server finishes the request once it sees the connection close.
@@ -173,6 +177,7 @@ test('an upload cut off part way does not replace the sequence', async () => {
 });
 
 test('an upload with no body does not empty the sequence it names', async ({ request }) => {
+  // Regression: cbc274128 ("fix(api): a sequence upload replaces the old file only once it has all arrived").
   putFile(FILE, 'ORIGINAL');
   const r = await request.post(`/api/sequence/${NAME}`);
   expect(shaInPlayer(FILE), `the sequence was emptied (answer ${r.status()} ${await r.text()})`).toBe(sha('ORIGINAL'));
@@ -180,6 +185,7 @@ test('an upload with no body does not empty the sequence it names', async ({ req
 });
 
 test('an upload that cannot be written is reported as an error', async ({ request }) => {
+  // Regression: cbc274128 ("fix(api): a sequence upload replaces the old file only once it has all arrived").
   // A directory where the file would go: the one write failure a root player
   // can stage.
   inPlayer('mkdir', '-p', FILE);
