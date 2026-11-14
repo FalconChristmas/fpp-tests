@@ -65,6 +65,7 @@ for (const [what, opts] of [
   ['a body that is a number', raw('7')],
 ] as const) {
   test(`a save with ${what} does not empty the playlist`, async ({ request }) => {
+    // Regression: 6e3da8bcd ("fix(api): a playlist save with no playlist in the request is refused").
     const r = await request.post(`/api/playlist/${NAME}`, opts);
     expect(readFile(FILE), `the playlist was replaced (answer ${r.status()} ${(await r.text()).slice(0, 120)})`).toBe(SEEDED);
     expect(r.status()).toBeGreaterThanOrEqual(400);
@@ -72,6 +73,7 @@ for (const [what, opts] of [
 }
 
 test('a save whose sections are not lists is refused as a bad playlist', async ({ request }) => {
+  // Regression: 6e3da8bcd ("fix(api): a playlist save with no playlist in the request is refused").
   const r = await request.post(`/api/playlist/${NAME}`, { data: { name: NAME, leadIn: 5, mainPlaylist: 'all of it' } });
   const text = await r.text();
   expect(readFile(FILE), 'the control: this one is not written').toBe(SEEDED);
