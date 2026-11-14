@@ -32,3 +32,23 @@ test('each streamed run is its own request, never a cached copy of the last', as
   expect(seen[1]).toMatch(/^200 \?_=\d+$/);
   expect(seen[0], 'both runs asked for the same URL').not.toBe(seen[1]);
 });
+
+test('an error reply is shown once, not twice', async ({ page }) => {
+  // Regression: f92a46504 ("fix(ui): StreamURL shows an error reply once, not
+  // twice").  An error body streams too, so onprogress had already shown it
+  // when the failure handler added the whole reply again: a refusal such as
+  // a remote restart's 502 or the update lock's 409 showed its ERROR line
+  // twice.  restartRemoteFPPD.php with no ip is a 400 with one ERROR line.
+  await page.goto('/index.php');
+  await page.evaluate(() => {
+    const t = document.createElement('textarea');
+    t.id = 'fppTestsStream';
+    document.body.appendChild(t);
+  });
+  await page.evaluate(() => new Promise<void>((done) => {
+    (window as any).fppTestsDone = done;
+    (window as any).StreamURL('restartRemoteFPPD.php', 'fppTestsStream', 'fppTestsDone', 'fppTestsDone');
+  }));
+  const shown = await page.locator('#fppTestsStream').inputValue();
+  expect(shown.split('ERROR: No IP given').length - 1, JSON.stringify(shown)).toBe(1);
+});
