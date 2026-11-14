@@ -75,6 +75,7 @@ test('a device name is cut to letters and digits before it reaches a command', a
 // media line as /dev/, which the kernel cannot mount.  It now leaves the line
 // alone.
 test('a device name that sanitizes to nothing leaves the media line alone', async ({ request }) => {
+  // Regression: 434c1e81e ("fix(settings): the storageDevice probe no longer warns or writes an empty device").
   filesystem('Linux rev 1.0 ext4 filesystem data');
   expect(await choose(request, '!!!')).toBe(MEDIA_LINE.trim());
 });
