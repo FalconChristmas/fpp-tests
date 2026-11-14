@@ -57,7 +57,11 @@ test('a Baldrick board\'s state, uptime and firmware come from its /system_state
     // The board's test mode is its status, and the newer firmware it offers
     // is flagged on its version.
     await expect(row).toContainText('Testing', { timeout: 20_000 });
-    await expect(row.locator('span.text-warning[title="Update available: v3.6.0"]')).toContainText('v3.5.4');
+    // SetupToolTips() moves a title into data-bs-tooltip-title when its sweep
+    // runs after the render, so either holds the text.
+    const upd = 'Update available: v3.6.0';
+    await expect(row.locator(`span.text-warning:is([title="${upd}"], [data-bs-tooltip-title="${upd}"], ` +
+      `[data-bs-original-title="${upd}"])`)).toContainText('v3.5.4');
     // The player asked the board itself.
     expect(board.requests().map((q) => q.path)).toContain('/system_state');
   } finally {
