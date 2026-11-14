@@ -22,6 +22,7 @@ async function extend(page: Page, answer: string | null) {
 const refused = (page: Page) => expect(page.locator('#dialogOKPopup')).toContainText('Minutes must be a number between -180 and 720.');
 
 test('minutes in range are sent as seconds, and out of range or cancelled sends nothing', async ({ page }) => {
+  // Regression: 7dc653ada ("fix(ui): Extend Schedule refuses an answer that is not a number").
   expect(await extend(page, '30')).toEqual([{ command: 'Extend Schedule', args: [1800] }]);
   expect(await extend(page, '-180')).toEqual([{ command: 'Extend Schedule', args: [-10800] }]);
   expect(await extend(page, '721')).toEqual([]);
@@ -32,6 +33,7 @@ test('minutes in range are sent as seconds, and out of range or cancelled sends 
 });
 
 test('an answer that is not a number is refused, not sent', async ({ page }) => {
+  // Regression: 7dc653ada ("fix(ui): Extend Schedule refuses an answer that is not a number").
   expect(await extend(page, 'ten')).toEqual([]);
   await refused(page);
 });
