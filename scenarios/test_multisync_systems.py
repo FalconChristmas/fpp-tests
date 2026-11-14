@@ -567,3 +567,23 @@ def test_a_containers_external_address_is_listed_as_its_own(fppd):
     fppd.wait_for(lambda: any(s.get("local") and s["address"] == "10.9.9.9"
                               for s in fppd.get("/fppd/multiSyncSystems")["systems"]),
                   timeout=10, what="the external address to be listed")
+
+
+def test_the_local_channel_ranges_are_sorted_and_overlaps_merged(fppd):
+    """This box's own channel ranges, from outputs listed out of order and
+    overlapping, come out sorted, with the overlapping pair as one range and
+    ranges more than 1025 channels apart kept apart.
+
+    Regression: 1ac0fc8c7 (the sortRanges half). sortRanges() took the
+    range list by value, so it sorted and merged a copy and the ranges were
+    used as the outputs had added them.
+    """
+    universes = [_ddp_universe(5000, 100, 0), _ddp_universe(0, 100, 1),
+                 _ddp_universe(1500, 100, 2), _ddp_universe(50, 100, 3)]
+    fppd.write("config/co-universes.json", {"channelOutputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 5100,
+        "universes": universes}]})
+    fppd.settings(DisableFakeNetworkBridges="1")
+    fppd.start()
+    local = [s for s in fppd.get("/fppd/multiSyncSystems")["systems"] if s.get("local")]
+    assert local and local[0]["channelRanges"] == "0-149,1500-1599,5000-5099", local
