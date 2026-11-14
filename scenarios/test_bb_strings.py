@@ -6,6 +6,7 @@ Device only: run with run-local.sh on a PocketBeagle2. Skipped elsewhere.
 """
 
 import os
+import re
 import time
 
 from bbcape import fake_pru, pixel_output, strings_config, write_string_cape
@@ -326,6 +327,41 @@ def test_falcon_v5_queries_are_charged_to_the_frame_budget(fppd):
     share = float(queries[0].split("queries on ")[1].split("%")[0]) / 100
     assert share > 0, queries
     assert abs(ms(queries[0]) - ms(base[0]) - 2.9 * share) < 0.1, base
+
+
+def frame_ms(line):
+    return float(line.split("-> ")[1].split("ms/frame")[0])
+
+
+def overhead_ms(line):
+    """What a "longest string" line charges on top of the string data: its
+    frame time less the data's bytes at its bit cell."""
+    m = re.search(r"longest string (\d+) bytes at (\d+)ns/bit", line)
+    assert m, line
+    return frame_ms(line) - int(m.group(1)) * 8 * int(m.group(2)) / 1e6
+
+
+def test_a_send_only_v4_chain_is_charged_its_config_packet_not_the_v5_phase(fppd):
+    """A Falcon V4 (send-only) receiver chain adds only its config packet
+    to the frame time, averaged over the one frame in twelve that carries
+    it: ~0.06 ms on top of the 0.3 ms reset, so the frame is the string
+    data plus ~0.36 ms.
+
+    Regression: 49d8d8315. Any Falcon receiver chain was charged a flat
+    1400 us -- a V5 measurement, packet and listen phase on most frames --
+    so a V4 config's frame came out ~1.7 ms over its data and its
+    frame-rate warning fired well below its real ceiling.
+    """
+    fake_pru(fppd)
+    fppd.settings(LogLevel_ChannelOut="info")
+    write_string_cape("TestShift16", {"driver": "BBShiftString", "outputs": shift_outputs()})
+    ports = [pixel_output(n, 50, n * 150) for n in range(4)]
+    ports[0]["differentialType"] = 16  # one Falcon V4 receiver
+    fppd.write("config/co-bbbStrings.json", strings_config("BBShiftString", "TestShift16", ports))
+    fppd.start(timeout=60)
+    lines = ceiling_lines(fppd)
+    assert lines and not any("queries" in l for l in lines), lines
+    assert abs(overhead_ms(lines[0]) - 0.364) < 0.1, lines
 
 
 # ---- PRU memory that can't be mapped ------------------------------------------
