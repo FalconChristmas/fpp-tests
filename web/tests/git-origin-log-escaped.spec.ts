@@ -45,6 +45,7 @@ test('the plain commits are listed by both dialogs', async ({ page }) => {
 });
 
 test("the System Upgrade page shows a commit's author and message as text", async ({ page }) => {
+  // Regression: 1704d5c27 ("fix(ui): escape commit text in the About page's git logs").
   await answer(page);
   await page.goto('/about.php');
   await page.evaluate(() => (window as any).GetGitOriginLog());
@@ -52,6 +53,7 @@ test("the System Upgrade page shows a commit's author and message as text", asyn
 });
 
 test("the shared Git Changes dialog shows a commit's author and message as text", async ({ page }) => {
+  // Regression: 1704d5c27 ("fix(ui): escape commit text in the About page's git logs").
   await answer(page);
   await page.goto('/index.php');
   await page.evaluate(() => (window as any).GetGitOriginLog());
