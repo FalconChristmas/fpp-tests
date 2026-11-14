@@ -1,11 +1,13 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
+import { editEmbeddedStatus } from './embedded-status';
 
 // The warnings banner (#warningsRow) as updateWarnings() in js/fpp.js draws
 // it from the status's warningInfo: one list item per warning, with its
 // group's icon from warnings-definitions.json, as a link to its help when
 // the definition has any.  These tests put the warnings they need into the
-// status the page is fed -- over fppd's socket and from api/system/status --
+// status the page is fed -- over fppd's socket, from api/system/status and
+// in the status PHP puts in the page --
 // so any id can be shown without raising it in fppd (status-warnings-banner
 // raises real ones).
 
@@ -18,6 +20,7 @@ async function feedWarnings(page: Page, warnings: Warning[]) {
     status.warnings = warnings.map((w) => w.message);
     status.warningInfo = warnings.map((w) => ({ ...w }));
   };
+  await editEmbeddedStatus(page, set);
   await page.routeWebSocket('**/fppdws', (ws) => {
     const server = ws.connectToServer();
     server.onMessage((message) => {
@@ -68,7 +71,9 @@ test('each warning is a list item with its group\'s icon, a link only when it ha
   await expect(page.locator('#warningsRow')).toBeVisible({ timeout: 15_000 });
   const list = page.locator('#warningsDiv > ul');
   await expect(list.locator('> li')).toHaveCount(3);
-  expect(await list.evaluate((ul) => getComputedStyle(ul).listStyleType)).toBe('none');
+  // Retried: each status update redraws the list, and a list just replaced
+  // has no computed style.
+  await expect(list).toHaveCSS('list-style-type', 'none');
 
   const plain = item(page, 'fpp-tests a warning without an id');
   await expect(plain.locator('i.fa-circle')).toHaveCount(1);
