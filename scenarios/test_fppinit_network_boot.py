@@ -59,6 +59,43 @@ def test_a_dhcp_server_interface_keeps_its_leases_for_eight_hours(fppinit):
         assert line + "\n" in server, net
 
 
+PROXY_FILE = "config/dhcp-proxy-config.conf"
+
+
+def test_a_dhcp_server_interface_gets_proxy_rules_for_its_subnet(fppinit):
+    """The control: a static interface running the DHCP server gets the
+    rewrite rules that proxy /proxy/<host> to the players on its subnet, and
+    Apache is reloaded to take them."""
+    with_config_dirs(fppinit)
+    fppinit.service("apache2", active=True)
+    fppinit.write("config/interface.eth0",
+                  interface_file(INTERFACE="eth0", PROTO="static", ADDRESS="192.168.40.1",
+                                 NETMASK="255.255.255.0", DHCPSERVER="1"))
+    assert_clean(run(fppinit, "setupNetwork", net=True))
+    rules = fppinit.media_file(PROXY_FILE)
+    assert "RewriteRule ^192.168.40.([0-9:]*)$  http://192.168.40.$1/" in rules, rules
+    assert "systemctl reload-or-restart apache2" in fppinit.calls(), fppinit.calls()
+
+
+def test_an_interface_that_gets_its_address_by_dhcp_gets_no_proxy_rule(fppinit):
+    """An interface set to DHCP with the DHCP server also ticked (an
+    Advanced save, a restored backup, a hand-edited file) runs no DHCP
+    server, so it gets no proxy rule and Apache is left alone.
+
+    Regression: 6f74fa6f3. The rule was written before PROTO was looked at,
+    from the empty ADDRESS of a DHCP interface: "RewriteRule
+    ^.([0-9:]*)$ http://.$1/", a junk rule in dhcp-proxy-config.conf, and
+    an Apache reload on every boot."""
+    with_config_dirs(fppinit)
+    fppinit.service("apache2", active=True)
+    fppinit.write("config/interface.eth0",
+                  interface_file(INTERFACE="eth0", PROTO="dhcp", DHCPSERVER="1"))
+    assert_clean(run(fppinit, "setupNetwork", net=True))
+    rules = fppinit.media_file(PROXY_FILE) if fppinit.media_exists(PROXY_FILE) else ""
+    assert "RewriteRule" not in rules, rules
+    assert "systemctl reload-or-restart apache2" not in fppinit.calls(), fppinit.calls()
+
+
 def test_a_pending_lease_reset_clears_the_dhcp_servers_leases_at_boot(fppinit):
     """Reset Config's network area leaves config/dhcpLeaseResetPending; the
     next boot's start step removes systemd-networkd's lease files and the
