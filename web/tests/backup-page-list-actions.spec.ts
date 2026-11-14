@@ -143,6 +143,7 @@ test.describe("a backup's restore button", () => {
   });
 
   test('is an error dialog when the player does not answer', async ({ page }) => {
+    // Regression: 1f56bfe7a ("fix(backup): a restore from the list that fails says so").
     // The error handler passes DialogError the request's .Message, which a
     // failed request does not have: no dialog opens, and a restore that never
     // happened looks like a button that did nothing.  In FUTURE.md.
