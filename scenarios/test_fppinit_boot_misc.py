@@ -6,6 +6,7 @@ Run in the fppinit sandbox (fppinit.py); what is checked is the files
 written and the commands run, as the stubs record them.
 """
 
+import contextlib
 import os
 
 from fppinit import Link, fppinit  # noqa: F401 -- the fixture
@@ -61,13 +62,50 @@ def test_a_wifi_client_whose_wpa_supplicant_is_enabled_but_down_is_restarted_at_
     Regression: d75f17566. After a reboot from tethering the supplicant
     could be enabled and dead, and the box never found its Wi-Fi."""
     from test_fppinit_network_boot import run
+    from test_fppinit_wifi import wifi_adapter
     fppinit.settings(bootDelay="0")
+    fppinit.root_file("/etc/wpa_supplicant/wpa_supplicant-wlan0.conf", 'network={\n  ssid="Home"\n}\n')
     fppinit.service("wpa_supplicant@wlan0", enabled=True, active=False)
-    assert_clean(run(fppinit, "postNetwork", net=True))
-    assert "systemctl restart wpa_supplicant@wlan0.service" in fppinit.calls(), fppinit.calls()
-    fppinit.service("wpa_supplicant@wlan0", enabled=True, active=True)
-    assert_clean(run(fppinit, "postNetwork", net=True))
-    assert not [c for c in fppinit.calls() if "restart wpa_supplicant" in c], fppinit.calls()
+    with wifi_adapter("wlan0"):
+        assert_clean(run(fppinit, "postNetwork", net=True))
+        assert "systemctl restart wpa_supplicant@wlan0.service" in fppinit.calls(), fppinit.calls()
+        fppinit.service("wpa_supplicant@wlan0", enabled=True, active=True)
+        assert_clean(run(fppinit, "postNetwork", net=True))
+        assert not [c for c in fppinit.calls() if "restart wpa_supplicant" in c], fppinit.calls()
+
+
+def test_every_wifi_clients_supplicant_that_is_down_is_restarted_at_boot(fppinit):
+    """postNetwork restarts the supplicant of every Wi-Fi client (each has a
+    wpa_supplicant-<if>.conf) whose adapter is there and whose unit is
+    enabled and inactive or failed. One that is running, starting
+    (activating) or disabled is left alone, as is an interface with no client
+    config (the tether AP) and a configured adapter that is not plugged in
+    (its restart would only time out; the udev rule starts it on arrival).
+
+    Regression: feb53f8c7 (#3178). Only wlan0 was retried. On a
+    slow boot the 30s JobTimeoutSec of wpa_supplicant@ ran out before the
+    start job could run, for wlan0 and a USB wlan1 alike; wlan0 came back
+    and wlan1 stayed down until a manual restart."""
+    from test_fppinit_network_boot import run
+    from test_fppinit_wifi import wifi_adapter
+    fppinit.settings(bootDelay="0")
+    for intf in ("wlan0", "wlan1", "wlan2", "wlan3", "wlan4", "wlan5"):
+        fppinit.root_file(f"/etc/wpa_supplicant/wpa_supplicant-{intf}.conf", 'network={\n  ssid="Home"\n}\n')
+    for intf, enabled, active in (("wlan0", True, "inactive"), ("wlan1", True, "failed"),
+                                  ("wlan2", True, "active"), ("wlan3", False, "inactive"),
+                                  ("wlan4", True, "activating"),
+                                  ("wlan5", True, "inactive"),  # conf, no adapter
+                                  ("wlan9", True, "inactive")):  # adapter, no conf
+        fppinit.service(f"wpa_supplicant@{intf}", enabled=enabled)
+        with open(os.path.join(fppinit.state, f"wpa_supplicant@{intf}.active"), "w") as f:
+            f.write(active + "\n")
+    with contextlib.ExitStack() as adapters:
+        for intf in ("wlan0", "wlan1", "wlan2", "wlan3", "wlan4", "wlan9"):
+            adapters.enter_context(wifi_adapter(intf))
+        assert_clean(run(fppinit, "postNetwork", net=True))
+    restarted = sorted(c for c in fppinit.calls() if c.startswith("systemctl restart wpa_supplicant"))
+    assert restarted == ["systemctl restart wpa_supplicant@wlan0.service",
+                         "systemctl restart wpa_supplicant@wlan1.service"], fppinit.calls()
 
 
 def test_leaving_the_tether_stops_hostapd_before_the_supplicant_is_restarted(fppinit):

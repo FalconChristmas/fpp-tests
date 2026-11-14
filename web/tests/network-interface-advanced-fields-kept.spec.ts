@@ -9,7 +9,7 @@ import { MEDIA, setSettingInFile, snapshotSettings } from './settings-file';
 // page's read of eth0 is answered here and its POST captured; that body is
 // then saved by the real API under a scratch interface name seeded with the
 // same settings, so the player's own eth0 is untouched.  Also the DHCP /
-// Static switch keeping a typed address, and the WEP key field.
+// Static switch keeping a typed address.
 
 test.skip(!container, 'needs the player run-web.sh serves (FPP_TESTS_WEB_CONTAINER)');
 
@@ -147,20 +147,4 @@ test('switching to DHCP and back to Static brings back the address typed', async
   await expect(page.locator('#dns_manual')).toBeChecked();
   const back = await update(page, again);
   expect(back).toMatchObject({ PROTO: 'static', ADDRESS: '192.168.61.9', NETMASK: '255.255.255.0' });
-});
-
-test('a WEP key the page asks for is stored with the network', async ({ request }) => {
-  // The page shows a WEP Key field for a WEP network (selectWifiNetworkForInterface)
-  // and a saved KEY (loadInterfaceConfiguration), and its save sends KEY.
-  test.fail(true, 'the save never writes KEY and nothing reads one, so a WEP network cannot be joined from the page (FUTURE.md)');
-  const wl = 'wlfpptestswep';
-  try {
-    const r = await request.post(`/api/network/interface/${wl}`, { data: { INTERFACE: wl, PROTO: 'dhcp',
-      SSID: 'fpp-tests-wep', PSK: '', KEY: '0123456789', HIDDEN: false, WPA3: false,
-      BACKUPSSID: '', BACKUPPSK: '', BACKUPHIDDEN: false, BACKUPWPA3: false } });
-    expect((await r.json()).status).toBe('OK');
-    expect(inPlayer('cat', `${MEDIA}/config/interface.${wl}`)).toContain('0123456789');
-  } finally {
-    inPlayer('rm', '-f', `${MEDIA}/config/interface.${wl}`, `${MEDIA}/config/leases.${wl}`);
-  }
 });

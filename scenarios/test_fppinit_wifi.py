@@ -131,6 +131,41 @@ def test_pmf_is_one_global_optional_not_per_network(fppinit):
         assert "ieee80211w" not in b, text
 
 
+HEX_PSK = "0123456789abcdef" * 4
+
+
+@pytest.mark.parametrize("wpa3", ["", "1"], ids=["WPA2", "WPA3 ticked"])
+def test_a_64_hex_digit_key_is_written_unquoted_as_wpa2(fppinit, wpa3):
+    """A 64 hex digit raw PSK, which the network page accepts, is written
+    as psk=<hex> unquoted with key_mgmt=WPA-PSK, for the primary and the
+    backup network; with WPA3 ticked there is still no SAE (SAE has no raw
+    form).
+
+    Regression: 4f4bff40b. The key was written quoted, which
+    wpa_supplicant reads as an over-long passphrase (8-63 characters), and
+    the whole config, the other network included, failed to parse."""
+    _, blocks, text = wpa_config(fppinit, SSID="PrimaryNet", PSK=HEX_PSK, WPA3=wpa3,
+                                 BACKUPSSID="BackupNet", BACKUPPSK=HEX_PSK.upper(), BACKUPWPA3=wpa3)
+    assert len(blocks) == 2, text
+    for b, key in zip(blocks, (HEX_PSK, HEX_PSK.upper())):
+        assert b["psk"] == key, text
+        assert b["key_mgmt"] == "WPA-PSK", text
+        assert "sae_password" not in b, text
+
+
+def test_a_network_with_no_password_is_open(fppinit):
+    """An empty PSK, primary or backup, is an open network: key_mgmt=NONE
+    and no psk line.
+
+    Regression: 4f4bff40b. It was written as key_mgmt=WPA-PSK,
+    which parses but never matches an open access point."""
+    _, blocks, text = wpa_config(fppinit, SSID="OpenNet", PSK="", BACKUPSSID="OpenBackup", BACKUPPSK="")
+    assert len(blocks) == 2, text
+    for b in blocks:
+        assert b["key_mgmt"] == "NONE", text
+        assert "psk" not in b and "sae_password" not in b and "wep_key0" not in b, text
+
+
 @contextlib.contextmanager
 def wifi_adapter(name):
     """A dummy interface named like a Wi-Fi adapter, so /sys/class/net/<name>
