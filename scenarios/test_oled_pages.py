@@ -4,7 +4,8 @@ page, and backing out of the Reset prompt.
 
 The buttons are gpio.json OLED Navigation inputs on free Raspberry Pi header
 lines, pressed by flipping their pads' pulls with the real pinctrl (as in
-test_oled_expander_buttons.py).
+test_oled_expander_buttons.py) -- or, where a test needs no GPIO line, an
+analog cape input fakeadc.c serves from a file (AdcButtons).
 
 Device only: run-local.sh on a Pi (fppoled isn't built in a container).
 """
@@ -428,6 +429,77 @@ def test_the_testing_menu_starts_and_stops_a_test_through_the_command_api(oled_m
             (web_stand_in, everything(screen.frames()[-1]))
         assert start.get("multisyncCommand") is False, start
         assert stop.get("command") == "Test Stop", (stop, web_stand_in)
+
+
+class AdcButtons:
+    """OLED buttons that touch no GPIO line: a cape-inputs.json "ain" input
+    (fppoled reads /sys/bus/iio/devices/iio:device0/in_voltage0_raw every
+    poll and maps value ranges to actions), served from a file here by
+    fakeadc.c. A press writes the action's value for a moment and then 0.
+
+    Use .preload and .env when starting the screen."""
+
+    RANGES = {"Enter": 1000, "Down": 2000, "Up": 3000, "Back": 4000}
+
+    def __init__(self, oled_media, tmp_path, *actions):
+        iio = tmp_path / "iio"
+        iio.mkdir()
+        self.raw = iio / "in_voltage0_raw"
+        self.raw.write_text("0\n")
+        oled_media.put("tmp/cape-inputs.json", json.dumps({"inputs": [{
+            "mode": "ain", "input": 0,
+            "actions": [{"action": a, "minValue": self.RANGES[a], "maxValue": self.RANGES[a] + 999}
+                        for a in actions]}]}))
+        self.preload = [shims.build("fakeadc.c")]
+        self.env = {"FAKEADC_MAP": f"/sys/bus/iio/devices/iio:device0={iio}"}
+
+    def press(self, action):
+        # held for less than an action's 250 ms repeat interval, so one press
+        # is one action; fppoled reads the input every 100 ms
+        with open(self.raw, "w") as f:
+            f.write(f"{self.RANGES[action] + 500}\n")
+        time.sleep(0.2)
+        with open(self.raw, "w") as f:
+            f.write("0\n")
+        time.sleep(0.5)
+
+
+def test_turning_tethering_off_in_the_menu_puts_the_settings(oled_media, screen, no_reboot,
+                                                             web_stand_in, tmp_path):
+    """Main Menu > Tethering > Off sets EnableTethering to "2" and asks for a
+    reboot (rebootFlag "1"), each with a PUT to /api/settings/<key>, the
+    settings API's method for a write, and asks the web server for nothing
+    else. The buttons are an analog input (AdcButtons), so no GPIO line is
+    touched.
+
+    Regression: 483b6a1cb (#945). The menu set them through fppjson.php's
+    setSetting with a GET. Shown red on master with that hand-restored: the
+    stand-in got GET /fppjson.php?command=setSetting&...&key=EnableTethering
+    &value=2 and no /api/settings request.
+    """
+    keys = AdcButtons(oled_media, tmp_path, "Enter", "Down", "Up")
+    screen.start(preload=keys.preload, extra_env=keys.env)
+    screen.wait_for(lambda f: f.line(0) in ("FPP Booting...", "No Network"), timeout=30,
+                    what="the status page")
+    keys.press("Enter")
+    screen.wait_for(in_main_menu, timeout=5, what="the main menu")
+    for _ in range(2):  # Start Playlist, FPP Mode, then Tethering
+        keys.press("Down")
+    keys.press("Enter")
+    # (the selected item, Automatic, is drawn inverted, which doesn't read)
+    screen.wait_for(lambda f: "Off" in everything(f) and "Back" in everything(f) and not in_main_menu(f),
+                    timeout=5, what="the Tethering menu (Automatic, On, Off, Back)")
+    for _ in range(2):  # Automatic, On, then Off
+        keys.press("Down")
+    keys.press("Enter")
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and not any("rebootFlag" in r[1] for r in web_stand_in):
+        time.sleep(0.2)
+    writes = [r for r in web_stand_in if "status" not in r[1]]
+    assert ("PUT", "/api/settings/EnableTethering", "2") in writes, \
+        (writes, everything(screen.frames()[-1]), screen.log())
+    assert ("PUT", "/api/settings/rebootFlag", "1") in writes, writes
+    assert len(writes) == 2, writes
 
 
 def test_a_gpio_json_button_overrides_the_capes_button_on_the_same_pin(oled_media, screen):
