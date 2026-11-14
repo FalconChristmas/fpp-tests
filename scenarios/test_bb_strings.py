@@ -400,6 +400,24 @@ def test_a_v5_chains_queries_are_charged_once(fppd):
     assert abs(frame_ms(queries[0]) - frame_ms(lines[0]) - 2.85 * share) < 0.1, lines
 
 
+def test_v5_chains_in_separate_listener_groups_are_queried_in_one_round(fppd):
+    """Four Falcon V5 chains of one receiver each, in four listener groups
+    on one mux, are all queried in the same frame: a round is one query
+    frame and one rest frame, so queries are on 50% of the frames.
+
+    Regression: ccff78f38. The round was sized by summing every group's
+    receivers, so four groups of one cost four query frames per rest
+    frame (80%), asked each chain four times a round, and charged the
+    frame budget for it.
+    """
+    fake_pru(fppd)
+    fppd.settings(LogLevel_ChannelOut="info")
+    v5_chains_config(fppd, "TestShiftV5Groups", [0, 4, 8, 12], [0, 1, 2, 3])
+    fppd.start(timeout=60)
+    queries = [l for l in ceiling_lines(fppd) if "FalconV5 queries on" in l]
+    assert queries and "FalconV5 queries on 50% of frames" in queries[0], queries or fppd.tail()
+
+
 # ---- PRU memory that can't be mapped ------------------------------------------
 
 
