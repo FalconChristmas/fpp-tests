@@ -128,6 +128,7 @@ test.describe('a GPIO-595 output', () => {
   });
 
   test('keeps its pins through a save', async ({ page, request }) => {
+    // Regression: cabf03fc3 ("fix(ui): a GPIO-595 output keeps its pins through a save").
     await open(page, request, [SHIFT]);
     await tab(page, 'GPIO').click();
     await expect(row(page, 'GPIO', 'GPIO-595').locator('select.latch')).toHaveValue('TF-3');
