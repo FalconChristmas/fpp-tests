@@ -135,6 +135,7 @@ test('showing disabled entries does not hide a playlist that will play', async (
 });
 
 test('a command late in the evening is listed once a day', async ({ page, request }) => {
+  // Regression: 86f560883 ("fix(ui): Calendar View lists a late-evening command once, and its hover matches").
   // A command has no length (its end is its start), and FullCalendar draws a
   // timed event without one an hour long (defaultTimedEventDuration): a
   // command at 23:30 runs on to 00:30 on screen, so the list shows it again
