@@ -513,3 +513,60 @@ def test_a_default_sink_lost_to_wireplumbers_own_pick_is_set_again(fppinit):
     out, _ = setup_audio(fppinit, maps)
     assert len(default_sink_sets(fppinit)) == 5, f"{default_sink_sets(fppinit)}\n{out[-3000:]}"
     assert "did not hold at fpp_group_default (now 'fpp_alsa_other')" in out, out[-3000:]
+
+
+JACK_APLAY = ("**** List of PLAYBACK Hardware Devices ****\n"
+              "card 0: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]\n"
+              "  Subdevices: 8/8\n  Subdevice #0: subdevice #0\n")
+
+
+def one_card_box(sb, cards, listing, cid):
+    """A board whose one sound card is `cid` (cards: /proc/asound/cards as
+    the kernel prints it; listing: aplay -l's), set to it in Simple mode,
+    outside Docker, with the card's sink coming up as the stack starts."""
+    from setupaudio import APLAY, dump
+    maps = fake_boards(sb, cards=cards)
+    sb.root_file("/.dockerenv", None)  # setupAudio leaves PipeWire alone in a container
+    sb.root_file("/usr/bin/aplay", APLAY)
+    sb.stub_output("aplay", "-l", listing)
+    sb.stub_output("aplay", f"hw:{cid}", dump(cid))
+    sb.stub_output("amixer", "scontrols", "Simple mixer control 'PCM',0\n")
+    n = cid.lower()
+    sb.stub_output("pactl", "list", f"1\tfpp_alsa_{n}\tPipeWire\ts16le 2ch 44100Hz\tSUSPENDED\n"
+                                    "2\tfpp_group_default\tPipeWire\ts16le 2ch 44100Hz\tSUSPENDED\n")
+    set_setting(sb, AudioOutput=cid, MediaBackend="pipewire-simple")
+    return maps
+
+
+def test_an_updated_boxs_simple_sink_gets_its_default_ranking(fppinit):
+    """A board with working audio in Simple mode, updated from an FPP
+    whose groups conf gave fpp_group_default no priority.session, and
+    rebooted with that conf (in /etc and the media directory's copy, the
+    card present and targeted): setupAudio regenerates it once, with the
+    ranking, and the boot after leaves it alone.
+
+    Regression: 0e2fd7ba1 (#3063). The old conf passed every check of the
+    cache, so it was kept: the boot's default-sink set had no ranking
+    behind it, and WirePlumber could take another sink as the default
+    until the Audio settings were saved again."""
+    from test_fppinit_audio_cards import carry
+    maps = one_card_box(fppinit, JACK, JACK_APLAY, "Headphones")
+    out, _ = setup_audio(fppinit, maps)
+    fresh = fppinit.written(GROUPS_CONF) or ""
+    assert 'node.name = "fpp_group_default"' in fresh and "priority.session" in fresh, \
+        f"precondition: a fresh run's groups conf:\n{fresh}\n{out[-3000:]}"
+
+    old = "".join(l for l in fresh.splitlines(True) if "priority.session" not in l)
+    carry(fppinit)
+    fppinit.root_file(GROUPS_CONF, old)
+    fppinit.write("config/pipewire-audio-groups.conf", old)
+    fppinit.service("fpp-pipewire", active=True)
+    out, _ = setup_audio(fppinit, maps)
+    regenerated = fppinit.written(GROUPS_CONF) or ""
+    assert "priority.session" in regenerated, \
+        f"the old groups conf was kept, with no ranking for fppd's sink:\n{regenerated}\n{out[-3000:]}"
+
+    # The control: the regenerated conf is not regenerated again.
+    carry(fppinit)
+    out, _ = setup_audio(fppinit, maps)
+    assert "predates the default-sink ranking" not in out, f"regenerated again:\n{out[-3000:]}"
