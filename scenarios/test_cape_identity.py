@@ -290,3 +290,22 @@ def test_a_cape_with_no_serial_takes_the_new_images_serial_only_for_the_same_cap
                                   "force")
     assert other[6:32].rstrip(b"\0") == b"CapeB", f"the force did not apply\n{out[-1500:]}"
     assert other[42:58] == b"0000000000000000", f"serial {other[42:58]!r}\n{out[-1500:]}"
+
+
+def test_an_eeprom_of_only_extras_takes_the_new_images_sections(fppinit):
+    """Upgrading a cape whose EEPROM holds its header and type-97 extras
+    and nothing else (the file sections lost: a corrupt EEPROM) writes the
+    new image's sections in after the extras, before the terminator, so
+    the cape is detected from them: its cape-info is published.
+
+    Regression: 49876868e. The walk over the extras read the terminator
+    and stopped past it, so the new sections went in after it, where
+    nothing reads: the upgraded cape still had no cape-info."""
+    from test_cape_detect import cape_info
+    old = ee.header() + ee.record(97, b"cs".ljust(12, b"\0") + b"0123456789abcdef") + ee.END
+    new = ee.image(ee.cape_info(name="Upgraded Cape"))
+    result, out = upgrade_in_place(fppinit, old + b"\xff" * (32768 - len(old)), new)
+    assert "Found Cape" in out and "Upgrade Complete" in out, out[-3000:]
+    assert result.startswith(old[:-len(ee.END)]), "the cape's header and extras were not kept"
+    detect(fppinit)
+    assert cape_info(fppinit).get("name") == "Upgraded Cape", out[-3000:]
