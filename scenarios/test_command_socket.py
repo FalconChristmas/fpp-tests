@@ -266,6 +266,24 @@ def test_fpp_cli_restart_restarts_fppd(fppd):
     fppd.wait_for(restarted, timeout=30, interval=0.3, what="fppd to restart with its uptime reset")
 
 
+def test_fpp_cli_usage_lists_r_as_working_and_the_removed_options_as_removed(fppd):
+    """`fpp -h` (any option it doesn't take) prints the usage: -r is among
+    the options that work, and the options taken out for the API are said
+    to have been removed, with the curl example's URL printed as it is.
+
+    Regression: 9bc28c8f2. The usage still called them "now deprecated",
+    so each looked usable and only printed the usage; -r, which Reset
+    Config and systemd's reload run, was listed among them; and the curl
+    example's %20 went to printf as a conversion."""
+    rc, out = fpp(fppd, "-h")
+    working, sep, removed = out.partition("have been removed")
+    assert sep, f"the usage doesn't say the old options are gone:\n{out}"
+    assert "\n  -r " in working and "Restart fppd daemon" in working, f"-r is not among the working options:\n{out}"
+    assert "\n  -r " not in removed, f"-r is listed as removed:\n{out}"
+    assert "\n  -s " in removed, f"the control: -s is among the removed options:\n{out}"
+    assert "/api/command/Start%20Playlist'" in out, out
+
+
 def test_fpp_cli_without_fppd_gives_up(fppd):
     """With no fppd listening, `fpp` reports false within a few seconds
     rather than hanging a script that called it."""
