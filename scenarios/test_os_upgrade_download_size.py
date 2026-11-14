@@ -19,14 +19,18 @@ UPLOAD = "upload/" + IMAGE
 class Sizes:
     """The player's /api/git/releases/sizes: "<image>,<bytes>" lines."""
 
-    def __init__(self, text):
+    def __init__(self, text, stall=False):
         body = text.encode()
         self.requests = []
+        self.release = threading.Event()
         outer = self
 
         class H(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
                 outer.requests.append(self.path)
+                if stall:  # a lookup GitHub never answers
+                    outer.release.wait(300)
+                    return
                 self.send_response(200)
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
@@ -42,15 +46,17 @@ class Sizes:
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
     def close(self):
+        self.release.set()
         self.server.shutdown()
         self.server.server_close()
 
 
-def apply(fppinit, size, github):
+def apply(fppinit, size, github, listing=None, stall=False, timeout=120):
     fppinit.write_bytes(UPLOAD, b"x" * size)
-    sizes = Sizes(f"Pi-9.9-other.fppos,1\n{IMAGE},{github}\n")
+    sizes = Sizes(listing if listing is not None else f"Pi-9.9-other.fppos,1\n{IMAGE},{github}\n", stall=stall)
     try:
-        r = fppinit._run(["/opt/fpp/SD/upgradeOS-part1.sh", f"/home/fpp/media/{UPLOAD}"], media_home=True)
+        r = fppinit._run(["/opt/fpp/SD/upgradeOS-part1.sh", f"/home/fpp/media/{UPLOAD}"],
+                         timeout=timeout, media_home=True)
     finally:
         sizes.close()
     # The control: the script got as far as asking, so what follows is its answer.
@@ -73,3 +79,25 @@ def test_a_download_of_githubs_size_goes_on_to_the_upgrade(fppinit):
     assert "fppos size matches Github, continuing" in out, out[-3000:]
     assert "too small" not in out
     assert fppinit.media_exists(UPLOAD), "a complete download was removed"
+
+
+def test_another_image_whose_name_holds_this_ones_does_not_skip_the_check(fppinit):
+    """Regression: f14f1aa27. The image's line was found with grep -F, so
+    an image whose name has this one's in it (BBB-Pi64-9.9.fppos for
+    Pi64-9.9.fppos) matched too: the size read back was two numbers, not
+    one, the check was skipped as if offline, and a cut-off download was
+    applied. Now the line must name the image whole."""
+    r, out = apply(fppinit, 1000, 5000, listing=f"BBB-{IMAGE},99999\n{IMAGE},5000\n")
+    assert "Download size seems too small. Our size: 1000, Github size: 5000" in out, out[-3000:]
+    assert r.returncode == 1, out[-3000:]
+    assert not fppinit.media_exists(UPLOAD), "the short download was kept"
+
+
+def test_a_size_lookup_that_never_answers_does_not_hold_the_upgrade(fppinit):
+    """Regression: f14f1aa27. The lookup (the player's API, which asks
+    api.github.com) had no time limit, so a stalled connection held the
+    upgrade at "Verifying image" for good. It now gives up after 45 s and
+    goes ahead, as it does offline."""
+    r, out = apply(fppinit, 5000, 5000, stall=True, timeout=100)
+    assert "Couldn't get fppos size from Github, attempting upgrade anyway" in out, out[-3000:]
+    assert fppinit.media_exists(UPLOAD), "the download was removed"
