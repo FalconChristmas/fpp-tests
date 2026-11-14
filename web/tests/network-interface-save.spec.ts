@@ -40,6 +40,9 @@ test('a static and a DHCP interface are written as fppinit reads them', async ({
   expect(r.json).toEqual({ status: 'OK' });
   expect(cfg(ETH)).toBe(`INTERFACE="${ETH}"\nPROTO="static"\nADDRESS="192.168.9.2"\nNETMASK="255.255.255.0"\nROUTEMETRIC=20\nIPFORWARDING=1\n`);
 
+  // A fresh file: a save that leaves ROUTEMETRIC and IPFORWARDING out keeps
+  // the saved ones (fpp c448237ac; network-interface-advanced-fields-kept).
+  sh(`rm -f ${CONFIG}/interface.${ETH}`);
   r = await save(request, ETH, { INTERFACE: ETH, PROTO: 'dhcp' });
   expect(r.json).toEqual({ status: 'OK' });
   expect(cfg(ETH)).toBe(`INTERFACE=${ETH}\nPROTO=dhcp\n`);
