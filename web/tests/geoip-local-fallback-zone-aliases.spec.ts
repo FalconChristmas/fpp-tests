@@ -32,6 +32,7 @@ async function lookup(page: Page) {
 }
 
 test('the API places a link name where it places the zone it links to', async ({ request }) => {
+  // Regression: 19679c309 ("fix(geoip): a browser that reports a legacy zone name gets coordinates, and the Time Zone list keeps its value").
   const at = async (tz: string) => (await (await request.get(`/api/geoip?nolookup=1&country=IN&timezone=${tz}`)).json()).fpp;
   expect(await at('Asia/Kolkata')).toMatchObject({ Latitude: '22.5333', Longitude: '88.3667' });
   for (const [alias, lat] of [['Asia/Calcutta', '22.5333'], ['Europe/Kiev', '50.4333'], ['Asia/Saigon', '10.75']]) {
@@ -50,12 +51,14 @@ test.describe('in India', () => {
   test.use({ timezoneId: 'Asia/Kolkata', locale: 'en-IN' });
 
   test("a browser in India is placed at its time zone's city", async ({ page }) => {
+    // Regression: 19679c309 ("fix(geoip): a browser that reports a legacy zone name gets coordinates, and the Time Zone list keeps its value").
     await lookup(page);
     await expect(page.locator('#Latitude')).toHaveValue('22.5333');
     await expect(page.locator('#Longitude')).toHaveValue('88.3667');
   });
 
   test('the Settings page lookup keeps a time zone it cannot match instead of saving a non-zone', async ({ page }) => {
+    // Regression: 19679c309 ("fix(geoip): a browser that reports a legacy zone name gets coordinates, and the Time Zone list keeps its value").
     // Chromium says Asia/Calcutta; this tzdata (Debian 13 without
     // tzdata-legacy) has no such file, so the Time Zone list has only
     // Asia/Kolkata.  $('#TimeZone').val() of a missing option empties the
@@ -99,6 +102,7 @@ test.describe('in India', () => {
     });
 
     test('after the lookup, Finish completes and stores the zone the lookup found', async ({ page }) => {
+      // Regression: 19679c309 ("fix(geoip): a browser that reports a legacy zone name gets coordinates, and the Time Zone list keeps its value").
       test.setTimeout(180_000);
       // Every save but the time zone is answered here; the time zone goes to
       // the real API, which refuses "null" and would take "".
