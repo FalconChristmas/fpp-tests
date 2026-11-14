@@ -59,6 +59,7 @@ test('a .json file of the area is written back to the config folder, and a name 
 });
 
 test('a name that is not a .json file is not written to the config folder', async ({ request }) => {
+  // Regression: 6ab5b6b44 ("fix(backup): restoring the Miscellaneous area writes only its own .json files").
   // The backup never holds these: BackupConfigFolderConfigs keeps *.json only,
   // "no .htaccess, .htpassword or .db files".  The config folder also holds
   // .htaccess, .htpasswd and the saved interface.* files.
@@ -73,6 +74,7 @@ test('a name that is not a .json file is not written to the config folder', asyn
 });
 
 test('another area\'s file named in other case is not written either', async ({ request }) => {
+  // Regression: 6ab5b6b44 ("fix(backup): restoring the Miscellaneous area writes only its own .json files").
   // On a case-insensitive filesystem (macOS) GPIO.json is gpio.json.
   await restoreMisc(request, { 'fpp-tests-misc.json': { ok: true }, 'GPIO.json': [{ pin: 'fpp-tests' }] });
   expect(exists(`${CONFIG}/fpp-tests-misc.json`), 'the control: the .json file is restored').toBe(true);
@@ -80,12 +82,14 @@ test('another area\'s file named in other case is not written either', async ({ 
 });
 
 test('an area whose every name is skipped is not reported as failed', async ({ request }) => {
+  // Regression: 6ab5b6b44 ("fix(backup): restoring the Miscellaneous area writes only its own .json files").
   const answer = await restoreMisc(request, { 'fpp-tests-misc.conf': 'password = x' });
   expect(answer).toEqual({ Success: true, Message: { misc_configs: { configs: { VALID_DATA: true, ATTEMPT: true, SUCCESS: true } } } });
   expect(exists(`${CONFIG}/fpp-tests-misc.conf`)).toBe(false);
 });
 
 test('a file that belongs to another area is not written by restoring only this one', async ({ request }) => {
+  // Regression: 6ab5b6b44 ("fix(backup): restoring the Miscellaneous area writes only its own .json files").
   // gpio.json is the "GPIO Input Triggers" area, which was not asked for.
   const mine = '[\n\t{ "pin": "fpp-tests: the triggers this player had" }\n]';
   putFile(GPIO, mine);
