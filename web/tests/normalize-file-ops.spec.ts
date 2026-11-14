@@ -74,11 +74,18 @@ test('a copy of a song is normalized like the original', async ({ request }) => 
   expect((await request.get(`/api/file/music/${P}-b2.mp3`)).ok(), 'the copy is there').toBe(true);
 });
 
-test("renaming over a normalized song doesn't leave its entry on the new file", async ({ request }) => {
-  putFile(`${MEDIA}/music/${P}-new.mp3`, 'abcd');
+test('a rename over a normalized song is refused, and both entries stay', async ({ request }) => {
+  // Before fpp 97f14767e the rename replaced the song, and the test was that
+  // its entry went with it.  Rename now refuses to replace a file.
+  putFile(`${MEDIA}/music/${P}-new.mp3`, 'efgh');
   const r = await request.post(`/api/file/music/rename/${P}-new.mp3/${P}-a.mp3`);
-  expect((await r.json()).status).toBe('success');
-  expect(gains()[`${P}-a.mp3`], 'the replaced song measured, not this one').toBeUndefined();
+  expect(r.status()).toBe(409);
+  expect((await r.json()).status).toBe('File exists');
+  expect(readFile(`${MEDIA}/music/${P}-a.mp3`), 'the song is not replaced').toBe('abcd');
+  expect(readFile(`${MEDIA}/music/${P}-new.mp3`), 'the file is not moved').toBe('efgh');
+  const g = gains();
+  expect(g[`${P}-a.mp3`]?.gainDb, 'the song keeps its entry').toBe(-1);
+  expect(g[`${P}-new.mp3`], 'the file gets none').toBeUndefined();
 });
 
 test('deleting a song removes its entry', async ({ request }) => {
