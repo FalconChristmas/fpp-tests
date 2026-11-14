@@ -97,6 +97,7 @@ test.describe('Rename Playlist', () => {
   });
 
   test('a rename whose save fails keeps the playlist under its old name', async ({ page, request }) => {
+    // Regression: 0d8dbcbca ("fix(playlists): Rename keeps the playlist when its save fails, and Rename or Copy no longer replaces another playlist").
     await store(request, A, { mainPlaylist: [pause(2), pause(3)] });
     await page.route(`**/api/playlist/${B}`, (r) =>
       r.request().method() === 'POST' ? r.fulfill({ status: 500, body: 'fpp-tests save refusal' }) : r.fallback());
@@ -112,6 +113,7 @@ test.describe('Rename Playlist', () => {
   });
 
   test('a save the player could not write (answered 200 with Status Error) keeps the playlist under its old name', async ({ page, request }) => {
+    // Regression: 0d8dbcbca ("fix(playlists): Rename keeps the playlist when its save fails, and Rename or Copy no longer replaces another playlist").
     await store(request, A, { mainPlaylist: [pause(2), pause(3)] });
     // What a player from before the 500 answers when file_put_contents fails.
     await page.route(`**/api/playlist/${B}`, (r) => r.request().method() === 'POST'
@@ -125,6 +127,7 @@ test.describe('Rename Playlist', () => {
   });
 
   test('a rename that changes only the case is refused, and the playlist stays', async ({ page, request }) => {
+    // Regression: 0d8dbcbca ("fix(playlists): Rename keeps the playlist when its save fails, and Rename or Copy no longer replaces another playlist").
     // On a case-folding media drive (FAT/exFAT, macOS) the save under the new
     // name is the same file, which the delete of the old name then removes.
     await store(request, A, { mainPlaylist: [pause(2)] });
@@ -137,6 +140,7 @@ test.describe('Rename Playlist', () => {
   });
 
   test('an empty name is refused and the playlist stays', async ({ page, request }) => {
+    // Regression: 0d8dbcbca ("fix(playlists): Rename keeps the playlist when its save fails, and Rename or Copy no longer replaces another playlist").
     await store(request, A, { mainPlaylist: [pause(2)] });
     await openEditor(page, A);
     page.on('dialog', (d) => d.accept());
@@ -147,6 +151,7 @@ test.describe('Rename Playlist', () => {
   });
 
   test('a rename onto another playlist does not replace it unasked', async ({ page, request }) => {
+    // Regression: 0d8dbcbca ("fix(playlists): Rename keeps the playlist when its save fails, and Rename or Copy no longer replaces another playlist").
     await store(request, A, { mainPlaylist: [pause(2)] });
     await store(request, B, { mainPlaylist: [pause(7), pause(8), pause(9)] });
     await openEditor(page, A);
@@ -176,6 +181,7 @@ test.describe('Copy Playlist', () => {
   });
 
   test('a copy onto another playlist does not replace it unasked', async ({ page, request }) => {
+    // Regression: 0d8dbcbca ("fix(playlists): Rename keeps the playlist when its save fails, and Rename or Copy no longer replaces another playlist").
     await store(request, A, { mainPlaylist: [pause(2)] });
     await store(request, B, { mainPlaylist: [pause(7), pause(8)] });
     await openEditor(page, A);
@@ -201,6 +207,7 @@ test.describe('Copy selected entries to another playlist', () => {
   }
 
   test('appends the selected entries to the chosen section and keeps what was there', async ({ page, request }) => {
+    // Regression: 0d8dbcbca ("fix(playlists): Rename keeps the playlist when its save fails, and Rename or Copy no longer replaces another playlist").
     await store(request, A, { mainPlaylist: [pause(2), pause(3), pause(4)] });
     await store(request, B, { leadIn: [pause(10)], mainPlaylist: [pause(11)], desc: 'target' });
     await store(request, C, {});
