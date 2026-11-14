@@ -26,6 +26,31 @@ async function addSensors(page: Page) {
   });
 }
 
+async function addFanAndTempSensors(page: Page) {
+  // Stub matches the fixed backend output:
+  // FanSpeed: precision=0, postfix=" RPM" → formatted="1200 RPM"
+  // Temperature: no postfix/precision from backend; frontend adds °C in tooltip
+  await page.routeWebSocket('**/fppdws', (ws) => {
+    const server = ws.connectToServer();
+    server.onMessage((message) => {
+      if (typeof message !== 'string') return ws.send(message);
+      let msg;
+      try {
+        msg = JSON.parse(message);
+      } catch {
+        return ws.send(message);
+      }
+      if (msg?.type === 'snapshot' && msg.data?.status) {
+        msg.data.status.sensors = [
+          { label: 'Fan1: ', value: 1200, formatted: '1200 RPM', valueType: 'FanSpeed', postfix: ' RPM' },
+          { label: 'CPU: ', value: 52.4, formatted: '52.4', valueType: 'Temperature', postfix: '' },
+        ];
+      }
+      ws.send(JSON.stringify(msg));
+    });
+  });
+}
+
 test('a wide header shows one sensor at a time and a click rotates to the next', async ({ page }) => {
   // Also guards a1aadee39: the header shows one sensor; the tooltip half isn't asserted.
   // Regression: 5ba9fafd4.  The rule hiding the inactive sensors only applied
@@ -61,4 +86,46 @@ test('a click on the header sensor saves which one is showing', async ({ page, r
   } finally {
     await request.put('/api/settings/currentHeaderSensor', { data: '0' });
   }
+});
+
+test('header sensor tooltip shows fan RPM as whole number and temperature with °C', async ({ page, request }) => {
+  await addFanAndTempSensors(page);
+  await request.put('/api/settings/temperatureInF', { data: '0' });
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto('/index.php');
+  
+  // Header only shows non-FanSpeed sensors (Temperature in this case)
+  const spans = page.locator('#header_sensors .sensorSpan');
+  await expect(spans).toHaveCount(1, { timeout: 15_000 });
+
+  // Hover the visible sensor (Temperature) to show tooltip with ALL sensors including FanSpeed
+  const tempSpan = page.locator('#header_sensors .sensorSpan:visible');
+  await tempSpan.hover();
+  const tooltip = page.locator('.tooltip-inner');
+  await expect(tooltip).toBeVisible();
+  
+  // Tooltip should contain fan RPM as whole number (no .0)
+  await expect(tooltip).toContainText('1200 RPM');
+  // Tooltip should contain temperature with °C
+  await expect(tooltip).toContainText('°C');
+});
+
+test('header sensor tooltip shows fan RPM as whole number and temperature with °F', async ({ page, request }) => {
+  await addFanAndTempSensors(page);
+  await request.put('/api/settings/temperatureInF', { data: '1' });
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto('/index.php');
+  
+  const spans = page.locator('#header_sensors .sensorSpan');
+  await expect(spans).toHaveCount(1, { timeout: 15_000 });
+
+  const tempSpan = page.locator('#header_sensors .sensorSpan:visible');
+  await tempSpan.hover();
+  const tooltip = page.locator('.tooltip-inner');
+  await expect(tooltip).toBeVisible();
+  
+  // Tooltip should contain fan RPM as whole number
+  await expect(tooltip).toContainText('1200 RPM');
+  // Tooltip should contain temperature with °F (52.4°C = 126.32°F)
+  await expect(tooltip).toContainText('126.32°F');
 });
