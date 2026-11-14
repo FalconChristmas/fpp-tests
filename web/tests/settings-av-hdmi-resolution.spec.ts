@@ -88,7 +88,7 @@ test('the Force HDMI Resolution modes are each listed once, at a real refresh ra
   // twice in the Pi 4/5 modes and had "2560x720@12", a typo for @120 that
   // asked the kernel for a 12 Hz mode.  Fixed by 76adf8dcc.
   const modes = await (await request.get('/hdmi_modes.json')).json();
-  const all: string[] = [...modes.all, ...modes.pi4pi5];
+  const all: string[] = [...modes.all, ...(modes.pi ?? []), ...modes.pi4pi5];
   expect(all.filter((m, i) => all.indexOf(m) !== i), 'listed twice').toEqual([]);
   expect(all.filter(m => !/^\d+x\d+@(24|25|30|50|60|70|75|80|85|100|120)$/.test(m)), 'odd refresh rate').toEqual([]);
 });

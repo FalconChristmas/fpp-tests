@@ -100,3 +100,17 @@ test('saving Force HDMI Resolution and Enable HDMI Display edits uEnv.txt', asyn
   expect(r.ok()).toBe(true);
   await expect.poll(uenv, { timeout: 10_000 }).toMatch(/^disable_uboot_overlay_video=1$/m);
 });
+
+test('Force HDMI Mode Timing reaches the uEnv.txt video= mode too', async ({ request }) => {
+  // Feature: 0a870c197 (Force HDMI Mode Timing).  The BeagleBone writes the same mode,
+  // suffix and all, into uEnv.txt; Auto takes the suffix off again.
+  let r = await request.put('/api/settings/ForceHDMIResolution', { data: '1024x768@75' });
+  expect(r.ok(), await r.text()).toBe(true);
+  r = await request.put('/api/settings/ForceHDMITiming', { data: 'M' });
+  expect(r.ok(), await r.text()).toBe(true);
+  await expect.poll(uenv, { timeout: 10_000 }).toMatch(/^cmdline=.* video=HDMI-A-1:1024x768M@75$/m);
+  r = await request.put('/api/settings/ForceHDMITiming', { data: '' });
+  expect(r.ok()).toBe(true);
+  await expect.poll(uenv, { timeout: 10_000 }).toMatch(/^cmdline=.* video=HDMI-A-1:1024x768@75$/m);
+  expect(uenv().match(/video=HDMI-A-1/g)).toHaveLength(1);
+});
