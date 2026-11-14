@@ -19,7 +19,7 @@ c22365699	todo		none	auto: not examined yet	fix(backup): a backup's comment is s
 1f56bfe7a	todo		none	auto: not examined yet	fix(backup): a restore from the list that fails says so	unreleased	backup	Upgrade, backup & files	web
 bb1592d80	todo		none	auto: not examined yet	fix(ui): Pixel Overlay Models can't be saved over when they failed to load	unreleased	ui	Web UI (shared JS/CSS/pages)	web
 8a9652d46	todo		none	auto: not examined yet	fix(ui): a PCF8574 port's "Hysteresis Off" level is read back	unreleased	ui	Web UI (shared JS/CSS/pages)	web
-0287efe24	todo		none	auto: not examined yet	fix(ui): an MQTT output's topic and payload are no longer cut at an apostrophe	unreleased	ui	Web UI (shared JS/CSS/pages)	web
+0287efe24	new-test	web/tests/other-outputs-gpio-mqtt-modules.spec.ts::an MQTT output › with an apostrophe in its topic or payload keeps both through a save	red-green-parent	verify-fix.sh red on the fix's parent, green on the fix (debug): the 1 test(s) named here	fix(ui): an MQTT output's topic and payload are no longer cut at an apostrophe	unreleased	ui	Web UI (shared JS/CSS/pages)	web
 cabf03fc3	todo		none	auto: not examined yet	fix(ui): a GPIO-595 output keeps its pins through a save	unreleased	ui	Web UI (shared JS/CSS/pages)	web
 3bef15782	todo		none	auto: not examined yet	fix(api): a script save whose body is not the script is refused	unreleased	api	Web API	web
 6e3da8bcd	todo		none	auto: not examined yet	fix(api): a playlist save with no playlist in the request is refused	unreleased	api	Web API	web

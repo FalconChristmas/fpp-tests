@@ -187,6 +187,7 @@ test.describe('an MQTT output', () => {
   });
 
   test('with an apostrophe in its topic or payload keeps both through a save', async ({ page, request }) => {
+    // Regression: 0287efe24 ("fix(ui): an MQTT output's topic and payload are no longer cut at an apostrophe").
     const odd = { ...MQTT, topic: "dad's/tree/set", payload: "{'rgb':'%R%,%G%,%B%'}" };
     await open(page, request, [odd]);
     await tab(page, 'ControlSignal').click();
