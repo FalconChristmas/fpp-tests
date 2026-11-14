@@ -51,6 +51,9 @@ race:PixelOverlayModel::setPixelValue
 race:PixelOverlayModel::doOverlay
 race:PixelOverlayModel::fillData
 race:PixelOverlayModel::setData
+# ...and a framebuffer model's own setData(), which a Virtual Matrix in
+# pass-through calls every frame while the API reads the model's pixels.
+race:PixelOverlayModelFB::setData
 race:PixelOverlayModel::blitData
 # ...including the dirty flag in that shared buffer's header.
 race_top:PixelOverlayModel::overlayBufferIsDirty

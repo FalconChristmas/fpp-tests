@@ -75,6 +75,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/eventfd.h>
+#include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
@@ -291,9 +292,21 @@ __attribute__((constructor)) static void init(void) {
 
 /* --- the real libc functions --------------------------------------------- */
 
+// Looked up once, as the library loads, and not on first use: a sanitizer
+// report opens /proc/self/exe to symbolize, which comes through open() here,
+// and a dlsym() from inside TSan's report path corrupted its allocator (a
+// "CHECK failed: sanitizer_allocator_secondary.h" crash, or a hang).  The
+// lazy lookup stays for a call made before the constructor runs.
+#define REAL_FNS(X) X(access) X(close) X(fopen) X(fopen64) X(ioctl) X(mmap) X(mmap64) \
+    X(open) X(open64) X(openat) X(stat) X(stat64) X(drmIoctl) X(drmSetClientCap)
+#define REAL_DECL(name) static __typeof__(&name) real_##name;
+REAL_FNS(REAL_DECL)
 #define REAL(name) \
-    static __typeof__(&name) real_##name; \
     if (!real_##name) real_##name = (__typeof__(&name))dlsym(RTLD_NEXT, #name)
+#define REAL_RESOLVE(name) REAL(name);
+__attribute__((constructor)) static void resolve_real(void) {
+    REAL_FNS(REAL_RESOLVE)
+}
 
 static void logf_(const char* fmt, ...) {
     const char* path = getenv("FAKEDRM_LOG");
