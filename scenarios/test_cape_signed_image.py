@@ -74,3 +74,33 @@ def test_a_cape_signed_with_the_jb_or_fpp_key_is_signed(fppinit, key):
     info, out = detect_signed(fppinit, signed(key))
     assert info.get("verifiedKeyId") == key, f"{info}\n{out[-1500:]}"
     assert info["capeStatus"] == "SIGNED_GENERIC", info
+
+
+def test_only_extras_the_signature_covers_are_listed_as_signed(fppinit):
+    """Type-97 extras after a verified signature are the cape's signed
+    extras, listed under "signed" in cape-info.json; ones before it are
+    plain keys; and a "signed" member the image's own cape-info.json brings
+    is dropped, so an archive can't claim signed extras.
+
+    Regression: 9e2c91026. Every type-97 extra was a plain key, the signed
+    ones were type 95 records, and cape-info.json's own "signed" member was
+    kept. Shown red on master with the signed extras made plain keys and the
+    removal taken out by hand: no "signed" from the records, and the
+    archive's forged "signed" member published as it was.
+    """
+    image = signed(cape_info=ee.cape_info(signed={"forged": "by the archive"}),
+                   extras={"plainKey": "before"}, signed_extras={"licensePorts": "8"})
+    info, out = detect_signed(fppinit, image)
+    assert info.get("verifiedKeyId") == "dk", f"{info}\n{out[-1500:]}"
+    assert info.get("signed") == {"licensePorts": "8"}, info
+    assert info.get("plainKey") == "before" and "licensePorts" not in info, info
+
+
+def test_an_unsigned_cape_info_cannot_claim_signed_extras(fppinit):
+    """The same for an unsigned image: its cape-info.json's "signed" member
+    is dropped and its extras are plain keys. Also 9e2c91026."""
+    image = ee.image(ee.cape_info(signed={"licensePorts": "48"}), extras={"plainKey": "x"})
+    info, out = detect_signed(fppinit, image)
+    assert info["capeStatus"] == "UNSIGNED", info
+    assert "signed" not in info, f"{info}\n{out[-1500:]}"
+    assert info.get("plainKey") == "x", info
