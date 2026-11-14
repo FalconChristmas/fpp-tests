@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
 import type { APIRequestContext, Page } from '@playwright/test';
+import { editEmbeddedStatus } from './embedded-status';
 
 // The warnings banner every page shows under the header (#warningsRow),
 // built by updateWarnings() in js/fpp.js from the status: each numbered
@@ -99,9 +100,17 @@ test('no warnings leaves the banner hidden, not an empty heading', async ({ page
   // carries a warnings array, empty when nothing is wrong, and the banner
   // showed for the key alone: an "Abnormal Conditions" heading over an empty
   // list.  The test takes this player's warnings out of what fppd pushes
-  // over the socket and what PHP answers -- fppd leaves the keys out when it
-  // has none -- and the banner has to stay hidden.
+  // over the socket, what PHP answers, and the status PHP puts in the page
+  // itself -- fppd leaves the keys out when it has none -- and the banner
+  // has to stay hidden.  (Left in the page, that copy was drawn first when
+  // the page loaded slowly, and the banner kept it once hidden.)
   let strip = true;
+  await editEmbeddedStatus(page, (status) => {
+    if (strip) {
+      delete status.warnings;
+      delete status.warningInfo;
+    }
+  });
   await page.routeWebSocket('**/fppdws', (ws) => {
     const server = ws.connectToServer();
     server.onMessage((message) => {
