@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import type { Page } from '@playwright/test';
+import type { APIRequestContext, Page } from '@playwright/test';
 
 // The header bar's sensors take turns: one shows, a click on it rotates to the
 // next.  The sensors reach the page in fppd's /fppdws snapshots; this player
@@ -27,9 +27,7 @@ async function addSensors(page: Page) {
 }
 
 async function addFanAndTempSensors(page: Page) {
-  // Stub matches the fixed backend output:
-  // FanSpeed: precision=0, postfix=" RPM" → formatted="1200 RPM"
-  // Temperature: no postfix/precision from backend; frontend adds °C in tooltip
+  // As fppd reports them: a fan at precision 0, a temperature with no unit.
   await page.routeWebSocket('**/fppdws', (ws) => {
     const server = ws.connectToServer();
     server.onMessage((message) => {
@@ -88,44 +86,36 @@ test('a click on the header sensor saves which one is showing', async ({ page, r
   }
 });
 
-test('header sensor tooltip shows fan RPM as whole number and temperature with °C', async ({ page, request }) => {
-  await addFanAndTempSensors(page);
-  await request.put('/api/settings/temperatureInF', { data: '0' });
-  await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto('/index.php');
-  
-  // Header only shows non-FanSpeed sensors (Temperature in this case)
-  const spans = page.locator('#header_sensors .sensorSpan');
-  await expect(spans).toHaveCount(1, { timeout: 15_000 });
+// The tooltip lists every sensor, fans included, with the header span's unit
+// suffix: the °C case was red before fpp 3183 added it.  The fan reading is
+// fppd's "formatted" passed through as is; its whole-number RPM comes from
+// Sensors.cpp (precision 0), which this stub can't exercise.
+async function tooltipWith(page: Page, request: APIRequestContext, inF: '0' | '1') {
+  const before = String((await (await request.get('/api/settings/temperatureInF')).json()).value ?? '0');
+  try {
+    await request.put('/api/settings/temperatureInF', { data: inF });
+    await addFanAndTempSensors(page);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto('/index.php');
+    // The header leaves fans out, so only the temperature gets a span.
+    await expect(page.locator('#header_sensors .sensorSpan')).toHaveCount(1, { timeout: 15_000 });
+    await page.locator('#header_sensors .sensorSpan:visible').hover();
+    const tooltip = page.locator('.tooltip-inner');
+    await expect(tooltip).toBeVisible();
+    return (await tooltip.textContent()) ?? '';
+  } finally {
+    await request.put('/api/settings/temperatureInF', { data: before });
+  }
+}
 
-  // Hover the visible sensor (Temperature) to show tooltip with ALL sensors including FanSpeed
-  const tempSpan = page.locator('#header_sensors .sensorSpan:visible');
-  await tempSpan.hover();
-  const tooltip = page.locator('.tooltip-inner');
-  await expect(tooltip).toBeVisible();
-  
-  // Tooltip should contain fan RPM as whole number (no .0)
-  await expect(tooltip).toContainText('1200 RPM');
-  // Tooltip should contain temperature with °C
-  await expect(tooltip).toContainText('°C');
+test('the header sensor tooltip shows a Celsius temperature with °C, and the fans', async ({ page, request }) => {
+  const text = await tooltipWith(page, request, '0');
+  expect(text).toContain('52.4°C');
+  expect(text).toContain('1200 RPM');
 });
 
-test('header sensor tooltip shows fan RPM as whole number and temperature with °F', async ({ page, request }) => {
-  await addFanAndTempSensors(page);
-  await request.put('/api/settings/temperatureInF', { data: '1' });
-  await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto('/index.php');
-  
-  const spans = page.locator('#header_sensors .sensorSpan');
-  await expect(spans).toHaveCount(1, { timeout: 15_000 });
-
-  const tempSpan = page.locator('#header_sensors .sensorSpan:visible');
-  await tempSpan.hover();
-  const tooltip = page.locator('.tooltip-inner');
-  await expect(tooltip).toBeVisible();
-  
-  // Tooltip should contain fan RPM as whole number
-  await expect(tooltip).toContainText('1200 RPM');
-  // Tooltip should contain temperature with °F (52.4°C = 126.32°F)
-  await expect(tooltip).toContainText('126.32°F');
+test('the header sensor tooltip shows a temperature in °F when the setting asks for it', async ({ page, request }) => {
+  const text = await tooltipWith(page, request, '1');
+  expect(text).toContain('126.32°F'); // 52.4 °C
+  expect(text).toContain('1200 RPM');
 });
