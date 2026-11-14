@@ -80,6 +80,7 @@ for (const [what, body] of [
   ['null', 'null'],
 ] as const) {
   test(`${what} does not empty the script`, async ({ request }) => {
+    // Regression: 3bef15782 ("fix(api): a script save whose body is not the script is refused").
     const r = await request.post(`/api/scripts/${NAME}`, raw(body));
     expect(readFile(FILE), `the script was replaced (answer ${r.status()} ${await r.text()})`).toBe(ORIGINAL);
     expect(r.status()).toBeGreaterThanOrEqual(400);
@@ -92,6 +93,7 @@ for (const [what, body] of [
   ['a number', '42'],
 ] as const) {
   test(`${what} in place of the text is refused, and the script stays`, async ({ request }) => {
+    // Regression: 3bef15782 ("fix(api): a script save whose body is not the script is refused").
     const r = await request.post(`/api/scripts/${NAME}`, raw(body));
     expect(readFile(FILE), `the script was replaced (answer ${r.status()} ${await r.text()})`).toBe(ORIGINAL);
     expect(r.status()).toBeGreaterThanOrEqual(400);
