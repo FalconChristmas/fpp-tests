@@ -240,6 +240,7 @@ test.describe('a PCF8574 expander', () => {
   });
 
   test('keeps a hysteresis "off" level other than the default through a save', async ({ page, request }) => {
+    // Regression: 8a9652d46 ("fix(ui): a PCF8574 port's "Hysteresis Off" level is read back").
     const ports = [...PORTS];
     ports[1] = port(1, { pinMode: 2, hysteresisUpper: 200, hysteresisLower: 20 });
     await open(page, request, [expander(ports)]);
