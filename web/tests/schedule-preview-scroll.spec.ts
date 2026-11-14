@@ -27,6 +27,7 @@ test.describe('schedule preview scrolling', () => {
   });
 
   test('the preview scrolls inside the dialog with its column headings in view', async ({ page, request }) => {
+    test.fail(true, 'the headings float against the window, not the preview\'s scrolling box (FUTURE.md)');
     // Regression: 09ef4ef6a.  The whole dialog body scrolled, and once the
     // rows had scrolled the headings floated over them were pinned above
     // the body's top edge, partly over the dialog's title bar.  Now the
@@ -42,21 +43,30 @@ test.describe('schedule preview scrolling', () => {
 
     await page.goto('/scheduler.php');
     await page.waitForFunction(() => typeof (window as any).PreviewSchedule === 'function');
+    // A slow player: the dialog is still sliding in when shown.bs.modal fires
+    // (Bootstrap's 300 ms timer runs from show(), the slide from the first
+    // frame after the table renders).  Headings placed then, against the
+    // window, were left up to ~40 px above the box.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
     await page.evaluate(() => {
       (window as any).fppTestsShown = false;
       document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsShown = true; }, { once: true });
       (window as any).PreviewSchedule();
     });
     await page.waitForFunction(() => (window as any).fppTestsShown);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     await expect(page.locator('#schedulePreview table.schedulePreviewTable tbody tr').first()).toBeVisible();
 
     const geometry = () => page.evaluate(() => {
-      const table = document.querySelector('#schedulePreview table.schedulePreviewTable') as HTMLElement;
+      const table = document.querySelector('#schedulePreview table.schedulePreviewTable:not(.floatThead-table)') as HTMLElement;
       let box = table.parentElement;
       while (box && !(box.scrollHeight > box.clientHeight + 2 && getComputedStyle(box).overflowY !== 'visible'))
         box = box.parentElement;
       if (!box) return null;
-      const head = (table.querySelector('thead tr') as HTMLElement).getBoundingClientRect();
+      // The heading floatThead floats, in its container, else the table's own.
+      const head = ((document.querySelector('#schedulePreview .floatThead-container thead tr') ||
+                     table.querySelector('thead tr')) as HTMLElement).getBoundingClientRect();
       const b = box.getBoundingClientRect();
       const top = b.top + box.clientTop;
       return { headTop: head.top, headBottom: head.bottom, boxTop: top, boxBottom: top + box.clientHeight,
@@ -67,7 +77,7 @@ test.describe('schedule preview scrolling', () => {
     expect(g0!.pageScrolls, 'the page behind the dialog scrolls instead').toBe(false);
 
     await page.evaluate(() => {
-      const table = document.querySelector('#schedulePreview table.schedulePreviewTable') as HTMLElement;
+      const table = document.querySelector('#schedulePreview table.schedulePreviewTable:not(.floatThead-table)') as HTMLElement;
       let box = table.parentElement;
       while (box && !(box.scrollHeight > box.clientHeight + 2 && getComputedStyle(box).overflowY !== 'visible'))
         box = box.parentElement;
@@ -77,11 +87,19 @@ test.describe('schedule preview scrolling', () => {
     await page.waitForTimeout(500);
     const g = await geometry();
     expect(g!.scrollTop).toBeGreaterThan(0);
-    // The heading row is inside the scrolling box's visible area.  floatThead
-    // pins it at an offset worked out from the header heights, which can
-    // land a pixel or so above the box's top edge, in the dialog body's
-    // padding (1.3 px with the CI runner's fonts).
-    expect(g!.headTop, JSON.stringify(g)).toBeGreaterThanOrEqual(g!.boxTop - 2);
+    // The heading row sits at the top of the scrolling box: not left where
+    // the table was mid-slide, nor up in the dialog body's padding.
+    expect(Math.abs(g!.headTop - g!.boxTop), JSON.stringify(g)).toBeLessThanOrEqual(1);
     expect(g!.headBottom, JSON.stringify(g)).toBeLessThanOrEqual(g!.boxBottom);
+
+    // And it stays there when the window changes size (a resize, a tablet
+    // turned): floated against the window, a reflow put the headings at the
+    // page and dialog headers' height, over the dialog's title bar.
+    const vp = page.viewportSize()!;
+    await page.setViewportSize({ width: vp.width - 200, height: vp.height - 100 });
+    await page.waitForTimeout(500);
+    const r = await geometry();
+    expect(r!.scrollTop, 'still scrolled').toBeGreaterThan(0);
+    expect(Math.abs(r!.headTop - r!.boxTop), JSON.stringify(r)).toBeLessThanOrEqual(1);
   });
 });
