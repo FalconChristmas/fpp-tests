@@ -476,6 +476,9 @@ def test_turning_tethering_off_in_the_menu_puts_the_settings(oled_media, screen,
     setSetting with a GET. Shown red on master with that hand-restored: the
     stand-in got GET /fppjson.php?command=setSetting&...&key=EnableTethering
     &value=2 and no /api/settings request.
+
+    Also 2dbd90ae5 (PUT, not POST, for those settings writes). Shown red on
+    master with urlPost() hand-restored: POST /api/settings/EnableTethering.
     """
     keys = AdcButtons(oled_media, tmp_path, "Enter", "Down", "Up")
     screen.start(preload=keys.preload, extra_env=keys.env)
