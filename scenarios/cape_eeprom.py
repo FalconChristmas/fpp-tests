@@ -18,7 +18,9 @@ media/config), 99 a signature (a 6-byte key id, then the bytes).
 
 Nothing here can sign: the images are unsigned, or carry a signature that
 does not verify. That is what a cape EEPROM uploaded by anyone looks like,
-and it is the case the restrictions in CapeUtils exist for.
+and it is the case the restrictions in CapeUtils exist for. (anysig.c makes
+the signature check itself pass, for what CapeUtils does with a signed
+image: test_cape_signed_image.py.)
 """
 
 import io
@@ -88,23 +90,33 @@ def header(name="TestCape", version="1.0", serial="TEST0001"):
 END = b"0".ljust(6, b"\0")
 
 
-def image(cape_info, files=None, links=None, location=None, signature=None, extras=None,
-          name="TestCape", serial="TEST0001", serials=None):
-    """An unsigned image whose archive holds cape-info.json plus `files`.
-
-    location: the type-98 value, or None for no record.
-    signature: (key id, bytes) for a type-99 record that will not verify.
-    extras: {key: value} type-97 records; a list value is one record each.
-    serials: (cape serial, device serial) as a type-96 record."""
-    out = header(name=name, serial=serial)
+def extra_records(extras):
+    out = b""
     for k, v in (extras or {}).items():
         for one in (v if isinstance(v, list) else [v]):
             out += record(97, k.encode().ljust(12, b"\0") + one.encode())
+    return out
+
+
+def image(cape_info, files=None, links=None, location=None, signature=None, extras=None,
+          name="TestCape", serial="TEST0001", serials=None, signed_extras=None):
+    """An unsigned image whose archive holds cape-info.json plus `files`.
+
+    location: the type-98 value, or None for no record.
+    signature: (key id, bytes) for a type-99 record that will not verify
+        (unless anysig.c answers for the check).
+    extras: {key: value} type-97 records; a list value is one record each.
+    signed_extras: the same, after the signature record: the extras a
+        signature covers.
+    serials: (cape serial, device serial) as a type-96 record."""
+    out = header(name=name, serial=serial)
+    out += extra_records(extras)
     if serials is not None:
         out += record(96, serials[0].encode().ljust(16, b"\0") + serials[1].encode().ljust(42, b"\0"))
     if signature is not None:
         key, sig = signature
         out += record(99, key.encode().ljust(6, b"\0") + sig)
+    out += extra_records(signed_extras)
     if location is not None:
         out += record(98, str(location).encode().ljust(2, b"\0"))
     archive = dict(files or {})
