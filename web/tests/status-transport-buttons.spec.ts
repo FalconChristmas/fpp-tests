@@ -104,6 +104,7 @@ test('Stop Now stops at once, in the middle of an entry', async ({ page, request
 });
 
 test('a stop the player refuses is reported, not silently dropped', async ({ page, request }) => {
+  // Regression: 02991c815 ("fix(ui): the stop and previous/next buttons say when the player did not act").
   // StopNow / StopGracefully / Next / Previous post with an empty .fail():
   // with fppd busy or gone, the press does nothing and the page says nothing,
   // while the show plays on.
