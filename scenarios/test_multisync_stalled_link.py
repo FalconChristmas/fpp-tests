@@ -14,7 +14,7 @@ would not do: it orphans the packets it delays, releasing that charge.)
 Channel output goes to a DDP receiver on loopback, which is healthy, and
 must keep flowing.
 
-Regression: 94ce02765 (fix(multisync): never block on a multicast or
+Regression: 19d4c7899 (fix(multisync): never block on a multicast or
 broadcast sync send). Before it, output stops as soon as the buffer fills.
 """
 
