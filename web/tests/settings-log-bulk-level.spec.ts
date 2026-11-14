@@ -10,14 +10,29 @@ import { setSettingInFile, settingInFile, snapshotSettings } from './settings-fi
 
 test.skip(!container, 'sets the settings file inside the run-web.sh container');
 
+// The bulk change is applied to fppd as it is saved, so putting the file
+// back is not enough: fppd would log at Debug (with its "Log Level is set to
+// Debug" warning up) for every test after this one.  Each level fppd had is
+// set again through the API, which tells fppd, and then the file is put
+// back as it was.
 let restoreSettings: () => void;
-test.beforeEach(() => {
+let levels: [string, string][];
+test.beforeEach(async ({ request }) => {
+  const defs = (await (await request.get('/settings.json')).json()).settings;
+  levels = Object.keys(defs).filter((k) => k.startsWith('LogLevel_'))
+    .map((k) => [k, settingInFile(k) ?? defs[k].default ?? 'info']);
+  expect(levels.length, 'the log levels settings.json defines').toBeGreaterThan(1);
   restoreSettings = snapshotSettings();
   setSettingInFile('uiLevel', '3');
   setSettingInFile('LogLevel_General', 'info');
   setSettingInFile('LogLevel_ChannelData', 'warn');
 });
-test.afterEach(() => restoreSettings());
+test.afterEach(async ({ request }) => {
+  for (const [name, value] of levels) {
+    expect((await request.put(`/api/settings/${name}`, { data: value })).ok(), name).toBe(true);
+  }
+  restoreSettings();
+});
 
 test('Bulk Change sets every log level but Channel Data', async ({ page }) => {
   await page.goto('/settings.php?tab=Logging');
