@@ -63,6 +63,7 @@ test('an Image entry naming its file by full path is not reported missing', asyn
 });
 
 test("an Image entry's Choose File lists the images, with the entry's own picked, and picks another", async ({ page, request }) => {
+  // Also e790ea826 ("Add a simple File Chooser dialog and use for PlaylistEntryImage UI").
   // Regression: 0fd2098fc ("Fix file chooser").  The chooser read the
   // listing of api/files/<dir> as an array, but it is {files: [...]}: the
   // list was always empty, so no file could be chosen.

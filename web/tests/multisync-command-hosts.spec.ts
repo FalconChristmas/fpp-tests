@@ -15,6 +15,7 @@ test.describe(() => {
   // run-web.sh publishes the player on a port the UI's CSP doesn't name.
   test.use({ bypassCSP: true });
   test('a command entry for two MultiSync hosts lists what each of them has', async ({ page, request }) => {
+    // Also 48a61676e ("Fix FPP Commands that have subcommands in playlist entry editor").
     // Regression: 5b19c77be.  When the hosts field became checkboxes, the
     // reload took only the first picked host, so a list showed only what
     // that one player had.  Also covers 9fae42ac3, which first filled the
