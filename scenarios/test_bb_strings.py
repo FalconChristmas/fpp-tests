@@ -341,6 +341,19 @@ def overhead_ms(line):
     return frame_ms(line) - int(m.group(1)) * 8 * int(m.group(2)) / 1e6
 
 
+def v5_chains_config(fppd, cape, heads, groups):
+    """A listener cape with a Falcon V5 chain of one receiver at each port
+    in `heads`, in listener group `groups[n]`; 16 ports of 50 pixels."""
+    outs = shift_outputs()
+    for head, grp in zip(heads, groups):
+        outs[head]["falconV5Listener"] = grp
+    listener_cape(cape, outs)
+    ports = [pixel_output(n, 50, n * 150) for n in range(16)]
+    for head in heads:
+        ports[head]["differentialType"] = 10  # one Falcon V5 receiver
+    fppd.write("config/co-bbbStrings.json", strings_config("BBShiftString", cape, ports))
+
+
 def test_a_send_only_v4_chain_is_charged_its_config_packet_not_the_v5_phase(fppd):
     """A Falcon V4 (send-only) receiver chain adds only its config packet
     to the frame time, averaged over the one frame in twelve that carries
@@ -362,6 +375,29 @@ def test_a_send_only_v4_chain_is_charged_its_config_packet_not_the_v5_phase(fppd
     lines = ceiling_lines(fppd)
     assert lines and not any("queries" in l for l in lines), lines
     assert abs(overhead_ms(lines[0]) - 0.364) < 0.1, lines
+
+
+def test_a_v5_chains_queries_are_charged_once(fppd):
+    """A Falcon V5 chain's frame time is the string data, the 0.3 ms reset
+    and the averaged config packet (~0.06 ms), plus 2.85 ms for each query
+    frame times the share of frames that carry one -- the queries charged
+    once.
+
+    Regression: 4bbf73941. A V5 chain was charged a flat 1400 us -- a
+    #2855 measurement that already included the queries -- and then the
+    queries' share on top, so one chain at 300 px predicted 82 fps against
+    98 measured.
+    """
+    fake_pru(fppd)
+    fppd.settings(LogLevel_ChannelOut="info")
+    v5_chains_config(fppd, "TestShiftV5", [0], [0])
+    fppd.start(timeout=60)
+    lines = ceiling_lines(fppd)
+    queries = [l for l in lines if "FalconV5 queries on" in l]
+    assert queries and "longest string" in lines[0], lines
+    assert abs(overhead_ms(lines[0]) - 0.364) < 0.1, lines
+    share = float(queries[0].split("queries on ")[1].split("%")[0]) / 100
+    assert abs(frame_ms(queries[0]) - frame_ms(lines[0]) - 2.85 * share) < 0.1, lines
 
 
 # ---- PRU memory that can't be mapped ------------------------------------------
