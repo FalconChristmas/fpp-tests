@@ -96,10 +96,11 @@ def test_a_failed_pull_stops_the_update(fppinit):
     (manual-update-failed-pull.spec.ts).
 
     Regression: 5c0b83a10. The script ran on past the failed pull, rebuilt
-    the old code and exited 0, so the update was reported complete. Then
-    the rebase was left stopped at the conflict: the checkout detached,
-    conflict markers in the file, and every later update refused for the
-    rebase already under way."""
+    the old code and exited 0, so the update was reported complete.
+
+    Regression: 81743667e. Then the rebase was left stopped at the
+    conflict: the checkout detached, conflict markers in the file, and
+    every later update refused for the rebase already under way."""
     fpp, new = pull_checkout(fppinit)
     with_identity(fpp)
     with open(os.path.join(fpp, "README"), "w") as f:
@@ -288,3 +289,34 @@ def test_an_upgrade_resets_a_dirtied_submodule(fppinit):
     r = upgrade_fpp(fppinit, "v2")
     with open(path) as f:
         assert f.read() == "original\n", f"the submodule file was not reset:\n{(r.stdout + r.stderr)[-3000:]}"
+
+
+def test_an_upgrade_whose_rebase_conflicts_leaves_the_checkout_whole(fppinit):
+    """upgrade_FPP on a checkout with a local commit that conflicts with
+    the new one upstream fails the switch but leaves the checkout as it
+    was: on its branch, at its own commit, with no rebase under way and
+    no conflict markers, so the rebuild after it is of a whole tree and
+    the next update can run. (test_a_failed_pull_stops_the_update is
+    git_pull's half.)
+
+    Regression: 81743667e. The rebase was left stopped at the conflict:
+    the checkout detached with conflict markers in the file, the rebuild
+    ran on that tree, and every later update refused for the rebase
+    already under way."""
+    from test_system_scripts import upgrade_fpp
+    fpp, new = pull_checkout(fppinit)
+    with_identity(fpp)
+    with open(os.path.join(fpp, "README"), "w") as f:
+        f.write("a local commit\n")
+    git("add", "README", cwd=fpp)
+    git("commit", "-q", "-m", "local", cwd=fpp)
+    before = head(fpp)
+    r = upgrade_fpp(fppinit, "v1")
+    out = r.stdout + r.stderr
+    # The control: the rebase was tried and stopped on the conflict.
+    assert "CONFLICT" in out or "could not apply" in out, out[-3000:]
+    assert not os.path.exists(os.path.join(fpp, ".git", "rebase-merge")), f"the rebase was left under way:\n{out[-3000:]}"
+    assert head(fpp) == before and gitout(fpp, "rev-parse", "--abbrev-ref", "HEAD") == "v1", \
+        f"the checkout moved: {gitout(fpp, 'status', '--short', '--branch')}\n{out[-3000:]}"
+    with open(os.path.join(fpp, "README")) as f:
+        assert f.read() == "a local commit\n", "conflict markers left in the checkout"
