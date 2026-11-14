@@ -570,3 +570,34 @@ def test_an_updated_boxs_simple_sink_gets_its_default_ranking(fppinit):
     carry(fppinit)
     out, _ = setup_audio(fppinit, maps)
     assert "predates the default-sink ranking" not in out, f"regenerated again:\n{out[-3000:]}"
+
+
+USB_HDMI = (" 0 [HDMI           ]: USB-Audio - USB3 to HDMI\n"
+            "                      DisplayLink USB3 to HDMI at usb-xhci-hcd.1-1, super speed\n")
+USB_HDMI_APLAY = ("**** List of PLAYBACK Hardware Devices ****\n"
+                  "card 0: HDMI [USB3 to HDMI], device 0: USB Audio [USB Audio]\n"
+                  "  Subdevices: 1/1\n  Subdevice #0: subdevice #0\n")
+
+
+def test_a_usb_card_with_hdmi_in_its_name_is_played_to(fppinit):
+    """A board whose one sound card is a USB adapter that calls itself
+    HDMI (a DisplayLink "USB3 to HDMI": "card 0: HDMI [USB3 to HDMI]"),
+    with no display on the board's own HDMI port: setupAudio takes it as
+    the ordinary sound card it is -- no snd-dummy stands in -- and Simple
+    mode's fpp_group_default plays into its adapter, not a null sink.
+
+    Regression: ba9aae54b (#3159). The name alone made it HDMI, so it
+    counted as no real card (snd-dummy was loaded) and as an HDMI output
+    with nothing attached: Simple mode built fpp_group_default as the
+    "FPP Audio (no sound card)" null sink, and fppd played into it
+    silently."""
+    maps = one_card_box(fppinit, USB_HDMI, USB_HDMI_APLAY, "HDMI")
+    os.makedirs(os.path.join(fppinit.state, "asound", "card0"), exist_ok=True)
+    with open(os.path.join(fppinit.state, "asound", "card0", "usbid"), "w") as f:
+        f.write("17e9:6006\n")
+    out, _ = setup_audio(fppinit, maps)
+    assert not any("snd-dummy" in m or "snd_dummy" in m for m in modprobes(fppinit)), \
+        f"snd-dummy stood in for the USB card: {modprobes(fppinit)}\n{out[-3000:]}"
+    conf = fppinit.written(GROUPS_CONF) or ""
+    assert "support.null-audio-sink" not in conf and 'node.target = "fpp_alsa_hdmi"' in conf, \
+        f"fppd's sink doesn't play into the USB card:\n{conf}\n{out[-3000:]}"
