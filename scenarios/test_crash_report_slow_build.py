@@ -15,7 +15,7 @@ BUILD_SECONDS = 75
 def test_a_report_that_builds_for_over_a_minute_is_still_answered(fppd, tmp_path):
     """A build that runs longer than a minute must still get its answer.
 
-    Regression: fpp 7fd3e93ec (issue #3178), which sets drogon's
+    Regression: fpp e6be1d010 (issue #3178), which sets drogon's
     idle-connection timeout to 300 s in src/httpAPI.cpp.
     Drogon closes a connection after 60 s with no reads or writes, and a
     request waiting for its answer counts as idle, so the finished report's
