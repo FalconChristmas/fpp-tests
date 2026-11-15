@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 // The GPIO Inputs page with the player's part mocked: the page reads
 // gpio.json from a canned list and its Save is caught, so nothing is written.
@@ -35,6 +35,9 @@ async function openEdit(page: Page, n = 0) {
   return modal;
 }
 const savePage = (page: Page) => page.locator('input[value="Save"][onclick="saveGPIOInputs()"]').click();
+// The page sets its tooltips up after it draws the cards (SetupToolTips, added to gpio.php
+// by 4cd2c63f6), which takes a badge's title attribute away; its icon says which rule it is.
+const reEnableBadge = (card: Locator, icon: string) => card.locator(`.badge:has(.${icon})`);
 const refused: Answer = { body: JSON.stringify({ Status: 'Error', Message: 'fpp-tests: no room' }) };
 
 test('a refused save shows the player\'s reason, a failed one says it failed, and neither says Saved', async ({ page }) => {
@@ -63,9 +66,9 @@ test('a card shows how its input is re-enabled, and the rule is posted as it was
   ], () => refused);
   page.on('dialog', (d) => d.accept());
   const cards = page.locator('.gpio-trigger-card');
-  await expect(cards.nth(0).locator('.badge[title="Re-enable after delay"]')).toHaveText('2500ms');
-  await expect(cards.nth(1).locator('.badge[title="Re-enable on player idle"]')).toHaveText('On idle');
-  await expect(cards.nth(2).locator('.badge[title^="Re-enable"]')).toHaveCount(0);
+  await expect(reEnableBadge(cards.nth(0), 'fa-clock')).toHaveText('2500ms');
+  await expect(reEnableBadge(cards.nth(1), 'fa-play-circle')).toHaveText('On idle');
+  await expect(cards.nth(2).locator('.badge:has(.fa-clock, .fa-play-circle)')).toHaveCount(0);
 
   // The dialog shows the delay only for the timed rule.
   const modal = await openEdit(page, 0);
@@ -76,7 +79,7 @@ test('a card shows how its input is re-enabled, and the rule is posted as it was
   await modal.locator('#gpioModalReEnableMode').selectOption('timed');
   await modal.locator('#gpioModalReEnableDelay').fill('900');
   await modal.locator('button[onclick="saveGPIOModal()"]').click();
-  await expect(cards.nth(0).locator('.badge[title="Re-enable after delay"]')).toHaveText('900ms');
+  await expect(reEnableBadge(cards.nth(0), 'fa-clock')).toHaveText('900ms');
 
   await savePage(page);
   await expect.poll(() => posted.length).toBe(1);
