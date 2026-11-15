@@ -97,3 +97,16 @@ test('the same image started again after a boot is a new run', async ({ request 
   writeLog(first + BOOTED + again);
   expect((await activity(request)).runId).toBe(alone);
 });
+
+test('an OS upgrade that finished its copy and then booted reads as complete, not stale', async ({ request }) => {
+  // Regression: 88d662e80.  With the "Rebooting" line lost to the reset,
+  // the boot ended the run as stale: "Last update did not finish", after an
+  // upgrade that worked.  upgradeOS-part1.sh prints "Please reboot if the
+  // system does not do so automatically" only when the copy succeeded.
+  writeLog(START(3600) + APPLYING + COPIED + BOOTED, '-1 hour');
+  const r = await activity(request);
+  expect(r, JSON.stringify(r)).toMatchObject({ inProgress: false, op: 'os-upgrade', stale: false, failed: false });
+  // The control: without part1's line the same boot leaves it stale.
+  writeLog(START(3600) + APPLYING + BOOTED, '-1 hour');
+  expect((await activity(request)).stale).toBe(true);
+});
