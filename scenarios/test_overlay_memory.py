@@ -243,3 +243,34 @@ def test_a_model_starts_dark_after_fppd_is_killed(fppd):
         if os.path.exists(RESTART_BLOCK):
             os.remove(RESTART_BLOCK)
 
+
+def test_a_second_model_of_the_same_name_leaves_the_first_ones_memory_alone(fppd):
+    """Two definitions of one name: the first is kept, the second ignored
+    with a warning, and the first model's shared memory block is still the
+    one it draws from, so a program outside fppd that maps it by name
+    reaches it.
+
+    Fix (8197825b3): the second definition is turned away before it is
+    built. Built, it mapped the first one's blocks by name, and deleting it
+    unlinked them."""
+    import mmap
+    name = "fpp-tests-dupe"
+    block = "/dev/shm/FPP-Model-Data-" + name
+    if not os.path.isdir("/dev/shm"):
+        pytest.skip("no /dev/shm here")
+    setup(fppd, [matrix(name, WIDTH, HEIGHT), matrix(name, WIDTH, HEIGHT, start=1001)], CHANNELS)
+    try:
+        fppd.start()
+        assert f'A pixel overlay model named "{name}" already exists' in fppd.log()
+        assert os.path.exists(block), f"{block} was unlinked when the duplicate was dropped"
+        with open(block, "r+b") as f:
+            outside = mmap.mmap(f.fileno(), CHANNELS)
+        try:
+            outside[:3] = bytes([4, 5, 6])
+            data = fppd.get(f"/overlays/model/{name}/data")["data"]
+            assert data[:3] == [4, 5, 6], "the block by that name is not the model's"
+        finally:
+            outside.close()
+    finally:
+        if os.path.exists(block):
+            os.remove(block)
