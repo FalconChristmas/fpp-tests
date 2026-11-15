@@ -8,6 +8,7 @@ written and the commands run, as the stubs record them.
 
 import os
 import re
+import time
 
 from fppinit import MEDIA, fppinit  # noqa: F401 -- the fixture
 from test_fppinit import assert_clean
@@ -55,6 +56,50 @@ def test_start_says_why_a_media_folder_could_not_be_created(fppinit):
     assert re.search(r"Could not create \S*/images: File exists", out), out[-3000:]
     assert os.path.isdir(os.path.join(fppinit.media, "music")), "the folders after it were not made"
     assert not re.search(r"Could not create \S*/music", out), out[-3000:]
+
+
+UPGRADE_LOG = "logs/fpp_system_upgrades.log"
+BOOT_LINE = r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d \[fpp-boot %s\] System booted \(clock may not be synced yet\)$"
+
+
+def boot_id():
+    with open("/proc/sys/kernel/random/boot_id") as f:
+        return f.read().strip()
+
+
+def test_start_logs_the_boot_to_the_upgrade_log(fppinit):
+    """Boot appends "[fpp-boot <boot_id>] System booted" to an upgrade log
+    that is there, so the update-activity API can end a run opened before
+    this boot without trusting the clock; and it never makes the log.
+
+    Regression: d54a72a96 (#3187). An OS upgrade whose closing lines were
+    lost to the reset came back as "FPP OS Upgrade - Finalizing", with
+    Upgrade OS locked, for as long as the log looked recent."""
+    start(fppinit)
+    assert not fppinit.media_exists(UPGRADE_LOG), "boot made an upgrade log"
+
+    fppinit.write(UPGRADE_LOG, "2026-11-15 21:00:00 [os-upgrade x.fppos] ===== os-upgrade START: x.fppos =====\n")
+    start(fppinit)
+    lines = fppinit.media_file(UPGRADE_LOG).splitlines()
+    assert len(lines) == 2, lines
+    assert lines[0].endswith("os-upgrade START: x.fppos ====="), lines
+    assert re.match(BOOT_LINE % re.escape(boot_id()), lines[1]), lines
+
+
+def test_a_clock_behind_the_upgrade_log_moves_its_mtime_forward(fppinit):
+    """When the clock comes up behind the upgrade log's last write (no
+    RTC), boot's line leaves the log's mtime one second past what it was,
+    not at the early clock: an open browser tab drops update payloads older
+    than the last one it applied.
+
+    Regression: d54a72a96 (#3187)."""
+    fppinit.write(UPGRADE_LOG, "2026-11-15 21:00:00 [os-upgrade x.fppos] ===== os-upgrade START: x.fppos =====\n")
+    path = os.path.join(fppinit.media, UPGRADE_LOG)
+    ahead = int(time.time()) + 11 * 86400
+    os.utime(path, (ahead, ahead))
+    start(fppinit)
+    assert re.match(BOOT_LINE % re.escape(boot_id()), fppinit.media_file(UPGRADE_LOG).splitlines()[-1])
+    assert int(os.stat(path).st_mtime) == ahead + 1
 
 
 def test_start_writes_an_open_ui_password_config_for_apache(fppinit):
