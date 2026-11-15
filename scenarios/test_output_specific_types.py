@@ -53,6 +53,9 @@ def test_an_output_type_that_is_not_the_panels_draws_nothing_on_it(fppd):
 
 
 def test_the_panels_own_output_type_draws_its_test(fppd):
+    """Also covers 401b25c33, which added the Output Specific test: the
+    tester hands each output OverlayTestData() to draw its own test; with
+    that call gone no frame is lit."""
     with captured() as cap:
         start(fppd, cap, None)
         try:
