@@ -7,6 +7,7 @@ written and the commands run, as the stubs record them.
 """
 
 import os
+import re
 
 from fppinit import MEDIA, fppinit  # noqa: F401 -- the fixture
 from test_fppinit import assert_clean
@@ -35,6 +36,25 @@ def test_start_creates_the_virtual_display_assets_directory(fppinit):
     start(fppinit)
     assert os.path.isdir(os.path.join(fppinit.media, "virtualdisplay_assets"))
     assert os.path.isdir(os.path.join(fppinit.media, "images")), "the list is not being walked, so this proves nothing"
+
+
+def test_start_says_why_a_media_folder_could_not_be_created(fppinit):
+    """A media folder boot cannot make is reported with mkdir's error, in
+    fppinit's own output (the journal), and the other folders are still
+    made.
+
+    Regression: 4c3b83e24. mkdir's result was ignored, and fppinit's log is
+    media/logs, so a media directory with folders missing left no trace of
+    why."""
+    os.rmdir(os.path.join(fppinit.media, "images"))
+    with open(os.path.join(fppinit.media, "images"), "w") as f:
+        f.write("a file where the folder goes\n")
+    os.rmdir(os.path.join(fppinit.media, "music"))
+    r = start(fppinit)
+    out = r.stdout + r.stderr
+    assert re.search(r"Could not create \S*/images: File exists", out), out[-3000:]
+    assert os.path.isdir(os.path.join(fppinit.media, "music")), "the folders after it were not made"
+    assert not re.search(r"Could not create \S*/music", out), out[-3000:]
 
 
 def test_start_writes_an_open_ui_password_config_for_apache(fppinit):
