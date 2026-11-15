@@ -151,3 +151,29 @@ def test_the_gpio0_program_is_built_with_its_resource_table(fppd):
     # the control: the PRU1 program has one
     assert sizes[1], f"the PRU1 program has no resource table: {sizes}"
     assert sizes[0], f"the GPIO0 program on PRU0 has no resource table: {sizes}"
+
+
+COMMAND_TABLE = 32  # BBShiftStringData.commandTable, after the timing block
+
+
+def test_each_pru_keeps_the_command_table_fppd_built_for_it(fppd):
+    """Once both cores run, each one's data RAM holds the command table
+    fppd built for its strings: a first record whose high mask has the
+    string's pin (bit 0 of the first byte), and the 0xFFFF terminator
+    after it.
+
+    Regression: 8881129d0. createOutputLengths() wrote the table before
+    run(), and run() clears the data RAM once the core is started, so the
+    firmware read an empty table and the strings stayed dark.
+    """
+    needs_bbb()
+    pru = FakePruss(fppd)
+    two_pru_shift_strings(fppd)
+    pru.start()
+    fppd.wait_for(lambda: pru.starts(0) and pru.starts(1), timeout=30,
+                  what=f"both cores to start ({pru.events()})")
+    time.sleep(2)
+    for core in (1, 0):
+        table = struct.unpack("<64H", pru.data_ram(core, COMMAND_TABLE, 128))
+        assert table[0] & 0x1 and 0xFFFF in table, \
+            f"PRU{core}'s command table after start: {' '.join(f'{v:04x}' for v in table[:20])}"
