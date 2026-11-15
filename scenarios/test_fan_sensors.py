@@ -60,6 +60,19 @@ def test_a_hwmon_fan_is_shown_in_rpm(fppd):
     assert shown[0].get("postfix") == " RPM", shown
 
 
+def test_a_fans_formatted_reading_is_a_whole_number_of_rpm(fppd):
+    """fppd's own formatted reading of a fan -- what the header tooltip, the
+    OLED status page and the status API show -- is "2345 RPM", not
+    "2345.0 RPM".
+
+    Regression: e1b19dce2. A fan sensor had the formatter's default one
+    decimal place, though a tachometer reads a whole number."""
+    start_with_hwmon(fppd, {"hwmon0/name": "pwmfan\n", "hwmon0/fan1_input": "2345\n"})
+    shown = fans(fppd)
+    assert len(shown) == 1, shown
+    assert shown[0]["formatted"] == "2345 RPM", shown
+
+
 def test_a_fans_label_comes_from_the_device_tree_where_it_can(fppd):
     """Three pwm-fan hwmon nodes, one fan each: one whose device-tree node
     carries an fpp,fan-label ("K16-Pro Fan"), one whose node is named
