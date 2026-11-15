@@ -128,6 +128,17 @@ class FakePruss:
         if noboot:
             self.env["FAKEPRUSS_NOBOOT"] = ",".join(str(n) for n in noboot)
 
+    def fill_ram(self, word):
+        """Before start(): fill both cores' data RAM and the shared RAM with
+        `word`, as a previous run (or power-up garbage) leaves them; the
+        CONTROL registers stay zero."""
+        ram = bytearray(0x40000)
+        fill = struct.pack("<I", word)
+        for off, size in ((0x0, 0x4000), (0x10000, 0x3000)):
+            ram[off:off + size] = fill * (size // 4)
+        with open(os.path.join(self.dir, "pruss"), "wb") as f:
+            f.write(ram)
+
     @staticmethod
     def sleep_firmware(n):
         return f"the image's sleep firmware for PRU{n}\n".encode()

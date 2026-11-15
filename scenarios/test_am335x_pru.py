@@ -1011,6 +1011,38 @@ def test_a_serial_output_starting_with_both_cores_stopped_does_not_touch_pru_mem
     fppd.get("/fppd/status")
 
 
+STALE = 0xDEADBEEF
+
+
+def stale_words(blob):
+    return [i for i in range(0, len(blob), 4) if struct.unpack_from("<I", blob, i)[0] == STALE]
+
+
+def test_a_matrix_output_starts_with_no_stale_words_in_pru_memory(fppd):
+    """A BBBMatrix output started on PRU memory that still holds an earlier
+    run's words (both cores' data RAM filled with 0xDEADBEEF before fppd
+    starts) leaves none of them there: run() clears the
+    memories once the core runs, so the program never reads a stale
+    command, response or brightness word. The fake runs no PRU code, so
+    what is cleared is fppd's doing.
+
+    Regression: 07febb1e0. PRU memory was used as it was found; the commit
+    made fppd clear it to zero before use (the clear is in run() now).
+    """
+    pru = FakePruss(fppd)
+    pru.fill_ram(STALE)
+    octoscroller()
+    fppd.write("config/channeloutputs.json", matrix_config())
+    pru.start()
+    fppd.wait_for(lambda: pru.starts(0) and pru.starts(1), timeout=60,
+                  what="the matrix's PRUs to start")
+    time.sleep(2)
+    # (the shared RAM is not the matrix's: it maps no shared memory)
+    left = {name: stale_words(blob) for name, blob in (
+        ("PRU0 data RAM", pru.data_ram(0)), ("PRU1 data RAM", pru.data_ram(1)))}
+    assert not any(left.values()), {k: (len(v), [hex(o) for o in v[:4]]) for k, v in left.items()}
+
+
 def unlicensed_strings(fppd):
     """A BBB48String output on run-local.sh's unsigned (or absent) cape,
     licensed for no outputs: port 1 of 60 pixels, port 2 of exactly 50 and
