@@ -1043,10 +1043,29 @@ def test_a_matrix_output_starts_with_no_stale_words_in_pru_memory(fppd):
     assert not any(left.values()), {k: (len(v), [hex(o) for o in v[:4]]) for k, v in left.items()}
 
 
+VIRTUAL_EEPROM = "/home/fpp/media/config/cape-eeprom.bin"
+
+
+@pytest.fixture
+def no_virtual_eeprom():
+    """No virtual cape EEPROM while the test runs.  fppd reads it from the
+    hard-coded /home/fpp/media, not the test's media, and a device that has a
+    signed one (the CI BeagleBone's K16A-B) is licensed for its outputs."""
+    saved = VIRTUAL_EEPROM + ".fpp-tests"
+    had = os.path.exists(VIRTUAL_EEPROM)
+    if had:
+        os.replace(VIRTUAL_EEPROM, saved)
+    try:
+        yield
+    finally:
+        if had:
+            os.replace(saved, VIRTUAL_EEPROM)
+
+
 def unlicensed_strings(fppd):
-    """A BBB48String output on run-local.sh's unsigned (or absent) cape,
-    licensed for no outputs: port 1 of 60 pixels, port 2 of exactly 50 and
-    port 3 of 10."""
+    """A BBB48String output on an unsigned cape (no virtual EEPROM: see
+    no_virtual_eeprom), licensed for no outputs: port 1 of 60 pixels, port 2
+    of exactly 50 and port 3 of 10."""
     pins, _ = string_pins()
     write_string_cape("TestLicence", {"outputs": [{"pin": p} for p in pins[:3]]})
     fppd.write("config/co-bbbStrings.json", strings_config(
@@ -1055,7 +1074,7 @@ def unlicensed_strings(fppd):
     FakePruss(fppd).start()
 
 
-def test_the_unlicensed_warning_names_only_the_ports_over_fifty(fppd):
+def test_the_unlicensed_warning_names_only_the_ports_over_fifty(fppd, no_virtual_eeprom):
     """With no licence, the warning that BBB48String is licensed for 0
     outputs names port 1 (60 pixels) and not port 2 (exactly 50) or port 3.
 

@@ -59,7 +59,9 @@
 #     bind it through the read-only /sys, wait 17 s, and delete the device's
 #     own tmp/eeprom.bin. The device's EEPROM is offered as a virtual one
 #     (config/cape-eeprom.bin) in the overlay instead, so the test fppd still
-#     sees the cape -- as unsigned, since a signature is bound to the bus;
+#     sees the cape. A signed one still verifies there, off the bus, as
+#     SIGNED_GENERIC, and keeps its licence: a scenario that needs an
+#     unlicensed cape removes the file;
 #   - pinctrl (a Raspberry Pi's writes the pad registers directly) as a stub
 #     that only logs its calls to /tmp/pinctrl.log, so no pad is re-muxed;
 #   - no kernel modules loaded or unloaded: CAP_SYS_MODULE is dropped, and
