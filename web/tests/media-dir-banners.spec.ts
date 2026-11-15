@@ -133,3 +133,43 @@ test.describe('the free-space banner', () => {
     expect(await withStatfs(request, '1000000 900000 4096 100000 90000')).toBe('');
   });
 });
+
+test.describe('a media drive /etc/fstab mounts that is not mounted', () => {
+  // menu.inc checks only on an FPP image (/etc/fpp/rfs_version), and the
+  // Storage page lists devices only off Docker (/etc/fpp/platform).
+  let fstab = '';
+  let media = '';
+  test.beforeAll(() => {
+    fstab = inPlayer('cat', '/etc/fstab');
+    media = inPlayer('cat', ROOT).trim();
+  });
+  test.afterEach(() => {
+    inPlayer('sh', '-c', `printf '%s' "$1" > /etc/fstab; rm -f /etc/fpp/rfs_version /etc/fpp/platform`, 'sh', fstab);
+  });
+
+  async function indexWith(request: APIRequestContext, line: string) {
+    inPlayer('sh', '-c', `touch /etc/fpp/rfs_version && printf '%s%s\\n' "$1" "$2" > /etc/fstab`, 'sh', fstab, line);
+    return banner(await (await request.get(PAGE)).text(), /\/etc\/fstab mounts/);
+  }
+
+  test('is named, with its device, on every page', async ({ request }) => {
+    // Regression: 87bed5f03.  The check looked for /home/pi/media in
+    // /etc/fstab, so on /home/fpp images it never fired.
+    expect(await indexWith(request, `/dev/sdz1 ${media} vfat defaults,nofail 0 0`)).toBe(
+      `/etc/fstab mounts /dev/sdz1 at ${media} but it is not mounted, so settings and uploads are going to the folder underneath it. There is no /dev/sdz1 on this system.`);
+    // The controls: a drive marked noauto, and one mounted inside the media
+    // directory, are no banner.
+    expect(await indexWith(request, `/dev/sdz1 ${media} vfat noauto 0 0`)).toBe('');
+    expect(await indexWith(request, `/dev/sdz1 ${media}/music vfat defaults 0 0`)).toBe('');
+  });
+
+  test('is listed on the Storage page, so it can be switched off', async ({ request }) => {
+    // Regression: 87bed5f03.  The setting showed the boot device the media
+    // folder is on instead, so the stale line could not be taken out.
+    // The Storage page looks for /home/fpp/media whatever the player's media
+    // directory is.
+    inPlayer('sh', '-c', `echo 'Raspberry Pi' > /etc/fpp/platform && printf '%s%s\\n' "$1" "/dev/sdz1 /home/fpp/media vfat defaults,nofail 0 0" > /etc/fstab`, 'sh', fstab);
+    const body = await (await request.get('/settings-storage.php')).text();
+    expect(body).toMatch(/<option value=['"]sdz1['"][^>]*selected[^>]*>sdz1 - \(in \/etc\/fstab, not attached\)<\/option>/);
+  });
+});
