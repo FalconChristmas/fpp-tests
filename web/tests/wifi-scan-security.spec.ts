@@ -169,6 +169,32 @@ test("a connected adapter's empty iw scans fall back to wpa_supplicant's scan re
   expect(realSyntaxErrors(), calls().join('\n')).toEqual([]);
 });
 
+test("a connected adapter's low-priority scan that never finishes is given up, and the full scan answers", async ({ request }) => {
+  // Regression: 0f5a5fddb.  mt7601u takes "iw scan lowpri" and never ends
+  // it: on a BeagleBone Black iw spun at full CPU for over half an hour, and
+  // the scan request never came back (exec() time is not in PHP's
+  // max_execution_time).
+  stub('iw', [
+    [`dev ${WLAN} info*`, `Interface ${WLAN}\n\tifindex 9\n\ttype managed\n`],
+    [`dev ${WLAN} link*`, iwLink('fpp-tests-home')],
+    [`dev ${WLAN} scan lowpri`, '', 'exec sleep 600'],
+    [`dev ${WLAN} scan`, bss('02:aa:bb:cc:03:01', 'fpp-tests-home', { privacy: true, ies: rsn('PSK') })],
+  ]);
+  stub('iwlist');
+  stub('wpa_cli');
+  clearCalls();
+  try {
+    const started = Date.now();
+    const r = await (await request.get(`/api/network/wifi/scan/${WLAN}`, { timeout: 40_000 })).json();
+    expect(Date.now() - started).toBeLessThan(30_000);
+    expect(r.status, JSON.stringify(r)).toBe('OK');
+    expect(r.networks.map((n: any) => n.SSID)).toEqual(['fpp-tests-home']);
+    expect(calls()).toEqual(expect.arrayContaining([`iw dev ${WLAN} scan lowpri`, `iw dev ${WLAN} scan`]));
+  } finally {
+    inPlayer('sh', '-c', 'pkill -f "[s]leep 600" || true');
+  }
+});
+
 test('an iwlist scan names WPA, Enterprise and the group cipher', async ({ request }) => {
   stub('iw');
   stub('iwlist', [[`${WLAN} scan`, `${WLAN}     Scan completed :

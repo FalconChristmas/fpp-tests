@@ -10,6 +10,7 @@ the adapter is left in, are the kernel's answers.
 """
 
 import subprocess
+import time
 
 import pytest
 
@@ -87,3 +88,42 @@ def test_an_adapter_that_was_up_stays_up(adapter):
     out = r.stdout + r.stderr
     assert out.count(SSID) == 2, out[-2000:]
     assert operstate() != "down", "an adapter that was up was taken down"
+
+
+# Connected, on a driver that takes "scan lowpri" and never finishes it, as
+# mt7601u does; every other scan answers.
+IW_HANGING_LOWPRI = f"""#!/bin/sh
+printf '%s\\n' "iw $*" >> /fppinit-calls.log
+case "$*" in
+  dev) printf 'phy#0\\n\\tInterface {DEV}\\n\\t\\ttype managed\\n' ;;
+  "dev {DEV} info") printf 'Interface {DEV}\\n\\tifindex 9\\n\\ttype managed\\n' ;;
+  "dev {DEV} link") printf 'Connected to 02:11:22:33:44:55 (on {DEV})\\n\\tSSID: {SSID}\\n\\tfreq: 2437\\n' ;;
+  "dev {DEV} scan lowpri") exec sleep 600 ;;
+  "dev {DEV} scan"*)
+    printf 'BSS 02:11:22:33:44:55(on {DEV})\\n\\tfreq: 2437\\n\\tsignal: -48.00 dBm\\n\\tSSID: {SSID}\\n\\tRSN:\\t * Version: 1\\n' ;;
+esac
+exit 0
+"""
+
+
+def test_a_low_priority_scan_that_never_finishes_is_given_up_after_5_seconds(adapter):
+    """On a connected adapter whose driver accepts the low-priority scan and
+    never ends it, the scan is given 5 s, said to have timed out, and the
+    full scan still runs and finds the network.
+
+    Regression: 0f5a5fddb. On a BeagleBone Black with an mt7601u, iw sat
+    at full CPU for over half an hour, and the scan never returned."""
+    adapter.root_file("/usr/sbin/iw", IW_HANGING_LOWPRI)
+    subprocess.run(["ip", "link", "set", DEV, "up"], check=True)
+    start = time.monotonic()
+    try:
+        r = adapter._run(["bash", "/opt/fpp/scripts/wifi_scan.sh"], timeout=60)
+    except subprocess.TimeoutExpired:
+        pytest.fail("wifi_scan.sh was still waiting on the low-priority scan after 60 s")
+    took = time.monotonic() - start
+    out = r.stdout + r.stderr
+    assert f"{DEV}: connected to '{SSID}'" in out, out[-2000:]
+    assert f"----- iw dev {DEV} scan (nl80211, low-priority) -----\ntimed out after 5s" in out, out[-2000:]
+    assert f"iw dev {DEV} scan" in adapter.calls(), adapter.calls()
+    assert SSID in out.split("timed out after 5s", 1)[1], "the full scan after it found nothing:\n" + out[-2000:]
+    assert took < 40, f"took {took:.0f} s"

@@ -31,8 +31,10 @@ const PATHS: Record<string, string> = {
   arp: '/usr/local/bin/arp',
 };
 
-// [shell case pattern over the arguments, output] -- the first match answers.
-export type Answers = Array<[string, string]>;
+// [shell case pattern over the arguments, output, and optionally a shell
+// command run after the output, e.g. "exec sleep 600" for a tool that never
+// finishes] -- the first match answers.
+export type Answers = Array<[string, string] | [string, string, string]>;
 
 function writeIn(path: string, content: string, mode = '644') {
   execFileSync('docker', ['exec', '-i', container, 'sh', '-c', `cat > '${path}' && chmod ${mode} '${path}'`], { input: content });
@@ -60,10 +62,10 @@ export function stub(tool: keyof typeof PATHS | string, answers: Answers = []) {
   const existing = inPlayer('sh', '-c', `test -e ${path} && ! grep -q ${MARK} ${path} && echo real || true`).trim();
   if (existing === 'real') throw new Error(`${path} is a real program in the player; not replacing it`);
   inPlayer('sh', '-c', `mkdir -p ${DIR} && touch ${LOG} && chmod 666 ${LOG}`);
-  const cases = answers.map(([pattern, out], i) => {
+  const cases = answers.map(([pattern, out, then], i) => {
     writeIn(`${DIR}/${tool}.${i}`, out);
     // Spaces escaped, so a pattern is one case word with its globs intact.
-    return `  ${pattern.replace(/ /g, '\\ ')}) cat ${DIR}/${tool}.${i} ;;`;
+    return `  ${pattern.replace(/ /g, '\\ ')}) cat ${DIR}/${tool}.${i}${then ? `; ${then}` : ''} ;;`;
   }).join('\n');
   writeIn(path, `#!/bin/sh\n# ${MARK}\necho "${tool} $*" >> ${LOG}\ncase "$*" in\n${cases}\n  *) ;;\nesac\nexit 0\n`, '755');
 }
