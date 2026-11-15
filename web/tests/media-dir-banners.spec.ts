@@ -83,3 +83,53 @@ test.describe('a media_root.txt that names no usable folder', () => {
       .toMatch(/Details: .*creating it: .*No such file or directory/);
   });
 });
+
+test('the not-writable banner gives the folder\'s owner and mode, the web server\'s user and the mount', async ({ request }) => {
+  // Feature: 91fb554dc.  Files copied in as root and a root filesystem
+  // remounted read-only both landed on a bare "is not writable".  /sys is
+  // read-only in the player, even to root.
+  const text = banner((await pageWith(request, '/sys/fs')).body, /is not\s+writable/);
+  expect(text).toContain('the media directory /sys/fs is not writable.');
+  expect(text).toMatch(/Details: \/sys\/fs \(root:root 0755\); web server runs as root \(uid 0, groups [^)]*\); \/sys\/fs is on sysfs mounted at \/sys \(sysfs, READ-ONLY\)\./);
+});
+
+test.describe('the free-space banner', () => {
+  // What `stat -f` says about the media directory: the banner's only
+  // source.  A stand-in earlier in php-fpm's PATH answers for that one call
+  // and hands every other on to the real stat.
+  const STUB = '/usr/local/bin/stat';
+  const ANSWER = '/tmp/fpp-tests-statfs';
+  let media = '';
+  test.beforeAll(() => {
+    media = inPlayer('cat', ROOT).trim();
+  });
+  test.beforeEach(() => {
+    inPlayer('sh', '-c', `printf '%s' "$1" > ${STUB} && chmod 755 ${STUB}`, 'sh',
+      `#!/bin/sh\n# fpp-tests-statfs-stub\nif [ "$1" = -f ] && [ "$4" = "${media}" ] && [ -e ${ANSWER} ]; then\n` +
+      `  cat ${ANSWER}; exit $(cat ${ANSWER}.rc 2>/dev/null || echo 0)\nfi\nexec /usr/bin/stat "$@"\n`);
+  });
+  test.afterEach(() => {
+    inPlayer('sh', '-c', `rm -f ${STUB} ${ANSWER} ${ANSWER}.rc`);
+  });
+
+  // %b %a %S %c %d: blocks, blocks free to users, block size, inodes, inodes free.
+  async function withStatfs(request: APIRequestContext, answer: string, rc = 0) {
+    inPlayer('sh', '-c', `printf '%s\\n' "$1" > ${ANSWER} && echo ${rc} > ${ANSWER}.rc`, 'sh', answer);
+    const body = await (await request.get(PAGE)).text();
+    return banner(body, /is running|cannot be read|is there/);
+  }
+
+  test('says which problem it is: low on space, out of inodes, or space that cannot be read', async ({ request }) => {
+    // Feature: 91fb554dc.  The check blamed the disk whenever free space
+    // could not be read (disk_free_space() is false, and false < 50000000)
+    // and never noticed a filesystem out of inodes.
+    expect(await withStatfs(request, '1000000 10000 4096 100000 50000'))
+      .toMatch(new RegExp(`^${media} is running low on space\\. .*Details: 41\\.0 MB free of 4\\.1 GB, 50000 of 100000 inodes free; ${media} is on `));
+    expect(await withStatfs(request, '1000000 900000 4096 100000 50'))
+      .toMatch(new RegExp(`^${media} is running out of inodes, so new files and folders cannot be created even though space is free\\. .*Details: 3\\.7 GB free of 4\\.1 GB, 50 of 100000 inodes free`));
+    expect(await withStatfs(request, `stat: cannot read file system information for '${media}': Input/output error`, 1))
+      .toMatch(new RegExp(`^${media} is there, but the free space on it cannot be read\\. .*Details: cannot read file system information for '${media}': Input/output error`));
+    // The control: plenty of both is no banner.
+    expect(await withStatfs(request, '1000000 900000 4096 100000 90000')).toBe('');
+  });
+});
