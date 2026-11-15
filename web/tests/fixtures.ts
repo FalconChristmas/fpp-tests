@@ -44,7 +44,16 @@ export const test = base.extend({
     // flight when the test ends; its handler's route.fetch() then throws
     // "Target page, context or browser has been closed", which fails a test
     // that had passed. Drop the routes first, ignoring any still running.
-    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    // Turning interception off while a request is being intercepted can
+    // hang for good (about 1 run in 400 of overlay-models-page-save, whose
+    // tests end on a save with the restart-flag PUT just going out), so it
+    // gets 5 s; the page closes with its context all the same.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      page.unrouteAll({ behavior: 'ignoreErrors' }).catch(() => {}),
+      new Promise<void>((resolve) => { timer = setTimeout(resolve, 5_000); }),
+    ]);
+    clearTimeout(timer);
   },
 });
 
