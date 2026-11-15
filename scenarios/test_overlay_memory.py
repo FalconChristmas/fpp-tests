@@ -184,11 +184,6 @@ RESTART_MODEL = "fpp-tests-restart"
 RESTART_BLOCK = "/dev/shm/FPP-Model-Data-" + RESTART_MODEL
 
 
-UNFIXED = pytest.mark.xfail(strict=True, reason=(
-    "fpp master still starts a model with the last fppd's pixels: fix written, "
-    "not yet committed (FUTURE.md, overlay model buffers in /dev/shm); drop this mark when it is"))
-
-
 def filled_then(fppd, stop):
     """Fill the model, end fppd with `stop`, start it again: the model's
     data as the new fppd has it."""
@@ -206,17 +201,16 @@ def dark(data):
     assert len(data) == CHANNELS and not any(data), f"the model started with {data[:6]}..."
 
 
-@UNFIXED
 def test_a_model_starts_dark_after_fppd_stops(fppd):
     """A model filled before fppd stops is dark when the next fppd starts.
     A program outside fppd that mapped the model's block before the stop
     still draws into the model after it.
 
-    Fix: fppd never destroys the models -- a restart execlp()s over itself,
-    and since 2302ce6c0 a stop ends in _exit() -- and only their destructors
-    unlinked the blocks. The next fppd shm_open()ed the same block and
-    started with the last one's pixels: a framebuffer screen showed them
-    again, and a later scenario in the same container saw them
+    Fix (62266e235): fppd never destroys the models -- a restart execlp()s
+    over itself, and since 2302ce6c0 a stop ends in _exit() -- and only
+    their destructors unlinked the blocks. The next fppd shm_open()ed the
+    same block and started with the last one's pixels: a framebuffer screen
+    showed them again, and a later scenario in the same container saw them
     (test_virtual_matrix_submodel). The block is cleared, not replaced."""
     import mmap
     outside = None
@@ -240,7 +234,6 @@ def test_a_model_starts_dark_after_fppd_stops(fppd):
             os.remove(RESTART_BLOCK)
 
 
-@UNFIXED
 def test_a_model_starts_dark_after_fppd_is_killed(fppd):
     """Killed, fppd cleans up nothing; the next fppd still starts the model
     dark."""
@@ -249,3 +242,4 @@ def test_a_model_starts_dark_after_fppd_is_killed(fppd):
     finally:
         if os.path.exists(RESTART_BLOCK):
             os.remove(RESTART_BLOCK)
+
