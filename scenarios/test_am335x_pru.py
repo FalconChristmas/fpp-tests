@@ -1010,3 +1010,29 @@ def test_a_serial_output_starting_with_both_cores_stopped_does_not_touch_pru_mem
     assert pru.remoteproc_state(core) == "running"
     fppd.get("/fppd/status")
 
+
+def unlicensed_strings(fppd):
+    """A BBB48String output on run-local.sh's unsigned (or absent) cape,
+    licensed for no outputs: port 1 of 60 pixels, port 2 of exactly 50 and
+    port 3 of 10."""
+    pins, _ = string_pins()
+    write_string_cape("TestLicence", {"outputs": [{"pin": p} for p in pins[:3]]})
+    fppd.write("config/co-bbbStrings.json", strings_config(
+        "BBB48String", "TestLicence",
+        [pixel_output(0, 60, 0), pixel_output(1, 50, 180), pixel_output(2, 10, 330)]))
+    FakePruss(fppd).start()
+
+
+def test_the_unlicensed_warning_names_only_the_ports_over_fifty(fppd):
+    """With no licence, the warning that BBB48String is licensed for 0
+    outputs names port 1 (60 pixels) and not port 2 (exactly 50) or port 3.
+
+    Regression: b3546bd69. A port cut to 50 pixels got no warning, so the
+    strings were short with nothing in the UI to say why; the same commit
+    let a port of exactly 50 through (the check was "50 <= pixelCount").
+    """
+    unlicensed_strings(fppd)
+    w = [x for x in warnings_of(fppd) if "BBB48String is licensed for" in x]
+    assert w and w[0].startswith("BBB48String is licensed for 0 outputs") and \
+        w[0].endswith("Output(s): 1"), (warnings_of(fppd), fppd.tail())
+
