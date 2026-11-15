@@ -57,4 +57,29 @@ test.describe('a media_root.txt that names no usable folder', () => {
     expect(inPlayer('sh', '-c', 'ls -d /opt/fpp/www/fpp-tests-relative /fpp-tests-relative 2>/dev/null; true').trim()).toBe('');
     expect(banner(r.body, /does not/), 'the control: it is reported as missing').toContain('fpp-tests-relative/media does not');
   });
+
+  test('the missing-media banner names the step of the path that fails', async ({ request }) => {
+    // Feature: 5b1e3c30c.  The banner said only that the directory did not
+    // exist; it now walks the path and names the first step that fails.
+    inPlayer('sh', '-c', 'printf x > /tmp/fpp-tests-file && ln -sfn /tmp/fpp-tests-loop /tmp/fpp-tests-loop');
+    const cases: Array<[string, string]> = [
+      // Under /proc, so mkdir cannot make it.
+      ['/proc/fpp-tests-missing/media', 'Why: /proc/fpp-tests-missing does not exist'],
+      ['/tmp/fpp-tests-file/media', 'Why: /tmp/fpp-tests-file (root:root 0644) is a file, not a folder'],
+      ['/tmp/fpp-tests-loop/media', 'Why: the symlinks under /tmp/fpp-tests-loop/media loop back on themselves'],
+      ['fpp-tests-relative/media', 'Why: the path "fpp-tests-relative/media" is not absolute (it does not start with /)'],
+      ['/home/fpp/med\\000ia', 'Why: the path in media_root.txt contains a NUL byte'],
+    ];
+    for (const [root, why] of cases) {
+      const text = banner((await pageWith(request, root)).body, /does not/);
+      expect(text, root).toContain(`It is set by ${ROOT}.`);
+      expect(text, root).toContain(why);
+    }
+    // And its evidence: the bytes of a media_root.txt holding a NUL, and
+    // mkdir's error for the one it could not make.
+    expect(banner((await pageWith(request, '/home/fpp/med\\000ia\\n')).body, /does not/))
+      .toContain('media_root.txt holds "/home/fpp/med\\x00ia\\x0a" (17 bytes)');
+    expect(banner((await pageWith(request, '/proc/fpp-tests-missing/media')).body, /does not/))
+      .toMatch(/Details: .*creating it: .*No such file or directory/);
+  });
 });
