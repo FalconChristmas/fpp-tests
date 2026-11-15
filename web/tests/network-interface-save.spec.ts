@@ -140,6 +140,32 @@ test('a save refused by a late check leaves the leases as they were, and no temp
   expect(sh(`stat -c %a ${CONFIG}/interface.${ETH}`).trim()).toBe('644');
 });
 
+// Before 4f4bff40b the API took any key: wpa_supplicant then refused the
+// whole file over a key it can't use (under 8 characters, or 64 that are not
+// hex), and the backup network went with it.
+test('a WiFi key that is neither empty, 8-63 characters nor 64 hex digits is refused, and the saved one kept', async ({ request }) => {
+  const saved = { INTERFACE: WL, PROTO: 'dhcp', SSID: 'net', PSK: 'saved-key', HIDDEN: false, WPA3: false,
+    BACKUPSSID: 'net-b', BACKUPPSK: 'saved-backup', BACKUPHIDDEN: false, BACKUPWPA3: false };
+  expect((await save(request, WL, saved)).json).toEqual({ status: 'OK' });
+  const before = cfg(WL);
+  for (const [k, v] of [['PSK', 'short12'], ['PSK', 'x'.repeat(64)], ['PSK', 'p'.repeat(65)], ['BACKUPPSK', 'short12']]) {
+    const r = await save(request, WL, { ...saved, [k]: v });
+    expect(r.json?.status, `${k} of ${v.length}`).toBe(`ERROR: ${k} must be an 8-63 character passphrase or 64 hex digits`);
+    expect(cfg(WL), `after the refused ${k} of ${v.length}`).toBe(before);
+  }
+  // Empty (an open network), 8 and 63 characters, and 64 hex digits are taken.
+  for (const v of ['', 'eight ch', 'p'.repeat(63), 'a1'.repeat(32)]) {
+    const r = await save(request, WL, { ...saved, PSK: v });
+    expect(r.json, `a key of ${v.length}`).toEqual({ status: 'OK' });
+    expect(cfg(WL)).toContain(`PSK="${v}"\n`);
+  }
+  // Only a key sent is checked: one saved before the check came in is kept.
+  sh(`printf '%s\\n' 'INTERFACE=${WL}' 'PROTO=dhcp' 'SSID="net"' 'PSK="old"' > ${CONFIG}/interface.${WL}`);
+  const r = await save(request, WL, { INTERFACE: WL, PROTO: 'dhcp', SSID: 'net' });
+  expect(r.json).toEqual({ status: 'OK' });
+  expect(cfg(WL)).toContain('PSK="old"\n');
+});
+
 test('a save without an interface name is refused with a JSON answer', async ({ request }) => {
   // Before f89cda65f the refusal was printed after "WTF", so the answer
   // wasn't JSON.
