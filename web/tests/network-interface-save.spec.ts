@@ -58,15 +58,17 @@ test("a wireless interface's network, its backup, and their flags are written", 
     `BACKUPSSID="fpp-tests-backup"\nBACKUPPSK="other key"\nBACKUPHIDDEN=false\nBACKUPWPA3=1\n`);
 });
 
+// Keys of 8-63 characters: since fpp 4f4bff40b a key sent that is neither
+// empty, 8-63 characters nor 64 hex digits refuses the whole save.
 test('a save without the keys keeps the ones saved before', async ({ request }) => {
-  await save(request, WL, { INTERFACE: WL, PROTO: 'dhcp', SSID: 'net', PSK: 'k${HOME}ept', HIDDEN: false, WPA3: false,
-    BACKUPSSID: '', BACKUPPSK: 'b-kept', BACKUPHIDDEN: false, BACKUPWPA3: false });
+  expect((await save(request, WL, { INTERFACE: WL, PROTO: 'dhcp', SSID: 'net', PSK: 'k${HOME}ept', HIDDEN: false, WPA3: false,
+    BACKUPSSID: '', BACKUPPSK: 'b-kept-key', BACKUPHIDDEN: false, BACKUPWPA3: false })).json).toEqual({ status: 'OK' });
   // The page never gets the keys back, so it sends none.
   const r = await save(request, WL, { INTERFACE: WL, PROTO: 'dhcp', SSID: 'net2', HIDDEN: false, WPA3: true,
     BACKUPSSID: '', BACKUPHIDDEN: false, BACKUPWPA3: false });
   expect(r.json).toEqual({ status: 'OK' });
   expect(cfg(WL)).toContain('SSID="net2"\nPSK="k${HOME}ept"\n');
-  expect(cfg(WL)).toContain('BACKUPPSK="b-kept"\n');
+  expect(cfg(WL)).toContain('BACKUPPSK="b-kept-key"\n');
 });
 
 test("the DHCP server's static leases are written, and a save without any removes the file", async ({ request }) => {
@@ -112,7 +114,7 @@ test('a bad name, lease, address, flag, string or number is refused', async ({ r
 // refused left the interface with no config, or half of one.
 test('a refused save leaves the saved settings as they were', async ({ request }) => {
   const saved = { INTERFACE: WL, PROTO: 'static', ADDRESS: '192.168.9.5', NETMASK: '255.255.255.0',
-    SSID: 'net', PSK: 'key', HIDDEN: false, WPA3: false, BACKUPSSID: '', BACKUPPSK: '', BACKUPHIDDEN: false, BACKUPWPA3: false };
+    SSID: 'net', PSK: 'saved-key', HIDDEN: false, WPA3: false, BACKUPSSID: '', BACKUPPSK: '', BACKUPHIDDEN: false, BACKUPWPA3: false };
   expect((await save(request, WL, saved)).json).toEqual({ status: 'OK' });
   const before = cfg(WL);
   for (const bad of [{ NETMASK: '255.255.255.256' }, { SSID: 'a"b' }, { HIDDEN: 'yes' }, { DHCPOFFSET: 'ten' }]) {
