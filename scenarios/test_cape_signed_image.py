@@ -32,7 +32,11 @@ def detect_signed(sb, image):
     sb.write_bytes(EEPROM, image)
     shutil.copy(shims.build("anysig.c"), os.path.join(sb.media, "anysig.so"))
     log = "/home/fpp/media/anysig.log"
-    r = sb._run(["env", "LD_PRELOAD=/home/fpp/media/anysig.so", f"ANYSIG_LOG={log}",
+    # In an ASan build the shim comes before the ASan runtime, which ASan
+    # refuses unless told not to check (anysig intercepts nothing ASan does).
+    # The sandbox quotes each argument, so "$ASAN_OPTIONS" would not expand.
+    asan = os.environ.get("ASAN_OPTIONS", "detect_leaks=0") + ":verify_asan_link_order=0"
+    r = sb._run(["env", "LD_PRELOAD=/home/fpp/media/anysig.so", f"ANYSIG_LOG={log}", f"ASAN_OPTIONS={asan}",
                  "/opt/fpp/src/fppcapedetect", "-no-set-permissions"], media_home=True)
     out = r.stdout + r.stderr
     assert "AddressSanitizer" not in out and "terminate called" not in out, out[-3000:]
