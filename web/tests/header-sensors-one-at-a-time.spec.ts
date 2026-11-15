@@ -87,7 +87,8 @@ test('a click on the header sensor saves which one is showing', async ({ page, r
 });
 
 // The tooltip lists every sensor, fans included, with the header span's unit
-// suffix: the °C case was red before fpp 3183 added it.  The fan reading is
+// suffix.  Regression: dadc42139 (#3183): a Celsius reading showed the bare
+// number, where a Fahrenheit one had its °F.  The fan reading is
 // fppd's "formatted" passed through as is; its whole-number RPM comes from
 // Sensors.cpp (precision 0), which this stub can't exercise.
 async function tooltipWith(page: Page, request: APIRequestContext, inF: '0' | '1') {
