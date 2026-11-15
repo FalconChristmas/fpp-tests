@@ -174,6 +174,47 @@ test.describe('a model that cannot work', () => {
   });
 });
 
+test.describe('two models with one name', () => {
+  // Regression: acaaccc43. fppd keeps the first model of a name and ignores
+  // the second with only a log line, so the page must not save a pair.
+  test('stop the save, naming the name, and nothing is posted', async ({ page }) => {
+    const { posts, alerts, flags } = await open(page, [channel('arch'), channel('tree', { StartChannel: 200 })]);
+    await row(page, 'tree').locator('input.blk').fill('arch');
+    await save(page);
+    await expect.poll(() => alerts.length).toBe(1);
+    expect(alerts[0]).toBe("More than one model is named 'arch'. Rename one, then Save again.");
+    await settle(page);
+    expect(posts).toEqual([]);
+    expect(flags).not.toContain('restartFlag');
+  });
+
+  test('as fppd names them (a "/" is a "_") stop the save too, naming both', async ({ page }) => {
+    const { posts, alerts, flags } = await open(page, [channel('roof_left'), fb('roof/left')]);
+    await save(page);
+    await expect.poll(() => alerts.length).toBe(1);
+    expect(alerts[0]).toBe("'roof_left' and 'roof/left' are the same name to FPP (a '/' counts as '_'). Rename one, then Save again.");
+    await settle(page);
+    expect(posts).toEqual([]);
+    expect(flags).not.toContain('restartFlag');
+  });
+
+  test('one made by hand named like one made from the outputs saves: it overrides it', async ({ page }) => {
+    // fppd loads the hand-made models first; an output finding its name taken
+    // leaves it alone (a pixel string) or names its own model "-1" (a matrix).
+    const { posts, alerts } = await open(page, [channel('by-hand'), channel('Panels', { autoCreated: true, StartChannel: 1000 })]);
+    await row(page, 'by-hand').locator('input.blk').fill('Panels');
+    expect((await saved(page, posts)).map((m) => m.Name)).toEqual(['Panels']);
+    expect(alerts).toEqual([]);
+  });
+
+  test('differing only in case or spaces are two names, and save', async ({ page }) => {
+    // The control: fppd's names are exact, and neither it nor the page trims them.
+    const { posts, alerts } = await open(page, [channel('arch'), channel('Arch'), channel('arch ')]);
+    expect((await saved(page, posts)).map((m) => m.Name)).toEqual(['arch', 'Arch', 'arch ']);
+    expect(alerts).toEqual([]);
+  });
+});
+
 test.describe('a framebuffer model', () => {
   test('on a device this player does not have now keeps its device, size and pixel size', async ({ page }) => {
     // An HDMI output that is unplugged, or a model restored from another player.
