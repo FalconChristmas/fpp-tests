@@ -577,6 +577,9 @@ def test_a_sequence_started_just_after_the_output_thread_idles_starts_its_own_ca
             for t, f in rx.snapshot(since):
                 if f in index and index[f] not in first:
                     first[index[f]] = t
+            assert 0 in first and 1 in first, (
+                f"{delay_ms} ms after the blank: B's frames 0 and 1 did not both go out; "
+                f"its first frames seen were {sorted(first)[:8]}")
             rounds.append((delay_ms, round((first[1] - first[0]) * 1000)))
             fppd.command("Stop Now")
             time.sleep(3)  # past the output thread's 2.5 s idle wait
