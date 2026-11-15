@@ -185,8 +185,8 @@ RESTART_BLOCK = "/dev/shm/FPP-Model-Data-" + RESTART_MODEL
 
 
 UNFIXED = pytest.mark.xfail(strict=True, reason=(
-    "fpp master still reopens a model's old shm block: fix written, not yet "
-    "committed (FUTURE.md, overlay model buffers in /dev/shm); drop this mark when it is"))
+    "fpp master still starts a model with the last fppd's pixels: fix written, "
+    "not yet committed (FUTURE.md, overlay model buffers in /dev/shm); drop this mark when it is"))
 
 
 def filled_then(fppd, stop):
@@ -202,38 +202,50 @@ def filled_then(fppd, stop):
     return fppd.get(f"/overlays/model/{RESTART_MODEL}/data")["data"]
 
 
+def dark(data):
+    assert len(data) == CHANNELS and not any(data), f"the model started with {data[:6]}..."
+
+
 @UNFIXED
 def test_a_model_starts_dark_after_fppd_stops(fppd):
-    """A model filled before fppd stops is dark when the next fppd starts,
-    and its shared memory block is gone in between.
+    """A model filled before fppd stops is dark when the next fppd starts.
+    A program outside fppd that mapped the model's block before the stop
+    still draws into the model after it.
 
     Fix: fppd never destroys the models -- a restart execlp()s over itself,
     and since 2302ce6c0 a stop ends in _exit() -- and only their destructors
     unlinked the blocks. The next fppd shm_open()ed the same block and
     started with the last one's pixels: a framebuffer screen showed them
     again, and a later scenario in the same container saw them
-    (test_virtual_matrix_submodel)."""
+    (test_virtual_matrix_submodel). The block is cleared, not replaced."""
+    import mmap
+    outside = None
+
     def stop():
+        nonlocal outside
+        if os.path.exists(RESTART_BLOCK):
+            with open(RESTART_BLOCK, "r+b") as f:
+                outside = mmap.mmap(f.fileno(), CHANNELS)
         assert fppd.stop() == 0
-        if os.path.isdir("/dev/shm"):
-            assert not os.path.exists(RESTART_BLOCK), f"{RESTART_BLOCK} was left behind by a clean stop"
     try:
-        data = filled_then(fppd, stop)
-        assert len(data) == CHANNELS and not any(data), f"the model started with {data[:6]}..."
+        dark(filled_then(fppd, stop))
+        if outside is not None:
+            outside[:3] = bytes([1, 2, 3])
+            data = fppd.get(f"/overlays/model/{RESTART_MODEL}/data")["data"]
+            assert data[:3] == [1, 2, 3], "a program that mapped the model before the restart no longer reaches it"
     finally:
-        # Only what a failed run left; the fixture stops fppd as usual.
+        if outside is not None:
+            outside.close()
         if os.path.exists(RESTART_BLOCK):
             os.remove(RESTART_BLOCK)
 
 
 @UNFIXED
 def test_a_model_starts_dark_after_fppd_is_killed(fppd):
-    """Killed, fppd unlinks nothing; the next fppd still starts the model
-    dark, as it makes a new block rather than open the one left behind."""
+    """Killed, fppd cleans up nothing; the next fppd still starts the model
+    dark."""
     try:
-        data = filled_then(fppd, fppd.kill)
-        assert len(data) == CHANNELS and not any(data), f"the model started with {data[:6]}..."
+        dark(filled_then(fppd, fppd.kill))
     finally:
-        # Only what a failed run left; the fixture stops fppd as usual.
         if os.path.exists(RESTART_BLOCK):
             os.remove(RESTART_BLOCK)
