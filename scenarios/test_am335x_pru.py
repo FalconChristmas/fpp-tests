@@ -966,10 +966,14 @@ def test_a_matrix_starting_with_both_cores_stopped_does_not_touch_pru_memory(fpp
     clocked those writes aborted the process (the BeagleBone crashes of
     10.1, in memset behind clearPRUMem()).
 
-    Also: BBBPru::run() cleared the memories before enabling the core (so
-    a restart would not see the last run's handshake words), the same crash
-    from BBBPruUtils.cpp; it no longer does on the AM335x (the AM62x
-    still does, its PRU memory is always accessible).
+    Regression: 49c9591f3. BBBPru::run() cleared the memories before
+    enabling the core (so a restart would not see the last run's handshake
+    words), the same crash from BBBPruUtils.cpp; it no longer does on the
+    AM335x (the AM62x still does, its PRU memory is always accessible).
+
+    Regression: 058910d4d. The data and shared RAM clears were in
+    initPrus(), when the first BBBPru is made and no core runs yet; they
+    moved to run(), after the core is enabled.
     """
     pru = FakePruss(fppd, states=("offline", "offline"), offline_fault="all")
     octoscroller()
@@ -983,3 +987,26 @@ def test_a_matrix_starting_with_both_cores_stopped_does_not_touch_pru_memory(fpp
     assert pru.starts(0), pru.events()
     assert pru.remoteproc_state(0) == "running"
     fppd.command("Test Stop")
+
+
+def test_a_serial_output_starting_with_both_cores_stopped_does_not_touch_pru_memory(fppd):
+    """fppd starting a BBBSerial DMX output while both PRU cores are
+    stopped starts it, its core running, without touching the PRU memories
+    before the core runs (the fake makes that RAM inaccessible while every
+    core is offline).
+
+    Regression: 49c9591f3. BBBPru::run() cleared the PRU memories before
+    enabling the core, and BBBSerial calls it with the defaults (it clears);
+    with both cores stopped that access aborted fppd (crash bucket
+    e80ad9caf7, SIGBUS in the clear; here a SIGSEGV).
+    """
+    pru = FakePruss(fppd, states=("offline", "offline"), offline_fault="all")
+    fppd.write("config/co-bbbStrings.json", serial_config())
+    pru.start()
+    fppd.wait_for(lambda: pru.starts() or "Crash handler called" in fppd.log(), timeout=60,
+                  what="the serial output's PRU to start")
+    assert "Crash handler called" not in fppd.log(), fppd.tail()
+    core = pru.starts()[-1][0]
+    assert pru.remoteproc_state(core) == "running"
+    fppd.get("/fppd/status")
+
