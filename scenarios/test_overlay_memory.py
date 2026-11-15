@@ -1,10 +1,14 @@
 """Pixel overlay models: where their buffers come from when shared memory
-can't be had, and their child lists under concurrent submodel changes."""
+can't be had, what is left of them across an fppd restart, and their child
+lists under concurrent submodel changes."""
 
 import http.client
+import os
 import threading
 import time
 import urllib.parse
+
+import pytest
 
 import shims
 from ddp import DdpReceiver
@@ -173,3 +177,63 @@ def test_concurrent_first_uses_map_a_models_overlay_buffer_once(fppd):
     with open(f"/proc/{fppd.proc.pid}/maps") as f:
         maps = [l for l in f if "FPP-Model-Overlay-Buffer-M" in l]
     assert len(maps) == 1, f"the overlay buffer is mapped {len(maps)} times:\n" + "".join(maps)
+
+
+
+RESTART_MODEL = "fpp-tests-restart"
+RESTART_BLOCK = "/dev/shm/FPP-Model-Data-" + RESTART_MODEL
+
+
+UNFIXED = pytest.mark.xfail(strict=True, reason=(
+    "fpp master still reopens a model's old shm block: fix written, not yet "
+    "committed (FUTURE.md, overlay model buffers in /dev/shm); drop this mark when it is"))
+
+
+def filled_then(fppd, stop):
+    """Fill the model, end fppd with `stop`, start it again: the model's
+    data as the new fppd has it."""
+    setup(fppd, [matrix(RESTART_MODEL, WIDTH, HEIGHT)], CHANNELS)
+    fppd.start()
+    put(fppd, f"model/{RESTART_MODEL}/fill", {"RGB": [200, 10, 30]})
+    data = fppd.get(f"/overlays/model/{RESTART_MODEL}/data")["data"]
+    assert data[:3] == [200, 10, 30], data[:6]
+    stop()
+    fppd.start()
+    return fppd.get(f"/overlays/model/{RESTART_MODEL}/data")["data"]
+
+
+@UNFIXED
+def test_a_model_starts_dark_after_fppd_stops(fppd):
+    """A model filled before fppd stops is dark when the next fppd starts,
+    and its shared memory block is gone in between.
+
+    Fix: fppd never destroys the models -- a restart execlp()s over itself,
+    and since 2302ce6c0 a stop ends in _exit() -- and only their destructors
+    unlinked the blocks. The next fppd shm_open()ed the same block and
+    started with the last one's pixels: a framebuffer screen showed them
+    again, and a later scenario in the same container saw them
+    (test_virtual_matrix_submodel)."""
+    def stop():
+        assert fppd.stop() == 0
+        if os.path.isdir("/dev/shm"):
+            assert not os.path.exists(RESTART_BLOCK), f"{RESTART_BLOCK} was left behind by a clean stop"
+    try:
+        data = filled_then(fppd, stop)
+        assert len(data) == CHANNELS and not any(data), f"the model started with {data[:6]}..."
+    finally:
+        # Only what a failed run left; the fixture stops fppd as usual.
+        if os.path.exists(RESTART_BLOCK):
+            os.remove(RESTART_BLOCK)
+
+
+@UNFIXED
+def test_a_model_starts_dark_after_fppd_is_killed(fppd):
+    """Killed, fppd unlinks nothing; the next fppd still starts the model
+    dark, as it makes a new block rather than open the one left behind."""
+    try:
+        data = filled_then(fppd, fppd.kill)
+        assert len(data) == CHANNELS and not any(data), f"the model started with {data[:6]}..."
+    finally:
+        # Only what a failed run left; the fixture stops fppd as usual.
+        if os.path.exists(RESTART_BLOCK):
+            os.remove(RESTART_BLOCK)
