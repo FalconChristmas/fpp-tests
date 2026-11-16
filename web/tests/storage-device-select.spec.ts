@@ -94,7 +94,11 @@ test('the list is in the disks\' order when the media partition is listed, rever
   standIn('sdz1');
   const listed = (await options(request)).map(([d]) => d);
   expect(listed).toEqual([...NODES].sort());
+  // Since 13e98c1c4 that media partition gets an entry of its own, after the
+  // reversed ones, and is selected: the page never opens on a device it is
+  // not on, which would rewrite /etc/fstab on its load-time save.
   standIn('elsewhere9');
-  const reversed = (await options(request)).map(([d]) => d);
-  expect(reversed).toEqual([...NODES].sort().reverse());
+  const opts = await options(request);
+  expect(opts.map(([d]) => d)).toEqual([...NODES].sort().reverse().concat('elsewhere9'));
+  expect(opts.filter(([, , s]) => s).map(([d]) => d), 'the selected entry').toEqual(['elsewhere9']);
 });
