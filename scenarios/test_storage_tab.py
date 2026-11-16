@@ -146,7 +146,9 @@ def test_the_storage_device_select_lists_nvme_partitions(tmp_path):
     disks = {name: 0 for name in ("mmcblk0", "mmcblk0p1", "sda", "sda1", "nvme0n1", "nvme0n1p1", "loop0")}
     out = run_php(tmp_path, code, "mmcblk0p2", disks, PI,
                   {"sfdisk": "#!/bin/sh\necho 67108864\n", "df": "#!/bin/sh\n"})
-    assert sorted(l.split()[0] for l in out.splitlines()) == ["mmcblk0p1", "nvme0n1p1", "sda1"], out
+    # mmcblk0p2 is the media folder's own partition, which the list has
+    # carried as "(current)" since 13e98c1c4 (#3188).
+    assert sorted(l.split()[0] for l in out.splitlines()) == ["mmcblk0p1", "mmcblk0p2", "nvme0n1p1", "sda1"], out
 
 
 def test_only_the_media_folders_partition_is_tagged_current_storage_device(tmp_path):
