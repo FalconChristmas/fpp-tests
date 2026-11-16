@@ -260,7 +260,7 @@ def test_an_rtp_jpeg_stream_reaches_an_overlay_model(fppd, audio):
     fppd.start()
     sender = subprocess.Popen(
         ["gst-launch-1.0", "-q", "videotestsrc", "is-live=true", "pattern=smpte",
-         "!", "video/x-raw,width=320,height=240,framerate=10/1", "!", "jpegenc",
+         "!", "video/x-raw,format=I420,width=320,height=240,framerate=10/1", "!", "jpegenc",
          "!", "rtpjpegpay", "!", "udpsink", "host=127.0.0.1", f"port={port}"],
         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     try:
