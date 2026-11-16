@@ -248,3 +248,25 @@ def test_start_with_no_sfdisk_output_leaves_no_unpartitioned_space(fppinit):
     empty split of the output, which is undefined: a SEGV under ASan that
     killed fppinit start."""
     assert unpartitioned_after_start(fppinit, "") == "0"
+
+
+def test_start_finishes_when_the_media_directory_is_mounted_from_none(fppinit):
+    """fppinit start runs to the end of boot init when findmnt names the
+    media directory's (or root's) source as something that is not a /dev
+    path, here "none", as a bind or pseudo filesystem can.
+
+    Regression: 73234c0f6. checkUnpartitionedSpace() cut "/dev/" off the
+    source without checking it was there; "none" is shorter than that, so
+    substr() threw std::out_of_range and fppinit start ended there, with
+    the SSH keys, host name, fstab, Apache, cape and network still to do."""
+    fppinit.root_file("/dev/mmcblk0", "")
+    fppinit.root_file("/etc/fpp/desktop", None)
+    fppinit.root_file("/usr/bin/findmnt", "#!/bin/sh\necho none\n")
+    fppinit.stub_output("sfdisk", "-F", "Start End Sectors Size\n1 2 3  12G\n")
+    fppinit.root_file("/usr/sbin/sfdisk", "#!/bin/sh\ncat /fppinit-state/sfdisk.-F.out\n")
+    r = start(fppinit)
+    assert "Setting file ownership" in r.stdout, r.stdout[-3000:]
+    unpartitioned = [line.split("=", 1)[1].strip().strip('"')
+                     for line in fppinit.media_file("settings").splitlines()
+                     if line.startswith("UnpartitionedSpace")]
+    assert unpartitioned == ["12"], unpartitioned
