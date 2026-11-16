@@ -18,9 +18,14 @@ const raw = (body: string) => ({ data: Buffer.from(body), headers: { 'Content-Ty
 // A save makes a JSON configuration backup: the ones made here are removed.
 let backups = '';
 const listBackups = () => inPlayer('sh', '-c', `mkdir -p ${BACKUPS} && cd ${BACKUPS} && find . -type f | sort`);
+// With each file's mtime: backups are named to the second, so one made in the
+// same second as an earlier spec's replaces that file rather than adding one.
+let stamps = '';
+const stampBackups = () => inPlayer('sh', '-c', `mkdir -p ${BACKUPS} && cd ${BACKUPS} && find . -type f -printf '%p %T@\\n' | sort`);
 const clean = () => inPlayer('sh', '-c', `find ${MEDIA}/scripts ${MEDIA} -maxdepth 1 -name 'fpp-tests-scriptsave*' -exec rm -rf -- {} +`);
 test.beforeEach(() => {
   backups = listBackups();
+  stamps = stampBackups();
   clean();
   putFile(FILE, ORIGINAL);
 });
@@ -37,7 +42,7 @@ test('a save writes the text as sent, line ends and odd characters included, and
   expect(await r.json()).toEqual({ status: 'OK', scriptName: NAME, scriptBody: text });
   expect(readFile(FILE)).toBe(text);
   expect(await (await request.get(`/api/scripts/${NAME}`)).text()).toBe(text);
-  await expect.poll(() => listBackups() !== backups, { message: 'a configuration backup after the save' }).toBe(true);
+  await expect.poll(() => stampBackups() !== stamps, { message: 'a configuration backup after the save' }).toBe(true);
 
   // An empty script is a script: the string "" is saved as that.
   expect((await (await request.post(`/api/scripts/${NAME}`, raw('""'))).json()).status).toBe('OK');
