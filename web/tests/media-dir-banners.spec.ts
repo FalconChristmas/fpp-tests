@@ -139,28 +139,67 @@ test.describe('a media drive /etc/fstab mounts that is not mounted', () => {
   // Storage page lists devices only off Docker (/etc/fpp/platform).
   let fstab = '';
   let media = '';
+  let saved = '';
+  const SETTING = '/api/settings/storageDevice';
   test.beforeAll(() => {
     fstab = inPlayer('cat', '/etc/fstab');
     media = inPlayer('cat', ROOT).trim();
   });
-  test.afterEach(() => {
-    inPlayer('sh', '-c', `printf '%s' "$1" > /etc/fstab; rm -f /etc/fpp/rfs_version /etc/fpp/platform`, 'sh', fstab);
+  test.beforeEach(async ({ request }) => {
+    saved = String((await (await request.get(SETTING)).json()).value ?? '');
+  });
+  test.afterEach(async ({ request }) => {
+    inPlayer('sh', '-c', `printf '%s' "$1" > /etc/fstab; printf '%s' "$2" > ${ROOT}; rm -f /etc/fpp/rfs_version /etc/fpp/platform /dev/sdz1; ` +
+      `if [ -e /usr/bin/findmnt.fpp-tests ]; then mv -f /usr/bin/findmnt.fpp-tests /usr/bin/findmnt; fi`, 'sh', fstab, media);
+    await request.put(SETTING, { data: saved });
   });
 
   async function indexWith(request: APIRequestContext, line: string) {
     inPlayer('sh', '-c', `touch /etc/fpp/rfs_version && printf '%s%s\\n' "$1" "$2" > /etc/fstab`, 'sh', fstab, line);
-    return banner(await (await request.get(PAGE)).text(), /\/etc\/fstab mounts/);
+    return banner(await (await request.get(PAGE)).text(), /\/etc\/fstab mounts|show files/);
+  }
+
+  // The player as an SD-card Pi whose media folder is /home/fpp/media (a
+  // symlink to the real one in the container): media_root.txt names it, and
+  // findmnt says the SD card's root partition is what it is on now.
+  function onAnSdCard() {
+    inPlayer('sh', '-c', `printf '/home/fpp/media' > ${ROOT}; mv /usr/bin/findmnt /usr/bin/findmnt.fpp-tests && ` +
+      `printf '#!/bin/sh\\ncase "$*" in *"-T /home/fpp/media"*) echo /dev/mmcblk0p2; exit 0;; esac\\nexec /usr/bin/findmnt.fpp-tests "$@"\\n' > /usr/bin/findmnt && ` +
+      'chmod 755 /usr/bin/findmnt');
   }
 
   test('is named, with its device, on every page', async ({ request }) => {
     // Regression: 87bed5f03.  The check looked for /home/pi/media in
     // /etc/fstab, so on /home/fpp images it never fired.
-    expect(await indexWith(request, `/dev/sdz1 ${media} vfat defaults,nofail 0 0`)).toBe(
-      `/etc/fstab mounts /dev/sdz1 at ${media} but it is not mounted, so settings and uploads are going to the folder underneath it. There is no /dev/sdz1 on this system.`);
+    expect(await indexWith(request, `/dev/sdz1 ${media} vfat defaults,nofail 0 0`))
+      .toMatch(new RegExp(`^/etc/fstab mounts /dev/sdz1 at ${media} but it is not mounted, so `));
     // The controls: a drive marked noauto, and one mounted inside the media
     // directory, are no banner.
     expect(await indexWith(request, `/dev/sdz1 ${media} vfat noauto 0 0`)).toBe('');
     expect(await indexWith(request, `/dev/sdz1 ${media}/music vfat defaults 0 0`)).toBe('');
+  });
+
+  test('says in plain words which drive is missing and how to stop using it', async ({ request }) => {
+    // Regression: 13e98c1c4 (#3188).  The banner gave the fstab line and
+    // "There is no /dev/sdz1 on this system", and nothing about how to get
+    // rid of it; the Storage tab could not either (see the next test).
+    onAnSdCard();
+    const line = '/dev/sdz1 /home/fpp/media vfat defaults,nofail 0 0';
+    const advice = 'go to Settings → Storage and, under Storage Device, choose the one marked “current storage device”.';
+    expect(await indexWith(request, line)).toBe(
+      'FPP is set up to keep your show files on the USB drive (sdz1), but that drive isn\'t connected. ' +
+      `Until it is, FPP is saving them to the SD card (mmcblk0p2) instead. If you don't use that drive any more, ${advice}`);
+    expect(await (await request.get(PAGE)).text()).toContain('<a href="settings.php?tab=Storage">');
+    // Attached but not mounted is a drive that may need checking.
+    inPlayer('touch', '/dev/sdz1');
+    expect(await indexWith(request, line)).toBe(
+      'FPP is set up to keep your show files on the USB drive (sdz1). It\'s connected but couldn\'t be used ' +
+      `(it may need checking), so FPP is saving them to the SD card (mmcblk0p2) instead. To stop using it, ${advice}`);
+    // A line the Storage tab cannot rewrite is sent to /etc/fstab instead.
+    expect(await indexWith(request, 'UUID=1234-ABCD /home/fpp/media vfat defaults,nofail 0 0')).toBe(
+      '/etc/fstab mounts UUID=1234-ABCD at /home/fpp/media but it is not mounted, so FPP is saving your show files ' +
+      'to the SD card (mmcblk0p2) instead. Fix or remove that line in /etc/fstab.');
+    expect(await (await request.get(PAGE)).text()).not.toContain('<a href="settings.php?tab=Storage">');
   });
 
   test('is listed on the Storage page, so it can be switched off', async ({ request }) => {
@@ -171,5 +210,26 @@ test.describe('a media drive /etc/fstab mounts that is not mounted', () => {
     inPlayer('sh', '-c', `echo 'Raspberry Pi' > /etc/fpp/platform && printf '%s%s\\n' "$1" "/dev/sdz1 /home/fpp/media vfat defaults,nofail 0 0" > /etc/fstab`, 'sh', fstab);
     const body = await (await request.get('/settings-storage.php')).text();
     expect(body).toMatch(/<option value=['"]sdz1['"][^>]*selected[^>]*>sdz1 - \(in \/etc\/fstab, not attached\)<\/option>/);
+  });
+
+  test('the Storage page opens on the drive /etc/fstab mounts, not a stale saved Storage Device', async ({ request }) => {
+    // Regression: 13e98c1c4 (#3188).  The dropdown opened on the saved
+    // storageDevice setting, often already the SD card: a drive attached
+    // but not mounted was not listed at all, and a saved value missing from
+    // the list made the page save a new one as it loaded, which rewrites
+    // /etc/fstab.
+    expect((await request.put(SETTING, { data: 'mmcblk0p2' })).ok()).toBe(true);
+    inPlayer('sh', '-c', `echo 'Raspberry Pi' > /etc/fpp/platform && printf '%s%s\\n' "$1" "/dev/sdz1 /home/fpp/media vfat defaults,nofail 0 0" > /etc/fstab`, 'sh', fstab);
+    const storage = async () => {
+      const body = await (await request.get('/settings-storage.php')).text();
+      const select = body.match(/<select id='storageDevice'[\s\S]*?<\/select>/)?.[0] ?? '';
+      return {
+        selected: [...select.matchAll(/<option value='([^']*)' selected>([^<]*)<\/option>/g)].map((m) => `${m[1]}: ${m[2]}`),
+        savesOnLoad: body.includes('is no longer available. Auto-updating to'),
+      };
+    };
+    expect(await storage(), 'not attached').toEqual({ selected: ['sdz1: sdz1 - (in /etc/fstab, not attached)'], savesOnLoad: false });
+    inPlayer('touch', '/dev/sdz1');
+    expect(await storage(), 'attached, not mounted').toEqual({ selected: ['sdz1: sdz1 - (in /etc/fstab)'], savesOnLoad: false });
   });
 });

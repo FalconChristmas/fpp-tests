@@ -147,3 +147,33 @@ def test_the_storage_device_select_lists_nvme_partitions(tmp_path):
     out = run_php(tmp_path, code, "mmcblk0p2", disks, PI,
                   {"sfdisk": "#!/bin/sh\necho 67108864\n", "df": "#!/bin/sh\n"})
     assert sorted(l.split()[0] for l in out.splitlines()) == ["mmcblk0p1", "nvme0n1p1", "sda1"], out
+
+
+def test_only_the_media_folders_partition_is_tagged_current_storage_device(tmp_path):
+    """The Storage Device list tags the one partition the media folder is
+    on as "(current storage device)", and none at all when findmnt names
+    nothing for it.
+
+    Regression: 13e98c1c4 (#3188). The tag was a prefix match on findmnt's
+    answer, so an empty answer matched every partition, the boot partition
+    included, and the banner's advice to pick the entry so marked could
+    mean any of them."""
+    code = block("settings-storage.php", "function PrintStorageDeviceSelect", "\n}\n") + "\n}\n"
+    code = code.replace('"/etc/fstab"', f'"{tmp_path}/fstab"')
+    code = ("function GetDirSetting($d) { return '/boot'; }\n"
+            "function GetSettingValue($s) { return '/home/fpp/media'; }\n"
+            "function PrintSettingSelect($t, $s, $r, $b, $d, $values, $p, $c) "
+            "{ echo implode(\"\\n\", array_keys($values)); }\n"
+            "$SUDO = '';\n" + code + "\nPrintStorageDeviceSelect('Raspberry Pi');\n")
+    (tmp_path / "fstab").write_text("")
+    disks = {name: 0 for name in ("mmcblk0p1", "mmcblk0p2", "sda1")}
+    tools = {"sfdisk": "#!/bin/sh\necho 67108864\n", "df": "#!/bin/sh\n"}
+
+    def tagged(findmnt):
+        d = tmp_path / str(len(list(tmp_path.iterdir())))
+        d.mkdir()
+        out = run_php(d, code, "mmcblk0p2", disks, PI, dict(tools, findmnt=findmnt))
+        return sorted(l.split()[0] for l in out.splitlines() if "(current storage device)" in l)
+
+    assert tagged("#!/bin/sh\n") == []
+    assert tagged("#!/bin/sh\necho /dev/mmcblk0p2\n") == ["mmcblk0p2"]
