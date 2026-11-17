@@ -415,6 +415,101 @@ def test_virtual_display_pixel_at_x_4095_uses_the_pages_key(fppd):
         f"x 4095 sent as {loc!r}, want the short key"
 
 
+def test_virtual_display_stream_decodes_to_the_frame(fppd):
+    """Decoded the way the page decodes it (virtualdisplaybody.php), the
+    HTTP virtual display's stream rebuilds exactly the frame fppd holds: every
+    pixel at its own location key, in its RGB666 colour, with no locations
+    that aren't in the map, each colour listed once a frame with all of its
+    pixels, and the frame tracked through a change by the deltas alone.
+
+    Guards 1c3d35889, which rewrote the encoder: it grouped pixels by colour
+    through a std::map of strings with two snprintf calls per changed pixel,
+    on the channel output thread, and now precomputes the location keys and
+    groups by a radix sort. The pixels mix short and long (x >= 4096) keys and
+    share some colours, so a broken grouping or key shows here.
+    """
+    import socket
+    from packets import E131_PORT, Sender, e131
+
+    width, height, count = 5000, 40, 150
+    pixels = []  # (x, y) per pixel, channel 3*i+1
+    for i in range(count):
+        x = (i * 37) % 300 if i < 120 else 4090 + (i - 120)  # 4090..4119: both key forms
+        y = (i * 7) % height
+        pixels.append((x, y))
+    assert len(set(pixels)) == count
+    virtual_display(fppd, [f"{width},{height}"] +
+                    [f"{x},{y},{i * 3},3,RGB" for i, (x, y) in enumerate(pixels)], count * 3)
+    fppd.write("config/ci-universes.json", {"channelInputs": [{
+        "type": "universes", "enabled": 1, "startChannel": 1, "channelCount": 512,
+        "universes": [{"active": 1, "id": 1, "universeCount": 1, "startChannel": 1,
+                       "channelCount": 512, "type": 1, "priority": 0, "address": ""}]}]})
+
+    def key(x, y):
+        y = height - y
+        if x >= 4096 or y >= 4096:
+            return "".join(B64[(v >> s) & 63] for v in (x, y) for s in (12, 6, 0))
+        return "".join(B64[(v >> s) & 63] for v in (x, y) for s in (6, 0))
+
+    def frame(salt):
+        # Every tenth pixel shares one colour, so groups hold many locations.
+        data = bytearray(512)
+        for i in range(count):
+            rgb = (0x84, 0x30, 0xFC) if i % 10 == 0 else \
+                ((i * 37 + salt) & 255, (i * 91 + salt * 3) & 255, (i * 13 + salt * 7) & 255)
+            data[i * 3:i * 3 + 3] = bytes(rgb)
+        want = {key(x, y): tuple((c >> 2) << 2 for c in data[i * 3:i * 3 + 3])
+                for i, (x, y) in enumerate(pixels)}
+        return bytes(data), want
+
+    shown = {}
+    buf = b""
+
+    def read(sock, want, seconds=10):
+        nonlocal buf
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            try:
+                chunk = sock.recv(1 << 20)
+            except socket.timeout:
+                continue
+            assert chunk, "the display closed the stream"
+            buf += chunk
+            lines = buf.split(b"\n")
+            buf = lines.pop()
+            for line in lines:
+                line = line.decode().rstrip("\r")
+                if not line.startswith("data: ") or len(line) == len("data: "):
+                    continue
+                colours = [g.split(":", 1)[0] for g in line[len("data: "):].split("|")]
+                assert len(colours) == len(set(colours)), f"a colour listed twice in a frame: {line[:200]}"
+                for group in line[len("data: "):].split("|"):
+                    rgb, locs = group.split(":", 1)
+                    assert len(rgb) == 3, group
+                    colour = tuple(B64.index(c) << 2 for c in rgb)
+                    for loc in locs.split(";"):
+                        assert loc in want, f"location {loc!r} is not a pixel of the map"
+                        shown[loc] = colour
+            if shown == want:
+                return
+        wrong = {k: (shown.get(k), v) for k, v in want.items() if shown.get(k) != v}
+        raise AssertionError(f"{len(wrong)} of {count} pixels wrong, e.g. {list(wrong.items())[:5]}")
+
+    fppd.start()
+    wait_for_display(fppd)
+    sock = socket.create_connection(("127.0.0.1", VD_PORT), timeout=2)
+    sock.settimeout(0.2)
+    try:
+        first, want_first = frame(0)
+        with Sender(lambda n: [(e131(1, first, seq=n), E131_PORT)]):
+            read(sock, want_first)
+        second, want_second = frame(1)
+        with Sender(lambda n: [(e131(1, second, seq=n), E131_PORT)]):
+            read(sock, want_second)
+    finally:
+        sock.close()
+
+
 def test_virtual_display_closes_reset_connections(fppd):
     """Preview clients that reset their connection don't leave sockets
     open in fppd.
