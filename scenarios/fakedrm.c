@@ -359,9 +359,28 @@ static int is_ours_locked(int fd) {
     return 0;
 }
 
+// Whether an fd is one of ours, readable without mu.  mmap() and close() of
+// every fd in the process come through here, the sanitizer's own included: a
+// TSan report symbolizes with libbacktrace, which mmaps and closes the ELF
+// files it reads while TSan holds its report locks.  Taking mu there waits on
+// a thread that holds mu and is itself waiting on TSan (an fclose() in logf_,
+// say), and fppd hangs.  So an fd that isn't ours never touches mu.  files[]
+// stays the list under mu; this mirrors it, set and cleared under mu.
+#define OURS_MAX 65536
+static unsigned char ours[OURS_MAX];
+
+static void mark_ours_locked(int fd, unsigned char v) {
+    if (fd >= 0 && fd < OURS_MAX) {
+        __atomic_store_n(&ours[fd], v, __ATOMIC_RELEASE);
+    }
+}
+
 static int is_ours(int fd) {
     if (fd < 0) {
         return 0;
+    }
+    if (fd < OURS_MAX) {
+        return __atomic_load_n(&ours[fd], __ATOMIC_ACQUIRE);
     }
     pthread_mutex_lock(&mu);
     int r = is_ours_locked(fd);
@@ -377,6 +396,7 @@ static int new_file(int cloexec) {
     pthread_mutex_lock(&mu);
     if (nfiles < MAXFILES) {
         files[nfiles++] = fd;
+        mark_ours_locked(fd, 1);
     }
     pthread_mutex_unlock(&mu);
     return fd;
@@ -1008,6 +1028,10 @@ int drmModeRmFB(int fd, uint32_t id) {
 
 int close(int fd) {
     REAL(close);
+    if (!is_ours(fd)) {
+        // Not ours: never mu (see is_ours()).
+        return real_close(fd);
+    }
     pthread_mutex_lock(&mu);
     if (is_ours_locked(fd)) {
         // Closing a card fd or a lease removes the framebuffers added on it,
@@ -1033,6 +1057,7 @@ int close(int fd) {
                 break;
             }
         }
+        mark_ours_locked(fd, 0);
     }
     pthread_mutex_unlock(&mu);
     return real_close(fd);
