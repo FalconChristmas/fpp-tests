@@ -5,6 +5,7 @@ TmpFile pins a container build has (TF-1, TF-2), high while
 /tmp/GPIO-<pin> exists."""
 
 import os
+import time
 
 import pytest
 
@@ -29,13 +30,18 @@ def test_a_multiplexer_reads_every_group_in_turn(fppd):
     fppd.start(preload=[shims.build("fakeadc.c")], extra_env=env)
     if not reported(fppd):
         pytest.skip("the multiplexer's sensors aren't reported (no TmpFile pins in this build?)")
+    # fppd reads the sensors at most once a second however often status is
+    # polled (e68e6cfa4), and the mux moves to the next group every fourth read, so a
+    # full pass over the four groups takes about 16 s.
     groups, read = set(), set()
-    for _ in range(80):
+    deadline = time.monotonic() + 40
+    while time.monotonic() < deadline:
         for label, v in reported(fppd).items():
             if v == 1234.0:
                 read.add(label)
         groups.add((os.path.exists("/tmp/GPIO-TF-1"), os.path.exists("/tmp/GPIO-TF-2")))
         if len(groups) == 4 and len(read) == 8:
             break
+        time.sleep(0.25)
     assert len(groups) == 4, f"select pin states seen: {sorted(groups)}"
     assert read == {f"M{i}" for i in range(8)}, f"sensors read: {sorted(read)}"
