@@ -1465,6 +1465,43 @@ def test_bulk_pixel_data_in_and_out(fppd):
     assert raw_data() == bytes(pixels), "the PNG read back wrong"
 
 
+def test_model_data_reads_back_as_json_rle_and_raw(fppd):
+    """GET .../data (a value per channel), .../data/rle (runs of identical
+    pixels as [count, ch...]) and .../data/raw all read back the frame a
+    model holds, for an RGB and an RGBW model, with no effect running.
+
+    Guards f0b02fbbc, which moved the JSON build out from under the overlay
+    locks: the handler copies the pixels under modelsLock and the model's
+    effect lock and builds the JSON after releasing them, through its own
+    encoder rather than PixelOverlayModel::getDataJson()."""
+    import itertools
+    setup(fppd, [matrix("RGB", width=6, height=3),
+                 matrix("RGBW", start=55, width=4, height=2, cpn=4)], channels=200)
+    fppd.start()
+
+    def rle(frame, bpp):
+        pixels = [tuple(frame[i:i + bpp]) for i in range(0, len(frame), bpp)]
+        out = []
+        for px, run in itertools.groupby(pixels):
+            out += [len(list(run)), *px]
+        return out
+
+    # Leading black pixels, runs of two and three, and single pixels.
+    rgb = [(0, 0, 0)] * 2 + [(10, 20, 30)] * 3 + [(10, 20, 31)] + [(255, 0, 7)] * 2 + \
+          [(i, 2 * i, 3 * i) for i in range(1, 11)]
+    rgbw = [(1, 2, 3, 4)] * 3 + [(0, 0, 0, 0)] * 2 + [(9, 9, 9, 9), (9, 9, 9, 8), (9, 9, 9, 8)]
+    for name, pixels, bpp in (("RGB", rgb, 3), ("RGBW", rgbw, 4)):
+        frame = bytes(c for px in pixels for c in px)
+        put(fppd, f"model/{name}/data?fmt={name.lower()}", frame)
+        assert raw_data(name) == frame, f"{name}: the raw frame did not read back"
+        plain = fppd.get(f"/overlays/model/{name}/data")
+        assert plain["data"] == list(frame), f"{name}: .../data: {plain['data']}"
+        assert plain["rle"] is False and plain["effectRunning"] is False and plain["isLocked"] is False
+        coded = fppd.get(f"/overlays/model/{name}/data/rle")
+        assert coded["data"] == rle(frame, bpp), f"{name}: .../data/rle: {coded['data']}"
+        assert coded["rle"] is True
+
+
 def test_an_rgbw_fill_takes_an_explicit_white(fppd):
     """Overlay Model Fill with #RRGGBBWW on an RGBW model puts the white
     value in each node's W channel.
