@@ -174,6 +174,23 @@ printf '\\tUUID: 4c4c4544-0042-3510-8051-b4c04f4e4d32\\n'
 """
 
 
+def hide_hardware_ids(sb):
+    """Take away every identity get_uuid ranks above dmidecode that this
+    machine has -- a Pi's or Beagle's /proc/cpuinfo serial, the device-tree
+    serial-number, a Beagle's board EEPROM -- so the DMI and machine-id rules
+    are what a scenario sees on any machine, Docker or a device. Only the
+    ones that exist are faked: there is nothing to bind over otherwise.
+    """
+    with open("/proc/cpuinfo") as f:
+        cpuinfo = "".join(l for l in f if not l.lower().startswith("serial"))
+    sb.fake_path("/proc/cpuinfo", cpuinfo)
+    if os.path.exists("/proc/device-tree/serial-number"):
+        # /proc/device-tree is a link into /sys; a bind takes the real path
+        sb.fake_path(os.path.realpath("/proc/device-tree/serial-number"), "")
+    if os.path.exists("/sys/bus/i2c/devices/0-0050/eeprom"):
+        sb.fake_path("/sys/bus/i2c/devices/0-0050/eeprom", b"\xff" * 64)
+
+
 def get_uuid(sb, *args, container=False):
     env = ["env", "FPP_DOCKERENV=/fpp-tests-none"]
     if not container:
@@ -190,8 +207,7 @@ def test_a_placeholder_dmi_serial_is_not_an_identity(fppinit):
     Regression: b9f68c58a. The serial was one awk field, so "Not" became
     the identity of every such machine.
     """
-    if open("/proc/cpuinfo").read().lower().count("serial"):
-        pytest.skip("this machine's /proc/cpuinfo has a serial, which get_uuid takes first")
+    hide_hardware_ids(fppinit)
     fppinit.root_file("/usr/sbin/dmidecode", DMIDECODE)
     fppinit.root_file("/etc/machine-id", "0123456789abcdef0123456789abcdef\n")
     assert get_uuid(fppinit) == "M2-4c4c4544-0042-3510-8051-b4c04f4e4d32"
@@ -204,8 +220,7 @@ def test_an_uninitialized_machine_id_is_not_an_identity(fppinit):
 
     Regression: b9f68c58a.
     """
-    if open("/proc/cpuinfo").read().lower().count("serial"):
-        pytest.skip("this machine's /proc/cpuinfo has a serial, which get_uuid takes first")
+    hide_hardware_ids(fppinit)
     fppinit.root_file("/usr/sbin/dmidecode", None)
     fppinit.root_file("/etc/machine-id", "uninitialized\n")
     uuid = get_uuid(fppinit)
