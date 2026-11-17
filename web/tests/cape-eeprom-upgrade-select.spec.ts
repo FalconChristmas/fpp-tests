@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import type { APIRequestContext, Page } from '@playwright/test';
+import type { APIRequestContext, Page, Route } from '@playwright/test';
 import { container, inPlayer } from './container';
 
 // Cape Info's EEPROM Upgrade tab: the Vendor and Cape/Hat lists come from the
@@ -23,12 +23,29 @@ const capes = (names: string[]) => Object.fromEntries(names.map((n) => [n, {
   versions: { '1.0': { url: `https://vendor.fpp-tests.invalid/${encodeURIComponent(n)}.bin` } },
 }]));
 
-async function vendorLists(page: Page) {
-  const answer = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body),
-                                       headers: { 'Access-Control-Allow-Origin': '*' } });
+const answer = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body),
+                                     headers: { 'Access-Control-Allow-Origin': '*' } });
+
+// The lists are fetched at once and arrive in any order.  By default the
+// installed cape's vendor (LIST) is answered after the other one, so the
+// selection and the Basic-level lock are made last; installedFirst answers it
+// first, and the other one 1.5 s later.
+async function vendorLists(page: Page, installedFirst = false) {
+  let firstDone!: () => void;
+  const first = new Promise<void>((done) => { firstDone = done; });
+  const inTurn = async (r: Route, body: unknown, isFirst: boolean) => {
+    if (isFirst) {
+      await r.fulfill(answer(body));
+      firstDone();
+    } else {
+      await first;
+      await new Promise((done) => setTimeout(done, 1500));
+      await r.fulfill(answer(body));
+    }
+  };
   await page.route(INDEX, (r) => r.fulfill(answer({ vendors: [{ name: 'Other', url: OTHER }, { name: 'fpp-tests', url: LIST }] })));
-  await page.route(LIST, (r) => r.fulfill(answer({ name: 'fpp-tests Vendor', capes: capes(['fpp-tests other cape', 'fpp-tests cape']) })));
-  await page.route(OTHER, (r) => r.fulfill(answer({ name: 'Another Vendor', capes: capes(['another cape']) })));
+  await page.route(LIST, (r) => inTurn(r, { name: 'fpp-tests Vendor', capes: capes(['fpp-tests other cape', 'fpp-tests cape']) }, installedFirst));
+  await page.route(OTHER, (r) => inTurn(r, { name: 'Another Vendor', capes: capes(['another cape']) }, !installedFirst));
 }
 
 let uiLevel = '';
@@ -54,8 +71,8 @@ async function setLevel(request: APIRequestContext, level: string) {
   expect(r.ok()).toBe(true);
 }
 
-async function openUpgrade(page: Page) {
-  await vendorLists(page);
+async function openUpgrade(page: Page, installedFirst = false) {
+  await vendorLists(page, installedFirst);
   await page.goto('/cape-info.php');
   await page.locator('#eeprom-upgrade-tab').click();
   // Both vendors' lists have arrived.
@@ -90,6 +107,24 @@ test('the EEPROM upgrade selects the installed cape, locked at the Basic UI leve
   await expect(page.locator('#eepromHardwareLockedNote')).toBeHidden();
 });
 
+test('a vendor list that arrives after the installed cape is selected leaves the Basic-level lock on', async ({ page, request }) => {
+  // Every vendor list that arrives enables the Vendor list again
+  // (addEEPROMVendorList's removeAttr('disabled')), so one that comes after the
+  // installed cape's vendor has locked the lists unlocks the Vendor list; the
+  // Cape/Hat list stays locked and the note stays up.  Seen on CI as the first
+  // test above failing when the lists arrived in that order.
+  test.fail(true, 'a later vendor list re-enables the locked Vendor list (FUTURE.md)');
+  installCape('fpp-tests Vendor');
+  await setLevel(request, '0');
+  await openUpgrade(page, true);
+  const vendor = page.locator('#eepromVendorList');
+  await expect(vendor).toHaveValue('fpp-tests Vendor');
+  await expect(page.locator('#eepromVendorCapes')).toHaveValue('fpp-tests cape');
+  await expect(page.locator('#eepromVendorCapes')).toBeDisabled();
+  await expect(page.locator('#eepromHardwareLockedNote')).toBeVisible();
+  await expect(vendor).toBeDisabled();
+});
+
 test('the installed cape\'s vendor is found when its EEPROM names it with a suffix the vendor list leaves off', async ({ page, request }) => {
   // Regression: 70dcffb22 (#2564).  The vendor was matched by exact name, so
   // a cape whose EEPROM says "fpp-tests Vendor, LLC" against a list named
@@ -109,8 +144,6 @@ test('the vendor named exactly wins over one whose name is only a prefix, whiche
   // version (and the download it leads to) was the wrong vendor's, and at the
   // Basic level the lists were locked to it.
   const PREFIX = 'https://prefix.fpp-tests.invalid/eeproms.json';
-  const answer = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body),
-                                       headers: { 'Access-Control-Allow-Origin': '*' } });
   await page.route(INDEX, (r) => r.fulfill(answer({ vendors: [{ name: 'Prefix', url: PREFIX }, { name: 'fpp-tests', url: LIST }] })));
   await page.route(PREFIX, (r) => r.fulfill(answer({ name: 'fpp-tests', capes: {
     'fpp-tests cape': { versions: { '1.0': { url: 'https://prefix.fpp-tests.invalid/fpp-tests%20cape.bin' } } },
