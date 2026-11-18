@@ -22,6 +22,7 @@ import time
 import pytest
 
 from audio import write_tone_wav
+from bursts import card_ppm, card_status
 from ddp import DdpReceiver
 from fseq import unique_frames, write_fseq
 from show import CHANNELS, ddp_output, playlist
@@ -102,7 +103,16 @@ def _play_songs(fppd, audio, songs, secs, settings=None):
         rec = audio.record(rate=RATE)
         t0 = time.monotonic()
         fppd.command("Start Playlist", "Songs", "false", "false")
-        time.sleep(songs * secs + 3)
+        # The card's position through the songs, for its rate: the
+        # recording is counted in its samples, which a card hundreds of ppm
+        # fast plays that much quicker than the system clock the lights are
+        # timed on.
+        statuses, until = [], time.monotonic() + songs * secs + 3
+        while time.monotonic() < until:
+            st = card_status()
+            if st:
+                statuses.append(st)
+            time.sleep(0.25)
         samples = rec.stop()
         seen = {}
         for t, d in rx.snapshot(t0):
@@ -120,15 +130,17 @@ def _play_songs(fppd, audio, songs, secs, settings=None):
         lights.append([(s, seen.get(bytes(frames[s * 1000 // STEP_MS + 1][:CHANNELS])))
                        for s in range(secs)])
         last.append(seen.get(bytes(frames[-1][:CHANNELS])))
-    return samples, rec, lights, last, tails, firsts
+    return samples, rec, lights, last, tails, firsts, card_ppm(statuses)
 
 
 def _measure(fppd, audio, songs=4, secs=6, settings=None):
-    samples, rec, lights, last, tails, firsts = _play_songs(fppd, audio, songs, secs, settings)
+    samples, rec, lights, last, tails, firsts, ppm = _play_songs(fppd, audio, songs, secs, settings)
+    def at(i):
+        return rec.time_of(i, ppm)
     marks, peak = _markers(samples, RATE)
     assert len(marks) == songs * secs, \
         f"heard {len(marks)} markers, not {songs * secs}: {[round(m / RATE, 3) for m in marks]}"
-    report = {"quiet_ms": [], "heard_ms": [], "start_minus_mid_ms": [], "end_minus_mid_ms": [],
+    report = {"card_ppm": round(ppm, 1), "quiet_ms": [], "heard_ms": [], "start_minus_mid_ms": [], "end_minus_mid_ms": [],
               "frames_unsent_at_end": [], "frame0_early_ms": [], "offsets_ms": []}
     for n in range(songs):
         first = marks[n * secs]
@@ -141,19 +153,19 @@ def _measure(fppd, audio, songs=4, secs=6, settings=None):
         offs = []
         for s, lt in lights[n]:
             m = marks[n * secs + s]
-            offs.append(None if lt is None else round((lt - rec.time_of(m) - STEP_MS / 1000) * 1000, 1))
+            offs.append(None if lt is None else round((lt - at(m) - STEP_MS / 1000) * 1000, 1))
         report["offsets_ms"].append(offs)
         mid = [o for o in offs[1:] if o is not None]
         report["start_minus_mid_ms"].append(
             None if offs[0] is None or not mid else round(offs[0] - statistics.median(mid), 1))
         # The song's last frame belongs on the wire when its sound reaches
         # that frame's time: a frame before its end.
-        due = rec.time_of(first) + (secs * 1000 - STEP_MS) / 1000
+        due = at(first) + (secs * 1000 - STEP_MS) / 1000
         per_song = secs * 1000 // STEP_MS
         report["frames_unsent_at_end"].append(None if tails[n] is None else per_song - 1 - tails[n][0])
         report["frame0_early_ms"].append(
             None if firsts[n] is None or not mid else
-            round((rec.time_of(first) - firsts[n]) * 1000 + statistics.median(mid), 1))
+            round((at(first) - firsts[n]) * 1000 + statistics.median(mid), 1))
         report["end_minus_mid_ms"].append(
             None if last[n] is None or not mid else round((last[n] - due) * 1000 - statistics.median(mid), 1))
     print(f"track changes: {report}", flush=True)
@@ -179,7 +191,13 @@ def test_back_to_back_songs_are_seamless(fppd, audio):
     last 5-6 frames never sent, and its first frame on the wire 120-200 ms
     before its sound; on the fix 0.0 ms, none unsent, -13..+8 ms.
 
-    Real card only: verified with run-local.sh --host-audio on a Pi 4."""
+    And a352000c0 (the next track is left time to carry on at any graph
+    rate): on an AM62x PCM5102A cape (graph at 88.2 kHz, the card +433 ppm),
+    the bridge laid 2-11 ms of silence at nearly every change on its parent,
+    once 105 ms; on the fix 0.0 ms in 13 runs.
+
+    Real card only: verified with run-local.sh --host-audio on a Pi 4, a
+    Pi 5 I2S HAT and that cape."""
     _need_card()
     r = _measure(fppd, audio, settings={"PipeWireKeepOutputOpen": "1"})
     assert all(q <= 1.0 for q in r["quiet_ms"]), f"silence between songs (ms): {r['quiet_ms']}"
