@@ -82,7 +82,7 @@ def _quiet_runs(samples, rate, start, end, peak):
     return runs
 
 
-def _play_songs(fppd, audio, songs, secs, settings=None, media=None):
+def _play_songs(fppd, audio, songs, secs, settings=None, media=None, gap_s=0):
     """Play `songs` back-to-back sequence+media songs; return the recording
     (samples, Recording) and, per song, [(marker second, lights time)].
     media(n, wav) makes song n's media from its sound and returns the
@@ -96,6 +96,8 @@ def _play_songs(fppd, audio, songs, secs, settings=None, media=None):
         wav = os.path.join(fppd.media, "music", f"S{n}.wav")
         _song_wav(wav, secs)
         fields = media(n, wav) if media else {"mediaName": f"S{n}.wav"}
+        if n and gap_s:
+            entries.append({"type": "pause", "enabled": 1, "playOnce": 0, "duration": gap_s})
         entries.append({"type": "both", "enabled": 1, "playOnce": 0, "sequenceName": f"S{n}.fseq", **fields})
     fppd.write("playlists/Songs.json", playlist("Songs", entries))
     fppd.write("config/co-universes.json", ddp_output(CHANNELS))
@@ -110,7 +112,7 @@ def _play_songs(fppd, audio, songs, secs, settings=None, media=None):
         # recording is counted in its samples, which a card hundreds of ppm
         # fast plays that much quicker than the system clock the lights are
         # timed on.
-        statuses, until = [], time.monotonic() + songs * secs + 3
+        statuses, until = [], time.monotonic() + songs * secs + (songs - 1) * gap_s + 3
         while time.monotonic() < until:
             st = card_status()
             if st:
@@ -136,8 +138,8 @@ def _play_songs(fppd, audio, songs, secs, settings=None, media=None):
     return samples, rec, lights, last, tails, firsts, card_ppm(statuses)
 
 
-def _measure(fppd, audio, songs=4, secs=6, settings=None, media=None):
-    samples, rec, lights, last, tails, firsts, ppm = _play_songs(fppd, audio, songs, secs, settings, media)
+def _measure(fppd, audio, songs=4, secs=6, settings=None, media=None, gap_s=0):
+    samples, rec, lights, last, tails, firsts, ppm = _play_songs(fppd, audio, songs, secs, settings, media, gap_s)
     def at(i):
         return rec.time_of(i, ppm)
     marks, peak = _markers(samples, RATE)
@@ -286,3 +288,23 @@ def test_back_to_back_songs_leave_delayed_speakers_alone(fppd, audio):
     assert "PipeWire delay flush" in log[:first], "the first song's start didn't flush the delay lines"
     later = [l for l in log[first:].splitlines() if "PipeWire delay flush" in l]
     assert not later, f"the delay lines were flushed across songs that carry on: {later}"
+
+
+def test_songs_that_start_on_a_drained_stream_all_land_alike(fppd, audio):
+    """Songs with a pause between them, so that each starts on a drained
+    output stream rather than carrying on the last one's sound: each lands
+    in the same place against its lights.
+
+    Fixed by 95f746d6e (the output stream measures when each sample is
+    heard). Through a pipewiresink, where a song that started on a drained
+    stream landed was estimated, and it landed anywhere within a graph cycle
+    of the estimate: on a Pi 5 I2S HAT, five such songs in one run were 11
+    and 20 ms apart against their lights (two runs on the parent); measured
+    from PipeWire's own timing, within 4 ms (two runs on the fix).
+
+    Real card only: verified with run-local.sh --host-audio on a Pi 5 I2S
+    HAT."""
+    _need_card()
+    r = _measure(fppd, audio, songs=5, secs=4, settings={"PipeWireKeepOutputOpen": "1"}, gap_s=4)
+    mids = [statistics.median([o for o in offs[1:] if o is not None]) for offs in r["offsets_ms"]]
+    assert max(mids) - min(mids) <= 4, f"lights minus sound mid-song, per song (ms): {mids}"
