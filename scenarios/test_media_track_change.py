@@ -199,8 +199,13 @@ def test_back_to_back_songs_are_seamless(fppd, audio):
     the bridge laid 2-11 ms of silence at nearly every change on its parent,
     once 105 ms; on the fix 0.0 ms in 13 runs.
 
+    And 9febfe81f (the next track is left 100 ms to carry on): on a BeagleBone
+    Black with a USB card, every run on its parent lost a song's head to a
+    flush and started the song after it on a drained stream (22 of 24
+    markers heard); on the fix none, at 100 fps and at 20 fps.
+
     Real card only: verified with run-local.sh --host-audio on a Pi 4, a
-    Pi 5 I2S HAT and that cape."""
+    Pi 5 I2S HAT, that cape and a BeagleBone Black."""
     _need_card()
     r = _measure(fppd, audio, settings={"PipeWireKeepOutputOpen": "1"})
     assert all(q <= 1.0 for q in r["quiet_ms"]), f"silence between songs (ms): {r['quiet_ms']}"
