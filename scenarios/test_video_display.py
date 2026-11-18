@@ -199,6 +199,42 @@ def test_a_video_inserted_to_play_next_starts_prepared(fppd, audio):
         "the inserted video was built when it started, not prepared"
 
 
+
+def test_the_playlist_an_insert_returns_to_starts_its_next_video_prepared(fppd, audio):
+    """When an inserted playlist (Insert Playlist After Current: Remote
+    Falcon's requests) ends, the playlist it interrupted goes on with its
+    next video, and that video was prepared in the last moments of the
+    insert: it starts from the prepared pipeline, and the display stays up
+    from the first video to the last.
+
+    Fixed by 3cb433fbf (Playlist::PrepareParentsNext()): the insert's last entry
+    saw only the end of its own playlist, prepared nothing, and the display
+    closed and reopened before the next video."""
+    make_video(os.path.join(fppd.media, "videos", "First.mkv"), seconds=2)
+    make_video(os.path.join(fppd.media, "videos", "Next.mkv"), seconds=2)
+    make_video(os.path.join(fppd.media, "videos", "Requested.mkv"), seconds=3)
+    fppd.write("playlists/Show.json", {"name": "Show", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                       "leadOut": [], "mainPlaylist": [media_entry("First.mkv"),
+                                                                       media_entry("Next.mkv")]})
+    fppd.write("playlists/Request.json", {"name": "Request", "repeat": 0, "loopCount": 0, "leadIn": [],
+                                          "leadOut": [], "mainPlaylist": [media_entry("Requested.mkv")]})
+    fppd.settings(DisableFakeNetworkBridges="1", LogLevel_MediaOut="debug")
+    preload, env = fakedrm.start_env(fppd)
+    fppd.start(preload=preload, extra_env=env)
+    fppd.command("Start Playlist", "Show", "false", "false")
+    fppd.wait_for(lambda: "GStreamer started playing: First.mkv" in fppd.log(), timeout=15,
+                  what="the first video")
+    fppd.command("Insert Playlist After Current", "Request", "0", "0")
+    fppd.wait_for(lambda: "GStreamer started playing: Requested.mkv" in fppd.log(), timeout=15,
+                  what="the inserted video")
+    fppd.wait_for(lambda: "GStreamer started playing: Next.mkv" in fppd.log(), timeout=15,
+                  what="the playlist to go on to its next video after the insert")
+    time.sleep(0.5)
+    assert "Using Next.mkv prepared for slot 1" in fppd.log(), \
+        "the video after the insert was built when it started, not prepared"
+    check_display_stays_up(fppd)
+
+
 LOG_TIME = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}) ")
 
 
