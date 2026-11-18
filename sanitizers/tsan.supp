@@ -124,7 +124,7 @@ race:libc.so.6
 # then reads as unbalanced.
 race:libGraphicsMagick-Q16.so.3
 # libpipewire (the media output stream, a native PipeWire stream since fpp
-# 95f746d6e): at exit its destructor tail-calls the unlock of a global mutex
+# 5c5f6c2b1): at exit its destructor tail-calls the unlock of a global mutex
 # of its own whose lock TSan didn't see, so in every scenario that played
 # media the report is an unlock of an unlocked mutex with only the dynamic
 # loader on the stack (_dl_fini, unsymbolized) -- the library's own frame is

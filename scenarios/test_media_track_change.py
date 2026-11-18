@@ -201,7 +201,7 @@ def test_back_to_back_songs_are_seamless(fppd, audio):
     the bridge laid 2-11 ms of silence at nearly every change on its parent,
     once 105 ms; on the fix 0.0 ms in 13 runs.
 
-    And 9febfe81f (the next track is left 100 ms to carry on): on a BeagleBone
+    And 2db666713 (the next track is left 100 ms to carry on): on a BeagleBone
     Black with a USB card, every run on its parent lost a song's head to a
     flush and started the song after it on a drained stream (22 of 24
     markers heard); on the fix none, at 100 fps and at 20 fps.
@@ -234,7 +234,7 @@ def test_a_video_song_whose_sound_starts_late_keeps_its_lead_in(fppd, audio):
     song's sound carries on the last one's, with its 40 ms lead-in heard as
     the silence it is, so that its sound plays where its position says.
 
-    Fixed by 870b3fb2e. Before it the stream put a carried-on song's first
+    Fixed by 6b5a2e775. Before it the stream put a carried-on song's first
     sound right behind the last song's, so the lead-in was skipped and every
     song after the first played 40 ms early against its position: on a Pi 5
     I2S HAT 13-36 ms of silence between songs where the videos with no
@@ -272,7 +272,7 @@ def test_back_to_back_songs_leave_delayed_speakers_alone(fppd, audio):
     it cut the end of one song and the start of the next on those speakers.
     Only the first song, which starts on a drained stream, flushes.
 
-    Fixed by ce143a545. Before it every change of song flushed twice (as the
+    Fixed by ede7e8cce. Before it every change of song flushed twice (as the
     next song started and as the last one closed).
 
     Real card only (nothing carries on without one). The group's speaker
@@ -295,7 +295,7 @@ def test_songs_that_start_on_a_drained_stream_all_land_alike(fppd, audio):
     output stream rather than carrying on the last one's sound: each lands
     in the same place against its lights.
 
-    Fixed by 95f746d6e (the output stream measures when each sample is
+    Fixed by 5c5f6c2b1 (the output stream measures when each sample is
     heard). Through a pipewiresink, where a song that started on a drained
     stream landed was estimated, and it landed anywhere within a graph cycle
     of the estimate: on a Pi 5 I2S HAT, five such songs in one run were 11

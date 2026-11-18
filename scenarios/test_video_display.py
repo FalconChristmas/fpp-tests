@@ -182,7 +182,7 @@ def test_a_prepare_that_expires_leaves_the_playing_video_playing(fppd, audio):
     playing goes on as before: its position keeps moving and keeps following
     the master's.
 
-    Fixed by ce143a545. Throwing the prepare away stopped its output, and the
+    Fixed by ede7e8cce. Throwing the prepare away stopped its output, and the
     stop marked the slot's status idle -- the playing video's status -- so
     the remote stopped processing the video it was playing (its position
     froze, and the master's sync went unheeded) for the rest of it."""
