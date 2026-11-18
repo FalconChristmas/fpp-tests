@@ -94,7 +94,12 @@ def test_the_display_closes_as_soon_as_the_playlist_stops(fppd, audio):
     screen back, rather than leaving the last frame up.
 
     Fixed by 74e172214. Before it the display lingered 5 s after the last
-    video, on the last frame."""
+    video, on the last frame.
+
+    Under TSan, also afd641e0a: fppd stops while the display is still
+    closing on its worker, and before it the lease was closed under fppd's
+    close-on-exec scan of its descriptors (a race report at teardown, here
+    and in test_a_remote_starts_the_masters_next_video_prepared)."""
     play_loop(fppd, passes=1)
 
     def stops():
