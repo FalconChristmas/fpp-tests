@@ -390,3 +390,54 @@ def test_a_remote_starts_the_masters_next_video_prepared(fppd, audio):
         send("stop", "media", 0, 1.0, "B.mkv")
     finally:
         sock.close()
+
+
+def test_a_looping_video_with_surround_sound_keeps_the_display(fppd, audio):
+    """A looping video whose sound has six channels: its passes can't be
+    started from the prepared pipeline (the output stream carries two, and
+    a Matroska file's count is only known as it decodes, after it was
+    prepared), so each is built again as it starts -- and the display stays
+    up across the rebuild.
+
+    Fixed by 9adff5bff (the display is held across Start()'s rebuild). Before
+    it the rebuild closed the prepared pipeline, its last user, and the
+    display closed before the rebuild took it again: the console at every
+    pass."""
+    make_video(os.path.join(fppd.media, "videos", "Loop.mkv"), seconds=2, channels=6)
+    fppd.write("playlists/Loop.json", video_playlist("Loop", "Loop.mkv"))
+    fppd.settings(DisableFakeNetworkBridges="1", LogLevel_MediaOut="debug")
+    preload, env = fakedrm.start_env(fppd)
+    fppd.start(preload=preload, extra_env=env)
+    fppd.command("Start Playlist", "Loop", "true", "false")
+    fppd.wait_for(lambda: starts(fppd) >= 3, timeout=40, interval=0.2, what="pass 3 of the looping video")
+    time.sleep(1)
+    kinds = [e for e, *_ in display_events(fppd)]
+    assert kinds.count("start") == 1 and "stop" not in kinds, \
+        f"the display was let go between passes: {kinds.count('start')} starts, {kinds.count('stop')} stops"
+
+
+def test_a_short_pause_between_videos_keeps_the_display(fppd, audio):
+    """Two videos with a short pause entry between them: the second isn't
+    prepared (the entry after the first is the pause), and starts as the
+    pause ends -- and the display stays up through the pause.
+
+    Fixed by f2879c540 (a display nothing uses stays up 400 ms). Before it
+    the display closed the moment the first video let go of it, and the
+    console showed until the second came up."""
+    make_video(os.path.join(fppd.media, "videos", "First.mkv"), seconds=2)
+    make_video(os.path.join(fppd.media, "videos", "Second.mkv"), seconds=2)
+    fppd.write("playlists/Paused.json", {"name": "Paused", "repeat": 0, "loopCount": 0, "leadIn": [], "leadOut": [],
+                                         "mainPlaylist": [media_entry("First.mkv"),
+                                                          {"type": "pause", "enabled": 1, "playOnce": 0, "duration": 0.2},
+                                                          media_entry("Second.mkv")]})
+    fppd.settings(DisableFakeNetworkBridges="1", LogLevel_MediaOut="debug")
+    preload, env = fakedrm.start_env(fppd)
+    fppd.start(preload=preload, extra_env=env)
+    fppd.command("Start Playlist", "Paused", "false", "false")
+    fppd.wait_for(lambda: "GStreamer started playing: Second.mkv" in fppd.log(), timeout=20,
+                  what="the second video")
+    time.sleep(1)
+    kinds = [e for e, *_ in display_events(fppd)]
+    assert kinds.count("start") == 1, \
+        f"the display was let go during the pause: {kinds.count('start')} starts, {kinds.count('stop')} stops"
+

@@ -38,11 +38,11 @@ BARS = [(1, 1, 1), (1, 1, 0), (0, 1, 1), (0, 1, 0), (1, 0, 1), (1, 0, 0), (0, 0,
 
 
 def make_video(path, seconds=4, pattern="smpte", width=320, height=240, fps=10, audio=True,
-               lead=None):
+               lead=None, channels=2):
     """A VP8 Matroska file of videotestsrc's `pattern` (the image has no
     H.264 decoder), with a quiet Vorbis tone track unless `audio` is
     False. `lead` = (pattern, seconds) puts that pattern first, so the
-    file is lead + `seconds` long."""
+    file is lead + `seconds` long. `channels`: the tone track's."""
     caps = f"video/x-raw,width={width},height={height},framerate={fps}/1"
     total = seconds + (lead[1] if lead else 0)
     cmd = ["gst-launch-1.0", "-q", "matroskamux", "name=mux", "!", "filesink", f"location={path}",
@@ -51,7 +51,7 @@ def make_video(path, seconds=4, pattern="smpte", width=320, height=240, fps=10, 
         cmd += ["videotestsrc", f"num-buffers={int(secs * fps)}", f"pattern={pat}", "!", caps, "!", "cat."]
     if audio:
         cmd += ["audiotestsrc", "volume=0.1", "samplesperbuffer=4410", f"num-buffers={int(total * 10)}",
-                "!", "audio/x-raw,rate=44100,channels=2", "!", "audioconvert", "!", "vorbisenc",
+                "!", f"audio/x-raw,rate=44100,channels={channels}", "!", "audioconvert", "!", "vorbisenc",
                 "!", "mux."]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     if r.returncode:
