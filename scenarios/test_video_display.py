@@ -176,6 +176,54 @@ def test_a_prepare_overtaken_by_an_insert_leaves_the_playing_track_alone(fppd, a
                   timeout=5, interval=0.2, what="the display to close once the playlist is over")
 
 
+def test_a_prepare_that_expires_leaves_the_playing_video_playing(fppd, audio):
+    """A MultiSync remote told to prepare a video the master then never
+    plays throws the prepare away after a few seconds, and the video it is
+    playing goes on as before: its position keeps moving and keeps following
+    the master's.
+
+    Fixed by ce143a545. Throwing the prepare away stopped its output, and the
+    stop marked the slot's status idle -- the playing video's status -- so
+    the remote stopped processing the video it was playing (its position
+    froze, and the master's sync went unheeded) for the rest of it."""
+    from multisync import PORT, sync_packet
+    import socket
+    make_video(os.path.join(fppd.media, "videos", "A.mkv"), seconds=16)
+    make_video(os.path.join(fppd.media, "videos", "B.mkv"), seconds=3)
+    fppd.settings(fppMode="remote", VideoOutput=CONNECTOR, DisableFakeNetworkBridges="1",
+                  LogLevel_MediaOut="debug", LogLevel_Sync="debug")
+    preload, env = fakedrm.start_env(fppd)
+    fppd.start(preload=preload, extra_env=env)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    send = lambda *a: sock.sendto(sync_packet(*a), ("127.0.0.1", PORT))
+    try:
+        time.sleep(2)
+        send("open", "media", 0, 0.0, "A.mkv")
+        send("start", "media", 0, 0.0, "A.mkv")
+        fppd.wait_for(lambda: re.search(r"GStreamer started playing: \S*A\.mkv", fppd.log()), timeout=15,
+                      what="the remote to play A.mkv")
+        started = time.monotonic()
+        played = []
+        while time.monotonic() - started < 13:
+            t = time.monotonic() - started
+            send("sync", "media", 0, t, "A.mkv")
+            if 1.0 <= t < 1.5:
+                send("prepare", "media", 0, 0.0, "B.mkv")
+            if "Discarding B.mkv prepared for slot 1" in fppd.log() or \
+                    re.search(r"Discarding \S*B\.mkv prepared for slot 1", fppd.log()):
+                played.append((t, float(status(fppd).get("seconds_played", 0) or 0)))
+            time.sleep(0.5)
+        assert played, "the remote never threw away the prepare it was not asked to play"
+        assert len(played) >= 4, f"the prepare was thrown away too late to look at what followed: {played}"
+        first, last = played[0], played[-1]
+        moved = last[1] - first[1]
+        assert moved >= (last[0] - first[0]) - 1.5, \
+            f"the playing video's position stopped moving once the prepare was thrown away: {played}"
+        send("stop", "media", 0, 13.0, "A.mkv")
+    finally:
+        sock.close()
+
+
 def test_a_video_inserted_to_play_next_starts_prepared(fppd, audio):
     """Insert Playlist After Current with a video playlist -- Remote Falcon's
     requests -- inside the playing entry's last moments, after its own next

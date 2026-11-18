@@ -82,18 +82,21 @@ def _quiet_runs(samples, rate, start, end, peak):
     return runs
 
 
-def _play_songs(fppd, audio, songs, secs, settings=None):
+def _play_songs(fppd, audio, songs, secs, settings=None, media=None):
     """Play `songs` back-to-back sequence+media songs; return the recording
-    (samples, Recording) and, per song, [(marker second, lights time)]."""
+    (samples, Recording) and, per song, [(marker second, lights time)].
+    media(n, wav) makes song n's media from its sound and returns the
+    entry's media fields; by default the sound itself plays."""
     entries, frames_by_song = [], []
     per_song = secs * 1000 // STEP_MS
     for n in range(songs):
         frames = unique_frames(per_song, CHANNELS, first=per_song * n)
         frames_by_song.append(frames)
         write_fseq(os.path.join(fppd.media, "sequences", f"S{n}.fseq"), frames, step_ms=STEP_MS)
-        _song_wav(os.path.join(fppd.media, "music", f"S{n}.wav"), secs)
-        entries.append({"type": "both", "enabled": 1, "playOnce": 0,
-                        "sequenceName": f"S{n}.fseq", "mediaName": f"S{n}.wav"})
+        wav = os.path.join(fppd.media, "music", f"S{n}.wav")
+        _song_wav(wav, secs)
+        fields = media(n, wav) if media else {"mediaName": f"S{n}.wav"}
+        entries.append({"type": "both", "enabled": 1, "playOnce": 0, "sequenceName": f"S{n}.fseq", **fields})
     fppd.write("playlists/Songs.json", playlist("Songs", entries))
     fppd.write("config/co-universes.json", ddp_output(CHANNELS))
     fppd.settings(DisableFakeNetworkBridges="1", **(settings or {}))
@@ -133,8 +136,8 @@ def _play_songs(fppd, audio, songs, secs, settings=None):
     return samples, rec, lights, last, tails, firsts, card_ppm(statuses)
 
 
-def _measure(fppd, audio, songs=4, secs=6, settings=None):
-    samples, rec, lights, last, tails, firsts, ppm = _play_songs(fppd, audio, songs, secs, settings)
+def _measure(fppd, audio, songs=4, secs=6, settings=None, media=None):
+    samples, rec, lights, last, tails, firsts, ppm = _play_songs(fppd, audio, songs, secs, settings, media)
     def at(i):
         return rec.time_of(i, ppm)
     marks, peak = _markers(samples, RATE)
@@ -216,3 +219,65 @@ def test_back_to_back_songs_are_seamless(fppd, audio):
     mids = [statistics.median([o for o in offs[1:] if o is not None]) for offs in r["offsets_ms"]]
     assert max(mids) - min(mids) <= 15, f"lights minus sound mid-song, per song (ms): {mids}"
 
+
+
+def test_a_video_song_whose_sound_starts_late_keeps_its_lead_in(fppd, audio):
+    """Back-to-back sequence+video songs whose sound starts 40 ms after
+    their picture (as an MP4's audio often does, a frame or two in): each
+    song's sound carries on the last one's, with its 40 ms lead-in heard as
+    the silence it is, so that its sound plays where its position says.
+
+    Fixed by 870b3fb2e. Before it the stream put a carried-on song's first
+    sound right behind the last song's, so the lead-in was skipped and every
+    song after the first played 40 ms early against its position: on a Pi 5
+    I2S HAT 13-36 ms of silence between songs where the videos with no
+    lead-in had 13-16; on the fix 53 ms.
+
+    Real card and a display only (the picture goes to the HDMI display);
+    needs ffmpeg to make the videos."""
+    _need_card()
+    import shutil
+    import subprocess
+    if not shutil.which("ffmpeg"):
+        pytest.skip("needs ffmpeg to make videos whose sound starts late")
+
+    def video(n, wav):
+        path = os.path.join(fppd.media, "videos", f"V{n}.mkv")
+        r = subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                            "testsrc=size=320x240:rate=25:duration=6.04", "-itsoffset", "0.04", "-i", wav,
+                            "-c:v", "libvpx", "-deadline", "realtime", "-c:a", "libvorbis", path],
+                           capture_output=True, text=True, timeout=120)
+        if r.returncode:
+            pytest.skip(f"cannot make a test video: {r.stderr.strip()[-300:]}")
+        return {"mediaName": f"V{n}.mkv", "videoOut": "--Default--"}
+
+    r = _measure(fppd, audio, songs=3, settings={"PipeWireKeepOutputOpen": "1"}, media=video)
+    # The 40 ms lead-in, on top of what a change of video leaves between
+    # them anyway (13-16 ms with none).
+    assert all(q >= 45 for q in r["quiet_ms"]), \
+        f"silence between songs whose sound starts 40 ms in (ms): {r['quiet_ms']}"
+
+
+def test_back_to_back_songs_leave_delayed_speakers_alone(fppd, audio):
+    """With an audio group whose speakers are delayed, back-to-back songs
+    carry on one another's sound without flushing the delay lines: the flush
+    mutes each delayed speaker for its delay, and between songs that carry on
+    it cut the end of one song and the start of the next on those speakers.
+    Only the first song, which starts on a drained stream, flushes.
+
+    Fixed by ce143a545. Before it every change of song flushed twice (as the
+    next song started and as the last one closed).
+
+    Real card only (nothing carries on without one). The group's speaker
+    isn't there, so the flush finds no delay line to mute; the debug log
+    shows each flush all the same."""
+    _need_card()
+    fppd.write("config/pipewire-audio-groups.json",
+               {"groups": [{"id": 1, "name": "Delayed", "members": [{"cardId": "nosuchcard", "delayMs": 50}]}]})
+    _play_songs(fppd, audio, 3, 4, settings={"PipeWireKeepOutputOpen": "1", "LogLevel_MediaOut": "debug"})
+    log = fppd.log()
+    first = log.find("GStreamer started playing: S1.wav")
+    assert first >= 0, "the second song never started"
+    assert "PipeWire delay flush" in log[:first], "the first song's start didn't flush the delay lines"
+    later = [l for l in log[first:].splitlines() if "PipeWire delay flush" in l]
+    assert not later, f"the delay lines were flushed across songs that carry on: {later}"
