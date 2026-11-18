@@ -122,3 +122,32 @@ def test_the_next_media_is_announced_before_it_opens(fppd, audio):
     assert prepares, f"no prepare packet for Second.wav: {[(s.action, s.filename) for s in syncs if s.action != 'sync']}"
     lead = opened - prepares[0]
     assert 0.5 <= lead <= 3, f"the prepare packet went out {lead:.2f} s before the open"
+
+
+def test_a_songs_sequence_is_opened_on_the_remotes_ahead_of_its_start(fppd, audio):
+    """A show's first sequence+media song: the master holds its sequence
+    until the song's sound is audible, and only then opens it here, but its
+    remotes, with nothing running either, are sent the open as the song
+    starts, so they read the sequence ahead of its start rather than at it.
+
+    Fixed by 463c8cae5. Before it the open went to the remotes together
+    with the start."""
+    from fseq import unique_frames, write_fseq
+    write_fseq(os.path.join(fppd.media, "sequences", "S.fseq"), unique_frames(200, 30), step_ms=25)
+    write_tone_wav(os.path.join(fppd.media, "music", "S.wav"), 5)
+    fppd.write("playlists/Song.json", playlist("Song", [
+        {"type": "both", "enabled": 1, "playOnce": 0, "sequenceName": "S.fseq", "mediaName": "S.wav"}]))
+    fppd.settings(MultiSyncEnabled="1", MultiSyncRemotes=REMOTE)
+    with UdpCapture(PORT, REMOTE) as cap:
+        fppd.start()
+        fppd.command("Start Playlist", "Song", "false", "false")
+        fppd.wait_for(lambda: any(s.action == "start" and s.file_type == "fseq"
+                                  for s in (parse_sync(t, p) for t, _, _, p in cap.snapshot()) if s),
+                      timeout=15, what="the master to start S.fseq")
+        syncs = [s for s in (parse_sync(t, p) for t, _, _, p in cap.snapshot()) if s and s.file_type == "fseq"]
+    fppd.command("Stop Now")
+    opened = min(s.time for s in syncs if s.action == "open")
+    started = min(s.time for s in syncs if s.action == "start")
+    lead = started - opened
+    print(f"sequence open {lead * 1000:.0f} ms before its start", flush=True)
+    assert lead >= 0.05, f"the remotes were sent the sequence's open {lead * 1000:.0f} ms before its start"
