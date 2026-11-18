@@ -95,3 +95,30 @@ def test_media_stop_goes_out_before_the_teardown(fppd, audio):
     # (ms to the stop packet, ms for Stop Now to return) per round
     assert all(d[0] <= 150 for d in delays), f"media stop packet late: {delays}"
 
+
+
+def test_the_next_media_is_announced_before_it_opens(fppd, audio):
+    """A MultiSync master playing one song after another tells its remotes
+    which file comes next (a prepare packet) about a second before it opens
+    it, so a remote can have its media -- a video, for a song -- ready.
+
+    Fixed by 31dc99c09 (SYNC_PKT_PREPARE)."""
+    write_tone_wav(os.path.join(fppd.media, "music", "First.wav"), 4)
+    write_tone_wav(os.path.join(fppd.media, "music", "Second.wav"), 3, freq=600)
+    fppd.write("playlists/Two.json", playlist("Two", [
+        {"type": "media", "enabled": 1, "playOnce": 0, "mediaName": "First.wav"},
+        {"type": "media", "enabled": 1, "playOnce": 0, "mediaName": "Second.wav"}]))
+    fppd.settings(MultiSyncEnabled="1", MultiSyncRemotes=REMOTE)
+    with UdpCapture(PORT, REMOTE) as cap:
+        fppd.start()
+        fppd.command("Start Playlist", "Two", "false", "false")
+        fppd.wait_for(lambda: any(s.action == "open" and s.filename == "Second.wav"
+                                  for s in media_syncs(cap.snapshot())),
+                      timeout=15, what="the master to open Second.wav")
+        syncs = media_syncs(cap.snapshot())
+    fppd.command("Stop Now")
+    prepares = [s.time for s in syncs if s.action == "prepare" and s.filename == "Second.wav"]
+    opened = min(s.time for s in syncs if s.action == "open" and s.filename == "Second.wav")
+    assert prepares, f"no prepare packet for Second.wav: {[(s.action, s.filename) for s in syncs if s.action != 'sync']}"
+    lead = opened - prepares[0]
+    assert 0.5 <= lead <= 3, f"the prepare packet went out {lead:.2f} s before the open"

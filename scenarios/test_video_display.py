@@ -254,3 +254,50 @@ def test_a_virtual_matrix_on_the_port_shows_between_videos(fppd, audio):
         f"the Virtual Matrix came back {back[-1] - song:.1f} s into the song"
     assert aside and aside[0] > second - 0.5, \
         f"the Virtual Matrix stood aside {second - aside[0]:.1f} s before the second video started"
+
+
+def test_a_remote_starts_the_masters_next_video_prepared(fppd, audio):
+    """A MultiSync remote told by the master which video comes next
+    (SYNC_PKT_PREPARE, sent as the master prepares it) has it ready: when the
+    master moves on -- stop, open, start -- the remote starts the next video
+    from the prepared pipeline, and its display stays up across the change.
+
+    Fixed by 31dc99c09. Before it a remote opened each video cold
+    when the master's open arrived, and its display closed in between."""
+    from multisync import PORT, sync_packet
+    import socket
+    make_video(os.path.join(fppd.media, "videos", "A.mkv"), seconds=3)
+    make_video(os.path.join(fppd.media, "videos", "B.mkv"), seconds=3)
+    fppd.settings(fppMode="remote", VideoOutput=CONNECTOR, DisableFakeNetworkBridges="1",
+                  LogLevel_MediaOut="debug", LogLevel_Sync="debug")
+    preload, env = fakedrm.start_env(fppd)
+    fppd.start(preload=preload, extra_env=env)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    send = lambda *a: sock.sendto(sync_packet(*a), ("127.0.0.1", PORT))
+    try:
+        time.sleep(2)
+        send("open", "media", 0, 0.0, "A.mkv")
+        send("start", "media", 0, 0.0, "A.mkv")
+        fppd.wait_for(lambda: re.search(r"GStreamer started playing: \S*A\.mkv", fppd.log()), timeout=15,
+                      what="the remote to play A.mkv")
+        for t in (0.5, 1.0, 1.5, 2.0, 2.5):
+            send("sync", "media", 0, t, "A.mkv")
+            if t == 1.5:
+                send("prepare", "media", 0, 0.0, "B.mkv")
+            time.sleep(0.5)
+        fppd.wait_for(lambda: re.search(r"Preparing \S*B\.mkv for slot 1", fppd.log()), timeout=5,
+                      what="the remote to prepare B.mkv")
+        send("stop", "media", 0, 3.0, "A.mkv")
+        send("open", "media", 0, 0.0, "B.mkv")
+        send("start", "media", 0, 0.0, "B.mkv")
+        fppd.wait_for(lambda: re.search(r"GStreamer started playing: \S*B\.mkv", fppd.log()), timeout=15,
+                      what="the remote to play B.mkv")
+        time.sleep(1)
+        assert re.search(r"Using \S*B\.mkv prepared for slot 1", fppd.log()), \
+            "the remote built B.mkv when the master's open came, not from what it prepared"
+        kinds = [e for e, *_ in display_events(fppd)]
+        assert kinds.count("start") == 1 and "stop" not in kinds, \
+            f"the remote's display was let go between the videos: {kinds.count('start')} starts, {kinds.count('stop')} stops"
+        send("stop", "media", 0, 1.0, "B.mkv")
+    finally:
+        sock.close()

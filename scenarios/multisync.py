@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 PORT = 32320
 TYPE_SYNC = 0x01
-ACTIONS = {0: "start", 1: "stop", 2: "sync", 3: "open"}
+ACTIONS = {0: "start", 1: "stop", 2: "sync", 3: "open", 4: "prepare"}
 FILE_TYPES = {0: "fseq", 1: "media"}
 
 
