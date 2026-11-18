@@ -164,28 +164,11 @@ def test_back_to_back_media_keeps_every_head(fppd, audio):
         assert ms >= secs * 1000 - 30, f"the {f} Hz tone lost {secs * 1000 - ms} ms: {heard}"
 
 
-def test_graph_stall_mid_song_recovers_in_that_song(fppd, audio):
-    """A stall in the PipeWire graph partway through a song costs that song
-    a skip in its sound, not its sync: a few seconds after the stall the
-    sound is back with the lights, in the same song.
-
-    The stall makes the card xrun, and PipeWire restarts it. fppd sees that
-    in the card's hardware pointer and flushes its output stream at once,
-    dropping what the stall held up. Before that, the between-track flush
-    (6f07f92a1) was the first chance, so the rest of the song played behind.
-
-    Regression: 32d77ad7a. Pi 5 I2S, 300 ms stall 15 s in, lights minus sound
-    before/after the stall: [2, 2, 30, 70, 80] / [-209 x6] ms on the
-    parent, [25, 33, 73, 84, 84] / [23 x6] on the fix. (The audio was 340
-    ms late, the lights on time: the sound was held up, not the lights
-    pushed ahead; it isn't the card's queue, which held 30-40 ms
-    throughout.)"""
-    import pytest
-    if not os.environ.get("FPP_TESTS_HOST_AUDIO"):
-        pytest.skip("needs a real sound card: run-local.sh --host-audio")
+def _stall_mid_song(fppd, audio, stall):
+    """Play a 40 s song, stall PipeWire `stall` ms 15 s in, and assert
+    the sound is back with the lights afterwards."""
     secs = 40
     stall_at = 15
-    stall = int(os.environ.get("FPP_TESTS_STALL_MS", "300"))
     frames = unique_frames(secs * 20, CHANNELS)
     write_fseq(os.path.join(fppd.media, "sequences", "Long.fseq"), frames)
     write_tone_wav(os.path.join(fppd.media, "music", "Long.wav"), secs, amplitude=0.3,
@@ -238,6 +221,46 @@ def test_graph_stall_mid_song_recovers_in_that_song(fppd, audio):
     assert abs(shift) <= 100, \
         f"a {stall} ms stall moved the sound {shift:.0f} ms against the lights for the rest of the song"
 
+
+
+def test_graph_stall_mid_song_recovers_in_that_song(fppd, audio):
+    """A stall in the PipeWire graph partway through a song costs that song
+    a skip in its sound, not its sync: a few seconds after the stall the
+    sound is back with the lights, in the same song.
+
+    The stall makes the card xrun, and PipeWire restarts it. fppd sees that
+    in the card's hardware pointer and flushes its output stream at once,
+    dropping what the stall held up. Before that, the between-track flush
+    (6f07f92a1) was the first chance, so the rest of the song played behind.
+
+    Regression: 32d77ad7a. Pi 5 I2S, 300 ms stall 15 s in, lights minus sound
+    before/after the stall: [2, 2, 30, 70, 80] / [-209 x6] ms on the
+    parent, [25, 33, 73, 84, 84] / [23 x6] on the fix. (The audio was 340
+    ms late, the lights on time: the sound was held up, not the lights
+    pushed ahead; it isn't the card's queue, which held 30-40 ms
+    throughout.)"""
+    import pytest
+    if not os.environ.get("FPP_TESTS_HOST_AUDIO"):
+        pytest.skip("needs a real sound card: run-local.sh --host-audio")
+    _stall_mid_song(fppd, audio, int(os.environ.get("FPP_TESTS_STALL_MS", "300")))
+
+
+def test_a_stall_still_on_when_the_card_is_seen_stopped_recovers(fppd, audio):
+    """A stall in the PipeWire graph longer than the output stream's card
+    check (every 250 ms) is still on when the check sees the card stopped.
+    The stream is flushed once the card runs again, so the sound comes back
+    with the lights.
+
+    Fixed by b3c5f757e. It flushed as soon as it saw the card stopped:
+    what the feed handed over for the rest of the stall queued up behind
+    the flush, and the sound stayed that far behind for the rest of the
+    song. A 300 ms stall hit that or not by where in it the card was read
+    (the test above passed or failed by a 130 ms shift in when it fired);
+    600 ms always does. Pi 4 headphone jack."""
+    import pytest
+    if not os.environ.get("FPP_TESTS_HOST_AUDIO"):
+        pytest.skip("needs a real sound card: run-local.sh --host-audio")
+    _stall_mid_song(fppd, audio, 600)
 
 def test_card_position_wrap_is_not_an_xrun(fppd, audio):
     """The card's hardware pointer wrapping at the ALSA boundary, with the
