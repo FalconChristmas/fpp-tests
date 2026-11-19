@@ -8,15 +8,19 @@ told to accept the "<?" tags config.php uses, as the PHP FPP installs is.
 """
 
 import os
+import subprocess
+import time
+
+import pytest
 
 from fppinit import fppinit  # noqa: F401 -- the fixture
 from test_upgrade_steps import media_settings
 
 
-def boot_actions(sb, **settings):
+def boot_actions(sb, timeout=180, **settings):
     sb.settings(BootActions="settings", **settings)
     r = sb._run(["php", "-d", "short_open_tag=1", "/opt/fpp/scripts/handle_boot_actions"],
-                timeout=180, media_home=True)
+                timeout=timeout, media_home=True)
     out = r.stdout + r.stderr
     assert r.returncode == 0 and "Performing boot action: settings" in out, out[-3000:]
     assert "BootActions" not in media_settings(sb), "the action was not consumed"
@@ -96,3 +100,35 @@ def test_an_upgrade_starts_the_services_it_enables_right_away(fppinit):
         time.sleep(1)
     calls = fppinit.calls()
     assert any("enable" in c and "--now" in c and "rsync" in c for c in calls), calls + [out[-1500:]]
+
+
+def test_an_upgrade_does_not_wait_for_chrony_it_restarts(fppinit):
+    """Restoring the NTP server after an FPPOS upgrade queues chrony's
+    restart instead of waiting for it, so the boot action finishes and
+    fppinit goes on to set up the network.
+
+    The boot action runs inside `fppinit start`, and chrony is ordered after
+    fpp_postnetwork (fpp-defer.conf from FPP_Install.sh), which is ordered
+    after fppinit: at that point chrony's restart can't run until fppinit is
+    done. Here chrony's start job is held the same way (start_delay).
+
+    Regression: 470ff383. A blocking `systemctl restart chrony` held fppinit
+    until systemd killed it at its 90 s start timeout, so setupNetwork() never
+    ran on the first boot after an upgrade: a WiFi-only player stayed off the
+    network until it was power-cycled."""
+    fppinit.root_file("/etc/chrony/chrony.conf",
+                      "pool 2.debian.pool.ntp.org iburst\n"
+                      "driftfile /var/lib/chrony/chrony.drift\n"
+                      "makestep 1 3\n")
+    fppinit.start_delay("chrony", 300)
+    t0 = time.time()
+    try:
+        boot_actions(fppinit, timeout=60, ntpServer="10.0.0.1")
+    except subprocess.TimeoutExpired:
+        pytest.fail("the boot action was still waiting for chrony's restart after 60 s: "
+                    + "; ".join(c for c in fppinit.calls() if "chrony" in c))
+    took = time.time() - t0
+    assert took < 30, f"the boot action took {took:.0f} s"
+    assert any("restart" in c and "chrony" in c for c in fppinit.calls()), fppinit.calls()
+    conf = fppinit.written("/etc/chrony/chrony.conf") or ""
+    assert "server 10.0.0.1 iburst" in conf, conf

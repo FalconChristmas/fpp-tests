@@ -84,8 +84,10 @@ printf '%s\n' "systemctl $*" >> /fppinit-calls.log
 S=/fppinit-state
 verb=
 rc=0
+noblock=
 for a in "$@"; do
     case "$a" in
+        --no-block) noblock=1; continue ;;
         -*) continue ;;
     esac
     if [ -z "$verb" ]; then verb=$a; continue; fi
@@ -102,7 +104,13 @@ for a in "$@"; do
             if [ "$verb" = stop ] && [ -f "$S/$n.stophang" ]; then exec sleep "$(cat "$S/$n.stophang")"; fi
             echo inactive > "$S/$n.active" ;;
         start|restart|reload-or-restart|try-restart)
-            # a start job waiting on its device (start_delay())
+            # a start job waiting on its device, or on a unit ordered after the
+            # caller (start_delay()); --no-block queues the job and returns at
+            # once, as the real systemctl does
+            if [ -f "$S/$n.startdelay" ] && [ -n "$noblock" ]; then
+                (sleep "$(cat "$S/$n.startdelay")"; echo active > "$S/$n.active") >/dev/null 2>&1 &
+                continue
+            fi
             if [ -f "$S/$n.startdelay" ]; then sleep "$(cat "$S/$n.startdelay")"; fi
             echo active > "$S/$n.active" ;;
         enable) echo enabled > "$S/$n.enabled" ;;
