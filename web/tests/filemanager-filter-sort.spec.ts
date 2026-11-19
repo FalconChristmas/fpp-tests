@@ -9,6 +9,7 @@ import { container, inPlayer } from './container';
 test.skip(!container, 'seeds files inside the run-web.sh container');
 
 const MEDIA = '/home/fpp/media';
+const CONFIG = '/home/fpp/media/config';
 
 function sh(cmd: string): string {
   return inPlayer('sh', '-c', cmd);
@@ -20,7 +21,8 @@ test.beforeEach(async ({ request }) => {
   for (const key of ['uiLevel', 'fileManagerTableFilter']) {
     saved[key] = String((await (await request.get(`/api/settings/${key}`)).json()).value ?? '');
   }
-  expect((await request.put('/api/settings/uiLevel', { data: '1' })).ok()).toBe(true);
+  // Config tab requires uiLevel >= 3 (developer mode)
+  expect((await request.put('/api/settings/uiLevel', { data: '3' })).ok()).toBe(true);
   expect((await request.put('/api/settings/fileManagerTableFilter', { data: '1' })).ok()).toBe(true);
 });
 
@@ -79,6 +81,30 @@ for (const [tab, table, dir, ext] of [
     }
   });
 }
+
+test('Config tab filtering counts what is shown and says "Filtered items"', async ({ page }) => {
+  // Regression: PR #3186.  The Config tab (tblConfig) was missing
+  // bootstrapTableOptions_Config, so it had no sorting/filtering at all.
+  const files = ['fpp-tests-config-a.json', 'fpp-tests-config-b.json'];
+  sh(files.map((f) => `echo '{}' > ${CONFIG}/${f}`).join(' && '));
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  try {
+    await openTab(page, 'config', 'Config');
+    const heading = page.locator('#divConfig .fileCountlabelHeading').first();
+    await expect(heading).toHaveText(/^Items:/);
+    // Wait for Bootstrap Table to initialize and render filter controls
+    const filterInput = page.locator('#tab-config .filter-control input.bootstrap-table-filter-control-filename');
+    await expect(filterInput.first()).toBeVisible({ timeout: 30_000 });
+    await filterInput.first().pressSequentially('fpp-tests-config-a');
+    await expect(page.locator('#tblConfig tbody tr')).toHaveCount(1);
+    expect.soft(errors, 'page errors').toEqual([]);
+    await expect.soft(page.locator('#fileCount_Config')).toHaveText('1');
+    await expect.soft(heading).toHaveText(/^Filtered items:/);
+  } finally {
+    sh(files.map((f) => `rm -f ${CONFIG}/${f}`).join(' && '));
+  }
+});
 
 test('turning the filter off shows every row again', async ({ page }) => {
   // Regression: d7afdf9db.  Unticking Filter hid the filter boxes but left
