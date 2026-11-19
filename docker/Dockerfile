@@ -41,6 +41,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # copy of one face at the top lets the Text scenarios run against those trees.
 RUN cp /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf /usr/share/fonts/truetype/
 
+# PHP as "FPP - Configuring PHP" in SD/FPP_Install.sh sets it up: FPP's PHP
+# scripts use short open tags, and a script one of them runs by its #! line
+# (handle_boot_actions' settings restore since d0d1713ef) gets no
+# "-d short_open_tag=1" from the scenario.
+RUN for f in /etc/php/*/cli/php.ini; do \
+        sed -i -e "s/^short_open_tag.*/short_open_tag = On/" "$f"; \
+    done
+
 # FPP's makefiles skip the OLED/cape/RTC tools when this marker exists, and
 # fppd takes its PLATFORM_DOCKER paths.
 RUN mkdir -p /etc/fpp && touch /etc/fpp/container
