@@ -3,6 +3,7 @@ import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
 import { MEDIA, exists, putFile, readFile, setSettingInFile } from './settings-file';
 import { keepingFile, keepingSettings } from './privacy-helpers';
+import { netAdmin } from './wifi-stubs';
 
 // Regression: 989c2dfc0 ("fix(php): Command injection vulnerabilities in web
 // UI"). A sequence file name, the storage device, the NTP server, the OS
@@ -17,6 +18,13 @@ import { keepingFile, keepingSettings } from './privacy-helpers';
 // with those: the time zone (IsValidTimeZone()), the File Copy path
 // (shell-input-refused.spec.ts) and the cape firmware URL (a public-host
 // check before the download). Its remote script install has been removed.
+//
+// #3192 is the same kind of gap in two more places: an interface name from
+// /sys/class/net went into co-ledPanels.php's ethtool command and into
+// network_persistentNames_create()'s ip/cat/mv commands bare, and the LED
+// Panels option rendered it as HTML. Those tests add a dummy interface named
+// with shell metacharacters, by a sibling container with NET_ADMIN (the
+// player itself has none).
 
 test.skip(!container, 'needs the player run-web.sh serves (FPP_TESTS_WEB_CONTAINER)');
 
@@ -25,8 +33,37 @@ const MARKER = '/tmp/fpp-tests-injected';
 // file name.
 const TOUCH_MARKER = `touch $(echo ${Buffer.from(MARKER).toString('base64')}|base64 -d)`;
 
-test.beforeEach(() => inPlayer('rm', '-f', MARKER));
-test.afterEach(() => inPlayer('rm', '-f', MARKER));
+// Interface names are at most 15 bytes and may not contain '/' or
+// whitespace, so the marker has no '/' in the name: a redirection with no
+// command makes the file in the shell's working directory, which for
+// php-fpm is '/'.
+const INJECT_IFACE = 'x;>fppinj';
+const HTML_IFACE = "a'<b>c";
+const NET_MARKER = '/fppinj';
+const NET_MARKER_LINK = '/fppinj.link';
+const NETDIR = '/etc/systemd/network';
+const ETHTOOL = '/usr/local/bin/ethtool';
+const ETHTOOL_LOG = '/tmp/fpp-tests-ethtool-args.log';
+
+// A shell word for the interface name, for the netAdmin script.
+function shq(s: string): string {
+  return `'${s.replace(/'/g, "'\\''")}'`;
+}
+
+function dummyInterface(name: string, add: boolean) {
+  netAdmin(add
+    ? `ip link del ${shq(name)} 2>/dev/null; ip link add name ${shq(name)} type dummy`
+    : `ip link del ${shq(name)} 2>/dev/null || true`);
+}
+
+test.beforeEach(() => inPlayer('rm', '-f', MARKER, NET_MARKER, NET_MARKER_LINK, ETHTOOL_LOG));
+test.afterEach(() => {
+  inPlayer('rm', '-f', MARKER, NET_MARKER, NET_MARKER_LINK, ETHTOOL_LOG, ETHTOOL);
+  if (container) {
+    dummyInterface(INJECT_IFACE, false);
+    dummyInterface(HTML_IFACE, false);
+  }
+});
 
 test('a gzipped sequence whose name has shell in it is unzipped under that name', async ({ request }) => {
   const name = `fpp-tests-$(${TOUCH_MARKER})`;
@@ -124,6 +161,84 @@ test('a mixer device with shell in it is passed to amixer as one name', async ({
     });
   } finally {
     inPlayer('rm', '-f', '/usr/local/bin/amixer', log);
+  }
+});
+
+// The player has no ethtool; a stand-in records its arguments, one per [...],
+// and reports a link speed, which the page shows beside the interface.
+test('an interface name with shell in it reaches ethtool as one name', async ({ page }) => {
+  // Regressions: 1b5e404b4 and 67d9fd558 (#3192).  PopulateEthernetInterfaces()
+  // put the name from /sys/class/net into "sudo ethtool $iface" bare, so a
+  // name containing ';' started a second command.
+  dummyInterface(INJECT_IFACE, true);
+  putFile(ETHTOOL, `#!/bin/sh\nfor a in "$@"; do printf '[%s]' "$a"; done >> ${ETHTOOL_LOG}\necho >> ${ETHTOOL_LOG}\necho 'Speed: 1000Mb/s'\n`);
+  inPlayer('chmod', '755', ETHTOOL);
+  const res = await page.goto('/channeloutputs.php');
+  expect(res!.ok(), await res!.text()).toBe(true);
+
+  // The control: the interface reached the list, with ethtool's speed.
+  const option = page.locator('#divLEDPanelsTemplate select.LEDPanelsInterface option').filter({ hasText: INJECT_IFACE });
+  await expect(option).toHaveCount(1);
+  await expect(option).toHaveText(`${INJECT_IFACE} (1000Mbps)`);
+  expect(exists(NET_MARKER), 'the interface name ran a command').toBe(false);
+
+  // ethtool also ran for the player's own interfaces; only the test's name
+  // matters here.
+  const calls = inPlayer('sh', '-c', `cat ${ETHTOOL_LOG} 2>/dev/null || true`).trim().split('\n').filter(Boolean);
+  expect(calls, `ethtool calls: ${calls}`).toContain(`[${INJECT_IFACE}]`);
+  expect(calls, `ethtool got only part of the name: ${calls}`).not.toContain('[x]');
+});
+
+test('an interface name with markup in it is escaped in the LED Panels list', async ({ page }) => {
+  // Regression: 4967d719f (#3192).  The <option> value and label used the
+  // name unchanged, so a name with a quote and a tag closed the attribute and
+  // added markup.
+  dummyInterface(HTML_IFACE, true);
+  const res = await page.goto('/channeloutputs.php');
+  const body = await res!.text();
+  const escaped = 'a&#039;&lt;b&gt;c';
+  expect(body).toContain(`value='${escaped}'`);
+  expect(body).toContain(`>${escaped} (`);
+});
+
+test('creating persistent names with shell in an interface name runs nothing', async ({ request }) => {
+  // Regression: 1b5e404b4 (#3192).  network_persistentNames_create() put the
+  // name from /sys/class/net into "ip link show", "cat /sys/class/net/..."
+  // and the .link "mv" bare.  The receiving end is the .link file systemd
+  // reads: the file written for the interface is the one that is moved.
+  dummyInterface(INJECT_IFACE, true);
+  try {
+    const r = await request.post('/api/network/persistentNames');
+    const body = await r.text();
+    expect(r.ok(), body).toBe(true);
+    expect(JSON.parse(body).status).toBe('OK');
+    expect(exists(NET_MARKER), 'the interface name ran a command').toBe(false);
+    expect(exists(NET_MARKER_LINK), 'the interface name ran a command').toBe(false);
+
+    const files = inPlayer('sh', '-c', `ls -1 ${NETDIR} 2>/dev/null || true`).trim().split('\n').filter(Boolean);
+    const file = files.find((f) => f.endsWith(`-fpp-${INJECT_IFACE}.link`));
+    expect(file, `the link files: ${files}`).toBeTruthy();
+    expect(inPlayer('cat', `${NETDIR}/${file}`)).toContain(`Name=${INJECT_IFACE}\n`);
+  } finally {
+    const files = inPlayer('sh', '-c', `ls -1 ${NETDIR} 2>/dev/null || true`).trim().split('\n').filter(Boolean);
+    for (const file of files.filter((f) => f.endsWith(`-fpp-${INJECT_IFACE}.link`))) {
+      inPlayer('rm', '-f', `${NETDIR}/${file}`);
+    }
+  }
+});
+
+test('clearing persistent names removes every fpp link file', async ({ request }) => {
+// Regression: delete glob fix (#3192).  The old "rm ... 5?-fpp-*.link"
+// glob only matched a single digit after the 5, so files numbered 510 and
+// above survived a clear.
+  inPlayer('sh', '-c', `mkdir -p ${NETDIR}; for n in 0 1 2 3 4 5 6 7 8 9 10 11; do touch ${NETDIR}/5\${n}-fpp-x.link; done; touch ${NETDIR}/510-fpp-x.link`);
+  try {
+    const r = await request.delete('/api/network/persistentNames');
+    expect(r.ok(), await r.text()).toBe(true);
+    const files = inPlayer('sh', '-c', `ls -1 ${NETDIR} 2>/dev/null || true`).trim().split('\n').filter(Boolean);
+    expect(files.filter((f) => /-fpp-.*\.link$/.test(f)), `leftover link files: ${files}`).toHaveLength(0);
+  } finally {
+    inPlayer('sh', '-c', `rm -f ${NETDIR}/*-fpp-*.link`);
   }
 });
 
