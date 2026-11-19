@@ -601,15 +601,17 @@ def brightness_args(build):
     return sorted(a for a in build if a.startswith(("-DBRIGHTNESS", "-DDELAY")))
 
 
-def test_nine_panel_outputs_use_the_last_timing_entry(fppd):
-    """A panel cape with more than 8 outputs builds its firmware with the
-    brightness timings of the tables' last (8 output) entry: chains of 8
-    panels reaching output 9 give the same BRIGHTNESSn/DELAYn as ones
-    reaching output 8.
+def test_a_panel_past_the_eighth_output_is_refused(fppd):
+    """With a pinout listing more than 8 outputs, a panel on output 9 is
+    refused with a warning, and the rest of the output builds its firmware
+    for the 8 outputs it has pins for, with the 8 output timings.
 
-    Regression: d8c38b495 (the BBBMatrix half). The timing tables stop at
-    8 outputs and were indexed with the output count unchecked, so 9 or
-    more outputs read past the table.
+    Regression: 2a59cb8ec. BBBMatrix counted the panel's output anyway,
+    and its per-output tables stop at 8: buildPrepTables() read the pins of
+    a ninth output past m_pinInfo -- uninitialized memory -- and used them
+    as array indexes, so fppd crashed in Init() whenever that memory held
+    the wrong bytes (on a PocketBeagle, it did). The timing lookup itself
+    was kept in range earlier by d8c38b495, the BBBMatrix half.
     """
     pru = FakePruss(fppd)
     fppd.settings(LogLevel_ChannelOut="debug")
@@ -622,12 +624,14 @@ def test_nine_panel_outputs_use_the_last_timing_entry(fppd):
     pru.start()
     first = matrix_builds(fppd)
     assert first, fppd.tail()
-    nine = matrix_config(panels=((0, 0), (8, 7)))
+    assert "-DOUTPUTS=8" in first[-1], first[-1]
+    nine = matrix_config(panels=((0, 0), (7, 7), (8, 7)))
     save(fppd, "config/channeloutputs.json", nine)
     fppd.wait_for(lambda: len(matrix_builds(fppd)) > len(first), timeout=60, what="the rebuild")
     last = matrix_builds(fppd)[-1]
-    assert "-DOUTPUTS=9" in last, last
+    assert "-DOUTPUTS=8" in last, last
     assert brightness_args(last) == brightness_args(first[-1]), (first[-1], last)
+    assert [w for w in warnings_of(fppd) if "on output 9" in w], warnings_of(fppd)
 
 
 def test_the_copy_firmware_is_built_for_the_core_it_runs_on(fppd):
