@@ -188,6 +188,83 @@ def test_remote_video_sound_follows_the_master(fppd, audio):
     assert max(late) - min(late) <= 30, f"the video's sound wandered {max(late) - min(late):.0f} ms"
 
 
+FIRST_SYNC = re.compile(r"GStreamer started playing: \S*?(C\d)\.mp4|GStreamer feed sync: master .*\(this packet ([-+][\d.]+) ms\)")
+
+
+def test_a_remote_learns_how_far_its_clips_start_off_the_master(fppd, audio):
+    """A remote whose sound is heard later than its master's -- an output
+    path 80 ms longer: the master's media syncs say it is 80 ms further on
+    than the remote can be -- starts the clips of a video playlist that much
+    further in once it has seen it: from the seventh clip on, each starts
+    within 30 ms of the master, rather than 80 ms and more behind at every
+    clip.
+
+    Fixed by 7e4f920b4. Before it every clip started on a fresh stream at
+    the master's start packet, the same distance behind; the remote's speed
+    servo took most of a clip to close it, and the next clip opened the gap
+    again: on a camera, a remote's picture a frame or two behind the
+    master's at each change of video, closing over ten seconds.
+
+    Needs a real card and a display (Docker's null sink under ASan starts
+    each clip anywhere from 90 to 230 ms late, so there is no steady
+    difference to learn): run-local.sh --host-audio, FPP_TESTS_VIDEO_OUT
+    naming the connector, and ffmpeg. Verified with run-local.sh
+    --host-audio on a Pi 5 with a sound card and HDMI: every clip 118-148
+    ms behind on the parent, 0bc731f4f; on the fix, within 25 ms from the
+    sixth clip on (3 of 3)."""
+    connector = os.environ.get("FPP_TESTS_VIDEO_OUT")
+    if not os.environ.get("FPP_TESTS_HOST_AUDIO") or not connector:
+        pytest.skip("needs a real sound card and a display: run-local.sh --host-audio, FPP_TESTS_VIDEO_OUT")
+    if not shutil.which("ffmpeg"):
+        pytest.skip("needs ffmpeg to make the videos")
+    lead = 0.080
+    clip_s = 4.0
+    names = [f"C{i}" for i in range(10)]
+    for n in names:
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30",
+                        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", str(clip_s + 0.5),
+                        "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-g", "30",
+                        "-c:a", "aac", "-shortest", os.path.join(fppd.media, "videos", f"{n}.mp4")],
+                       check=True)
+    fppd.settings(fppMode="remote", VideoOutput=connector, LogLevel_MediaOut="debug")
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    send = lambda *a: sock.sendto(sync_packet(*a), ("127.0.0.1", PORT))
+    try:
+        fppd.start()
+        time.sleep(2)
+        for i, n in enumerate(names):
+            send("open", "media", 0, 0.0, f"{n}.mp4")
+            send("start", "media", 0, 0.0, f"{n}.mp4")
+            t0 = time.monotonic()
+            prepared = i + 1 >= len(names)
+            nxt = 0.5
+            while (t := time.monotonic() - t0) < clip_s:
+                if t >= nxt:
+                    send("sync", "media", 0, t + lead, f"{n}.mp4")
+                    nxt += 0.5
+                    if t >= 2.0 and not prepared:
+                        send("prepare", "media", 0, 0.0, f"{names[i + 1]}.mp4")
+                        prepared = True
+                time.sleep(0.005)
+            fppd.check_alive()
+            send("stop", "media", 0, clip_s + lead, f"{n}.mp4")
+    finally:
+        sock.close()
+    firsts, clip = {}, None
+    for m in FIRST_SYNC.finditer(fppd.log()):
+        if m.group(1):
+            clip = m.group(1)
+        elif clip and clip not in firsts:
+            firsts[clip] = float(m.group(2))
+    print(f"\neach clip's first error against the master, ms: {firsts}")
+    used = len(re.findall(r"Using \S*C\d\.mp4 prepared for slot 1", fppd.log()))
+    assert used >= len(names) - 2, f"only {used} clips started from their prepared pipeline"
+    late = [firsts.get(n) for n in names[6:]]
+    assert None not in late, f"a clip was never synced: {firsts}"
+    assert max(abs(e) for e in late) <= 30, \
+        f"the remote still started clips {max(abs(e) for e in late):.0f} ms from the master after five to learn from: {firsts}"
+
+
 def test_a_remote_moves_to_the_masters_next_file_on_a_sync_packet(fppd, audio):
     """A remote playing A.wav that gets a media sync for B.wav -- the
     master has moved on and the open packet was lost -- opens B.wav and
