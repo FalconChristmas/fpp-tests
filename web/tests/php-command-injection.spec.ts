@@ -167,7 +167,7 @@ test('a mixer device with shell in it is passed to amixer as one name', async ({
 // The player has no ethtool; a stand-in records its arguments, one per [...],
 // and reports a link speed, which the page shows beside the interface.
 test('an interface name with shell in it reaches ethtool as one name', async ({ page }) => {
-  // Regressions: 1b5e404b4 and 67d9fd558 (#3192).  PopulateEthernetInterfaces()
+  // Regressions: 2684c2789 and 9532283ff (#3192).  PopulateEthernetInterfaces()
   // put the name from /sys/class/net into "sudo ethtool $iface" bare, so a
   // name containing ';' started a second command.
   dummyInterface(INJECT_IFACE, true);
@@ -190,7 +190,7 @@ test('an interface name with shell in it reaches ethtool as one name', async ({ 
 });
 
 test('an interface name with markup in it is escaped in the LED Panels list', async ({ page }) => {
-  // Regression: 4967d719f (#3192).  The <option> value and label used the
+  // Regression: 8bd867240 (#3192).  The <option> value and label used the
   // name unchanged, so a name with a quote and a tag closed the attribute and
   // added markup.
   dummyInterface(HTML_IFACE, true);
@@ -202,7 +202,7 @@ test('an interface name with markup in it is escaped in the LED Panels list', as
 });
 
 test('creating persistent names with shell in an interface name runs nothing', async ({ request }) => {
-  // Regression: 1b5e404b4 (#3192).  network_persistentNames_create() put the
+  // Regression: 2684c2789 (#3192).  network_persistentNames_create() put the
   // name from /sys/class/net into "ip link show", "cat /sys/class/net/..."
   // and the .link "mv" bare.  The receiving end is the .link file systemd
   // reads: the file written for the interface is the one that is moved.
@@ -228,9 +228,9 @@ test('creating persistent names with shell in an interface name runs nothing', a
 });
 
 test('clearing persistent names removes every fpp link file', async ({ request }) => {
-// Regression: delete glob fix (#3192).  The old "rm ... 5?-fpp-*.link"
-// glob only matched a single digit after the 5, so files numbered 510 and
-// above survived a clear.
+  // Regression: 1bf1052be (#3192).  The old "rm ... 5?-fpp-*.link"
+  // glob only matched a single digit after the 5, so files numbered 510 and
+  // above survived a clear.
   inPlayer('sh', '-c', `mkdir -p ${NETDIR}; for n in 0 1 2 3 4 5 6 7 8 9 10 11; do touch ${NETDIR}/5\${n}-fpp-x.link; done; touch ${NETDIR}/510-fpp-x.link`);
   try {
     const r = await request.delete('/api/network/persistentNames');

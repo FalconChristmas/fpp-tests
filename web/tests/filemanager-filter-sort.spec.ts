@@ -83,7 +83,7 @@ for (const [tab, table, dir, ext] of [
 }
 
 test('Config tab filtering counts what is shown and says "Filtered items"', async ({ page }) => {
-  // Regression: PR #3186.  The Config tab (tblConfig) was missing
+  // Regression: 1a3736dbe (#3186).  The Config tab (tblConfig) was missing
   // bootstrapTableOptions_Config, so it had no sorting/filtering at all.
   const files = ['fpp-tests-config-a.json', 'fpp-tests-config-b.json'];
   sh(files.map((f) => `echo '{}' > ${CONFIG}/${f}`).join(' && '));

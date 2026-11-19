@@ -112,7 +112,7 @@ def test_an_upgrade_does_not_wait_for_chrony_it_restarts(fppinit):
     after fppinit: at that point chrony's restart can't run until fppinit is
     done. Here chrony's start job is held the same way (start_delay).
 
-    Regression: 470ff383. A blocking `systemctl restart chrony` held fppinit
+    Regression: ed2524cd0. A blocking `systemctl restart chrony` held fppinit
     until systemd killed it at its 90 s start timeout, so setupNetwork() never
     ran on the first boot after an upgrade: a WiFi-only player stayed off the
     network until it was power-cycled."""
