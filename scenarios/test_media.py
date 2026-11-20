@@ -1114,7 +1114,7 @@ def test_an_empty_audio_groups_file_logs_no_error_per_song(fppd, audio):
     """An empty config/pipewire-audio-groups.json -- older installs have one
     -- reads as no groups: playing a song twice logs no JSON parse error.
 
-    Fixed by e2be4a350. Its readers run as each song's pipeline is built and
+    Fixed by af8786738. Its readers run as each song's pipeline is built and
     started, and each logged "Error parsing JSON string in
     LoadJsonFromString(): ''" at error level: three lines per pass of a
     looping 15 s video on a remote."""
