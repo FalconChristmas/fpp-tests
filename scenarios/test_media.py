@@ -1108,3 +1108,23 @@ def test_a_slow_pactl_does_not_hold_fppds_sockets(fppd):
     assert children, "found none of fppd's children"
     leaks = [(p, cmd[:80], len(shared)) for p, cmd, shared in children if shared]
     assert not leaks, f"fppd's children hold its sockets (pid, command, how many): {leaks}"
+
+
+def test_an_empty_audio_groups_file_logs_no_error_per_song(fppd, audio):
+    """An empty config/pipewire-audio-groups.json -- older installs have one
+    -- reads as no groups: playing a song twice logs no JSON parse error.
+
+    Fixed by e2be4a350. Its readers run as each song's pipeline is built and
+    started, and each logged "Error parsing JSON string in
+    LoadJsonFromString(): ''" at error level: three lines per pass of a
+    looping 15 s video on a remote."""
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 1, freq=1000, amplitude=0.2)
+    open(os.path.join(fppd.media, "config", "pipewire-audio-groups.json"), "w").close()
+    fppd.start()
+    for _ in range(2):
+        fppd.command("Play Media", "Tone.wav", "1", "0", "1")
+        time.sleep(0.5)
+        fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=10,
+                      what="the player to go idle after the song")
+    errors = [l for l in fppd.log().splitlines() if "Error parsing JSON string" in l]
+    assert not errors, f"{len(errors)} JSON parse errors logged for an empty groups file: {errors[:3]}"
