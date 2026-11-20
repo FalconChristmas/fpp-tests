@@ -32,7 +32,7 @@ def test_a_playing_video_follows_its_model_through_an_output_reload(fppd, audio)
     """
     make_video(os.path.join(fppd.media, "videos", "Bars.mkv"), seconds=40, width=64, height=32)
     fppd.write("config/channeloutputs.json", colorlight_panel())
-    fppd.settings(DisableFakeNetworkBridges="1", VideoOutput="Panel", LogLevel_MediaOut="info")
+    fppd.settings(DisableFakeNetworkBridges="1", VideoOutput="Panel", LogLevel_MediaOut="debug")
     fppd.start()
     fppd.command("Play Media", "Bars.mkv", "1", "0", "1", "--Default--")
     fppd.wait_for(lambda: showing(fppd), timeout=20, interval=0.2, what="the video on the model")

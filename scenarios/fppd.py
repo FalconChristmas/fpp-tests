@@ -40,6 +40,11 @@ class Fppd:
         # when run-local.sh tests on an FPP device. The sanitizer report and
         # the saved artifacts cover what the crash report would.
         self.settings(ShareCrashData="-1")
+        # What a song is doing (started playing, end of stream, ...) is
+        # logged at debug, as fppd writes no line per song at its default
+        # level, and many scenarios wait on those lines. A scenario's own
+        # LogLevel_MediaOut, appended later, wins.
+        self.settings(LogLevel_MediaOut="debug")
         self.proc = None
         # Set by a scenario that makes fppd exit on purpose and has checked
         # how it exited; the fixture then skips its own end-of-test checks.
