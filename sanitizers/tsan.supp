@@ -127,13 +127,17 @@ race:libc.so.6
 # then reads as unbalanced.
 race:libGraphicsMagick-Q16.so.3
 # libpipewire (the media output stream, a native PipeWire stream since fpp
-# 5c5f6c2b1): at exit its destructor tail-calls the unlock of a global mutex
-# of its own whose lock TSan didn't see, so in every scenario that played
-# media the report is an unlock of an unlocked mutex with only the dynamic
-# loader on the stack (_dl_fini, unsymbolized) -- the library's own frame is
-# gone, and a mutex: suppression doesn't match the mutex's location.  Matched
-# by the loader, arm64's and x86-64's alike: nothing of ours runs there.
-mutex:ld-linux
+# 5c5f6c2b1), linked into every fppd: the dynamic loader, running its
+# destructors, unlocks a global mutex of libpipewire's whose lock TSan didn't
+# see, and reports an unlock of an unlocked mutex with only the loader on the
+# stack.  Not a mutex: suppression: that only matches once the report is
+# symbolized, and libbacktrace symbolizes through open()/read()/close() --
+# which, in a scenario with a shim preloaded, are the shim's, and a shim that
+# resolves its real function on first use calls dlsym() from inside TSan's
+# report, which aborts fppd ("nested bug in the same thread", or a hang on
+# arm64).  called_from_lib leaves the loader's own lock calls untracked, so no
+# report is made: nothing of ours runs there.  Matches arm64's and x86-64's.
+called_from_lib:ld-linux
 # OpenSSL 3.5 (SHA1() for the WLED API's WebSocket handshake): two first
 # handshakes at once fill libcrypto's algorithm cache, one under its rwlock,
 # the other reading without it through lookups whose atomics, in an
