@@ -495,7 +495,7 @@ def test_overlays_switched_on_from_the_api_while_a_song_plays(fppd, audio):
         "type": "both", "enabled": 1, "playOnce": 0, "sequenceName": "Song.fseq", "mediaName": "Song.wav"}]))
     fppd.write("config/co-universes.json", ddp_output(CHANNELS))
     fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [matrix("A"), matrix("B")]})
-    fppd.settings(DisableFakeNetworkBridges="1", mediaOffset="20")
+    fppd.settings(DisableFakeNetworkBridges="1", mediaOffset="20", LogLevel_MediaOut="debug")
     errors = []
     stop = threading.Event()
 

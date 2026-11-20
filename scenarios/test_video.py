@@ -178,7 +178,7 @@ def test_the_video_output_hdmi_is_the_display_not_a_model_of_that_name(fppd, aud
     make_video(os.path.join(fppd.media, "videos", "Bars.mkv"), seconds=6)
     fppd.write("config/co-universes.json", ddp_output(W * H * 3))
     fppd.write("config/model-overlays.json", {"autoCreate": False, "models": [dict(model(), Name="HDMI")]})
-    fppd.settings(DisableFakeNetworkBridges="1", VideoOutput="HDMI")
+    fppd.settings(DisableFakeNetworkBridges="1", VideoOutput="HDMI", LogLevel_MediaOut="debug")
     fppd.start()
     fppd.command("Play Media", "Bars.mkv", "1", "0", "1", "--Default--")
     fppd.wait_for(lambda: "GStreamer started playing: Bars.mkv" in fppd.log(), timeout=15,

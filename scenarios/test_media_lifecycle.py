@@ -177,6 +177,7 @@ def test_a_slow_audio_teardown_does_not_hold_up_the_next_song(fppd, audio):
     for name in ("A.wav", "B.wav"):
         write_tone_wav(os.path.join(fppd.media, "music", name), 2)
     fppd.write("playlists/Two.json", playlist("Two", [media_entry("A.wav"), media_entry("B.wav")]))
+    fppd.settings(LogLevel_MediaOut="debug")  # "started playing" and end of stream are debug lines
     fppd.start(preload=[shims.build("slownull.c")], extra_env={"SLOWNULL_MS": "3000"})
     fppd.command("Start Playlist", "Two", "false", "false")
     fppd.wait_for(lambda: started_at(fppd, "B.wav"), timeout=20, interval=0.2,
@@ -299,6 +300,7 @@ def test_a_song_that_never_prerolls_gives_way_to_the_next(fppd, audio):
     arm, mark = os.path.join(tmp, "arm"), os.path.join(tmp, "mark")
     open(arm, "w").close()
     fppd.write("playlists/Two.json", playlist("Two", [media_entry("A.wav"), media_entry("B.wav")]))
+    fppd.settings(LogLevel_MediaOut="debug")  # "started playing" is a debug line
     fppd.start(preload=[shims.build("med_holdread.c")],
                extra_env={"HOLDREAD_NAME": "/A.wav", "HOLDREAD_ARM": arm, "HOLDREAD_MARK": mark,
                           "HOLDREAD_UNTIL_NULL": "12000"})

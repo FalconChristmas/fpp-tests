@@ -291,6 +291,7 @@ def test_track_changes_do_not_discard_audio(fppd, audio):
     fppd.write("playlists/tones.json", {"name": "tones", "repeat": 0, "loopCount": 0,
                                         "mainPlaylist": [{"type": "media", "enabled": 1,
                                                           "playOnce": 0, "mediaName": "tone.wav"}] * 3})
+    fppd.settings(LogLevel_MediaOut="debug")  # "started playing" is a debug line
     with RtpCapture(5004) as cap:
         start_sender(fppd, audio)
         time.sleep(2)
