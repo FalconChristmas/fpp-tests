@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import type { APIRequestContext } from '@playwright/test';
 import { container, inPlayer } from './container';
 import { SETTINGS, putFile, readFile } from './settings-file';
-import { keepingSettings, setSettingInFile } from './privacy-helpers';
+import { dropSettings, keepingSettings, setSettingInFile } from './privacy-helpers';
 
 // PUT /api/settings/<name> does more than store the value for a few settings:
 // it applies them.  Routing between interfaces goes into /etc/sysctl.conf,
@@ -89,6 +89,57 @@ test.describe('EnableTethering', () => {
       await put(request, 'EnableTethering', '1', '?skipBackup=1');
       expect(line('TetherSSID')).toBe('TetherSSID = "fpp-tests-show"');
       expect(line('TetherPSK')).toBe('TetherPSK = "Christmas"');
+    });
+  });
+});
+
+test.describe('Use hostname as tether SSID', () => {
+  test('a host name saved with the option on becomes the tether SSID', async ({ request }) => {
+    // Feature: fpp#3199. The sync is in the API, so it also covers writes
+    // from the setup wizard and direct PUTs, not just the Network page.
+    // skipApply keeps this away from /etc/hostname in the test player; the
+    // SSID write happens before that step is skipped.
+    await keepingSettings(async () => {
+      setSettingInFile('TetherUseHostname', '1');
+      await put(request, 'HostName', 'fpp-tests-kitchen', '?skipApply=1&skipBackup=1');
+      expect(line('TetherSSID')).toBe('TetherSSID = "fpp-tests-kitchen"');
+    });
+  });
+
+  test('an existing custom SSID keeps the option off without a stored choice', async ({ request }) => {
+    // Feature: fpp#3199. An install that never saw this setting but already
+    // has its own SSID must not start overwriting it on hostname changes.
+    await keepingSettings(async () => {
+      setSettingInFile('HostName', 'fpp-tests-host');
+      setSettingInFile('TetherSSID', 'fpp-tests-show');
+      dropSettings('TetherUseHostname');
+      await put(request, 'HostName', 'fpp-tests-other', '?skipApply=1&skipBackup=1');
+      expect(line('TetherSSID')).toBe('TetherSSID = "fpp-tests-show"');
+    });
+  });
+
+  test('enabling the option copies the stored host name, without .local', async ({ request }) => {
+    await keepingSettings(async () => {
+      setSettingInFile('HostName', 'fpp-tests.local');
+      setSettingInFile('TetherSSID', 'FPP');
+      await put(request, 'TetherUseHostname', '1', '?skipBackup=1');
+      expect(line('TetherSSID')).toBe('TetherSSID = "fpp-tests"');
+    });
+  });
+
+  test('the option off leaves the SSID alone, and on with no host name keeps the fallback', async ({ request }) => {
+    await keepingSettings(async () => {
+      setSettingInFile('TetherUseHostname', '0');
+      setSettingInFile('TetherSSID', 'fpp-tests-show');
+      await put(request, 'HostName', 'fpp-tests-other', '?skipApply=1&skipBackup=1');
+      expect(line('TetherSSID')).toBe('TetherSSID = "fpp-tests-show"');
+
+      // A fresh install has no HostName in the settings file. Never write
+      // an empty SSID: fppinit needs its FPP fallback on first boot.
+      dropSettings('HostName');
+      setSettingInFile('TetherSSID', 'FPP');
+      await put(request, 'TetherUseHostname', '1', '?skipBackup=1');
+      expect(line('TetherSSID')).toBe('TetherSSID = "FPP"');
     });
   });
 });

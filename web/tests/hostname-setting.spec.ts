@@ -51,6 +51,7 @@ test('a host name saved on the Network page renames the host, flags a reboot and
   // properly after the reboot the setting already asks for.
   await keepingSettings(async () => {
     setSettingInFile('rebootFlag', '0');
+    setSettingInFile('TetherUseHostname', '1');
     await page.goto('/networkconfig.php');
     await page.click('#tab-global-network-tab');
     const input = page.locator('#HostName');
@@ -61,10 +62,31 @@ test('a host name saved on the Network page renames the host, flags a reboot and
     await input.blur();
     expect((await saved).ok()).toBe(true);
     expect(settingInFile('HostName')).toBe(NAME);
+    // Feature: fpp#3199. With the option on, the tether SSID follows the
+    // host name from the same save, wherever it is made.
+    expect(settingInFile('TetherSSID')).toBe(NAME);
     // The receiving end that matters now: the running host name is set.
     await expect.poll(calls, { message: 'hostname was not run' }).toContain(`hostname ${NAME}`);
     await expect.poll(() => settingInFile('rebootFlag'), { message: 'no reboot was flagged' }).toBe('1');
     expect(calls().filter((c) => /avahi/.test(c)), 'avahi was restarted').toEqual([]);
+  });
+});
+
+test('with "Use hostname as tether SSID" off, a host name change leaves the SSID alone', async ({ page }) => {
+  // Feature: fpp#3199. Unchecking the option is how a separate SSID is kept.
+  await keepingSettings(async () => {
+    setSettingInFile('TetherUseHostname', '0');
+    setSettingInFile('TetherSSID', 'fpp-tests-show');
+    await page.goto('/networkconfig.php');
+    await page.click('#tab-global-network-tab');
+    const input = page.locator('#HostName');
+    await expect(input).toBeVisible({ timeout: 15_000 });
+    const saved = page.waitForResponse((r) => r.url().endsWith('/api/settings/HostName') && r.request().method() === 'PUT');
+    await input.fill(NAME);
+    await input.press('Enter');
+    expect((await saved).ok()).toBe(true);
+    expect(settingInFile('HostName')).toBe(NAME);
+    expect(settingInFile('TetherSSID')).toBe('fpp-tests-show');
   });
 });
 

@@ -48,7 +48,12 @@ def test_enabled_tethering_with_no_interface_files_writes_the_access_point(fppin
     # action goes on to the tethering step, which writes the same files.
     fppinit.root_file("/etc/ssh/.fpp-test", "")
     assert_clean(run(fppinit, "start", net=True))
-    assert "interface=wlan0" in (fppinit.written(HOSTAPD_CONF) or ""), fppinit.written(HOSTAPD_CONF)
+    conf = fppinit.written(HOSTAPD_CONF) or ""
+    assert "interface=wlan0" in conf, conf
+    # A fresh install has no HostName in the settings file, while the web
+    # UI's "Use hostname as tether SSID" checkbox defaults to on. The tether
+    # must still come up with a usable name: fppinit's FPP fallback.
+    assert "ssid=FPP\n" in conf, conf
     net = fppinit.written(TETHER_NETWORK) or ""
     assert "Name=wlan0" in net and "DHCPServer=yes" in net, net
     assert "Address=192.168.8.1/24" in net, net
