@@ -33,8 +33,13 @@ test.beforeEach(async ({ request }) => {
   uiLevel = String((await (await request.get('/api/settings/uiLevel')).json()).value ?? '0');
   description = String((await (await request.get('/api/settings/HostDescription')).json()).value ?? '');
   // No description, whatever an earlier spec left: the node is then named by
-  // the host name.  fppd reports the setting live, so it shows at once.
+  // the host name.  fppd has the setting at once, but /fppd/status keeps its
+  // identity part (host_description with it) for up to a second, so a
+  // description set just before -- the Stage Left test's -- can still be what
+  // the shim is told.  Wait until the status says none.
   await request.put('/api/settings/HostDescription?skipBackup=1', { data: '' });
+  await expect.poll(async () => (await (await request.get('/api/system/status')).json()).host_description,
+    { timeout: 3000 }).toBe('');
   await request.put('/api/settings/uiLevel', { data: '3' });
 });
 test.afterEach(async ({ request }) => {
@@ -58,14 +63,15 @@ test("/json/info describes the player as a WLED node: its name, version, address
   expect(info.ip).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
   // Named by the host description when there is a real one, else by the
   // host name: the default description, "FPP", says less, and so does none.
-  // fppd reports the current setting.
+  // beforeEach waited for the status to report the cleared setting.
   expect(status.host_description).toBe('');
   expect(info.name).toBe(status.host_name);
 });
 
 test('/json/info is named by a host description set since fppd started', async ({ request }) => {
   // The description comes from fppd's status, which reports the current
-  // HostDescription, so a new one shows without a restart.
+  // HostDescription, so a new one shows without a restart: within a second,
+  // as the status rebuilds its identity part at most once a second.
   await request.put('/api/settings/HostDescription?skipBackup=1', { data: 'Stage Left' });
   await expect.poll(async () => (await json(request, '/json/info')).name, { timeout: 3000 }).toBe('Stage Left');
 });
