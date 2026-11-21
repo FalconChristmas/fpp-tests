@@ -7,9 +7,24 @@ which is when a report is most needed."""
 
 import os
 import re
+import shutil
 import subprocess
 
+import pytest
+
 from test_crash_reports import private_fppdir
+
+
+def _opt_fpp():
+    """What is at /opt/fpp before the run, for the log."""
+    p = "/opt/fpp"
+    if not os.path.lexists(p):
+        return "absent"
+    if os.path.islink(p):
+        return f"a symlink to {os.readlink(p)}" + ("" if os.path.exists(p) else " (dangling)")
+    if os.path.isdir(p):
+        return f"a directory: {sorted(os.listdir(p))[:20]}"
+    return "a file"
 
 
 def troubleshooting_text(fppd):
@@ -18,20 +33,37 @@ def troubleshooting_text(fppd):
         view = private_fppdir(fppd.tree, fppd.media)
     env = dict(os.environ)
     env.pop("LD_PRELOAD", None)
+    # short_open_tag: config.php needs it, and FPP_Install.sh turns it on.
+    php = ["php", "-d", "short_open_tag=1", os.path.join(view, "www", "troubleshootingText.php"),
+           "--manual-crash-report"]
     # The command list is read from /opt/fpp/www/troubleshoot-commands.json,
-    # wherever the tree is; point /opt/fpp at this one for the run.
-    linked = not os.path.lexists("/opt/fpp")
-    if linked:
+    # wherever the tree is; point /opt/fpp at this one for the run. Whatever
+    # is there already is not necessarily this tree: in a scenario container
+    # an earlier scenario can have left a partial /opt/fpp behind (seen in CI:
+    # "error no troubleshoot-commands.json"), so that is covered with the view
+    # in a mount namespace of the run's own rather than used as it is.
+    before = _opt_fpp()
+    print(f"/opt/fpp before the run: {before}")
+    linked = False
+    if os.path.lexists("/opt/fpp") and os.path.realpath("/opt/fpp") == os.path.realpath(fppd.tree):
+        pass  # the tree under test is /opt/fpp (run-local.sh on a device)
+    elif not os.path.lexists("/opt/fpp"):
         os.makedirs("/opt", exist_ok=True)
         os.symlink(view, "/opt/fpp")
+        linked = True
+    elif os.path.isdir("/opt/fpp") and shutil.which("unshare"):
+        php = ["unshare", "--mount", "--propagation", "private", "sh", "-c",
+               'mount --bind "$1" /opt/fpp && shift && exec "$@"', "sh", view, *php]
+    else:
+        pytest.fail(f"/opt/fpp is {before}, not the tree under test, and cannot be covered with it")
     try:
-        # short_open_tag: config.php needs it, and FPP_Install.sh turns it on.
-        r = subprocess.run(["php", "-d", "short_open_tag=1", os.path.join(view, "www", "troubleshootingText.php"),
-                            "--manual-crash-report"], capture_output=True, text=True, timeout=300, env=env, cwd=fppd.media)
+        r = subprocess.run(php, capture_output=True, text=True, timeout=300, env=env, cwd=fppd.media)
     finally:
         if linked:
             os.unlink("/opt/fpp")
     assert r.returncode == 0, f"rc {r.returncode}:\n{r.stdout[-2000:]}\n{r.stderr[-2000:]}"
+    assert "error no troubleshoot-commands.json" not in r.stdout, \
+        f"/opt/fpp (before the run: {before}) gave no command list:\n{r.stdout[:2000]}"
     return r.stdout
 
 
