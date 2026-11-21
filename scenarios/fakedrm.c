@@ -59,6 +59,14 @@
  *                         first's (default 7000): two displays are never
  *                         genlocked
  *
+ *   FAKEDRM_LOG_DUMBS     "1": FAKEDRM_LOG gets "close lease <id>: <n> dumb
+ *                         buffers still on it" as each lease fd closes, n the
+ *                         dumb buffers created on it and not yet destroyed
+ *                         (the kernel frees them, and a later
+ *                         DESTROY_DUMB of one on that fd number fails or hits
+ *                         whatever took it), and "destroy dumb <h>: not on fd
+ *                         <fd>" for a DESTROY_DUMB of a handle the fd never had
+ *
  * A page flip on a CRTC whose last flip hasn't landed yet fails with EBUSY,
  * as the kernel's does; FAKEDRM_LOG gets "refuse flip <crtc>: EBUSY".
  *   FAKEDRM_LOG_FLIPS     "1": FAKEDRM_LOG gets "flip <crtc>" for every page
@@ -155,6 +163,12 @@ static Fb fbs[MAXFBS];
 static uint32_t next_fb = 600, next_handle, next_lessee;
 static Event events[MAXEVENTS];
 static int nevents;
+// Dumb buffers, by the fd they were created on, and the leases' fds.
+#define MAXDUMBS 1024
+static struct { uint32_t handle; int fd; } dumbs[MAXDUMBS];
+static int ndumbs;
+static struct { int fd; uint32_t lessee; } leases[MAXFILES];
+static int nleases;
 static int timer_started;
 
 // A connector, its encoder and the CRTC driving it.  Head 0 is the card's
@@ -939,7 +953,29 @@ int drmIoctl(int fd, unsigned long request, void* arg) {
         c->size = (uint64_t)c->pitch * c->height;
         pthread_mutex_lock(&mu);
         c->handle = ++next_handle;
+        if (ndumbs < MAXDUMBS) {
+            dumbs[ndumbs].handle = c->handle;
+            dumbs[ndumbs++].fd = fd;
+        }
         pthread_mutex_unlock(&mu);
+        return 0;
+    }
+    case DRM_IOCTL_MODE_DESTROY_DUMB: {
+        struct drm_mode_destroy_dumb* d = arg;
+        int found = 0;
+        pthread_mutex_lock(&mu);
+        for (int i = 0; i < ndumbs; i++) {
+            if (dumbs[i].handle == d->handle && dumbs[i].fd == fd) {
+                dumbs[i] = dumbs[--ndumbs];
+                found = 1;
+                break;
+            }
+        }
+        pthread_mutex_unlock(&mu);
+        const char* log = getenv("FAKEDRM_LOG_DUMBS");
+        if (!found && log && !strcmp(log, "1")) {
+            logf_("destroy dumb %u: not on fd %d", d->handle, fd);
+        }
         return 0;
     }
     case DRM_IOCTL_MODE_MAP_DUMB: {
@@ -947,7 +983,6 @@ int drmIoctl(int fd, unsigned long request, void* arg) {
         m->offset = (uint64_t)m->handle << 12;
         return 0;
     }
-    case DRM_IOCTL_MODE_DESTROY_DUMB:
     case DRM_IOCTL_SET_MASTER:
     case DRM_IOCTL_DROP_MASTER:
         return 0;
@@ -1032,8 +1067,26 @@ int close(int fd) {
         // Not ours: never mu (see is_ours()).
         return real_close(fd);
     }
+    int lease = 0, left = 0;
+    uint32_t lessee = 0;
     pthread_mutex_lock(&mu);
     if (is_ours_locked(fd)) {
+        for (int i = 0; i < ndumbs;) {
+            if (dumbs[i].fd == fd) {
+                dumbs[i] = dumbs[--ndumbs];
+                left++;
+            } else {
+                i++;
+            }
+        }
+        for (int i = 0; i < nleases; i++) {
+            if (leases[i].fd == fd) {
+                lease = 1;
+                lessee = leases[i].lessee;
+                leases[i] = leases[--nleases];
+                break;
+            }
+        }
         // Closing a card fd or a lease removes the framebuffers added on it,
         // and takes them off the screen.
         for (int i = 0; i < MAXFBS; i++) {
@@ -1060,6 +1113,10 @@ int close(int fd) {
         mark_ours_locked(fd, 0);
     }
     pthread_mutex_unlock(&mu);
+    const char* log = getenv("FAKEDRM_LOG_DUMBS");
+    if (lease && log && !strcmp(log, "1")) {
+        logf_("close lease %u: %d dumb buffers still on it", lessee, left);
+    }
     return real_close(fd);
 }
 
@@ -1074,6 +1131,10 @@ int drmModeCreateLease(int fd, const uint32_t* objects, int count, int flags, ui
     }
     pthread_mutex_lock(&mu);
     *lessee_id = ++next_lessee;
+    if (nleases < MAXFILES) {
+        leases[nleases].fd = lfd;
+        leases[nleases++].lessee = *lessee_id;
+    }
     pthread_mutex_unlock(&mu);
     logf_("lease %u: %d objects", *lessee_id, count);
     (void)objects;

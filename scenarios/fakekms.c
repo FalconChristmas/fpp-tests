@@ -14,6 +14,14 @@
  *                       the real sink's error.  For a fake card (fakedrm.c)
  *                       to see the plane: the frame is a framebuffer of the
  *                       negotiated format and size, with nothing in it.
+ *   FAKEKMS_POOL        "1": answer the allocation query with a pool of the
+ *                       sink's own, as the real sink does, whose every buffer
+ *                       has a dumb buffer on the sink's fd (the display's
+ *                       lease), destroyed with DESTROY_DUMB on that fd when
+ *                       the buffer is freed.  FAKEKMS_LOG gets "alloc pool
+ *                       <connector-id> <s>" for each buffer the pool makes,
+ *                       and "lostdumb pool <connector-id> <s>" for each
+ *                       DESTROY_DUMB that fails (its fd closed under it).
  *
  * Loaded by pointing GST_PLUGIN_SYSTEM_PATH_1_0 at a directory holding it
  * and every system plugin except libgstkms.so (video.fake_kms_env()).
@@ -84,6 +92,88 @@ static void record(GstFakeKms* self, const char* event) {
             (long)ts.tv_sec, ts.tv_nsec / 1000000);
     g_free(name);
     fclose(f);
+}
+
+static void record_pool(gint connector_id, const char* event) {
+    const char* path = getenv("FAKEKMS_LOG");
+    FILE* f = path ? fopen(path, "a") : NULL;
+    if (!f) {
+        return;
+    }
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    fprintf(f, "%s pool %d %ld.%03ld\n", event, connector_id, (long)ts.tv_sec, ts.tv_nsec / 1000000);
+    fclose(f);
+}
+
+/* FAKEKMS_POOL: buffers of system memory, each with a dumb buffer on the
+ * fd the sink was given, as the real sink's dumb-buffer allocator makes. */
+#define FAKE_TYPE_KMS_POOL (fake_kms_pool_get_type())
+G_DECLARE_FINAL_TYPE(FakeKmsPool, fake_kms_pool, FAKE, KMS_POOL, GstBufferPool)
+
+struct _FakeKmsPool {
+    GstBufferPool parent;
+    gint fd;
+    gint connector_id;
+};
+
+G_DEFINE_TYPE(FakeKmsPool, fake_kms_pool, GST_TYPE_BUFFER_POOL)
+
+static GQuark dumb_quark(void) {
+    return g_quark_from_static_string("fakekms-dumb");
+}
+
+static GstFlowReturn fake_kms_pool_alloc(GstBufferPool* pool, GstBuffer** buffer, GstBufferPoolAcquireParams* params) {
+    FakeKmsPool* self = FAKE_KMS_POOL(pool);
+    GstFlowReturn ret = GST_BUFFER_POOL_CLASS(fake_kms_pool_parent_class)->alloc_buffer(pool, buffer, params);
+    if (ret != GST_FLOW_OK) {
+        return ret;
+    }
+    struct drm_mode_create_dumb c = { .height = 1, .width = (guint32)gst_buffer_get_size(*buffer), .bpp = 8 };
+    if (drmIoctl(self->fd, DRM_IOCTL_MODE_CREATE_DUMB, &c) == 0) {
+        gst_mini_object_set_qdata(GST_MINI_OBJECT(*buffer), dumb_quark(), GUINT_TO_POINTER(c.handle), NULL);
+    }
+    record_pool(self->connector_id, "alloc");
+    return GST_FLOW_OK;
+}
+
+static void fake_kms_pool_free(GstBufferPool* pool, GstBuffer* buffer) {
+    FakeKmsPool* self = FAKE_KMS_POOL(pool);
+    guint handle = GPOINTER_TO_UINT(gst_mini_object_get_qdata(GST_MINI_OBJECT(buffer), dumb_quark()));
+    if (handle) {
+        struct drm_mode_destroy_dumb d = { .handle = handle };
+        if (drmIoctl(self->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &d)) {
+            record_pool(self->connector_id, "lostdumb");
+        }
+    }
+    GST_BUFFER_POOL_CLASS(fake_kms_pool_parent_class)->free_buffer(pool, buffer);
+}
+
+static void fake_kms_pool_class_init(FakeKmsPoolClass* klass) {
+    GstBufferPoolClass* pool = GST_BUFFER_POOL_CLASS(klass);
+    pool->alloc_buffer = fake_kms_pool_alloc;
+    pool->free_buffer = fake_kms_pool_free;
+}
+
+static void fake_kms_pool_init(FakeKmsPool* self) {
+    self->fd = -1;
+}
+
+static gboolean gst_fake_kms_propose_allocation(GstBaseSink* sink, GstQuery* query) {
+    GstFakeKms* self = GST_FAKE_KMS(sink);
+    const char* want = getenv("FAKEKMS_POOL");
+    GstCaps* caps = NULL;
+    gboolean need_pool = FALSE;
+    gst_query_parse_allocation(query, &caps, &need_pool);
+    if (!want || strcmp(want, "1") || self->fd < 0 || !caps) {
+        return FALSE;
+    }
+    FakeKmsPool* pool = g_object_new(FAKE_TYPE_KMS_POOL, NULL);
+    pool->fd = self->fd;
+    pool->connector_id = self->connector_id;
+    gst_query_add_allocation_pool(query, GST_BUFFER_POOL(pool), 0, 2, 0);
+    gst_object_unref(pool);
+    return TRUE;
 }
 
 static gboolean gst_fake_kms_start(GstBaseSink* sink) {
@@ -260,6 +350,7 @@ static void gst_fake_kms_class_init(GstFakeKmsClass* klass) {
     base->stop = gst_fake_kms_stop;
     base->render = gst_fake_kms_render;
     base->set_caps = gst_fake_kms_set_caps;
+    base->propose_allocation = gst_fake_kms_propose_allocation;
 }
 
 static void gst_fake_kms_init(GstFakeKms* self) {
