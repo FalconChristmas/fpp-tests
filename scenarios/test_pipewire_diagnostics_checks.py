@@ -7,6 +7,7 @@ machine; test_pipewire_diagnostics.py has the others."""
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -594,8 +595,20 @@ def test_the_capture_check_records_from_a_source_in_the_graph(fppd, audio):
                                                       text=True).stdout:
             assert time.monotonic() < deadline, "the test source never appeared"
             time.sleep(0.25)
-        subprocess.run(["pw-metadata", "-n", "default", "0", "default.audio.source",
+        # The user's choice goes in default.configured.audio.source, as
+        # `wpctl set-default` and the settings page write it. WirePlumber owns
+        # default.audio.source (the one the script reads) and recomputes it
+        # from that on every graph change, so writing it directly lasted only
+        # until the next rescan: the loopback's ports and links landing after
+        # its node did put it back on the sink's monitor.
+        subprocess.run(["pw-metadata", "-n", "default", "0", "default.configured.audio.source",
                         '{"name":"fpp_test_source"}', "Spa:String:JSON"], env=env(), check=True, timeout=10)
+        deadline = time.monotonic() + 15
+        while not re.search(r"key:'default\.audio\.source' value:'[^']*\"fpp_test_source\"",
+                            subprocess.run(["pw-metadata", "-n", "default"], env=env(), capture_output=True,
+                                           text=True, timeout=10).stdout):
+            assert time.monotonic() < deadline, "WirePlumber never made the test source the default"
+            time.sleep(0.25)
         out = smoke()
         capture = out.split("--- Capture from PipeWire ---", 1)[1].split("---", 1)[0]
         assert "[PASS] Captured " in capture and " bytes from fpp_test_source" in capture, \
