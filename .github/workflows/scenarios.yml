@@ -887,11 +887,12 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      actions: write
       pages: write
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deploy.outputs.page_url || steps.redeploy.outputs.page_url }}
     concurrency:
       group: pages
       cancel-in-progress: false
@@ -927,11 +928,45 @@ jobs:
             "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           rm -f site/coverage/coverage.json
 
+      # A re-run's upload sits beside the first attempt's, and deploy-pages
+      # refuses a run with two github-pages artifacts.
+      - name: Clear an earlier attempt's site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=github-pages" \
+                        --jq '.artifacts[].id'); do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id"
+          done
+
       - name: Upload the site
         uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
+      # The artifact list lags the upload; deploy-pages looks once.
+      - name: Wait for the site to be listed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 12); do
+            n=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=github-pages" \
+                  --jq '.total_count')
+            [ "$n" -ge 1 ] && exit 0
+            sleep 5
+          done
+          echo "::warning::github-pages not listed after 60s"
+
       - name: Deploy
         id: deploy
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+
+      - name: Wait before deploying again
+        if: steps.deploy.outcome == 'failure'
+        run: sleep 30
+
+      - name: Deploy again
+        id: redeploy
+        if: steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v5
