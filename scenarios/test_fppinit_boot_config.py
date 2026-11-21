@@ -278,3 +278,23 @@ def test_a_tether_that_is_already_off_is_left_alone(fppinit):
     assert_clean(tether_removal(fppinit, 0, hostapd=False))
     calls = [c for c in fppinit.calls() if c.startswith("systemctl") and "is-" not in c]
     assert not [c for c in calls if "hostapd" in c or "networkd" in c], calls
+
+
+def test_start_drops_the_cached_system_uuid(fppinit):
+    """fppinit start removes the UUID the web UI cached in /tmp, and the
+    source it came from, so the UI asks get_uuid again on every start.
+
+    Regression: 2895e97ed. In a container /tmp survives restarts and
+    upgrades, so a UUID an older get_uuid took from the image's shared
+    machine-id was served for good, and identical containers kept reporting
+    one identity."""
+    ssh_dir(fppinit, "ssh_host_ecdsa_key", "ssh_host_ecdsa_key.pub", "ssh_host_rsa_key", "ssh_host_rsa_key.pub")
+    fppinit.root_file("/tmp/fpp_uuid", "M4-941e84aaaa5243b78352e939b8955ce7\n")
+    fppinit.root_file("/tmp/fpp_uuid_source", "machine-id\n")
+    cached = "for f in /tmp/fpp_uuid /tmp/fpp_uuid_source; do test -e $f && echo $1:$f; done"
+    r = fppinit._run(["sh", "-c", f"c() {{ {cached}; }}; c before; "
+                      "/opt/fpp/src/fppinit start >/dev/null 2>&1; echo rc=$?; c after"])
+    out = r.stdout
+    assert "before:/tmp/fpp_uuid_source" in out, f"the cache was not set up:\n{out}{r.stderr[-2000:]}"
+    assert "rc=0" in out, out
+    assert "after:" not in out, f"the cached UUID outlived fppinit start:\n{out}"
