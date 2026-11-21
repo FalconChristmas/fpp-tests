@@ -132,3 +132,38 @@ def test_an_upgrade_does_not_wait_for_chrony_it_restarts(fppinit):
     assert any("restart" in c and "chrony" in c for c in fppinit.calls()), fppinit.calls()
     conf = fppinit.written("/etc/chrony/chrony.conf") or ""
     assert "server 10.0.0.1 iburst" in conf, conf
+
+
+def test_a_restore_that_hangs_is_cut_short_and_tried_once_more_next_boot(fppinit):
+    """A settings restore with a step that never returns (here the time
+    zone's) gives up within its time limit, so fppinit can go on to set up
+    the network; it stays queued as settings-retry for the next boot, and a
+    retry that hangs as well is not queued again.
+
+    Regression: d0d1713ef. The restore ran with no limit inside `fppinit
+    start`, so a blocking step held fppinit until systemd killed it at its
+    90 s start timeout, before setupNetwork(); and the action came off
+    BootActions before it ran, so the settings after the step that hung
+    were never applied."""
+    hang = "#!/bin/sh\nexec sleep 300\n"
+    for path in ("/usr/bin/timedatectl", "/usr/sbin/dpkg-reconfigure", "/usr/bin/dpkg-reconfigure"):
+        fppinit.root_file(path, hang)
+    fppinit.settings(BootActions="settings", TimeZone="America/New_York")
+
+    def run():
+        t0 = time.time()
+        try:
+            r = fppinit._run(["php", "-d", "short_open_tag=1", "/opt/fpp/scripts/handle_boot_actions"],
+                             timeout=100, media_home=True)
+        except subprocess.TimeoutExpired:
+            pytest.fail("the restore was still waiting on the step that hangs after 100 s")
+        return time.time() - t0, r.stdout + r.stderr
+
+    took, out = run()
+    assert took < 80, f"the restore took {took:.0f} s"
+    assert "timed out" in out, out[-3000:]
+    assert media_settings(fppinit).get("BootActions") == "settings-retry", media_settings(fppinit)
+
+    took, out = run()
+    assert "Performing boot action: settings-retry" in out, out[-3000:]
+    assert "BootActions" not in media_settings(fppinit), media_settings(fppinit)
