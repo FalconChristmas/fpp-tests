@@ -17,6 +17,12 @@
 //   "simPin"          more of the port's pin config, as a cape gives it
 //                     (enablePin, eFusePin, ...): merged into what fppd gets
 //
+// and, on the output itself:
+//   "simDropTrailingEmpty"  once every port is set up, delete the trailing
+//                     ports with no pixels, last first, as DPIPixels::Init()
+//                     does: their monitors are removed while the ports
+//                     before them are still there
+//
 // Every frame, in test mode, the output hands the strings to the string
 // tester exactly as DPIPixelsOutput::PrepData() does, then writes each
 // port's current: 30 mA dark, plus 60 mA for each pixel on the wire at full
@@ -79,6 +85,15 @@ public:
             ports.back().ps = new PixelString(true);
             if (!ports.back().ps->Init(s, &pin)) {
                 return 0;
+            }
+        }
+        if (config.get("simDropTrailingEmpty", false).asBool()) {
+            while (!ports.empty() && ports.back().ps->m_outputBytes == 0) {
+                delete ports.back().ps;
+                if (ports.back().fd >= 0) {
+                    close(ports.back().fd);
+                }
+                ports.pop_back();
             }
         }
         return ChannelOutput::Init(config);
