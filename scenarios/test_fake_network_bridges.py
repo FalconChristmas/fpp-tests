@@ -5,6 +5,7 @@ on the E1.31 and DDP ports, to warn about data sent to it by mistake
 import socket
 import time
 
+import shims
 from packets import DDP_PORT, E131_PORT, ddp, e131, send
 from test_command_socket import send as command
 
@@ -80,3 +81,21 @@ def test_disable_fake_network_bridges_closes_the_listeners(fppd):
     command("SetSetting,DisableFakeNetworkBridges,0")
     fppd.wait_for(lambda: {E131_PORT, DDP_PORT} <= set(udp_sockets()), timeout=10,
                   what="the fake listeners to open once the setting is 0")
+
+
+def test_a_stray_packet_is_read_without_waiting_for_more_on_a_blocking_socket(fppd):
+    """With the listeners' sockets blocking, as they are on macOS
+    (blockingbridge.c), one stray E1.31 packet still raises its warning
+    and fppd goes on answering.
+
+    Regression: 1bd27890b. The warning's reader was the only one on those
+    sockets without MSG_DONTWAIT, and SOCK_NONBLOCK is 0 on macOS: asked
+    for a batch of 64, recvmmsg held the main loop until 63 more packets
+    came or the watchdog restarted fppd."""
+    fppd.start(preload=[shims.build("blockingbridge.c")])
+    send([e131(1, bytes(10))], E131_PORT)
+    fppd.wait_for(lambda: [w for w in fppd.get("/fppd/status").get("warnings", [])
+                           if w.startswith("Received E1.31")],
+                  timeout=10, what="the warning about the stray E1.31 packet")
+    fppd.command("Outputs Off")
+    fppd.check_alive()
