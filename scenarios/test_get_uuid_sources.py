@@ -12,9 +12,10 @@ import pytest
 TREE = os.environ.get("FPP_TREE", "")
 
 
-def get_uuid(tmp_path, eeprom=None, dt_serial=None, dmi_serial=None, machine_id=None, settings=None):
+def get_uuid(tmp_path, eeprom=None, dt_serial=None, dmi_serial=None, machine_id=None, settings=None, env=None):
     """Run the tree's get_uuid with the given stand-ins (None: absent) and
-    no CPU serial, as on a BeagleBone; its output."""
+    no CPU serial, as on a BeagleBone; its output. `env` is added to its
+    environment."""
     if not TREE:
         pytest.skip("FPP_TREE is not set")
     with open(os.path.join(TREE, "scripts", "get_uuid")) as f:
@@ -46,7 +47,7 @@ def get_uuid(tmp_path, eeprom=None, dt_serial=None, dmi_serial=None, machine_id=
                                 FPP_DOCKERENV=str(tmp_path / "no-dockerenv"),
                                 FPP_CONTAINERFILE=str(tmp_path / "no-container"),
                                 FPP_UUIDFILE=str(tmp_path / "fpp_uuid"),
-                                FPP_UUIDMEDIAFILE=str(tmp_path / "media-fpp_uuid")))
+                                FPP_UUIDMEDIAFILE=str(tmp_path / "media-fpp_uuid"), **(env or {})))
     return r.stdout.strip(), r.stderr
 
 
@@ -131,3 +132,33 @@ def test_get_uuid_takes_the_developer_fpp_uuid_setting_first(tmp_path):
     assert out == "TEST-1234", f"get_uuid gave {out!r}\n{err[-2000:]}"
     out, err = get_uuid(tmp_path, dt_serial=b"FPPDT0012345\x00", settings=b'HostName = "x"\n')
     assert out == "M3-FPPDT0012345", f"get_uuid gave {out!r}\n{err[-2000:]}"
+
+
+def test_a_machine_id_baked_into_an_old_image_is_replaced_not_reported(tmp_path):
+    """A board whose machine-id is one an old image shipped (every board
+    flashed from it has the same one) gets a fresh machine-id, and reports
+    M4-<the new one>; the real dbus copy it was seeded from becomes a link
+    to /etc/machine-id.
+
+    Regression: 1c60a33ce. get_uuid reported the image's machine-id, so
+    boards from the same image with no hardware serial (a PocketBeagle 2
+    with a blank EEPROM) advertised one UUID between them."""
+    shared = "941e84aaaa5243b78352e939b8955ce7"  # in the 9.x images
+    dbus = tmp_path / "dbus-machine-id"
+    dbus.write_text(shared + "\n")
+    # sudo and flock as get_uuid runs them, unprivileged: the files are ours
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "sudo").write_text('#!/bin/sh\nexec "$@"\n')
+    (bindir / "flock").write_text('#!/bin/sh\nshift\nexec "$@"\n')
+    for f in ("sudo", "flock"):
+        (bindir / f).chmod(0o755)
+    out, err = get_uuid(tmp_path, machine_id=f"{shared}\n".encode(),
+                        env={"PATH": f"{bindir}:{os.environ['PATH']}",
+                             "FPP_MACHINEID": str(tmp_path / "machine-id"),
+                             "FPP_DBUSMACHINEID": str(dbus)})
+    assert out != f"M4-{shared}", f"get_uuid reported the image's shared machine-id\n{err[-2000:]}"
+    now = (tmp_path / "machine-id").read_text().strip()
+    assert now != shared and len(now) == 32, f"machine-id is now {now!r}\n{err[-2000:]}"
+    assert out == f"M4-{now}", f"get_uuid gave {out!r} for machine-id {now}\n{err[-2000:]}"
+    assert dbus.is_symlink(), "the dbus copy is still a file of its own"
