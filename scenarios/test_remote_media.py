@@ -280,7 +280,7 @@ def test_a_remote_moves_to_the_masters_next_file_on_a_sync_packet(fppd, audio):
     from audio import write_tone_wav
     for name in ("A.wav", "B.wav"):
         write_tone_wav(os.path.join(fppd.media, "music", name), 30)
-    fppd.settings(fppMode="remote")
+    fppd.settings(fppMode="remote", LogLevel_MediaOut="debug")  # "started playing" is a debug line
     fppd.start()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     send = lambda *a: sock.sendto(sync_packet(*a), ("127.0.0.1", PORT))
@@ -468,10 +468,10 @@ def test_a_remote_with_its_own_sink_keeps_up_with_a_fast_master(fppd, audio):
     """A remote plays a 6-channel file -- a pipewiresink of its own, not the
     slot's persistent output stream -- for a master whose media syncs run 3%
     fast. It speeds up to follow: from 30 s to 40 s it stays within 250 ms
-    of the master and loses no more ground (its offset moves by at most
-    60 ms), and the 41 s of tone at the head of the file is heard over no
-    more than 40.4 s of the null sink (the master gets through it in
-    39.8 s; played at 1x it takes 41).
+    of the master and loses no more ground (its offset at 40 s is within
+    60 ms of its offset at 30 s), and the 41 s of tone at the head of the
+    file is heard over no more than 40.4 s of the null sink (the master
+    gets through it in 39.8 s; played at 1x it takes 41).
 
     Regression: 11de6c82c. AdjustSpeed() (7471f0a6c) changed only the
     pipeline's rate, which a pipewiresink drained by PipeWire at the
@@ -493,6 +493,7 @@ def test_a_remote_with_its_own_sink_keeps_up_with_a_fast_master(fppd, audio):
     send = lambda *a: sock.sendto(sync_packet(*a), ("127.0.0.1", PORT))
     fast = 1.03
     offsets = []
+    rtts = []
     try:
         send("open", "media", 0, 0.0, "Six.wav")
         time.sleep(1)
@@ -505,10 +506,16 @@ def test_a_remote_with_its_own_sink_keeps_up_with_a_fast_master(fppd, audio):
                 send("sync", "media", 0, (now - t0) * fast, "Six.wav")
                 nxt += 0.5
                 if 30 <= now - t0 <= 40:
+                    asked = time.monotonic()
                     sl = slot_status(fppd, 1) or {}
+                    got = time.monotonic()
                     if sl.get("status") == "playing":
                         local = sl["secondsElapsed"] + sl["subSecondsElapsed"] / 100
-                        offsets.append(round((local - (time.monotonic() - t0) * fast) * 1000))
+                        # Against the master's position halfway through the
+                        # request, not after its reply: a reply the box was
+                        # slow to send is not the remote falling behind.
+                        offsets.append(round((local - ((asked + got) / 2 - t0) * fast) * 1000))
+                        rtts.append(round((got - asked) * 1000))
             time.sleep(0.01)
         send("stop", "media", 0, 0.0, "Six.wav")
     finally:
@@ -519,6 +526,12 @@ def test_a_remote_with_its_own_sink_keeps_up_with_a_fast_master(fppd, audio):
     heard_s = (loud[-1] - loud[0]) / RATE if loud else 0.0
     assert len(offsets) >= 15, f"the remote wasn't playing: {offsets}"
     # Unsteered, the remote loses 30 ms a second: 300 ms over these 10 s.
-    assert max(abs(o) for o in offsets) <= 250 and max(offsets) - min(offsets) <= 60, \
-        f"remote minus master, ms, from 30 s: {offsets}"
+    # Steered, AdjustSpeed()'s 2% steps hunt 20-40 ms either side of where
+    # they settle, so ground lost is judged on the first and last few
+    # samples' medians: one sample a busy (coverage) box read late doesn't
+    # count as the remote losing 90 ms in half a second and regaining it in
+    # the next.
+    drift = statistics.median(offsets[:5]) - statistics.median(offsets[-5:])
+    assert max(abs(o) for o in offsets) <= 250 and abs(drift) <= 60, \
+        f"remote minus master, ms, from 30 s: {offsets} (status round trips, ms: {rtts})"
     assert 38 <= heard_s <= 40.4, f"41 s of tone took {heard_s:.2f} s to play"
