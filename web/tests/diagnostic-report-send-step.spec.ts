@@ -113,7 +113,7 @@ for (const [code, said] of [
   ['busy', 'A report build is already running. Please wait a moment and try again.'],
   ['rate-limited', 'A report was just built. Please wait a few seconds and try again.'],
   ['build-failed', 'The report build failed on the player. Please try again, or check Troubleshooting.'],
-  ['unavailable', 'fppd is running but did not respond. Try restarting FPPD, then try again.'],
+  ['unavailable', 'fppd did not respond, and the report could not be built on the player. Please try again.'],
 ] as const) {
   test(`a build refused as ${code} is said in words, and Build Report can be pressed again`, async ({ page }) => {
     await wizard(page, { build: { Status: 'ERROR', Code: code, Message: 'raw' } });
@@ -129,3 +129,19 @@ test('a report built while fppd is down says what it has instead', async ({ page
   await expect(page.locator('#errorReportStatus')).toContainText('fppd is not running, so this report was built without it.');
   await expect(page.locator('#errorReportDownloadText')).toContainText(FILE);
 });
+
+test('a report built after fppd failed says so, and offers the download', async ({ page }) => {
+  await wizard(page, { build: { Status: 'OK', File: FILE, Size: 1000, Fppd: 'unavailable' } });
+  await next(page);
+  await expect(page.locator('#errorReportStatus')).toContainText('fppd could not build the report, so this one was built without it.');
+  await expect(page.locator('#errorReportDownloadText')).toContainText(FILE);
+});
+
+test('a minimal report says it is minimal instead of claiming a full one', async ({ page }) => {
+  await wizard(page, { build: { Status: 'OK', File: FILE, Size: 1000, Fppd: 'unavailable', Minimal: true } });
+  await next(page);
+  await expect(page.locator('#errorReportStatus')).toContainText('this is a minimal report with basic system information only');
+  await expect(page.locator('#errorReportStatus')).not.toContainText('It includes fppd');
+  await expect(page.locator('#errorReportDownloadText')).toContainText(FILE);
+});
+
