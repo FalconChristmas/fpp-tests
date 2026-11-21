@@ -1153,3 +1153,27 @@ def test_media_with_no_pipewire_to_connect_to_leaves_fppd_running(fppd):
         fppd.check_alive()
     assert "could not connect" in fppd.log(), \
         "the output stream never tried to connect, so this proves nothing:\n" + fppd.tail(30)
+
+
+def test_a_looping_clip_logs_nothing_per_pass(fppd, audio):
+    """A playlist that plays one short clip over and over -- each pass a new
+    media output, as a remote looping its master's video is -- writes nothing
+    to fppd.log per pass at the default log levels: the lines a pass used to
+    write are debug, and the warning that there is no sink latency to correct
+    by is said once, not at every pass.
+
+    Regression: 6d4992f64. Each pass wrote "StartMediaOutput: Calling
+    Start()" (at warn), "GStreamer started playing", the free CMA after the
+    close and often "End of stream": about a thousand lines an hour of
+    steady playback, on an SD card."""
+    write_tone_wav(os.path.join(fppd.media, "music", "Clip.wav"), 1, freq=1000, amplitude=0.2)
+    fppd.write("playlists/Loop.json", playlist("Loop", [
+        {"type": "media", "enabled": 1, "playOnce": 0, "mediaName": "Clip.wav"}]))
+    fppd.start()
+    fppd.command("Start Playlist", "Loop", "true", "false")
+    time.sleep(4)  # past whatever is said once, at the first passes
+    before = len(fppd.log().splitlines())
+    time.sleep(8)
+    grown = [l for l in fppd.log().splitlines()[before:] if "[MediaOut]" in l]
+    fppd.command("Stop Now")
+    assert not grown, f"{len(grown)} media lines logged over 8 one-second passes of a clip:\n" + "\n".join(grown[:20])

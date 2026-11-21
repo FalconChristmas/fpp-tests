@@ -1,7 +1,7 @@
 commit	outcome	test	proof	note	subject	release	area	feature	where
 4ec27d33a	todo		none	auto: not examined yet	perf(media): give a finished track's freed memory back to the system	unreleased	media	Media: audio & video	docker
 78fa09d48	todo		none	auto: not examined yet	BBB image: make a PocketBeagle 2 booted from it flash its LEDs	unreleased	.github	Boot, OS image & install	os-image
-6d4992f64	todo		none	auto: not examined yet	fix(media): a looping clip writes no log line per pass	unreleased	media	Media: audio & video	docker
+6d4992f64	new-test	scenarios/test_media.py::test_a_looping_clip_logs_nothing_per_pass	red-green-parent	parent: 24 [MediaOut] lines over 8 one-second passes (End of stream, GStreamer started playing, Calling Start, post-close CmaFree)	fix(media): a looping clip writes no log line per pass	unreleased	media	Media: audio & video	docker
 af8786738	named	scenarios/test_media.py::test_an_empty_audio_groups_file_logs_no_error_per_song	unreviewed	auto: a test names this commit; check it fails without it	fix(common): an empty JSON file is empty, not a parse error	unreleased	common	fppd core & utilities	docker
 b1c12b087	todo		none	auto: not examined yet	Open button: don't add controllers to the proxy list	unreleased	js	Other channel outputs	web
 6f90bbc16	todo		none	auto: not examined yet	Open button: go through the FPP proxy	unreleased	js	Other channel outputs	web
