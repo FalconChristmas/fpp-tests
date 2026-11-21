@@ -102,3 +102,22 @@ test('the list is in the disks\' order when the media partition is listed, rever
   expect(opts.map(([d]) => d)).toEqual([...NODES].sort().reverse().concat('elsewhere9'));
   expect(opts.filter(([, , s]) => s).map(([d]) => d), 'the selected entry').toEqual(['elsewhere9']);
 });
+
+test('a partition name with shell syntax in it is passed to the disk tools as one argument', async ({ request }) => {
+  // Regression: c3e457b02.  The names read from /dev went into sfdisk and df
+  // command lines unquoted, so a node named "sdz2;<command>" ran the command.
+  // This one would leave a file in /tmp (no '/' can be in a name).
+  const injected = '/tmp/fpp-tests-storage-injected';
+  const node = 'sdz2;cd $(dirname $(mktemp -u));touch fpp-tests-storage-injected';
+  inPlayer('rm', '-f', injected);
+  standIn('sdz1');
+  inPlayer('touch', `/dev/${node}`);
+  try {
+    await options(request);
+  } finally {
+    inPlayer('rm', '-f', `/dev/${node}`);
+  }
+  const left = inPlayer('sh', '-c', `test -e ${injected} && echo yes || echo no`).trim();
+  inPlayer('rm', '-f', injected);
+  expect(left, 'a command in a /dev name ran').toBe('no');
+});
