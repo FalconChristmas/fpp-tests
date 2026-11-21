@@ -1128,3 +1128,28 @@ def test_an_empty_audio_groups_file_logs_no_error_per_song(fppd, audio):
                       what="the player to go idle after the song")
     errors = [l for l in fppd.log().splitlines() if "Error parsing JSON string" in l]
     assert not errors, f"{len(errors)} JSON parse errors logged for an empty groups file: {errors[:3]}"
+
+
+def test_media_with_no_pipewire_to_connect_to_leaves_fppd_running(fppd):
+    """With PipeWire chosen for media but no PipeWire server running (it
+    hasn't come up yet, or it died), playing media fails to connect the
+    slot's output stream, and fppd carries on: it says so, and the next
+    try fails the same way.
+
+    Regression: 9b1acf558. Once the output stream had been created, the
+    failed connect destroyed the stream's PipeWire thread loop twice -- once
+    in CloseLocked() and again because the check of whether it was still
+    ours came after CloseLocked() had cleared it -- and fppd crashed in
+    pw_thread_loop_destroy() on the first media to play."""
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 1, freq=1000, amplitude=0.2)
+    fppd.settings(MediaBackend="pipewire-simple", PipeWireSinkName="fpp_test_sink")
+    fppd.start()
+    for _ in range(2):
+        try:
+            fppd.command("Play Media", "Tone.wav", "1", "0", "1")
+        except urllib.error.HTTPError:
+            pass  # refused is fine; crashing is the bug
+        time.sleep(2)
+        fppd.check_alive()
+    assert "could not connect" in fppd.log(), \
+        "the output stream never tried to connect, so this proves nothing:\n" + fppd.tail(30)
