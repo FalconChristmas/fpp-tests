@@ -1177,3 +1177,41 @@ def test_a_looping_clip_logs_nothing_per_pass(fppd, audio):
     grown = [l for l in fppd.log().splitlines()[before:] if "[MediaOut]" in l]
     fppd.command("Stop Now")
     assert not grown, f"{len(grown)} media lines logged over 8 one-second passes of a clip:\n" + "\n".join(grown[:20])
+
+
+def test_a_songs_lights_stop_with_its_sound_when_its_length_is_off(fppd, audio):
+    """A sequence+media entry whose sequence outlasts its song, and whose
+    song's length on record is 300 ms longer than its sound (as a VBR mp3's
+    often is): the lights stop when the last of the sound is heard, not
+    300 ms after it, where the length says the song ends.
+
+    Regression: 73b753504. At the media's end of stream the sequence ran
+    on for the media's length less how far the sequence had got, and the
+    length is the file's metadata (here, the web UI's cached probe of it):
+    the lights ran on to the length, past the sound."""
+    secs = 2.4
+    frames = unique_frames(400, CHANNELS)  # 4 s at 10 ms
+    write_fseq(os.path.join(fppd.media, "sequences", "Song.fseq"), frames, step_ms=10)
+    wav = write_tone_wav(os.path.join(fppd.media, "music", "Song.wav"), secs, freq=1000, amplitude=0.2)
+    fppd.write("config/media_durations.cache",
+               {"Song.wav": {"filesize": os.path.getsize(wav), "duration": f"{secs + 0.3:.3f}"}})
+    fppd.write("playlists/Song.json", playlist("Song", [{
+        "type": "both", "enabled": 1, "playOnce": 0,
+        "sequenceName": "Song.fseq", "mediaName": "Song.wav"}]))
+    fppd.write("config/co-universes.json", ddp_output(CHANNELS))
+    fppd.settings(DisableFakeNetworkBridges="1")
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        fppd.command("Start Playlist", "Song", "false", "false")
+        time.sleep(secs + 2.5)
+        received = rx.snapshot()
+    lookup = {bytes(f[:CHANNELS]): i for i, f in enumerate(frames)}
+    sent = [lookup[bytes(d[:CHANNELS])] for _, d in received if bytes(d[:CHANNELS]) in lookup]
+    assert sent, "no frame of the sequence was sent"
+    last = max(sent)
+    print(f"last frame sent: {last} (the sound ends at frame {int(secs * 100)})")
+    # The lights follow the sound, a little behind it in a container.
+    assert last <= secs * 100 + 12, \
+        f"the lights ran to frame {last}, {(last - secs * 100) * 10:.0f} ms past the end of the sound"
+    assert last >= secs * 100 - 30, f"the lights stopped at frame {last}, well before the sound ended"
+
