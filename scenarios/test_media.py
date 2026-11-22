@@ -1215,3 +1215,26 @@ def test_a_songs_lights_stop_with_its_sound_when_its_length_is_off(fppd, audio):
         f"the lights ran to frame {last}, {(last - secs * 100) * 10:.0f} ms past the end of the sound"
     assert last >= secs * 100 - 30, f"the lights stopped at frame {last}, well before the sound ended"
 
+
+
+def test_a_stream_reopened_between_songs_logs_nothing(fppd, audio):
+    """At the default media log level, songs with a silence between them
+    longer than the output stream's idle time -- the stream closes in the
+    gap and opens again for the next song -- log nothing about the stream.
+
+    Fixed by b4a4de094. Each opening, ready and closing (idle) was logged at
+    info: a playlist alternating clips with sound and soundless videos wrote
+    three lines per pass, about 66 KB of fppd.log an hour on a 15 s loop."""
+    write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 1, freq=1000, amplitude=0.2)
+    song = {"type": "media", "enabled": 1, "playOnce": 0, "mediaName": "Tone.wav"}
+    gap = {"type": "pause", "enabled": 1, "playOnce": 0, "duration": 7}
+    fppd.write("playlists/Gaps.json", playlist("Gaps", [song, gap, song, gap, song]))
+    fppd.settings(LogLevel_MediaOut="info")
+    fppd.start()
+    fppd.command("Start Playlist", "Gaps", "false", "false")
+    time.sleep(2)
+    fppd.wait_for(lambda: status(fppd).get("status_name") == "idle", timeout=40,
+                  what="the playlist to finish")
+    lines = [l for l in fppd.log().splitlines() if "PipeWire output stream" in l and
+             ("opening on" in l or "ready on" in l or "closing (idle)" in l)]
+    assert not lines, f"{len(lines)} routine stream lines logged at the default level: {lines[:3]}"
