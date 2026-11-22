@@ -81,6 +81,12 @@ race_top:PixelOverlayModel::needRefresh
 # child's lock then. Other threads reach playlists only through the Player's
 # current snapshot, m_parent chains or PL_CLEANUPS. Don't rework the insert
 # path to silence this.
+#
+# These patterns match any stack through PlayImpl or Resume, so they also hid
+# a real inversion: PlayImpl() stopping the levels under a published insert
+# while holding its parent's lock (fpp 49f635194, which made a running level
+# that is not current hand the start to the current one first). Any new path
+# that locks a child while holding its parent must be checked by hand.
 deadlock:Playlist::PlayImpl
 deadlock:Playlist::Resume
 

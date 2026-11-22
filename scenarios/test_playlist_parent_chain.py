@@ -25,6 +25,14 @@ def test_starts_and_stops_while_playlists_are_inserted(fppd):
     main loop freed it while the first was still reading it -- a
     use-after-free (TSan: m_status read in SetIdle against the delete in
     DrainRetiredPlaylists).
+
+    Regression: fpp 49f635194. A start handed on after that stop reached the
+    parent while a new insert was playing under it, and PlayImpl stopped the
+    insert under the parent's lock while a Stop Now of the insert, holding
+    its lock, waited in Resume for the parent's: a lock-order deadlock that
+    wedged every HTTP thread and the main loop. Timing-dependent -- it
+    failed some nightlies and no local run; the fix was proved from the
+    nightly's gdb backtrace, not red-before-green.
     """
     fppd.write("playlists/P.json", playlist("P", main=[step(1), pause(1), step(2), pause(60)]))
     fppd.write("playlists/Q.json", {"name": "Q", "repeat": 0, "loopCount": 0, "leadIn": [],
@@ -78,6 +86,12 @@ def test_a_stop_drops_an_insert_still_waiting_to_start(fppd):
     fppd.start()
     start(fppd, "P")
     wait_trace(fppd, "12")
+    # The step has run but may still be the current entry for a moment, and
+    # an insert after a finished entry starts on the next tick: Stop Now
+    # would then stop Q (one level, as it is meant to) and P would resume.
+    # Insert once P is in the 60 s pause, so the insert is still waiting.
+    fppd.wait_for(lambda: status(fppd).get("current_playlist", {}).get("type") == "pause",
+                  what="P's 60 s pause")
     fppd.command("Insert Playlist After Current", "Q", "-1", "-1", "false")
     fppd.command("Stop Now")
     wait_idle(fppd)
