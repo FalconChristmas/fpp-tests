@@ -131,9 +131,13 @@ test.describe('in India', () => {
       if (await page.locator('#osPasswordEnable').isVisible()) await page.selectOption('#osPasswordEnable', '0');
       await page.click('#finishSetupBtn');
       // Where Finish ends up: the status page, or the wizard's error dialog.
-      await expect.poll(async () => /index\.php/.test(page.url()) ? 'status page'
-        : (await page.locator('.modal.show, .ui-dialog:visible').allInnerTexts()).join(' ').replace(/\s+/g, ' ').trim() || 'still waiting',
-      { timeout: 60_000 }).toBe('status page');
+      // A throw ends expect.poll at once, and Finish's navigation to the status
+      // page can destroy the page under allInnerTexts(): poll on through it.
+      await expect.poll(async () => {
+        if (/index\.php/.test(page.url())) return 'status page';
+        const shown = await page.locator('.modal.show, .ui-dialog:visible').allInnerTexts().catch(() => null);
+        return shown === null ? 'navigating' : shown.join(' ').replace(/\s+/g, ' ').trim() || 'still waiting';
+      }, { timeout: 60_000 }).toBe('status page');
       // The lookup puts the browser's zone in the list under the name the
       // list has (Asia/Calcutta -> Asia/Kolkata), and Finish stores it.
       expect(sent.TimeZone, 'the time zone sent').toBe('Asia/Kolkata');
