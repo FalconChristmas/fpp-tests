@@ -66,11 +66,12 @@ test('a saved command for a Multisync host opens with the lists from that host',
   // saved for another player showed this player's lists, so a playlist
   // only that player has could not be shown as the one chosen.
   const REMOTE_ONLY = 'fpp-tests-on-the-host-only';
+  const REMOTE_ONLY_TOO = 'fpp-tests-on-the-host-only-too';
   await put(request, { command: 'Start Playlist', args: [REMOTE_ONLY, 'false', 'false'], multisyncCommand: true, multisyncHosts: HOST });
   const asked: string[] = [];
   await page.route(/\/proxy\/192\.0\.2\.77\//, (route) => {
     asked.push(new URL(route.request().url()).pathname);
-    return route.fulfill({ json: [REMOTE_ONLY] });
+    return route.fulfill({ json: [REMOTE_ONLY, REMOTE_ONLY_TOO] });
   });
   await page.goto('/index.php');
   await page.locator('button', { hasText: 'Run FPP Command' }).click();
@@ -78,5 +79,9 @@ test('a saved command for a Multisync host opens with the lists from that host',
   await expect(dialog.locator('#editorCommand')).toHaveValue('Start Playlist', { timeout: 15_000 });
   await expect(dialog.locator('#tblCommandEditor_multisync')).toBeChecked();
   await expect(dialog.locator('#tblCommandEditor_arg_1')).toHaveValue(REMOTE_ONLY);
-  expect(asked).toContain(`/proxy/${HOST}/api/playlists/playable`);
+  // The list is loaded after the editor opens, so the request and the
+  // second name come when they come.
+  await expect.poll(() => asked).toContain(`/proxy/${HOST}/api/playlists/playable`);
+  await expect.poll(() => dialog.locator('#tblCommandEditor_arg_1 option').evaluateAll((os) => os.map((o: any) => o.value)),
+    { message: "the host's whole list" }).toEqual([REMOTE_ONLY, REMOTE_ONLY_TOO]);
 });
