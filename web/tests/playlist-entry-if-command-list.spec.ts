@@ -166,3 +166,56 @@ test('an If picked into an If entry\'s list takes its own commands, and the pick
   expect(commandsOf(then[0].args[1])).toEqual([setVariable('fppTestsNested', 'deep')]);
   expect(errors).toEqual([]);
 });
+
+// Picks a command with no arguments into the list whose Add Command was
+// clicked, after optionally browsing the picker through another command.
+async function pickPlain(page: Page, command: string, browseFirst?: string) {
+  const dialog = picker(page);
+  await expect(dialog.locator('#btnSaveEditorCommand')).toHaveValue('Add Command', { timeout: 15_000 });
+  if (browseFirst) {
+    await dialog.locator('#editorCommand').selectOption(browseFirst);
+    await expect(dialog.locator('#tblCommandEditor input[value="+ Add Command"]').first()).toBeVisible();
+  }
+  await dialog.locator('#editorCommand').selectOption(command);
+  await dialog.locator('#btnSaveEditorCommand').click();
+}
+
+// An If picked into the entry's list, with Stop Now already in its Then list:
+// the picker, back as that If.
+async function nestedIfWithStopNow(page: Page) {
+  await openEditor(page);
+  const entry = await newIfEntry(page);
+  await entry.locator('#playlistEntryCommandOptions input[value="+ Add Command"]').first().click();
+  const dialog = picker(page);
+  await expect(dialog.locator('#btnSaveEditorCommand')).toHaveValue('Add Command', { timeout: 15_000 });
+  await dialog.locator('#editorCommand').selectOption('If');
+  await dialog.locator('#tblCommandEditor input[value="+ Add Command"]').first().click();
+  await pickPlain(page, 'Stop Now');
+  await expect(dialog.locator('#editorCommand')).toHaveValue('If', { timeout: 15_000 });
+  await expect(dialog.locator('#tblCommandEditor_arg_2_container .cmdListLabel')).toHaveText(['Stop Now']);
+  return dialog;
+}
+
+test('a second pick into a nested If\'s list keeps the first', async ({ page }) => {
+  // The control for the test below: the same picks, without browsing the
+  // second picker through If.
+  const dialog = await nestedIfWithStopNow(page);
+  await dialog.locator('#tblCommandEditor input[value="+ Add Command"]').first().click();
+  await pickPlain(page, 'Stop Gracefully');
+  await expect(dialog.locator('#editorCommand')).toHaveValue('If', { timeout: 15_000 });
+  await expect(dialog.locator('#tblCommandEditor_arg_2_container .cmdListLabel')).toHaveText(['Stop Now', /^Stop Gracefully/]);
+});
+
+test('a second pick into a nested If\'s list keeps the first, even when the picker was set to If on the way', async ({ page }) => {
+  // FPP bug (~/FUTURE.md "#3209 follow-ups", "a nested If wipes the outer
+  // list's earlier rows"): every command editor uses tblCommandEditor_arg_N
+  // ids, so the second picker drawing an If (even only browsing to it) resets
+  // commandListState['tblCommandEditor_arg_2'], the nested If's own list, and
+  // the pick then lands in the emptied list: Stop Now is gone.
+  test.fail(true, 'browsing the picker to If empties the nested If\'s list (FPP bug)');
+  const dialog = await nestedIfWithStopNow(page);
+  await dialog.locator('#tblCommandEditor input[value="+ Add Command"]').first().click();
+  await pickPlain(page, 'Stop Gracefully', 'If');
+  await expect(dialog.locator('#editorCommand')).toHaveValue('If', { timeout: 15_000 });
+  await expect(dialog.locator('#tblCommandEditor_arg_2_container .cmdListLabel')).toHaveText(['Stop Now', /^Stop Gracefully/], { timeout: 5_000 });
+});

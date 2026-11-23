@@ -104,3 +104,29 @@ test('an fppDialog closed after it is shown closes', async ({ page }) => {
   await page.evaluate(() => (window as any).$('#fppTestsJqShown').fppDialog('close'));
   await expect(page.locator('#fppTestsJqShown')).toBeHidden();
 });
+
+test("a click on a dialog's header × while it is still fading in closes it once it is shown", async ({ page }) => {
+  // FPP bug (~/FUTURE.md "A dialog's header × does nothing while the dialog
+  // fades in"): the × (common/footer.inc, data-bs-dismiss="modal") goes
+  // straight to Bootstrap, whose hide() returns while the fade-in runs, so the
+  // click is dropped and the dialog stays open.  CloseModalDialog() waits for
+  // the fade; the × does not use it.  Seen on the Schedule Preview, whose
+  // fade-in is about half a second.
+  test.fail(true, 'the header × is dropped during the fade-in (FPP bug)');
+  await page.evaluate(() => {
+    (window as any).DoModalDialog({ id: 'fppTestsXFade', title: 'fpp-tests', body: 'quick', buttons: {} });
+    (document.querySelector('#fppTestsXFade .btn-close') as HTMLElement).click();
+  });
+  await settled(page, 'fppTestsXFade');
+  await expect(page.locator('#fppTestsXFade')).toBeHidden({ timeout: 2000 });
+});
+
+test("a click on a dialog's header × once it is shown closes it", async ({ page }) => {
+  // The control for the test above.
+  await open(page, 'fppTestsXShown', 'shown');
+  const dialog = page.locator('#fppTestsXShown');
+  await expect(dialog).toBeVisible();
+  await settled(page, 'fppTestsXShown');
+  await dialog.locator('.btn-close').click();
+  await expect(dialog).toBeHidden();
+});
