@@ -12,6 +12,8 @@ const PLAYLIST = 'fpp-tests-preview-holiday';
 const HOLIDAY = { name: 'fpp-tests Holiday', shortName: 'FppTestsHoliday', year: 0 };
 
 test.describe('schedule preview holiday names', () => {
+  // schedulePreview.php is a fragment: loaded alone it calls SetupToolTips without fpp.js.
+  test.use({ allowPageErrors: true });
   let before: unknown;
   let holidays: string | null;
 

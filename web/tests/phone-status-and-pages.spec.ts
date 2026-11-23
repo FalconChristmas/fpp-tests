@@ -123,7 +123,8 @@ test('a playlist entry can be added and the playlist saved by tapping', async ({
   await expect.poll(async () => (await (await request.get(`/api/playlist/${NAME}`)).json()).mainPlaylist.length).toBe(2);
 });
 
-for (const path of ['/index.php', '/playlists.php', `/playlistEditor.php?playlist=${NAME}`, '/scheduler.php', '/filemanager.php', '/settings.php', '/about.php']) {
+// playlistEditor.php is a fragment of playlists.php (no jQuery of its own); ?playlist= opens it there.
+for (const path of ['/index.php', '/playlists.php', `/playlists.php?playlist=${NAME}`, '/scheduler.php', '/filemanager.php', '/settings.php', '/about.php']) {
   test(`${path} does not scroll sideways on a phone`, async ({ page }) => {
     await page.goto(path);
     await page.waitForLoadState('networkidle').catch(() => {});

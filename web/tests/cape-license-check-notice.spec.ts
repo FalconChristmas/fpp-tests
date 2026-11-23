@@ -48,7 +48,7 @@ async function visit(page: Page, reach: boolean) {
     if (new URL(r.request().url()).searchParams.get('lc') === '1') vendor.push(r.request().url());
     return reach ? r.fulfill({ body: '' }) : r.abort('internetdisconnected');
   });
-  await page.route('**/api/cape/eeprom/vendors**', (r) => r.fulfill({ json: { index: [] } }));
+  await page.route('**/api/cape/eeprom/vendors**', (r) => r.fulfill({ json: { vendors: [], index: [] } }));
   page.on('request', (r) => {
     if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/cape/licenseCheck') reports.push(JSON.parse(r.postData() || '{}'));
   });

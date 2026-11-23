@@ -34,6 +34,8 @@ async function previewSpacers(page: Page, request: APIRequestContext, schedule: 
 }
 
 test.describe('schedule preview indent columns', () => {
+  // schedulePreview.php is a fragment: loaded alone it calls SetupToolTips without fpp.js.
+  test.use({ allowPageErrors: true });
   let before: unknown;
   const year = new Date().getFullYear();
   // Every day, so the preview has rows whatever today is.

@@ -40,6 +40,10 @@ test('a setting whose save reloads the page still records the restart it needs',
   }
 });
 
+// The callback throws on purpose; the test checks that error itself.
+test.describe(() => {
+test.use({ allowPageErrors: true });
+
 test("a setting's restart is recorded even when its save callback fails", async ({ page }) => {
   // Regression: e0a25d514.  The flags were set after the callback, so a
   // callback that reloads the page or throws ran first; one that throws left
@@ -59,6 +63,7 @@ test("a setting's restart is recorded even when its save callback fails", async 
   await expect.poll(() => settingInFile('restartFlag'), { timeout: 10_000 }).toBe('1');
   // The receiving end: the header shows the restart request.
   await expect(page.locator('#restartFlag')).toBeVisible();
+});
 });
 
 test('a saved value the select no longer offers is replaced by the default, and fppd uses it', async ({ page, request }) => {

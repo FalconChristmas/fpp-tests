@@ -38,7 +38,7 @@ async function openTab(page: Page, answers: string[]) {
     flashes.push({ query: q, body: r.request().postDataBuffer()?.toString('latin1') ?? '' });
     return r.fulfill({ body: answers[flashes.length - 1] ?? 'Done\n' });
   });
-  await page.route('**/api/cape/eeprom/vendors**', (r) => r.fulfill({ json: { index: [] } }));
+  await page.route('**/api/cape/eeprom/vendors**', (r) => r.fulfill({ json: { vendors: [], index: [] } }));
   await page.goto('/cape-info.php');
   await page.locator('#eeprom-upgrade-tab').click();
   await expect(page.locator('#backupFile')).toBeVisible();

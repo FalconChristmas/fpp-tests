@@ -31,13 +31,24 @@ export function retryGotoOnNetworkChange(page: Page, errorText = NETWORK_CHANGED
   };
 }
 
-export const test = base.extend({
+// Every test fails if the page threw an uncaught exception (`pageerror`), e.g. a
+// ReferenceError in a click handler (fpp #3209), whether or not the test looked
+// for it. A test that expects one opts out with test.use({ allowPageErrors: true })
+// (a file, or a describe block), saying why. A page that lost a script (no
+// response, e.g. a dropped connection under load) throws for want of it, not
+// for a fault in FPP, so then the errors are noted on the test, not thrown.
+export const test = base.extend<{ allowPageErrors: boolean }>({
+  allowPageErrors: [false, { option: true }],
   context: async ({ context }, use) => {
     await coveringContext(context, use);
   },
-  page: async ({ page, request }, use) => {
+  page: async ({ page, request, allowPageErrors }, use, testInfo) => {
     await startCoverage(page);
     retryGotoOnNetworkChange(page);
+    const pageErrors: string[] = [];
+    page.on('pageerror', (e) => pageErrors.push(e.stack || String(e)));
+    const lostScripts: string[] = [];
+    page.on('requestfailed', (r) => { if (r.resourceType() === 'script') lostScripts.push(r.url()); });
     await request.put('/api/settings/themeOverride', { data: '' });
     await use(page);
     // A page that polls (status, warnings) can have a routed request in
@@ -54,6 +65,12 @@ export const test = base.extend({
       new Promise<void>((resolve) => { timer = setTimeout(resolve, 5_000); }),
     ]);
     clearTimeout(timer);
+    if (pageErrors.length && !allowPageErrors) {
+      const report = `${pageErrors.length} uncaught page error(s):\n${pageErrors.join('\n---\n')}`;
+      if (!lostScripts.length) throw new Error(report);
+      testInfo.annotations.push({ type: 'page errors after lost scripts',
+        description: `${report}\nscripts with no response:\n${lostScripts.join('\n')}` });
+    }
   },
 });
 

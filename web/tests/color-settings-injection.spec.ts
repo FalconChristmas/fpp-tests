@@ -59,6 +59,10 @@ test.describe('color settings holding a quote', () => {
     await assertNotInjected(page);
   });
 
+  // schedulePreview.php is a fragment: loaded alone it calls SetupToolTips without fpp.js.
+  test.describe('as a fragment', () => {
+  test.use({ allowPageErrors: true });
+
   test('the schedule preview puts neither into its markup', async ({ page, request }) => {
     await request.delete(`/api/playlist/${PLAYLIST}`);
     const before = await (await request.get('/api/schedule')).json();
@@ -89,5 +93,6 @@ test.describe('color settings holding a quote', () => {
       await request.post('/api/schedule/reload');
       await request.delete(`/api/playlist/${PLAYLIST}`);
     }
+  });
   });
 });
