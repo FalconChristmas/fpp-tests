@@ -40,7 +40,7 @@ def test_outputs_saved_just_after_a_test_stop_leave_the_command_socket_answering
     next 3 s the command socket answers within 0.5 s every time; the run
     repeats five times.
 
-    Regression: 52249174f. The output thread held outputThreadLock
+    Regression: 0db35e5cf. The output thread held outputThreadLock
     through its 2.5 s idle wait, and the reload on the main loop waited for
     that lock: the main loop stopped for the rest of the wait, GetTestMode
     went unanswered past the UI's 1 s timeout, and the Display Testing page
