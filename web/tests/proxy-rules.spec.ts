@@ -173,18 +173,23 @@ test('the DHCP server\'s subnet is proxied as fppinit writes it', async () => {
   }
 });
 
-test('a WebSocket through /proxy reaches the controller', async () => {
+test('a WebSocket through /proxy reaches the controller', async ({ page }) => {
   // Regression: 0f6e2bca4 ("fix websocket handling in proxies").  The
   // upgrade rule matched only one-character hosts and paths, and sent them to
   // this player's own Host: an ESPixelStick's or WLED's live view through
   // /proxy never connected.
-  const base = new URL(test.info().project.use.baseURL!);
-  const message = await new Promise<string>((resolve) => {
-    const ws = new WebSocket(`ws://${base.host}/proxy/${ctl}/ws`);
-    const timer = setTimeout(() => resolve('timed out'), 10_000);
-    ws.onmessage = (e) => { clearTimeout(timer); ws.close(); resolve(String(e.data)); };
-    ws.onerror = () => { clearTimeout(timer); resolve('refused'); };
-  });
+  // Opened in the browser, as the live view does (the runner's Node has no
+  // WebSocket before 22); a page of the player's own gives it the origin.
+  await page.goto('/api/system/info');
+  const message = await page.evaluate(
+    ([path]) => new Promise<string>((resolve) => {
+      const ws = new WebSocket(`ws://${location.host}${path}`);
+      const timer = setTimeout(() => resolve('timed out'), 10_000);
+      ws.onmessage = (e) => { clearTimeout(timer); ws.close(); resolve(String(e.data)); };
+      ws.onerror = () => { clearTimeout(timer); resolve('refused'); };
+    }),
+    [`/proxy/${ctl}/ws`],
+  );
   expect(message).toBe('controller:80:/ws');
 });
 
