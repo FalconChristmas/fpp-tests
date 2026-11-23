@@ -110,14 +110,14 @@ test('an Upgrade with nothing chosen says so, and a mismatched vendor image is f
   const alerts: string[] = [];
   page.on('dialog', (d) => { alerts.push(d.message()); return d.accept(); });
   // Nothing in the version list and no file: the Upgrade is refused.
-  await page.evaluate(() => { $('#UpdateFirmware').prop('disabled', false); $('#eepromVendorCapeVersions').append("<option value='' selected></option>"); });
+  await page.evaluate(() => { (window as any).$('#UpdateFirmware').prop('disabled', false); (window as any).$('#eepromVendorCapeVersions').append("<option value='' selected></option>"); });
   await page.click('#UpdateFirmware');
   await expect.poll(() => alerts).toEqual(['You must choose a downloadable file from the list or pick a local file to upload.']);
   expect(flashes).toHaveLength(0);
 
   // A version from the list: posted as filename, then forced after the question.
   const url = 'https://vendor.fpp-tests.invalid/fpp-tests%20F48.bin';
-  await page.evaluate((u) => { $('#eepromVendorCapeVersions').append($('<option>').val(u).text('3.0')).val(u); }, url);
+  await page.evaluate((u) => { (window as any).$('#eepromVendorCapeVersions').append((window as any).$('<option>').val(u).text('3.0')).val(u); }, url);
   await page.click('#UpdateFirmware');
   await expect.poll(() => flashes.length).toBe(2);
   expect(alerts[1]).toContain('Firmware: fpp-tests F48 v3');

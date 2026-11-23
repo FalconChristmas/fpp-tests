@@ -91,7 +91,7 @@ test('a snapshot without breadcrumbs clears the nested playlist label', async ({
   });
   await page.goto('/index.php');
   await expect.poll(() => socket !== undefined, { timeout: 15_000 }).toBe(true);
-  let current = { ...playing, breadcrumbs: ['Main'] };
+  let current: Status = { ...playing, breadcrumbs: ['Main'] };
   const timer = setInterval(() => socket!.send(snapshot(current)), 500);
   try {
     const label = page.locator('#txtPlayerStatusLabel');

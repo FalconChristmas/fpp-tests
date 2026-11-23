@@ -36,6 +36,6 @@ test('a range argument shows its value beside the slider and follows it', async 
   await expect(shown).toHaveText('73');
 
   // Loading a saved value sets the slider and fires change.
-  await slider.evaluate((el: HTMLInputElement) => { $(el).val('12').change(); });
+  await slider.evaluate((el: HTMLInputElement) => { (window as any).$(el).val('12').change(); });
   await expect(shown).toHaveText('12');
 });

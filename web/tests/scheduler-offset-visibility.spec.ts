@@ -28,7 +28,7 @@ test('a time offset shows only beside dawn, sunrise, sunset or dusk', async ({ p
 
   // A row with no time has no offset.
   await page.evaluate(() => {
-    const r = $('#tblScheduleBody > tr').last();
+    const r = (window as any).$('#tblScheduleBody > tr').last();
     r.find('.schStartTime').val('');
     (window as any).SetRowDateTimeFieldVisibility(r);
   });
@@ -40,7 +40,7 @@ test('a time offset shows only beside dawn, sunrise, sunset or dusk', async ({ p
     await start.fill(sun);
     await start.press('Tab');
     await expect(offset, `offset beside ${sun}`).toBeVisible();
-    await page.evaluate(() => (window as any).SetRowDateTimeFieldVisibility($('#tblScheduleBody > tr').last()));
+    await page.evaluate(() => (window as any).SetRowDateTimeFieldVisibility((window as any).$('#tblScheduleBody > tr').last()));
     await expect(offset, `offset beside ${sun} after a refresh`).toBeVisible();
   }
   await start.fill('19:30');

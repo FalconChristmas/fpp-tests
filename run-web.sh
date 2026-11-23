@@ -64,11 +64,15 @@ docker build -q -t fpp-tests-web "$HERE/docker/web" > /dev/null
 $DOCKER -v "$ARTIFACTS:/artifacts" fpp-tests-env find /artifacts -mindepth 1 -delete ||
     echo "warning: could not empty $ARTIFACTS; is another run using it? (--artifacts DIR)" >&2
 
-$DOCKER -v "$HERE:/tests:ro" fpp-tests-env /tests/scripts/build-fpp.sh "$TREE" "$FLAVOR"
-
-if [ ! -d "$HERE/web/node_modules" ]; then
+# Packages first (a checkout from before typescript was added installs again),
+# then the specs' type check, so a broken spec fails before the fpp build.
+if [ ! -d "$HERE/web/node_modules" ] || [ ! -d "$HERE/web/node_modules/typescript" ]; then
     (cd "$HERE/web" && npm ci --no-audit --no-fund && npx playwright install chromium)
 fi
+echo "Type-checking the specs (node $(node --version))"
+(cd "$HERE/web" && npx tsc --noEmit -p .) || { echo "error: the specs do not type-check" >&2; exit 1; }
+
+$DOCKER -v "$HERE:/tests:ro" fpp-tests-env /tests/scripts/build-fpp.sh "$TREE" "$FLAVOR"
 
 WWW_ENV=
 if [ -n "$WWW_COVERAGE" ]; then
