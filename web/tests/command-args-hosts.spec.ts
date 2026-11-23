@@ -15,6 +15,10 @@ import { snapshotSettings } from './settings-file';
 // fppd reads.  The Run FPP Command dialog has its own tests of each type
 // (command-editor, condition-editor and command-editor-subcommand specs), and
 // an inline If's command list its own #3209 spec.
+//
+// 68b85bb6b: in the Playlist Editor an argument that shows or hides others
+// (Set Variable's Set To, the Text effect's Color Mode) never did, because
+// they were wired to the handler for the entry type's own arguments.
 
 const NAME = 'fpp-tests-argshosts';
 const VAR = 'fppTestsArgsHosts';
@@ -295,10 +299,8 @@ const recurring: Host = {
 const PL_TBL = 'playlistEntryCommandOptions';
 const playlist: Host = {
   name: 'Playlist Editor',
-  // The inline If's Add Command is the #3209 regression spec's.  Set
-  // Variable's Set To shows no Expression row here (UpdateChildVisibility
-  // walks the entry type's arguments, not the command's), so it isn't tested.
-  types: ['conditionlist', 'subcommand'],
+  // The inline If's Add Command is the #3209 regression spec's.
+  types: ['conditionlist', 'expression', 'subcommand'],
   async keep(request) {
     return async () => { await request.delete(`/api/playlist/${NAME}`); };
   },
@@ -429,3 +431,33 @@ for (const host of [presets, scheduler, recurring, playlist, gpio]) {
     }
   });
 }
+
+test('the Text effect\'s Color Mode shows its colour fields in the Playlist Editor, and they are saved', async ({ page, request }) => {
+  // Regression: 68b85bb6b.  Picking a Gradient Color Mode never showed the
+  // Palette, extra colours or Color Speed in a playlist entry.
+  const level = String((await (await request.get('/api/settings/uiLevel')).json()).value ?? '0');
+  await request.put('/api/settings/uiLevel', { data: '1' }); // Color Mode is an Advanced argument
+  const restorePlaylist = await playlist.keep(request);
+  const thrown: string[] = [];
+  page.on('pageerror', (e) => thrown.push(e.message));
+  try {
+    const a = await playlist.open(page, request, 'Overlay Model Effect');
+    await a.scope.locator('select.arg_Effect').selectOption('Text');
+    const color2 = a.scope.locator('.arg_row_Color2 input[type=color]');
+    await expect(color2).toBeHidden();
+    await a.scope.locator('select.arg_ColorMode').selectOption('Gradient Horizontal');
+    await expect(color2).toBeVisible();
+    await expect(a.scope.locator('.arg_row_Palette')).toBeVisible();
+    await color2.fill('#123456');
+    const saved = await playlist.save(page, request);
+    expect(saved.args).toEqual(expect.arrayContaining(['Text', 'Gradient Horizontal', '#123456']));
+
+    const r = await playlist.reopen(page);
+    await expect(r.scope.locator('select.arg_ColorMode')).toHaveValue('Gradient Horizontal');
+    await expect(r.scope.locator('.arg_row_Color2 input[type=color]')).toHaveValue('#123456');
+    expect(thrown, 'the page threw').toEqual([]);
+  } finally {
+    await restorePlaylist();
+    await request.put('/api/settings/uiLevel', { data: level || '0' });
+  }
+});
