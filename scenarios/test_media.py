@@ -1222,7 +1222,7 @@ def test_a_stream_reopened_between_songs_logs_nothing(fppd, audio):
     longer than the output stream's idle time -- the stream closes in the
     gap and opens again for the next song -- log nothing about the stream.
 
-    Fixed by b4a4de094. Each opening, ready and closing (idle) was logged at
+    Fixed by 54309f092. Each opening, ready and closing (idle) was logged at
     info: a playlist alternating clips with sound and soundless videos wrote
     three lines per pass, about 66 KB of fppd.log an hour on a 15 s loop."""
     write_tone_wav(os.path.join(fppd.media, "music", "Tone.wav"), 1, freq=1000, amplitude=0.2)
