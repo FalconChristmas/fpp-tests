@@ -386,6 +386,39 @@ async function getRowOrder(page: Page): Promise<string[]> {
     );
 }
 
+/**
+ * Bounding box of the nth reorder grip, re-read until the grip is laid out.
+ * A poll's re-render replaces every row; boundingBox() returns null for a grip
+ * that is momentarily detached or not yet laid out, so take the box right before
+ * it is used and retry instead of assuming the first read succeeds.
+ */
+async function gripBox(page: Page, n: number) {
+    const grip = page.locator('#fppSystems tr.systemRow .reorder-grip').nth(n);
+    let box: { x: number; y: number; width: number; height: number } | null = null;
+    await expect.poll(async () => {
+        box = await grip.boundingBox();
+        return box !== null && box.width > 0 && box.height > 0;
+    }).toBe(true);
+    return box!;
+}
+
+/**
+ * Counts table renders (bootstrap-table initBody calls) from now on in
+ * window.__renders, so a test can wait for a render it caused instead of sleeping.
+ */
+async function countRenders(page: Page) {
+    await page.evaluate(() => {
+        const bt = (window as any).jQuery('#fppSystemsTable').data('bootstrap.table');
+        (window as any).__renders = 0;
+        const orig = bt.initBody;
+        bt.initBody = function (...a: any[]) {
+            const r = orig.apply(this, a);
+            (window as any).__renders++;
+            return r;
+        };
+    });
+}
+
 // ============================================================
 // Test setup
 // ============================================================
@@ -530,9 +563,8 @@ test('Reorder mode: drag order survives auto-refresh', async ({ page }) => {
     // single move, which a slower machine's sortable can miss, so move in steps: from
     // grip[0] to just below the middle of grip[1] swaps the two rows ('pointer'
     // tolerance fires when the dragged item passes the midpoint of its neighbour).
-    const grips = page.locator('#fppSystems tr.systemRow .reorder-grip');
-    const from = (await grips.nth(0).boundingBox())!;
-    const to = (await grips.nth(1).boundingBox())!;
+    const from = await gripBox(page, 0);
+    const to = await gripBox(page, 1);
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
     await page.mouse.move(to.x + to.width / 2, to.y + to.height * 0.75, { steps: 20 });
@@ -542,9 +574,15 @@ test('Reorder mode: drag order survives auto-refresh', async ({ page }) => {
     await expect.poll(() => getRowOrder(page)).not.toEqual(before);
     const afterDrag = await getRowOrder(page);
 
-    // Wait for the next scheduled poll — the tick that previously reset the order.
+    // Force a refresh and wait for the render it causes.  Reorder mode schedules no
+    // new polls (isUserInteracting), and the one already queued when the mode was
+    // entered may land before or during the drag, so waiting for "the next poll"
+    // can wait forever.  Refresh Stats runs the same RefreshStats() a tick does.
+    await countRenders(page);
     const poll2 = nextStatusPoll(page);
+    await page.locator('#refreshStatsButton').click();
     await poll2;
+    await page.waitForFunction(() => (window as any).__renders > 0);
 
     const afterRefresh = await getRowOrder(page);
     expect(afterRefresh).toEqual(afterDrag);
@@ -570,13 +608,21 @@ test('Reorder mode: a refresh while the mouse is down does not break the drag', 
     await grips.first().waitFor({ state: 'visible' });
     const before = await getRowOrder(page);
 
-    const from = (await grips.nth(0).boundingBox())!;
-    const to = (await grips.nth(1).boundingBox())!;
+    const from = await gripBox(page, 0);
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await countRenders(page);
     await page.mouse.down();
-    await nextStatusPoll(page);
-    // Let the poll's re-render run before the drag starts.
-    await page.waitForTimeout(500);
+    // Reorder mode schedules no new polls and the one queued on entry may already
+    // have landed (under load it does), so don't wait for a timer: run the same
+    // RefreshStats() a tick runs, with the button held, and wait for the render it
+    // attempts.  The patched initBody defers it while the grip is held; the counter
+    // wraps that, so it also counts a deferred attempt.
+    const poll = nextStatusPoll(page);
+    await page.evaluate(() => (window as any).RefreshStats());
+    await poll;
+    await page.waitForFunction(() => (window as any).__renders > 0);
+    // Re-take the target now: the grip may be a different node than before mousedown.
+    const to = await gripBox(page, 1);
     await page.mouse.move(to.x + to.width / 2, to.y + to.height * 0.75, { steps: 20 });
     await page.mouse.up();
 
