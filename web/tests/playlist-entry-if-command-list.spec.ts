@@ -219,3 +219,36 @@ test('a second pick into a nested If\'s list keeps the first, even when the pick
   await expect(dialog.locator('#editorCommand')).toHaveValue('If', { timeout: 15_000 });
   await expect(dialog.locator('#tblCommandEditor_arg_2_container .cmdListLabel')).toHaveText(['Stop Now', /^Stop Gracefully/], { timeout: 5_000 });
 });
+
+test('an If two levels down takes its pick, and each picker comes back in turn', async ({ page }) => {
+  // FPP bug (~/FUTURE.md "#3209 follow-ups", "commandListPendingOuterReopen is
+  // a single slot, not a stack"): the pick into the inner If's list saves the
+  // inner picker to reopen over the one saved for the outer If, so after the
+  // inner If is added, the outer If's picker never comes back and the inner
+  // If is dropped.  One level down (the test above) works.
+  test.fail(true, 'a second level of If overwrites the saved reopen (FPP bug)');
+  await openEditor(page);
+  const entry = await newIfEntry(page);
+  await entry.locator('#playlistEntryCommandOptions input[value="+ Add Command"]').first().click();
+  const dialog = picker(page);
+  const add = dialog.locator('#tblCommandEditor input[value="+ Add Command"]').first();
+  // Outer If.
+  await expect(dialog.locator('#btnSaveEditorCommand')).toHaveValue('Add Command', { timeout: 15_000 });
+  await dialog.locator('#editorCommand').selectOption('If');
+  await add.click();
+  // Inner If.
+  await expect(dialog.locator('#btnSaveEditorCommand')).toHaveValue('Add Command', { timeout: 15_000 });
+  await dialog.locator('#editorCommand').selectOption('If');
+  await add.click();
+  await pickPlain(page, 'Stop Now');
+  // The inner If's picker, with Stop Now.
+  await expect(dialog.locator('#editorCommand')).toHaveValue('If', { timeout: 15_000 });
+  await expect(dialog.locator('#tblCommandEditor_arg_2_container .cmdListLabel')).toHaveText(['Stop Now']);
+  await dialog.locator('#btnSaveEditorCommand').click();
+  // The outer If's picker, with the inner If.
+  await expect(dialog.locator('#editorCommand')).toHaveValue('If', { timeout: 15_000 });
+  await expect(dialog.locator('#tblCommandEditor_arg_2_container .cmdListLabel')).toHaveText([/^If: .*Stop Now/], { timeout: 5_000 });
+  await dialog.locator('#btnSaveEditorCommand').click();
+  await expect(dialog).toBeHidden();
+  await expect(entry.locator('#playlistEntryCommandOptions_arg_2_container .cmdListLabel')).toHaveText(/^If: .*If: .*Stop Now/);
+});

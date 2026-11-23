@@ -279,3 +279,55 @@ test('Set Variable warns that a bare name in Expression is stored as text, and t
   await again.locator('#btnSaveEditorCommand').click();
   await expect.poll(() => variable(request, VAR), { timeout: 10_000 }).toBe('11');
 });
+
+test.describe('a picker opened from an If\'s Then Run list', () => {
+  // A bare condition, as in the preset test above.
+  const TRUE = { source: 'Expression', name: '1', comparator: 'equal to', value: '1', not: false };
+
+  // The Run FPP Command dialog as an If, with the picker for its Then Run
+  // list open on top, fully shown.
+  async function openPicker(page: Page, request: APIRequestContext) {
+    await put(request, INSTANT, { command: 'If', args: [JSON.stringify(TRUE), '[]', 'Sequential', '', 'Sequential'] });
+    const dialog = await openDialog(page);
+    await expect(dialog.locator('#editorCommand')).toHaveValue('If');
+    await dialog.locator('#tblCommandEditor input[value="+ Add Command"]').first().click();
+    await expect(dialog.locator('#btnSaveEditorCommand')).toHaveValue('Add Command', { timeout: 15_000 });
+    // Shown, not fading in: Bootstrap drops a hide asked for in the fade.
+    await page.waitForFunction(() => {
+      const m = (window as any).bootstrap.Modal.getInstance(document.getElementById('commandEditorPopup'));
+      return m && m._isShown && !m._isTransitioning;
+    });
+    return dialog;
+  }
+
+  // The If's editor is back, as the Run FPP Command dialog.
+  async function expectIfBack(page: Page) {
+    const dialog = page.locator('#commandEditorPopup');
+    await expect(dialog.locator('#editorCommand')).toHaveValue('If', { timeout: 15_000 });
+    await expect(dialog.locator('#btnSaveEditorCommand')).toHaveValue('Run and Close');
+  }
+
+  test('cancelled, it gives the If\'s editor back', async ({ page, request }) => {
+    // The control for the two tests below.
+    const dialog = await openPicker(page, request);
+    await dialog.locator('#btnCancelCommandEditor').click();
+    await expectIfBack(page);
+  });
+
+  for (const [how, close] of [
+    ['Esc', (page: Page) => page.keyboard.press('Escape')],
+    ['its ×', (page: Page) => page.locator('#commandEditorPopup .modal-header .btn-close, #commandEditorPopup .modal-header [data-bs-dismiss="modal"]').first().click()],
+  ] as const) {
+    test(`closed with ${how}, it gives the If's editor back as Cancel does`, async ({ page, request }) => {
+      // FPP bug (~/FUTURE.md "#3209 follow-ups", "closing the picker with ×,
+      // Esc or a click outside it skips CommandEditorCancel"): fppDialog's
+      // close is data-bs-dismiss and Esc is not turned off, so the picker
+      // just closes; the If's editor never comes back, and the reopen it had
+      // saved (commandListPendingOuterReopen) is left set for the next pick.
+      test.fail(true, `closing the picker with ${how} skips CommandEditorCancel (FPP bug)`);
+      await openPicker(page, request);
+      await close(page);
+      await expectIfBack(page);
+    });
+  }
+});
