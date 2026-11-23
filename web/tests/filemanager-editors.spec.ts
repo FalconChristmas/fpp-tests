@@ -39,6 +39,10 @@ function row(page: Page, table: string, name: string) {
 async function openTab(page: Page, tab: 'scripts' | 'config', table: string, name: string) {
   await page.goto(`/filemanager.php?fpp-tests=${Date.now()}`);
   await page.locator(`#tab-${tab}-tab`).click();
+  // A tab's table is set up by Bootstrap Table only once the tab is shown,
+  // and that first render drops a row selection made before it: the buttons
+  // then go back to disabled.  Click the row only once the table is set up.
+  await expect(page.locator(`.bootstrap-table #tbl${table}`)).toBeAttached();
   await row(page, table, name).click();
 }
 
