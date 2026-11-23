@@ -71,9 +71,15 @@ test('Preview offers the nested table and the calendar view of the schedule', as
   await expect(preview).toBeVisible({ timeout: 15_000 });
 
   await preview.click();
+  const shown = page.evaluate(
+    () => new Promise<void>((resolve) => document.addEventListener('shown.bs.modal', () => resolve(), { once: true })),
+  );
   await page.locator('.dropdown-menu.show .dropdown-item', { hasText: 'Nested Table View' }).click();
   const table = page.locator('#schedulePreview');
   await expect(table.locator('.modal-title')).toHaveText('Schedule Preview: Nested Table View');
+  // Bootstrap ignores hide() while the fade-in is still running, so a close
+  // click before 'shown' leaves the modal open.  Wait for that event.
+  await shown;
   await table.locator('.modal-header .close, .modal-header [data-bs-dismiss="modal"]').first().click();
   await expect(table).toBeHidden();
 
