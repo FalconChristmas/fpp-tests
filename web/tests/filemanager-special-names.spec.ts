@@ -5,6 +5,9 @@ import { putFile } from './settings-file';
 import { answerUpdateCheck } from './standin-http';
 import { fseqV2 } from './fseq';
 
+// The player answers with an error on purpose here: Sequence Info for a sequence that has gone is one of its tests.
+test.use({ allowFailedRequests: [/^GET \/api\/sequence\/\S*gone\S*\/meta 404/] });
+
 // File and playlist names with characters a URL gives a meaning to: "#" (a
 // fragment), "?" (a query), "+" and "%".  The File Manager put such names
 // into API paths as they were, so Sequence Info, Copy, Rename, the script

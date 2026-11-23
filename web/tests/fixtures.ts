@@ -1,5 +1,5 @@
 import { test as base } from '@playwright/test';
-import type { Page, Request } from '@playwright/test';
+import type { BrowserContext, Page, Request, Response, Route } from '@playwright/test';
 import { coveringContext, startCoverage } from './www-coverage';
 
 // Chrome here runs on the host, beside the containers. A container or Docker
@@ -31,18 +31,73 @@ export function retryGotoOnNetworkChange(page: Page, errorText = NETWORK_CHANGED
   };
 }
 
+// Requests a test's own route.fulfill() answered with an error status: the
+// test asked for that failure, so it is not one of the player's.  A fulfill
+// that passes the player's response on ({ response }, no status of its own)
+// keeps the player's status, and counts.
+const stubbedFailures = new WeakSet<Request>();
+type RouteHandler = (route: Route, request: Request) => unknown;
+function markStubbedFailures(target: Page | BrowserContext) {
+  const route = target.route.bind(target) as (url: any, handler: RouteHandler, options?: any) => Promise<void>;
+  (target as any).route = (url: any, handler: RouteHandler, options?: any) => route(url, (r: Route, req: Request) => {
+    const fulfill = r.fulfill.bind(r);
+    r.fulfill = (o?: Parameters<Route['fulfill']>[0]) => {
+      if (o?.status !== undefined && o.status >= 400) stubbedFailures.add(req);
+      return fulfill(o);
+    };
+    return handler(r, req);
+  }, options);
+}
+
 // Every test fails if the page threw an uncaught exception (`pageerror`), e.g. a
 // ReferenceError in a click handler (fpp #3209), whether or not the test looked
 // for it. A test that expects one opts out with test.use({ allowPageErrors: true })
 // (a file, or a describe block), saying why. A page that lost a script (no
 // response, e.g. a dropped connection under load) throws for want of it, not
 // for a fault in FPP, so then the errors are noted on the test, not thrown.
-export const test = base.extend<{ allowPageErrors: boolean }>({
+//
+// Every test also fails if one of the player's own responses to the page was
+// an error (4xx/5xx) that the test did not ask for with a route of its own: a
+// save the page reports as done while its request failed, a missing script or
+// image, a PHP fatal behind an XHR.  A test that expects one opts out with
+// test.use({ allowFailedRequests: [/\/api\/thing/] }) (patterns matched against
+// "METHOD /path?query 500"), or true for all, saying why.
+// Reads a page makes on purpose for a config that may not have been saved,
+// and handles a 404 as "nothing saved yet" (e.g. co-other.php GetChannelOutputs,
+// channelinputs.php, outputs.js getUniverses, scheduler.php LoadUserHolidays,
+// gpio.php loadGPIOConfig, recurringtasks.php LoadTasks, RunCommandDialog in
+// fpp.js, the Virtual Display's background), and plugins.php's icons for listed plugins, which the player
+// fetches from the plugin's own site and the test container cannot reach.
+// None is a fault on a fresh player, so no test has to opt out of them.
+const BY_DESIGN = [
+  /^GET \/api\/channel\/output\/(co-[\w-]+|universeOutputs|universeInputs|dmxInputs)(\?\S*)? 404$/,
+  /^GET \/api\/configfile\/(user-holidays|gpio|recurringtasks|instantCommand)\.json(\?\S*)? 404$/,
+  /^GET \/api\/plugin\/[^/]+\/icon(\?\S*)? 404$/,
+  // virtualdisplaybody.php tries the background a user may have uploaded.
+  /^GET \/api\/file\/Images\/virtualdisplaybackground\.jpg 404$/,
+];
+
+export const test = base.extend<{ allowPageErrors: boolean; allowFailedRequests: boolean | RegExp[] }>({
   allowPageErrors: [false, { option: true }],
+  allowFailedRequests: [false, { option: true }],
   context: async ({ context }, use) => {
+    markStubbedFailures(context);
     await coveringContext(context, use);
   },
-  page: async ({ page, request, allowPageErrors }, use, testInfo) => {
+  page: async ({ page, request, allowPageErrors, allowFailedRequests, baseURL }, use, testInfo) => {
+    markStubbedFailures(page);
+    const origin = new URL(baseURL ?? 'http://127.0.0.1').origin;
+    const failedRequests: Promise<string>[] = [];
+    page.on('response', (r: Response) => {
+      const req = r.request();
+      if (r.status() < 400 || stubbedFailures.has(req)) return;
+      const url = new URL(r.url());
+      if (url.origin !== origin) return;
+      const line = `${req.method()} ${url.pathname}${url.search} ${r.status()}`;
+      if (BY_DESIGN.some((p) => p.test(line))) return;
+      if (Array.isArray(allowFailedRequests) && allowFailedRequests.some((p) => p.test(line))) return;
+      failedRequests.push(r.text().then((t) => `${line}: ${t.replace(/\s+/g, ' ').slice(0, 200)}`, () => line));
+    });
     await startCoverage(page);
     retryGotoOnNetworkChange(page);
     const pageErrors: string[] = [];
@@ -70,6 +125,10 @@ export const test = base.extend<{ allowPageErrors: boolean }>({
       if (!lostScripts.length) throw new Error(report);
       testInfo.annotations.push({ type: 'page errors after lost scripts',
         description: `${report}\nscripts with no response:\n${lostScripts.join('\n')}` });
+    }
+    if (failedRequests.length && allowFailedRequests !== true) {
+      const lines = await Promise.all(failedRequests);
+      throw new Error(`${lines.length} failed request(s) to the player that the test did not ask for:\n${lines.join('\n')}`);
     }
   },
 });

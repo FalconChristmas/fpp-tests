@@ -3,6 +3,9 @@ import type { Page } from '@playwright/test';
 import { container, inPlayer } from './container';
 import { MEDIA, exists, putFile, readFile } from './settings-file';
 
+// The player answers with an error on purpose here: a rename or copy onto a file that exists is refused, and that is what it tests.
+test.use({ allowFailedRequests: [/^POST \/api\/file\/Scripts\/(rename|copy)\/\S+ 409/] });
+
 // The File Manager's Rename and Copy buttons ask for a name with a prompt and
 // post it (fpp.js RenameFile / CopyFile ->
 // POST /api/file/<dir>/rename|copy/<source>/<dest>, files_rename / files_copy

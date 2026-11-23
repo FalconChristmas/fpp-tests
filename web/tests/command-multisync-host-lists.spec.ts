@@ -1,6 +1,9 @@
 import { test, expect } from './fixtures';
 import type { APIRequestContext } from '@playwright/test';
 
+// The player answers with an error on purpose here: its Multisync host is a TEST-NET address nothing answers on.
+test.use({ allowFailedRequests: [/^GET \/proxy\/192\.0\.2\.77\//] });
+
 // The command editor's Multisync Hosts field.  An argument that offers a
 // list (Start Playlist's playlist) fills it from the machine the command
 // will run on; choosing a host loads the list from that host, through the

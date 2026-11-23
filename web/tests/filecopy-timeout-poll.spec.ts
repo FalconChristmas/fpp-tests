@@ -1,6 +1,9 @@
 import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
 
+// The player answers with an error on purpose here: a File Copy log that is gone is what it tests.
+test.use({ allowFailedRequests: [/^GET \/api\/file\/Logs\/fpp_backup_filecopy_\S+ 404/] });
+
 // When a File Copy's stream is cut off (a proxy timeout, a dropped
 // connection) the dialog falls back to polling the copy's progress feed,
 // api/file/Logs/fpp_backup_filecopy_<id>.log, once a second, and takes the

@@ -3,6 +3,9 @@ import { whenModalShown } from './dialogs';
 import type { Page } from '@playwright/test';
 import { container, inPlayer } from './container';
 
+// The player answers with an error on purpose here: entries whose files are gone are what it tests.
+test.use({ allowFailedRequests: [/^GET \/api\/(sequence\/fpp-tests-gone-\S+\/meta|media\/fpp-tests-gone-\S+\/duration) 404/] });
+
 // An entry added in the playlist editor is measured as it goes in: its length
 // comes from the file, and a file that isn't there is said so on the row.  The
 // lists in the New Entry modal are read when it opens, so the way to add a

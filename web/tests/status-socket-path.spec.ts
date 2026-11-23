@@ -1,6 +1,9 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 
+// The player answers with an error on purpose here: its pages are served under a made-up path, where the page's own relative requests find nothing.
+test.use({ allowFailedRequests: [/^GET \/fpp-tests-(sub|prefix)\//] });
+
 // The status WebSocket (fppdws) is opened by js/fpp.js at a URL built in the
 // browser, so it has to work out for itself where the site's root is.
 

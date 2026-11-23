@@ -3,6 +3,9 @@ import type { APIRequestContext, Page } from '@playwright/test';
 import { container, inPlayer } from './container';
 import { answerUpdateCheck } from './standin-http';
 
+// The player answers with an error on purpose here: a config file that cannot be read is one of its tests.
+test.use({ allowFailedRequests: [/^GET \/api\/file\/Config\/fpp-tests-\S+ 404/] });
+
 // The File Manager's editors: Edit in the Scripts tab (api/scripts/<name>),
 // and, at the Developer UI level, Edit and Delete in the Config tab
 // (api/file/Config/<name>).  What is opened, saved, kept on Cancel, and what

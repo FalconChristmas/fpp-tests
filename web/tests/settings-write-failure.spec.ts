@@ -4,6 +4,9 @@ import { keepingSettings, setSettingInFile } from './privacy-helpers';
 import { putFile } from './settings-file';
 import { denying, preloadDeny, unpreloadDeny } from './fakedeny';
 
+// The player answers with an error on purpose here: a setting the player cannot write is what it tests.
+test.use({ allowFailedRequests: [/^PUT \/api\/settings\/\w+ 500/] });
+
 // A setting the player can't write is reported as not saved, and not
 // applied.  On a player the way in is a settings file a stray root write left
 // root's, which the web user (fpp) can't open for writing; here php-fpm runs

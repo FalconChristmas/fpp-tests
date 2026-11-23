@@ -2,6 +2,9 @@ import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
 import { putFile } from './settings-file';
 
+// The player answers with an error on purpose here: the status page asks for a picked media file's playlist details as if it were a playlist (PopulatePlaylistDetailsEntries; ~/FUTURE.md).
+test.use({ allowFailedRequests: [/^GET \/api\/playlist\/fpp-tests-\S+\.(wav|mp3|fseq)\?mergeSubs=1 404/] });
+
 // The status page's playlist picker lists the media files too, and picking
 // one starts it as a playlist of its own (index.php, PopulatePlaylists(true)).
 

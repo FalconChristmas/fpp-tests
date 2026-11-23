@@ -1,5 +1,8 @@
 import { test, expect } from './fixtures';
 
+// The player answers with an error on purpose here: an error reply is what it tests.
+test.use({ allowFailedRequests: [/^GET \/restartRemoteFPPD\.php\S* 400/] });
+
 // StreamURL() (js/fpp.js) is what every progress dialog streams through.
 
 test('each streamed run is its own request, never a cached copy of the last', async ({ page }) => {

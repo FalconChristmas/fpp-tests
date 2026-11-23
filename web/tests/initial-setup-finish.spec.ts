@@ -4,6 +4,9 @@ import http from 'http';
 import { container, inPlayer } from './container';
 import { setSettingInFile, settingInFile, snapshotSettings } from './settings-file';
 
+// The player answers with an error on purpose here: the UI password it sets then guards the page it goes on to.
+test.use({ allowFailedRequests: [/^GET \/index\.php 401/] });
+
 // The setup wizard, run again over this player (initialSetup-02 back to 0):
 // what it shows before it is finished, and what finishing it with a UI
 // password saves.  The settings file is put back after each test, and a UI

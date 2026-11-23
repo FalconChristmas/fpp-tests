@@ -4,6 +4,9 @@ import { container, inPlayer } from './container';
 import { CONFIG, exists, readFile, writeFile } from './pw-helpers';
 import { settingInFile, setSettingInFile } from './settings-file';
 
+// The player answers with an error on purpose here: a refused save is part of what it tests.
+test.use({ allowFailedRequests: [/^POST \/api\/pipewire\/aes67\/instances 400/] });
+
 // The AES67 page's editor (aes67-config.php): the PTP settings, Add
 // Instance, each stream's fields, delete, Save & Apply and its failures, the
 // idle notice, the status line and the SDP dialog.

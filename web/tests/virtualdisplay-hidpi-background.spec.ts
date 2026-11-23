@@ -2,6 +2,9 @@ import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
 import { keepingFile } from './privacy-helpers';
 
+// The player answers with an error on purpose here: no Virtual Display output is set up, so fppd has no stream to proxy.
+test.use({ allowFailedRequests: [/^GET \/api\/http-virtual-display\/ 503/] });
+
 // The 2D Virtual Display draws the uploaded background
 // (Images/virtualdisplaybackground.jpg) under the pixels, fitted to the
 // canvas.  On a high-DPI screen (two device pixels to a CSS pixel here) it

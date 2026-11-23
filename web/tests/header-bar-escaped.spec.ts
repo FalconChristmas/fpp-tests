@@ -1,6 +1,9 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 
+// The player answers with an error on purpose here: its injected sensor label becomes an icon name that does not exist.
+test.use({ allowFailedRequests: [/^GET \/images\/redesign\/wifi-\S*fpptestsinj\S* 404/] });
+
 // The header bar on every page shows the network interfaces and sensors from
 // the status answer.  Sensor labels come from the cape's EEPROM and from
 // config/sensors.json, interface names and their Wi-Fi fields from the

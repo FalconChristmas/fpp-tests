@@ -3,6 +3,9 @@ import { whenModalShown } from './dialogs';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { container, inPlayer } from './container';
 
+// The player answers with an error on purpose here: an entry whose media is gone is one of its tests.
+test.use({ allowFailedRequests: [/^GET \/api\/media\/fpp-tests-gone-\S+ 404/] });
+
 // The playlist editor's entry modal (playlists.php, the drill-in editor):
 // what it shows for an entry, and what it saves back.  Each test stores a
 // playlist through the API, edits it on the page, and reads it back.

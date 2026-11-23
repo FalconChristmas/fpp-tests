@@ -4,6 +4,9 @@ import { container, inPlayer } from './container';
 import { putFile } from './settings-file';
 import { fseqV2 } from './fseq';
 
+// The player answers with an error on purpose here: the status page asks for a picked sequence's playlist details as if it were a playlist (PopulatePlaylistDetailsEntries; ~/FUTURE.md).
+test.use({ allowFailedRequests: [/^GET \/api\/playlist\/fpp-tests-\S+\.fseq\?mergeSubs=1 404/] });
+
 // A sequence played straight from the status page's picker, as many people
 // try a new one: fppd plays it, the page marks its row and counts the time played
 // up and the time left down, and when it ends the player is idle again (or,

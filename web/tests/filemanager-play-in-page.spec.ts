@@ -3,6 +3,9 @@ import type { Page } from '@playwright/test';
 import { execFileSync } from 'child_process';
 import { container, inPlayer } from './container';
 
+// The player answers with an error on purpose here: a song deleted after the list loaded is one of its tests.
+test.use({ allowFailedRequests: [/^(GET|HEAD) \/api\/file\/Music\/fpp-tests-\S+ 404/] });
+
 // Listen (Music) and View (Videos) in the File Manager play the file in a
 // dialog on the page, served by api/file/<dir>/<name>?play=1 with HTTP range
 // support.  Regression: e178608b1 (#3146).  Listen opened that URL in a new
