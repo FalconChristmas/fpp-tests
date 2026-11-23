@@ -32,6 +32,7 @@ test.describe('schedule preview rows', () => {
       const items = (await (await request.get('/api/fppd/schedule')).json()).schedule.items;
       return [...new Set(items.map((i: { args: string[]; priority: number }) => `${i.args[0]}:${i.priority}`))].sort();
     }, { timeout: 10_000 }).toEqual(playlists.map((p, i) => `${p}:${i}`).sort());
+    // lint: fragment, the preview's rows, which fpp.js loads into its dialog as they are
     await page.goto('/schedulePreview.php');
     await expect(page.locator('table.schedulePreviewTable tbody tr').first()).toBeVisible();
     return page.locator('table.schedulePreviewTable tbody tr');

@@ -85,6 +85,7 @@ test.describe('color settings holding a quote', () => {
         (await (await request.get('/api/fppd/schedule')).json()).schedule.items.length,
       { timeout: 10_000 }).toBeGreaterThan(1);
 
+      // lint: fragment, the preview's markup, which fpp.js loads into its dialog as it is
       await page.goto('/schedulePreview.php');
       await expect(page.locator('table.schedulePreviewTable tbody tr').first()).toBeVisible();
       await assertNotInjected(page);

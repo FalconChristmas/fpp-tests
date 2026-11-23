@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // A tree with no .git (git archive, a downloaded ZIP, the tree this suite
 // serves) takes its version from src/EXPORTED_VERSION. fppversion.sh derived

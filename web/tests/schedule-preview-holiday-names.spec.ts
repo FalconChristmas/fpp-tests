@@ -58,6 +58,7 @@ test.describe('schedule preview holiday names', () => {
       return [Object.values(s.entries ?? {}).map((e: any) => e.startDateInt), s.items.map((i: any) => i.startDateInt % 10000)];
     }, { timeout: 15_000 }).toEqual([[mmdd], [mmdd]]);
 
+    // lint: fragment, the preview's rows, which fpp.js loads into its dialog as they are
     await page.goto('/schedulePreview.php');
     const rows = page.locator('table.schedulePreviewTable tbody tr', { hasText: PLAYLIST });
     await expect(rows.first()).toBeVisible();

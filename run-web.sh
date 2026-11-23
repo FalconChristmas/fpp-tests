@@ -71,6 +71,7 @@ if [ ! -d "$HERE/web/node_modules" ] || [ ! -d "$HERE/web/node_modules/typescrip
 fi
 echo "Type-checking the specs (node $(node --version))"
 (cd "$HERE/web" && npx tsc --noEmit -p .) || { echo "error: the specs do not type-check" >&2; exit 1; }
+"$HERE/scripts/lint-web-specs.sh" || { echo "error: the spec lint failed" >&2; exit 1; }
 
 $DOCKER -v "$HERE:/tests:ro" fpp-tests-env /tests/scripts/build-fpp.sh "$TREE" "$FLAVOR"
 

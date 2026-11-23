@@ -1,6 +1,6 @@
 import http from 'http';
 import type { AddressInfo } from 'net';
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { container } from './container';
 import { snapshotSettings } from './settings-file';
 

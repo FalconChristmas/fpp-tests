@@ -173,6 +173,7 @@ test("a stored value with '=' in it reaches PHP and the page whole", async ({ pa
     setSettingInFile('fppTestsEquals', 'a=b=c');
     expect((await jsSettings(page, '/index.php')).fppTestsEquals).toBe('a=b=c');
     // The MQTT tab prints the stored password into its field from $settings.
+    // lint: fragment, the MQTT tab's markup, which settings.php loads into the tab as it is
     await page.goto('/settings-mqtt.php');
     await expect(page.locator('#MQTTPassword')).toHaveValue('fpp=tests==');
   });

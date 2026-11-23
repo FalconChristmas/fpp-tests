@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
 
 // scripts/common's getSetting and setSetting wait for the settings file's lock

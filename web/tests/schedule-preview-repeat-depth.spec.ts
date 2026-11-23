@@ -26,6 +26,7 @@ async function previewSpacers(page: Page, request: APIRequestContext, schedule: 
       i.startTimeStr.replace(/^.*@ /, '')))].sort();
   }, { timeout: 10_000 }).toEqual([...starts].sort());
 
+  // lint: fragment, the preview's table, which fpp.js loads into its dialog as it is
   await page.goto('/schedulePreview.php');
   const head = page.locator('table.schedulePreviewTable thead tr').first();
   await expect(head).toBeVisible();

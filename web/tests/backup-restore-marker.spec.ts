@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { container, inPlayer } from './container';
 
 // A JSON backup restore asks the next boot to install the restored packages
