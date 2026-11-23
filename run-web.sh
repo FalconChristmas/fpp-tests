@@ -64,6 +64,14 @@ docker build -q -t fpp-tests-web "$HERE/docker/web" > /dev/null
 $DOCKER -v "$ARTIFACTS:/artifacts" fpp-tests-env find /artifacts -mindepth 1 -delete ||
     echo "warning: could not empty $ARTIFACTS; is another run using it? (--artifacts DIR)" >&2
 
+# Node 20 or later (the header's "Needs Node.js 20+"); a spec written on a newer
+# Node can lean on what 20 lacks (global WebSocket arrived in 22), so the
+# version goes in the log.
+NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
+if [ "$NODE_MAJOR" -lt 20 ]; then
+    echo "error: run-web.sh needs Node.js 20 or later (found: $(node --version 2>/dev/null || echo none))" >&2
+    exit 1
+fi
 # Packages first (a checkout from before typescript was added installs again),
 # then the specs' type check, so a broken spec fails before the fpp build.
 if [ ! -d "$HERE/web/node_modules" ] || [ ! -d "$HERE/web/node_modules/typescript" ]; then
