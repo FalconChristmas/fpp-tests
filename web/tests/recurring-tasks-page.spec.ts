@@ -198,3 +198,43 @@ test('a task file that cannot be read is not shown as empty and then overwritten
   await save(page);
   await expect.poll(async () => (await saved(request)).map((t: any) => t.name)).toEqual(['fpp-tests first']);
 });
+
+test('an If task keeps its Result Variable section through a pick into its Then Run list', async ({ page, request }) => {
+  // Regression: 155bad634.  The Result Variable / Filter fields are added to
+  // the command editor once it opens.  A pick into the If's list closes the
+  // editor and reopens it afterwards, and the reopen left them out, so the
+  // task's result could no longer be set there.
+  const level = String((await (await request.get('/api/settings/uiLevel')).json()).value ?? '0');
+  await request.put('/api/settings/uiLevel', { data: '1' }); // If is an Advanced command
+  try {
+    const TRUE = JSON.stringify({ op: 'AND', conditions: [{ source: 'Expression', name: '1', comparator: 'equal to', value: '1' }] });
+    await put(request, [{ name: 'fpp-tests if', enabled: false, intervalMS: 60000, type: 'command', preset: '',
+      command: 'If', args: [TRUE, '[]', 'Sequential', '[]', 'Sequential'], resultVariable: '', persistResult: false,
+      filterType: '', filterJsonPath: '', filterBetweenStart: '', filterBetweenEnd: '', filterRegex: '' }]);
+    const rows = await openPage(page, 1);
+    await rows.nth(0).locator('input[value="Edit"]').click();
+    const dialog = page.locator('#commandEditorPopup');
+    await expect(dialog.locator('#editorCommand')).toHaveValue('If', { timeout: 15_000 });
+    await dialog.locator('.ptTmplAdvancedSectionWrapper .ptTmplResultVariable').fill('fppTestsIfResult');
+
+    await dialog.locator('#tblCommandEditor input[value="+ Add Command"]').first().click();
+    await expect(dialog.locator('#btnSaveEditorCommand')).toHaveValue('Add Command', { timeout: 15_000 });
+    await dialog.locator('#editorCommand').selectOption('Set Variable');
+    await dialog.locator('#tblCommandEditor_arg_1').fill('fppTestsIfThen');
+    await dialog.locator('#btnSaveEditorCommand').click();
+
+    await expect(dialog.locator('#editorCommand')).toHaveValue('If', { timeout: 15_000 });
+    await expect(dialog.locator('.cmdListLabel')).toHaveText(/^Set Variable: fppTestsIfThen,/);
+    await expect(dialog.locator('.ptTmplAdvancedSectionWrapper .ptTmplResultVariable')).toHaveValue('fppTestsIfResult');
+    await dialog.locator('#btnSaveEditorCommand').click();
+    await expect(dialog).toBeHidden();
+
+    await save(page);
+    await expect(page.locator('#jGrowl')).toContainText('Recurring tasks saved and reloaded.');
+    const task = (await saved(request))[0];
+    expect(task.resultVariable).toBe('fppTestsIfResult');
+    expect(JSON.parse(task.args[1]).map((c: any) => [c.command, c.args[0]])).toEqual([['Set Variable', 'fppTestsIfThen']]);
+  } finally {
+    await request.put('/api/settings/uiLevel', { data: level || '0' });
+  }
+});

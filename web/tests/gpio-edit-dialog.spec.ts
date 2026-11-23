@@ -94,3 +94,34 @@ test('the edit dialog grows down to the bottom of a short window and scrolls ins
     expect(await modal.locator('.modal-body').evaluate((e) => e.scrollHeight > e.clientHeight), `${height}px: body scrolls`).toBe(true);
   }
 });
+
+test('a pick into an If\'s list brings the Add Command dialog back as it was', async ({ page, request }) => {
+  // Regression: 155bad634.  The editor reopened after the pick as the generic
+  // "FPP Command Editor", without the presets list and with "Accept Changes"
+  // for a button, instead of the GPIO page's own Add Command dialog.
+  const level = String((await (await request.get('/api/settings/uiLevel')).json()).value ?? '0');
+  await request.put('/api/settings/uiLevel', { data: '1' }); // If is an Advanced command
+  try {
+    await putGpio(request, [input]);
+    const modal = await openEdit(page);
+    await modal.locator('button', { hasText: 'Add Command' }).first().click();
+
+    const editor = page.locator('#commandEditorPopup');
+    await expect(editor.locator('#editorCommand')).toBeVisible({ timeout: 15_000 });
+    await expect(editor.locator('.modal-title')).toHaveText(/^Add Command — \w+ Edge$/);
+    const title = (await editor.locator('.modal-title').textContent())!;
+    await editor.locator('#editorCommand').selectOption('If');
+    await editor.locator('#tblCommandEditor input[value="+ Add Command"]').first().click();
+    await expect(editor.locator('.modal-title')).toHaveText('Add Command', { timeout: 15_000 });
+    await editor.locator('#editorCommand').selectOption('Set Variable');
+    await editor.locator('#tblCommandEditor_arg_1').fill('fppTestsGpioIf');
+    await editor.locator('#btnSaveEditorCommand').click();
+
+    await expect(editor.locator('.cmdListLabel')).toHaveText(/^Set Variable: fppTestsGpioIf,/, { timeout: 15_000 });
+    await expect(editor.locator('.modal-title')).toHaveText(title);
+    await expect(editor.locator('#presetNames')).toBeVisible();
+    await expect(editor.locator('#btnSaveEditorCommand')).toHaveValue('Add Command');
+  } finally {
+    await request.put('/api/settings/uiLevel', { data: level || '0' });
+  }
+});

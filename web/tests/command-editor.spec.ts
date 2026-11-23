@@ -148,6 +148,8 @@ test('a Command Preset picked into an If\'s Then Run list runs as the preset is 
 
   // The If's editor comes back with the reference in its list.
   await expect(dialog.locator('#editorCommand')).toHaveValue('If', { timeout: 15_000 });
+  // As the Run FPP Command dialog, not "Accept Changes" (155bad634).
+  await expect(dialog.locator('#btnSaveEditorCommand')).toHaveValue('Run and Close');
   await expect(dialog.locator('.cmdListLabel')).toHaveText(`Trigger Command Preset: ${PRESET}`);
   const sent = page.waitForRequest((r) => r.method() === 'POST' && /api\/command(\?|$)/.test(r.url()));
   await dialog.locator('#btnSaveEditorCommand').click();
