@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { whenModalShown } from './dialogs';
 import type { APIRequestContext, Page } from '@playwright/test';
 
 // A Media entry in a random file mode takes a file name prefix to narrow the
@@ -43,12 +44,7 @@ test('a random Media entry offers a file name prefix, and saves it', async ({ pa
   uiLevelBefore = String((await (await request.get('/api/settings/uiLevel')).json()).value ?? '0');
   expect((await request.put('/api/settings/uiLevel', { data: '1' })).ok()).toBe(true);
   await openEditor(page);
-  await page.evaluate(() => {
-    (window as any).fppTestsModalShown = false;
-    document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsModalShown = true; }, { once: true });
-  });
-  await page.locator('.playlistEntriesAddNewBtn').first().click();
-  await page.waitForFunction(() => (window as any).fppTestsModalShown);
+  await whenModalShown(page, () => page.locator('.playlistEntriesAddNewBtn').first().click());
   const modal = page.locator('.modal.show');
   await page.selectOption('#pe_type', 'media');
   const prefix = modal.locator('.arg_mediaPrefix');

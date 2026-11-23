@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { whenModalShown } from './dialogs';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { container, inPlayer } from './container';
 
@@ -164,12 +165,7 @@ test.describe('user-defined holidays', () => {
   });
 
   async function openEditor(page: Page) {
-    await page.evaluate(() => {
-      (window as any).fppTestsModalShown = false;
-      document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsModalShown = true; }, { once: true });
-    });
-    await page.locator('[onclick="OpenHolidayEditor();"]:visible').first().click();
-    await page.waitForFunction(() => (window as any).fppTestsModalShown);
+    await whenModalShown(page, () => page.locator('[onclick="OpenHolidayEditor();"]:visible').first().click());
     return page.locator('#holidayEditorModal');
   }
 

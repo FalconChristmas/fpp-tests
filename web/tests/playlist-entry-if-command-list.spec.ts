@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { whenModalShown } from './dialogs';
 import type { APIRequestContext, Locator, Page } from '@playwright/test';
 
 // An If command as a Playlist Editor entry: its Then Run and Otherwise Run
@@ -46,12 +47,7 @@ async function savePlaylist(page: Page) {
 // As playlist-entry-args.spec.ts: wait for the show transition to end, or a
 // hide asked for while it is still fading in is dropped.
 async function openNewEntry(page: Page) {
-  await page.evaluate(() => {
-    (window as any).fppTestsModalShown = false;
-    document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsModalShown = true; }, { once: true });
-  });
-  await page.locator('.playlistEntriesAddNewBtn').first().click();
-  await page.waitForFunction(() => (window as any).fppTestsModalShown);
+  await whenModalShown(page, () => page.locator('.playlistEntriesAddNewBtn').first().click());
 }
 
 async function addEntry(page: Page, entry: Locator) {

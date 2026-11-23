@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { modalSettled } from './dialogs';
 import type { APIRequestContext, Page } from '@playwright/test';
 
 // The Scheduler's "Preview > Calendar View" (scheduleCalendar.php, FullCalendar
@@ -107,6 +108,8 @@ test('the calendar opened again shows the schedule as it is now', async ({ page,
   await useSchedule(request, [entry(A)]);
   const calendar = await openCalendar(page);
   await expect(rows(calendar, A)).toHaveCount(7);
+  // The × goes straight to Bootstrap, which drops a hide during the fade-in.
+  await modalSettled(page, 'scheduleCalendarModal');
   await calendar.locator('.btn-close, [data-bs-dismiss="modal"]').first().click();
   await expect(calendar).toBeHidden();
 

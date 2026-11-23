@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { whenModalShown } from './dialogs';
 import type { APIRequestContext, Page } from '@playwright/test';
 
 // The Playlists page's Rename Playlist, Copy Playlist onto a name, and the
@@ -33,15 +34,6 @@ async function openEditor(page: Page, name: string) {
   await card(page, name).locator('h3').click();
   await expect(page.locator('#playlistEditor')).toHaveClass(/hasPlaylistDetailsLoaded/);
   await expect(page.locator('#txtPlaylistName')).toHaveValue(name);
-}
-
-async function whenModalShown(page: Page, open: () => Promise<void>) {
-  await page.evaluate(() => {
-    (window as any).fppTestsModalShown = false;
-    document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsModalShown = true; }, { once: true });
-  });
-  await open();
-  await page.waitForFunction(() => (window as any).fppTestsModalShown);
 }
 
 async function playlistAction(page: Page, id: string, item: string) {

@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { whenModalShown } from './dialogs';
 import type { Page } from '@playwright/test';
 import { container, inPlayer } from './container';
 
@@ -24,12 +25,7 @@ test.beforeEach(async ({ page, request }) => {
   await page.goto('/playlists.php');
   await page.locator('.playlistCard h3', { hasText: new RegExp(`^${NAME}$`) }).click();
   await expect(page.locator('#playlistEditor')).toHaveClass(/hasPlaylistDetailsLoaded/);
-  await page.evaluate(() => {
-    (window as any).fppTestsModalShown = false;
-    document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsModalShown = true; }, { once: true });
-  });
-  await page.locator('.playlistEntriesAddNewBtn').first().click();
-  await page.waitForFunction(() => (window as any).fppTestsModalShown);
+  await whenModalShown(page, () => page.locator('.playlistEntriesAddNewBtn').first().click());
 });
 
 test.afterEach(async ({ request }) => {

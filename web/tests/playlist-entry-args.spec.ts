@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { whenModalShown } from './dialogs';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { container, inPlayer } from './container';
 
@@ -41,12 +42,7 @@ async function savePlaylist(page: Page) {
 // an Add clicked that early adds the entry but leaves the modal open over
 // the page.
 async function openNewEntry(page: Page) {
-  await page.evaluate(() => {
-    (window as any).fppTestsModalShown = false;
-    document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsModalShown = true; }, { once: true });
-  });
-  await page.locator('.playlistEntriesAddNewBtn').first().click();
-  await page.waitForFunction(() => (window as any).fppTestsModalShown);
+  await whenModalShown(page, () => page.locator('.playlistEntriesAddNewBtn').first().click());
 }
 
 // The New Entry modal's Add: the entry goes into the list.

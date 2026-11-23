@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { whenModalShown } from './dialogs';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { readFileSync } from 'fs';
 import { container, inPlayer } from './container';
@@ -34,16 +35,6 @@ async function openEditor(page: Page, name = NAME) {
   await card(page, name).locator('h3').click();
   await expect(page.locator('#playlistEditor')).toHaveClass(/hasPlaylistDetailsLoaded/);
   await expect(page.locator('#txtPlaylistName')).toHaveValue(name);
-}
-
-// Waits for Bootstrap's show transition to end (a click that early can be dropped).
-async function whenModalShown(page: Page, open: () => Promise<void>) {
-  await page.evaluate(() => {
-    (window as any).fppTestsModalShown = false;
-    document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsModalShown = true; }, { once: true });
-  });
-  await open();
-  await page.waitForFunction(() => (window as any).fppTestsModalShown);
 }
 
 test.afterEach(async ({ request }) => {

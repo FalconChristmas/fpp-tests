@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { whenModalShown } from './dialogs';
 import type { APIRequestContext, Locator, Page } from '@playwright/test';
 import { container } from './container';
 import { snapshotSettings } from './settings-file';
@@ -311,12 +312,7 @@ const playlist: Host = {
     expect(r.ok()).toBe(true);
     await openPlaylist(page);
     // New Entry, once Bootstrap's show transition is over.
-    await page.evaluate(() => {
-      (window as any).fppTestsModalShown = false;
-      document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsModalShown = true; }, { once: true });
-    });
-    await page.locator('.playlistEntriesAddNewBtn').first().click();
-    await page.waitForFunction(() => (window as any).fppTestsModalShown);
+    await whenModalShown(page, () => page.locator('.playlistEntriesAddNewBtn').first().click());
     await page.selectOption('#pe_type', 'command');
     await page.selectOption('#playlistEntryOptions_arg_1', command);
     return { scope: page.locator(`#${PL_TBL}`), tbl: PL_TBL };

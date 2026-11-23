@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { whenModalShown } from './dialogs';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { container, inPlayer } from './container';
 
@@ -27,12 +28,7 @@ async function openAndResave(page: Page) {
   await page.locator('.playlistCard h3', { hasText: new RegExp(`^${NAME}$`) }).click();
   await expect(page.locator('#playlistEditor')).toHaveClass(/hasPlaylistDetailsLoaded/);
   await expect(page.locator('#tblPlaylistMainPlaylist tr.playlistRow')).toHaveCount(1);
-  await page.evaluate(() => {
-    (window as any).fppTestsModalShown = false;
-    document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsModalShown = true; }, { once: true });
-  });
-  await page.locator('.playlistRowEditButton').first().click();
-  await page.waitForFunction(() => (window as any).fppTestsModalShown);
+  await whenModalShown(page, () => page.locator('.playlistRowEditButton').first().click());
   const modal = page.locator('.modal.show');
   await expect(modal.locator('.modal-title')).toHaveText('Edit Entry');
   await modal.getByRole('button', { name: 'Save', exact: true }).click();
@@ -73,12 +69,7 @@ test("an Image entry's Choose File lists the images, with the entry's own picked
     await page.goto('/playlists.php');
     await page.locator('.playlistCard h3', { hasText: new RegExp(`^${NAME}$`) }).click();
     await expect(page.locator('#playlistEditor')).toHaveClass(/hasPlaylistDetailsLoaded/);
-    await page.evaluate(() => {
-      (window as any).fppTestsModalShown = false;
-      document.addEventListener('shown.bs.modal', () => { (window as any).fppTestsModalShown = true; }, { once: true });
-    });
-    await page.locator('.playlistRowEditButton').first().click();
-    await page.waitForFunction(() => (window as any).fppTestsModalShown);
+    await whenModalShown(page, () => page.locator('.playlistRowEditButton').first().click());
     const modal = page.locator('.modal.show');
     const field = modal.locator('input.arg_imagePath');
     await expect(field).toHaveValue('fpp-tests-chooser-a.png');

@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { modalSettled } from './dialogs';
 
 // The Git Changes dialog (GetGitOriginLog in fpp.js): the commits origin has
 // that this checkout does not, opened from the System Upgrade page.
@@ -15,6 +16,8 @@ test('the Git Changes dialog can be closed, from its header and its Close button
   await expect(dlg).toBeVisible();
   await expect(dlg).toContainText('fix: something');
   await expect(dlg.locator('#modalCloseButton')).toBeEnabled();
+  // The × goes straight to Bootstrap, which drops a hide during the fade-in.
+  await modalSettled(page, 'GitOriginLogView');
   await dlg.locator('#modalCloseButton').click();
   await expect(dlg).toBeHidden();
 

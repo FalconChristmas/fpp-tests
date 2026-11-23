@@ -1,5 +1,6 @@
 import { execFileSync } from 'child_process';
 import { test, expect } from './fixtures';
+import { modalSettled } from './dialogs';
 import { container, docker, inPlayer } from './container';
 import { MEDIA, keepingFile, keepingSettings, setSettingInFile, writeFile } from './privacy-helpers';
 
@@ -539,6 +540,8 @@ test('F8 builds a Diagnostic Report, waits on the Build step, and closing keeps 
     await expect(page.locator('#helpDialogText')).toContainText('Diagnostic Report', { timeout: 10_000 });
     const z = (sel: string) => page.locator(sel).evaluate((el) => parseInt(getComputedStyle(el).zIndex, 10) || 0);
     expect(await z('#helpDialog'), 'the help is under the wizard').toBeGreaterThan(await z('#errorReportDialog'));
+    // The × goes straight to Bootstrap, which drops a hide during the fade-in.
+    await modalSettled(page, 'helpDialog');
     await help.locator('.btn-close').first().click();
     await expect(help).toBeHidden();
     await expect(dlg, 'closing the help closed the wizard').toBeVisible();
