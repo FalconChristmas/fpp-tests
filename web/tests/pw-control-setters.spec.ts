@@ -26,7 +26,12 @@ test.beforeEach(() => {
   for (const k of keys) setSettingInFile(k, 'pipewire');
 });
 test.afterEach(() => {
-  keys.forEach((k, i) => setSettingInFile(k, saved[i]));
+  // An absent MediaBackend goes back as its default (settings.json), not by
+  // dropping it: fppd's reload only reads the keys the file has, so a dropped
+  // key keeps its last value in fppd (here 'alsa', from the refusal test
+  // below), and the next spec's media played through ALSA.  (Nothing reads
+  // AudioBackend any more.)
+  keys.forEach((k, i) => setSettingInFile(k, saved[i] ?? (k === 'MediaBackend' ? 'pipewire-simple' : undefined)));
   stopPipeWire();
   cleanupPipeWire();
 });

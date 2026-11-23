@@ -23,6 +23,9 @@ test.describe('in the player', () => {
     // Regression: 86685958b. The route asked fppd for /api/fppd/status, a 404 on fppd's own
     // server, and read media_filename, which a playing playlist doesn't report.
     // So slot 1 never had a file name or times.
+    // Played through PipeWire, whatever an earlier spec left fppd's backend at.
+    const restore = snapshotSettings();
+    setSettingInFile('MediaBackend', 'pipewire');
     inPlayer('php', '-r', `$n = 44100 * 2 * 60; file_put_contents('${MUSIC}', 'RIFF' . pack('V', 36 + $n) . 'WAVEfmt ' . pack('VvvVVvv', 16, 1, 1, 44100, 88200, 2, 16) . 'data' . pack('V', $n) . str_repeat("\\0", $n));`);
     try {
       const saved = await request.post(`/api/playlist/${PLAYLIST}`, { data: {
@@ -46,6 +49,7 @@ test.describe('in the player', () => {
       await request.post('/api/command', { data: { command: 'Stop Now', args: [] } });
       await request.delete(`/api/playlist/${PLAYLIST}`);
       inPlayer('rm', '-f', MUSIC);
+      restore();
     }
   });
 
