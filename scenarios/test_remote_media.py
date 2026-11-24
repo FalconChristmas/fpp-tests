@@ -265,6 +265,80 @@ def test_a_remote_learns_how_far_its_clips_start_off_the_master(fppd, audio):
         f"the remote still started clips {max(abs(e) for e in late):.0f} ms from the master after five to learn from: {firsts}"
 
 
+LOG_TIME = re.compile(r"^\S+ (\d+):(\d+):([\d.]+) ", re.M)
+HELD_BACK = re.compile(r"GStreamer: picture held back ([\d.]+) ms to meet the sound")
+PLAYING_AGAIN = re.compile(r"GStreamer sync state: PAUSED -> PLAYING")
+
+
+def _log_seconds(line):
+    m = LOG_TIME.match(line)
+    return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3)) if m else None
+
+
+def test_a_resync_seek_doesnt_hold_a_remotes_picture_back(fppd, audio):
+    """A remote's resync seek on a video with sound, slow to preroll
+    (keyframes 10 s apart, so the accurate seek decodes seconds of 1080p),
+    doesn't hold the picture back by however long that takes: the hold
+    stays under 300 ms (the sound's path, ~60 ms) through the seek.
+
+    Fixed by fpp 6140d9129. The seek flushed the video's sound from the
+    output stream; while the pipeline prerolled again, the position loop
+    measured the sound's latency against the feed's last sample, still
+    where the flush left it, so it grew with the wall clock -- 50 ms per
+    50 ms report -- and the picture was held back by it all (to 1.85 s on a
+    Pi 4 remote). The seek's first frame waited that long.
+
+    Needs a real card and a display: run-local.sh --host-audio,
+    FPP_TESTS_VIDEO_OUT naming the connector, and ffmpeg. Verified with
+    run-local.sh --host-audio on a Pi 5 with a sound card and HDMI (a 0.85
+    s seek): held back 676-722 ms on the parent, 933f24b6a (3 of 3); under
+    60 ms on the fix (3 of 3)."""
+    connector = os.environ.get("FPP_TESTS_VIDEO_OUT")
+    if not os.environ.get("FPP_TESTS_HOST_AUDIO") or not connector:
+        pytest.skip("needs a real sound card and a display: run-local.sh --host-audio, FPP_TESTS_VIDEO_OUT")
+    if not shutil.which("ffmpeg"):
+        pytest.skip("needs ffmpeg to make the video")
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=30",
+                    "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "40",
+                    "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-g", "300",
+                    "-c:a", "aac", "-shortest", os.path.join(fppd.media, "videos", "Seek.mp4")],
+                   check=True)
+    fppd.settings(fppMode="remote", VideoOutput=connector, LogLevel_MediaOut="debug")
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    send = lambda *a: sock.sendto(sync_packet(*a), ("127.0.0.1", PORT))
+    try:
+        fppd.start()
+        time.sleep(2)
+        send("open", "media", 0, 0.0, "Seek.mp4")
+        send("start", "media", 0, 0.0, "Seek.mp4")
+        t0 = time.monotonic()
+        nxt = 0.5
+        while (t := time.monotonic() - t0) < 24:
+            if t >= nxt:
+                # 12 s in, the master is 5 s further on: the remote seeks to
+                # ~17.5 s, decoding from the keyframe at 10 s.
+                send("sync", "media", 0, t + (5.0 if t >= 12 else 0.0), "Seek.mp4")
+                nxt += 0.5
+                fppd.check_alive()
+            time.sleep(0.005)
+        send("stop", "media", 0, 0.0, "Seek.mp4")
+        time.sleep(2)
+    finally:
+        sock.close()
+    lines = fppd.log().splitlines()
+    seek = next((i for i, l in enumerate(lines) if RESYNC_SEEK.search(l)), None)
+    assert seek is not None, "the remote never seeked to the master's jump: the test, not fppd, needs a look"
+    resumed = next((i for i in range(seek, len(lines)) if PLAYING_AGAIN.search(lines[i])), None)
+    assert resumed is not None, "the remote never played again after its seek"
+    preroll = _log_seconds(lines[resumed]) - _log_seconds(lines[seek])
+    held = [float(m.group(1)) for l in lines[seek:resumed + 1] if (m := HELD_BACK.search(l))]
+    after = [float(m.group(1)) for l in lines[resumed + 1:] if (m := HELD_BACK.search(l))]
+    print(f"\nseek prerolled in {preroll:.2f} s; held back during it {held}, after {after[:5]}")
+    assert preroll >= 0.5, f"the seek prerolled in {preroll:.2f} s, too quick to show the fault: the test needs a slower seek"
+    assert max(held + after, default=0) <= 300, \
+        f"the picture was held back {max(held + after):.0f} ms through a {preroll:.2f} s seek"
+
+
 def test_a_remote_moves_to_the_masters_next_file_on_a_sync_packet(fppd, audio):
     """A remote playing A.wav that gets a media sync for B.wav -- the
     master has moved on and the open packet was lost -- opens B.wav and
