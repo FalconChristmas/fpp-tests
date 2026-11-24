@@ -116,13 +116,14 @@ race:GStreamerOutput::BusCallbackScope::BusCallbackScope
 # ...and the guard's copy the bus holds is freed through the same unseen
 # locking, by the bus's destroy notify on whichever thread drops it.
 race:GStreamerOutput::ReleaseBusCallbackGuard
-# The same for VideoDisplay: the FeedRef it hands an appsink's pad probe
-# (AttachFeed()) is published by gst_pad_add_probe() under the pad's lock,
-# and its first read is in the probe on the decoder's streaming thread
-# (test_video_display.py, a playlist's next video prepared).  That read alone
-# is in FeedRefDisplay() (fpp, a function of its own for this), so a race in
-# what the probe goes on to do -- the display's kmssink answering the track's
-# allocation query -- is still reported.
+# The same for VideoDisplay: the FeedRef it hands an appsink's pad probe and
+# its new-sample callback (AttachFeed()) is published by gst_pad_add_probe()
+# and gst_app_sink_set_callbacks() under GStreamer's locks, and first read on
+# the feed's streaming thread -- a pooled one, so no thread start orders it
+# either (test_video_display.py, a playlist's next video prepared).  That read
+# alone is in FeedRefDisplay() (fpp, a function of its own for this; the
+# callback too since fpp 933f24b6a), so a race in
+# what the probe or the frame push go on to do is still reported.
 race:FeedRefDisplay
 # GLib's own threads hand blocks to each other through GLib's locks; TSan
 # sees only libc allocating on one and freeing on the other.
