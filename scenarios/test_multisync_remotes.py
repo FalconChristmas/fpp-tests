@@ -136,6 +136,50 @@ def test_all_known_remotes_get_the_sync_by_unicast(fppd):
     assert set(syncs) == {remote}, f"sync packets by destination: {syncs}"
 
 
+def _sync_destinations(packets):
+    syncs = {}
+    for t, _, dst, p in packets:
+        if parse_sync(t, p):
+            syncs[dst] = syncs.get(dst, 0) + 1
+    return syncs
+
+
+def test_all_known_unicast_is_limited_to_the_listed_subnets(fppd):
+    """MultiSyncUnicastSubnets limits "all known remotes" unicast to the
+    remotes inside one of its subnets: with 10.77.0.0/25 (and an entry that
+    doesn't parse, which is skipped), the remote at .9 is sent the sync and
+    the one at .200 is not. Changing the list while the sequence plays takes
+    effect without a restart: a bare IP naming .200 moves the sync there.
+
+    Regression: 359dcb784, which added the setting. Before it every known
+    remote was unicast to whatever the setting held.
+    """
+    frames = unique_frames(1200, CHANNELS)
+    install(fppd, frames, step_ms=STEP_MS)
+    fppd.settings(MultiSyncEnabled="1", MultiSyncUnicast="1",
+                  MultiSyncUnicastSubnets="bogus, 10.77.0.0/25")
+    inside, outside = "10.77.0.9", "10.77.0.200"
+    with interface("10.77.0.1"):
+        fppd.start()
+        send(ping_packet(inside, "subnet-inside", mode=0x08))
+        send(ping_packet(outside, "subnet-outside", mode=0x08))
+        for a in (inside, outside):
+            wait_listed(fppd, a)
+        fppd.command("Start Playlist", "Show", "false", "false")
+        with UdpCapture(PORT, iface="fpptest0") as cap:
+            time.sleep(3)
+            first = _sync_destinations(cap.snapshot())
+        fppd.settings(MultiSyncUnicastSubnets="10.77.0.200")
+        time.sleep(1)
+        with UdpCapture(PORT, iface="fpptest0") as cap:
+            time.sleep(3)
+            second = _sync_destinations(cap.snapshot())
+    assert first.get(inside, 0) >= 5, f"sync packets by destination: {first}"
+    assert set(first) == {inside}, f"sync packets by destination: {first}"
+    assert second.get(outside, 0) >= 5, f"after the change: {second}"
+    assert set(second) == {outside}, f"after the change: {second}"
+
+
 def test_sync_is_handled_while_quiet_remotes_are_probed(fppd):
     """A remote keeps handling its master's sync packets while fppd probes,
     over HTTP, the controllers it has not heard from in 80 minutes: six
