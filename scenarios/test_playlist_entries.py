@@ -603,6 +603,32 @@ def test_a_restart_asked_for_by_a_playlist_entry_resumes_after_it(fppd):
     fppd.command("Stop Now")
 
 
+def test_a_restart_before_the_http_server_is_up_still_restarts(fppd):
+    """A Restart FPPD entry that runs before the HTTP server's loop has
+    started still restarts fppd, which comes back and plays on. slowhttpbind.so
+    holds drogon's bind of the HTTP port back 3 s, so the restart (the
+    playlist's first entry, run as the main loop starts) always lands there.
+
+    Regression: af627577a. drogon's quit() does nothing until its main loop
+    runs, so the restart's shutdown joined an HTTP server thread that was
+    never told to stop, and fppd hung there for good. Seen in a nightly TSan
+    run, where the restart came 90 ms after the main loop started.
+    """
+    import shims
+    restart = {"type": "command", "enabled": 1, "playOnce": 0, "command": "Restart FPPD", "args": []}
+    scheduled_now(fppd, "Res", [restart, mark("B"), pause(15)])
+    fppd.start(timeout=60, preload=[shims.build("slowhttpbind.c")])
+
+    def reached_b():
+        try:
+            return (fppd.get("/variables", timeout=2) or {}).get("B")
+        except Exception:
+            return None
+    fppd.wait_for(reached_b, timeout=30, interval=0.5, what="the entry after the restart")
+    assert sum("Restart FPPD Command" in l for l in fppd.log().splitlines()) == 1
+    fppd.command("Stop Now")
+
+
 # --- playlist data fppd can only partly read ---------------------------------
 
 
