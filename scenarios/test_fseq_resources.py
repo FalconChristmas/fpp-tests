@@ -209,9 +209,18 @@ def test_a_sequence_whose_read_thread_cannot_start_is_not_opened(fppd):
 def stack_room(pid, tid):
     """How far a blocked thread's stack pointer is above the bottom of the
     mapping it is in: the room its stack has to grow into. (Measured down
-    from the pointer, so a mapping the kernel merged above doesn't count.)"""
-    with open(f"/proc/{pid}/task/{tid}/syscall") as f:
-        fields = f.read().split()
+    from the pointer, so a mapping the kernel merged above doesn't count.)
+    A thread that is on a CPU reads as just "running", with no stack
+    pointer, so it is read again until the thread is blocked."""
+    deadline = time.monotonic() + 10
+    while True:
+        with open(f"/proc/{pid}/task/{tid}/syscall") as f:
+            fields = f.read().split()
+        if len(fields) >= 3:
+            break
+        if time.monotonic() > deadline:
+            raise AssertionError(f"thread {tid} never blocked: {fields}")
+        time.sleep(0.05)
     sp = int(fields[-2], 16)
     with open(f"/proc/{pid}/maps") as f:
         for line in f:
