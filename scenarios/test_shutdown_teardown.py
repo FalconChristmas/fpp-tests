@@ -91,3 +91,20 @@ def test_fppd_shuts_down_cleanly_without_mqtt(fppd):
 
     Regression: 9c0b15454. Shutdown called through the null MQTT client."""
     fppd.start()
+
+
+def test_a_slow_http_teardown_is_asked_for_once(fppd):
+    """fppd exits 0 on SIGTERM when drogon's teardown is slow to finish:
+    slowhttpclose.so holds the close of each HTTP listening socket back
+    200 ms, as a loaded box can.
+
+    Regression: 89a4e5366. af627577a asked drogon to quit every 10 ms until its
+    server thread returned, taking quit() for a no-op once it had taken
+    effect. In drogon 1.9 (Debian 13's) it isn't: each call queues the whole
+    teardown, the first frees the listener manager, and the second
+    dereferences it -- SIGSEGV in ListenerManager::stopListening() at every
+    stop whose teardown took more than 10 ms, in two nightly media scenarios
+    among others."""
+    fppd.start(preload=[shims.build("slowhttpclose.c")])
+    fppd.get("/fppd/status")
+    stopped_cleanly(fppd)
