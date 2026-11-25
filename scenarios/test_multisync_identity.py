@@ -160,3 +160,19 @@ def test_a_ping_with_no_uuid_keeps_the_one_known(fppd):
     fppd.wait_for(lambda: any(s["address"] == "10.20.30.81" and s["version"] == "2.0" for s in remotes(fppd)),
                   timeout=5, what="the second ping to be taken in")
     assert uuid_of(fppd, "10.20.30.81") == "real-uuid-0002", remotes(fppd)
+
+
+def test_a_player_sending_multisync_keeps_one_identity(fppd):
+    """A player sending MultiSync, whose pings report mode 6 (player with the
+    MultiSync bit), carries its real UUID at every address it is listed at.
+
+    Regression: found with FalconChristmas/fpp#3210. The mode it pinged with
+    was compared with the player mode it is stored as, and never matched, so
+    its other addresses kept their stand-ins."""
+    fppd.start()
+    send(ping_packet("10.20.30.84", "sender", type_id=ESPS, mode=6))
+    wait_listed(fppd, "10.20.30.84")
+    send(ping_packet("10.20.30.85", "sender", type_id=ESPS, mode=6, uuid="sender-real-uuid"))
+    wait_listed(fppd, "10.20.30.85")
+    fppd.wait_for(lambda: uuid_of(fppd, "10.20.30.84") == "sender-real-uuid", timeout=5,
+                  what="the real UUID to reach the sender's other address")

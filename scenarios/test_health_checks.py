@@ -314,28 +314,103 @@ def test_only_the_first_of_two_default_gateways_is_pinged(tmp_path):
     assert "10.0.0.1" in pings and "10.0.0.2" not in pings, pings
 
 
-def fpp_systems(*hostnames):
+def fpp_system(hostname, uuid, address, last_seen=100, type_id=14, local=0, type="Raspberry Pi 3 B+"):
+    return ('{"address":"%s","capeInfo":{"present":false},"fppMode":2,"hostname":"%s","lastSeen":%d,'
+            '"local":%d,"type":"%s","typeId":%d,"uuid":"%s"}' % (address, hostname, last_seen, local, type, type_id, uuid))
+
+
+def fpp_systems(*systems):
     """/api/fppd/multiSyncSystems as fppd answers it: one line, keys in order,
     objects nested in each system."""
-    return '{"Status":"OK","systems":[' + ",".join(
-        '{"address":"10.0.0.%d","capeInfo":{"present":false},"fppMode":2,"hostname":"%s","local":0}' % (i, h)
-        for i, h in enumerate(hostnames)) + "]}"
+    return '{"Status":"OK","systems":[' + ",".join(fpp_system(*s) for s in systems) + "]}"
 
 
-@pytest.mark.parametrize("hostnames, setting, want", [
-    (("FPP", "fpp", "stage"), "stage", "Warning - There may be more than one host"),
-    (("FPP", "stage"), "stage", "Pass - Hostname is set to other than the default"),
-    (("FPP",), "FPP", "Warning - Hostname is set to the default"),
-], ids=["two-called-fpp", "one-called-fpp", "still-the-default"])
-def test_the_hostname_check_warns_about_more_than_one_fpp(tmp_path, hostnames, setting, want):
-    """HostName is unique warns when two systems on the network are called
-    FPP, whatever the case, and when this one still has the default name.
+# name: (systems, names reported as shared)
+HOSTNAMES = {
+    "one-device-two-addresses": ([("FPP", "M1-a", "10.0.0.1"), ("FPP", "M1-a", "fe80::1%eth0")], ""),
+    "two-called-fpp": ([("FPP", "M1-a", "10.0.0.1"), ("fpp", "M1-b", "10.0.0.2")], "FPP"),
+    "two-called-something-else": ([("Garage", "M1-a", "10.0.0.1"), ("Garage", "M1-b", "10.0.0.2")], "Garage"),
+    "two-names-shared": ([("FPP", "M1-a", "10.0.0.1"), ("FPP", "M1-b", "10.0.0.2"),
+                          ("Garage", "M1-c", "10.0.0.3"), ("Garage", "M1-d", "10.0.0.4")], "FPP, Garage"),
+    "renamed-then-a-new-fpp": ([("FPP", "M1-a", "10.0.0.1", 100), ("Porch", "M1-a", "10.0.0.1", 200),
+                                ("FPP", "M1-b", "10.0.0.2", 200)], ""),
+    "local-name-beats-an-old-row": ([("FPP", "M1-a", "10.0.0.1", 200), ("Porch", "M1-a", "10.0.0.1", 100, 14, 1),
+                                     ("FPP", "M1-b", "10.0.0.2", 200)], ""),
+    "row-named-by-its-address": ([("Garage", "M1-a", "10.0.0.1"), ("Garage", "M1-b", "10.0.0.2", 100),
+                                  ("10.0.0.2", "M1-b", "10.0.0.2", 200, 0)], "Garage"),
+    "other-controllers": ([("F16", "MH-a", "10.0.0.1", 100, 136), ("F16", "MH-b", "10.0.0.2", 100, 136)], ""),
+    "no-uuid-of-its-own": ([("Garage", "MAC:aa", "10.0.0.1"), ("Garage", "", "fe80::1%eth0"),
+                            ("Garage", "Unknown", "10.0.0.2")], ""),
+    "markup-in-a-name": ([("<b>x", "M1-a", "10.0.0.1"), ("<b>x", "M1-b", "10.0.0.2")], "?b?x"),
+    # JSON escapes, so fppd reports a tab, a newline, a quote and a backslash
+    "control-characters-in-a-name": ([(r"a\tb\nc\"d\\e*", "M1-a", "10.0.0.1"),
+                                      (r"a\tb\nc\"d\\e*", "M1-b", "10.0.0.2")], "a?b?c?d?e?"),
+}
+
+
+@pytest.mark.parametrize("script", ["healthCheck", "healthCheckSSE"])
+@pytest.mark.parametrize("systems, shared", HOSTNAMES.values(), ids=HOSTNAMES)
+def test_the_hostname_check_warns_about_a_name_two_devices_share(tmp_path, script, systems, shared):
+    """The hostname check warns when two FPP devices have one hostname,
+    whatever the case, and counts a device with several addresses, or one
+    still listed under its old name, once. Only the streamed check says which
+    name: the text one goes in diagnostic reports.
+
+    Regression: FalconChristmas/fpp#3210. It counted rows named FPP, a row per
+    address."""
+    if script == "healthCheck":
+        out = run_checks(tmp_path, script, HC_MAIN, 'getSetting() { echo stage; }; HC_HostName',
+                         APIJSON=fpp_systems(*systems))
+        want = ("Warning - More than one FPP device has the same hostname" if shared
+                else "Pass - Hostname is set to other than the default")
+        assert want in out, out[-2000:]
+        assert "Garage" not in out and "10.0.0." not in out, out[-2000:]
+    else:
+        out = run_checks(tmp_path, script, "# Run all health checks", 'getSetting() { echo stage; }; HC_HostName',
+                         APIJSON=fpp_systems(*systems))
+        ev = sse_events(out)["hostname"]
+        assert ev["status"] == ("warn" if shared else "pass"), ev
+        assert ev["message"] == (f"Duplicate: {shared}" if shared else "stage"), ev
+        assert ("restart FPPD" in " ".join(ev.get("details", []))) == bool(shared), ev
+
+
+def test_the_hostname_check_lists_the_devices_sharing_a_name(tmp_path):
+    """The streamed check's details have a line per device with its IPv4
+    addresses (any other only if it has none), and say which is this one."""
+    out = run_checks(tmp_path, "healthCheckSSE", "# Run all health checks", 'getSetting() { echo FPP; }; HC_HostName',
+                     APIJSON=fpp_systems(("FPP", "M1-a", "10.0.0.1", 100, 14, 1), ("FPP", "M1-a", "fe80::1%eth0"),
+                                         ("fpp", "M1-b", "10.0.0.2"), ("fpp", "M1-b", "10.0.1.2"),
+                                         ("FPP", "M1-c", "fe80::3%eth0"),
+                                         ("FPP", "M1-e", "169.254.1.5"), ("Porch", "M1-d", "10.0.0.4")))
+    details = sse_events(out)["hostname"]["details"]
+    assert sorted(details[:4]) == ["FPP: 10.0.0.1 (Raspberry Pi 3 B+, this device)",
+                                   "FPP: 10.0.0.2, 10.0.1.2 (Raspberry Pi 3 B+)",
+                                   "FPP: 169.254.1.5 (Raspberry Pi 3 B+)",
+                                   "FPP: fe80::3%eth0 (Raspberry Pi 3 B+)"], details
+    assert "10.0.0.4" not in " ".join(details), details
+
+
+@pytest.mark.parametrize("script", ["healthCheck", "healthCheckSSE"])
+@pytest.mark.parametrize("reply", ["", "<html>not json", '{"systems":null}', "[]"])
+def test_the_hostname_check_survives_a_bad_reply(tmp_path, script, reply):
+    """No systems, or an answer that isn't JSON, is no shared name, and no
+    shell error."""
+    cut = HC_MAIN if script == "healthCheck" else "# Run all health checks"
+    out = run_checks(tmp_path, script, cut, 'getSetting() { echo stage; }; HC_HostName', APIJSON=reply)
+    if script == "healthCheck":
+        assert "Pass - Hostname is set to other than the default" in out, out[-2000:]
+    else:
+        assert sse_events(out)["hostname"]["status"] == "pass", out[-2000:]
+    assert "line " not in out, out[-2000:]
+
+
+def test_the_hostname_check_warns_about_the_default_name(tmp_path):
+    """HostName is unique warns when this system still has the default name.
 
     Regression: c9de7a118, which added the check."""
-    out = run_checks(tmp_path, "healthCheck", HC_MAIN,
-                     f'getSetting() {{ echo "{setting}"; }}; HC_HostName',
-                     APIJSON=fpp_systems(*hostnames))
-    assert want in out, out[-2000:]
+    out = run_checks(tmp_path, "healthCheck", HC_MAIN, 'getSetting() { echo FPP; }; HC_HostName',
+                     APIJSON=fpp_systems(("FPP", "M1-a", "10.0.0.1", 100, 14, 1)))
+    assert "Warning - Hostname is set to the default" in out, out[-2000:]
 
 
 @pytest.mark.parametrize("mounted", [False, True], ids=["not-a-mount", "a-mount"])
