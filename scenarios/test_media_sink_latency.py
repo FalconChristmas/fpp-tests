@@ -9,10 +9,16 @@ generated PipeWire confs. Each scenario plays a silent song in a playlist
 through the device's own PipeWire and checks that the correction fppd
 logs is that card's queue (read from /proc beside it), not nothing.
 
-Needs a real card: run-local.sh --host-audio, on a device whose Simple
-graph plays into a USB card's adapter declared after another card's
-(verified on a Pi 4 with the headphone jack as card 0 and a USB card as
-card 1). Silent, so nothing is heard.
+Stereo media plays through the slot's persistent output stream, whose
+position is measured from PipeWire's timing and the card's pointers
+(test_media_usb_card_timing.py), not estimated from the queue. Media with
+more channels than the stream carries still plays through a pipewiresink
+of its own and takes this estimate, so the song here has six.
+
+Needs a real card: run-local.sh --host-audio. The card-choice scenarios
+also need a device whose Simple graph plays into a USB card's adapter
+declared after another card's (verified on a Pi 4 with the headphone jack
+as card 0 and a USB card as card 1). Silent, so nothing is heard.
 """
 
 import contextlib
@@ -21,17 +27,17 @@ import re
 import subprocess
 import tempfile
 import time
+import wave
 
 import pytest
 
-from audio import write_tone_wav
 from fseq import write_fseq
 from show import playlist
 
 CONF = "/etc/pipewire/pipewire.conf.d/"
 SINKS = CONF + "95-fpp-alsa-sink.conf"
 GROUPS = CONF + "97-fpp-audio-groups.conf"
-CORRECTED = re.compile(r"correcting reported position by ([\d.]+) ms of audio sink latency")
+CORRECTED = re.compile(r"position backed up ([\d.]+) ms to the sound \(estimated\)")
 
 
 def read(path):
@@ -74,20 +80,41 @@ def graph_card():
     return None
 
 
+def target_card():
+    """(card ID, its node) the device's Simple graph plays into, or None."""
+    if not os.environ.get("FPP_TESTS_HOST_AUDIO"):
+        return None
+    targets = re.findall(r'node\.target = "(fpp_alsa_[^"]+)"', read(GROUPS))
+    for name, cid in adapters(read(SINKS)):
+        if len(targets) == 1 and name == targets[0] and cid in cards():
+            return cid, name
+    return None
+
+
 GRAPH = graph_card()
+TARGET = target_card()
+needs_target = pytest.mark.skipif(
+    TARGET is None, reason="needs run-local.sh --host-audio on a device whose Simple graph plays into one card")
 needs_graph = pytest.mark.skipif(
     GRAPH is None, reason="needs run-local.sh --host-audio on a device whose Simple graph plays into "
                           "a card that is not the first in its 95 conf")
 
 
-def play_and_read(fppd, audio_output):
-    """Play a silent 12 s song in a playlist with AudioOutput set as given;
-    the correction fppd logged (ms, or None) and the graph card's own queue
-    in ms, read from /proc while it played."""
-    cid = GRAPH[0]
+def silent_wav(path, secs, channels=6, rate=48000):
+    with wave.open(path, "wb") as w:
+        w.setnchannels(channels)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(bytes(2 * channels * int(secs * rate)))
+
+
+def play_and_read(fppd, audio_output, cid):
+    """Play a silent 12 s six-channel song in a playlist with AudioOutput set
+    as given; the correction fppd logged (ms, or None) and card `cid`'s own
+    queue in ms, read from /proc while it played."""
     idx = cards()[cid]
     write_fseq(os.path.join(fppd.media, "sequences", "Quiet.fseq"), [bytes(8)] * 240)
-    write_tone_wav(os.path.join(fppd.media, "music", "Quiet.wav"), 12, amplitude=0.0)
+    silent_wav(os.path.join(fppd.media, "music", "Quiet.wav"), 12)
     fppd.write("playlists/Quiet.json", playlist("Quiet", [{
         "type": "both", "enabled": 1, "playOnce": 0,
         "sequenceName": "Quiet.fseq", "mediaName": "Quiet.wav"}]))
@@ -117,7 +144,7 @@ def assert_corrected_by(fppd, got, queue):
     assert 0.5 * queue < got < 1.5 * queue, f"corrected by {got} ms; the card's queue was {queue:.1f} ms"
 
 
-@needs_graph
+@needs_target
 def test_the_reported_position_is_backed_up_by_the_cards_queue(fppd, audio):
     """AudioOutput names the card the graph plays into: fppd corrects the
     media position by about that card's queue depth.
@@ -127,7 +154,7 @@ def test_the_reported_position_is_backed_up_by_the_cards_queue(fppd, audio):
     11750d6c6 (the card it reads: the first adapter in the 95 conf, card 0
     here, whose PCM is closed -- so no correction at all on a box with
     more than one card)."""
-    got, queue = play_and_read(fppd, GRAPH[0])
+    got, queue = play_and_read(fppd, TARGET[0], TARGET[0])
     assert_corrected_by(fppd, got, queue)
 
 
@@ -139,7 +166,7 @@ def test_the_card_the_graph_feeds_wins_over_the_setting(fppd, audio):
 
     Regression: ef26935dc. The setting was matched first, so the card
     read was one not playing -- PCM closed, no correction."""
-    got, queue = play_and_read(fppd, GRAPH[2])
+    got, queue = play_and_read(fppd, GRAPH[2], GRAPH[0])
     assert_corrected_by(fppd, got, queue)
 
 
@@ -176,5 +203,5 @@ def test_an_adapter_declared_only_in_the_groups_conf_is_found(fppd, audio):
     groups = "context.objects = [\n" + moved[0] + "]\n" + read(GROUPS)
     with bound_over(SINKS, sinks.replace(moved[0], "")), bound_over(GROUPS, groups):
         assert name not in [n for n, _ in adapters(read(SINKS))], "precondition: 95 no longer declares it"
-        got, queue = play_and_read(fppd, cid)
+        got, queue = play_and_read(fppd, cid, cid)
     assert_corrected_by(fppd, got, queue)
