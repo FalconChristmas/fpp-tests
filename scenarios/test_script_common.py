@@ -49,7 +49,10 @@ def test_common_runs_a_helper_named_on_its_command_line(fppd, tmp_path):
     Regression: 463a89663. With $0 "-bash", basename took it for an option
     and printed an error on every ssh login.
     Regression: 0677fb44c. f4d30c4e8 left a debug "BASENAME: ..." line that
-    every source printed."""
+    every source printed.
+    Regression: the dispatch passed "$@" unquoted, so a value with spaces
+    was split into several arguments and setSetting stored only the first
+    word (glob characters in it were expanded as well)."""
     fppd.start()  # writes the media_root.txt the scripts find the media directory by
     env = dict(os.environ, FPPDIR=fppd.tree)
     scripts = os.path.join(fppd.tree, "scripts")
@@ -61,6 +64,11 @@ def test_common_runs_a_helper_named_on_its_command_line(fppd, tmp_path):
     _, out = run([os.path.join(scripts, "common"), "setSetting", "fppTestsDirect", "fromTheCommandLine"])
     with open(os.path.join(fppd.media, "settings")) as f:
         assert "fromTheCommandLine" in f.read(), f"scripts/common setSetting did nothing:\n{out[-2000:]}"
+
+    _, out = run([os.path.join(scripts, "common"), "setSetting", "fppTestsSpaces", "value with spaces*a"])
+    with open(os.path.join(fppd.media, "settings")) as f:
+        assert 'fppTestsSpaces = "value with spaces*a"' in f.read(), \
+            f"scripts/common split or expanded a value with spaces:\n{out[-2000:]}"
 
     for helper in ("common", "functions"):
         sourcer = tmp_path / f"source-{helper}.sh"
