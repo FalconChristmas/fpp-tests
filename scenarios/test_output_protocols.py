@@ -303,6 +303,47 @@ def test_kinet_packets(fppd, version):
         assert not bad, f"port {port}: {len(bad)} packets whose data is not its slice of a frame"
 
 
+def test_kinet_universes_past_port_255_are_clamped(fppd):
+    """A KiNet entry whose ports would run past 255 sends only the ports that
+    fit, with warning 26, instead of wrapping id 250 + 10 universes around to
+    ports 0-3 (where it collides with unrelated outputs).
+
+    Regression: the KiNet port is one byte in both headers, but the output
+    assigned port + x to it without checking the range.
+    """
+    from test_output_warnings import wait_for_warnings
+
+    size = 10
+    frames = unique_frames(30, size * 10)
+    with Listener(KINET_PORT) as rx:
+        play(fppd, frames, [output(7, 250, 1, size, universes=10)])
+        time.sleep(3)
+        pkts = packets(rx)
+    assert len(pkts) > 5, f"only {len(pkts)} KiNet packets arrived"
+    ports = sorted({p[16] for p in pkts})
+    assert ports == list(range(250, 256)), ports
+    assert all(p[0:4] == bytes.fromhex("0401dc4a") for p in pkts)
+    wait_for_warnings(fppd, [(26, "reducing universeCount to 6")])
+
+
+def test_kinet_id_outside_one_byte_disables_output(fppd):
+    """A KiNet id that cannot be written to the one-byte port field disables
+    the output and raises warning 26, rather than emitting packets on the
+    wrapped port numbers.
+
+    Regression: same missing range check as the clamping case, with the
+    starting port itself outside 0-255.
+    """
+    from test_output_warnings import wait_for_warnings
+
+    with Listener(KINET_PORT) as rx:
+        play(fppd, unique_frames(20, 20), [output(7, 300, 1, 10, universes=2)])
+        time.sleep(3)
+        pkts = packets(rx)
+    assert not pkts, [p[:24].hex() for p in pkts[:3]]
+    wait_for_warnings(fppd, [(26, "outside the one-byte KiNet port range 0-255")])
+
+
 def test_generic_udp_tokens(fppd):
     """A Generic UDP output lays its packet out from the Data tokens: hex
     bytes (0x.. and #..), the channel and pixel counts in one byte and in
