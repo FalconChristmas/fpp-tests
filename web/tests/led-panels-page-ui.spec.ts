@@ -375,6 +375,29 @@ test('with no channeloutputs.json at all, a matrix can be added and is saved', a
   await expect.poll(() => modelSize(request), { timeout: 15_000 }).toBe('64x32');
 });
 
+test('a matrix added while its save is on its way is not read back before the save lands', async ({ page, request }) => {
+  // Regression: 8f4d87332.  Adding (or removing) a matrix posted the config and,
+  // without waiting for the post, read channeloutputs.json back.  Whichever
+  // landed first won: with no file yet the read was a 404, and with a file it
+  // was the config from before the save, put over the one the save had just
+  // set.  Holding the post makes the read win every time; the fixture fails
+  // the test on its 404.
+  inPlayer('rm', '-f', OUTPUTS);
+  await page.route('**/api/configfile/channeloutputs.json*', async (route) => {
+    if (route.request().method() === 'POST') await new Promise((r) => setTimeout(r, 1_500));
+    await route.continue();
+  });
+  page.on('dialog', (d) => d.accept());
+  await page.goto('/channeloutputs.php');
+  await page.locator('#tab-LEDPanels-tab').click();
+  const saved = page.waitForResponse((r) => r.request().method() === 'POST' && r.url().includes('/api/configfile/channeloutputs.json'));
+  await addMatrix(page, 'ColorLight5a75');
+  await saved;
+  await expect.poll(() => savedIDs(request), { timeout: 15_000 }).toEqual([1]);
+  // what the page holds as saved is the matrix it saved
+  expect(await page.evaluate(() => (0, eval)('channelOutputs.channelOutputs.length'))).toBe(1);
+});
+
 test('a page with no matrix on show throws no script errors while one is removed and one added', async ({ page, request }) => {
   // Regression: 75620b034.  GetCurrentActiveMatrixPanelID() returned the
   // text of the active tab's first element, and a tab with no matrix holds
