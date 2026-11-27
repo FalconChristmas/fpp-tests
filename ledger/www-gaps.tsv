@@ -199,18 +199,18 @@ www/api/controllers/options.php	GetOptions_GPIOS	559	0	26	test	web/tests/options
 www/api/controllers/options.php	GetOptions_AES67Interface	607	0	5	test	web/tests/network-interface-lists.spec.ts	grep -v lo and the @<link> suffix are a test.fail() (FUTURE.md); the setting it fills is read by nothing
 www/api/controllers/options.php	GetOptions	629	3	36	todo	web/tests/options-api.spec.ts	dispatcher: AudioMixerDevice, AudioInput*, GPIOS/GPIOLIST, AES67Interface, unknown name reached. Left: FrameBuffer (fpp -FB), BBBLeds
 www/api/controllers/pipewire.php	(top level)	0	1	5	todo		auto: not examined yet
-www/api/controllers/pipewire.php	pw_find_combine_streams	75	1	19	todo		auto: not examined yet
-www/api/controllers/pipewire.php	pw_node_channel_count	107	1	5	todo		auto: not examined yet
+www/api/controllers/pipewire.php	pw_find_combine_streams	75	1	19	test	web/tests/pipewire-helper-branches.spec.ts	legacy and output.<combine>_<target> stream names matched by node.target/target.object, with non-node entries skipped
+www/api/controllers/pipewire.php	pw_node_channel_count	107	1	5	test	web/tests/pipewire-helper-branches.spec.ts	channelVolumes length and the stereo fallback
 www/api/controllers/pipewire.php	RestartPipeWireServices	302	2	13	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetPipeWireAudioGroups	332	1	7	todo		auto: not examined yet
 www/api/controllers/pipewire.php	SavePipeWireAudioGroups	351	0	24	test	web/tests/pw-config-save-refusals.spec.ts	bad bodies refused, ids filled in; test.fail: a non-object element is a fatal with a 200
 www/api/controllers/pipewire.php	ApplyPipeWireAudioGroups	401	15	183	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetPipeWireSinks	753	0	14	covered		auto: every line reached
-www/api/controllers/pipewire.php	QueryAlsaCardBestRate	815	2	27	todo		auto: not examined yet
+www/api/controllers/pipewire.php	QueryAlsaCardBestRate	815	2	27	test	web/tests/pipewire-helper-branches.spec.ts	discrete list, continuous range, single rate, graph-clock preference and fallback
 www/api/controllers/pipewire.php	DetectAlsaCardMaxChannels	879	4	21	todo		auto: not examined yet
-www/api/controllers/pipewire.php	PipeWireProbeFormatRate	947	14	14	todo		auto: not examined yet
-www/api/controllers/pipewire.php	PipeWireBestFormatForRate	988	17	23	todo		auto: not examined yet
-www/api/controllers/pipewire.php	PipeWireCardHwParams	1030	9	18	todo		auto: not examined yet
+www/api/controllers/pipewire.php	PipeWireProbeFormatRate	947	14	14	test	web/tests/pipewire-helper-branches.spec.ts	unknown format, exact rate, refinement, refusal and default rate/channels
+www/api/controllers/pipewire.php	PipeWireBestFormatForRate	988	17	23	test	web/tests/pipewire-helper-branches.spec.ts	with a stand-in aplay: free widen, costly widen, no S16 baseline, no S16 at all and the advertised fallback
+www/api/controllers/pipewire.php	PipeWireCardHwParams	1030	9	18	test	web/tests/pipewire-helper-branches.spec.ts	aplay HW params and a dead card; left: the /proc synthesised busy-card path, which needs an open device
 www/api/controllers/pipewire.php	GetPipeWireAudioCards	1078	1	261	todo		auto: not examined yet
 www/api/controllers/pipewire.php	UsbFindTTOwner	1521	15	15	todo		auto: not examined yet
 www/api/controllers/pipewire.php	GetUsbAudioBandwidthCheck	1557	47	64	todo		auto: not examined yet
@@ -335,12 +335,12 @@ www/api/controllers/playlist.php	playlist_delete	921	2	17	test	web/tests/playlis
 www/api/controllers/playlist.php	PlaylistSectionInsertItem	966	2	32	test	web/tests/playlist-item-insert-refusals.spec.ts	new section, missing playlist, bad name; 8 test.fail (any key is a section, any body an item, an unparsable file is replaced); the write-failure branch cannot be staged as root
 www/api/controllers/playlist.php	playlist_repeat	1189	2	14	todo		auto: not examined yet
 www/api/controllers/plugin.php	(top level)	0	1	49	todo		auto: not examined yet
-www/api/controllers/plugin.php	DepsRequirePackages	54	1	6	todo		auto: not examined yet
-www/api/controllers/plugin.php	DepsRequirePython	68	1	6	todo		auto: not examined yet
-www/api/controllers/plugin.php	IsOfficialPluginSrcURL	102	1	8	todo		auto: not examined yet
+www/api/controllers/plugin.php	DepsRequirePackages	54	1	6	test	web/tests/plugin-helper-branches.spec.ts	no block, empty, blank strings and a real package
+www/api/controllers/plugin.php	DepsRequirePython	68	1	6	test	web/tests/plugin-helper-branches.spec.ts	non-array, blank strings and a real pip package
+www/api/controllers/plugin.php	IsOfficialPluginSrcURL	102	1	8	test	web/tests/plugin-helper-branches.spec.ts	host and first GitHub path segment checked case-insensitively; empty and non-URL values refused
 www/api/controllers/plugin.php	PluginBoundedFetch	154	1	12	todo		auto: not examined yet
 www/api/controllers/plugin.php	GetListedPluginInfo	269	8	12	todo		auto: not examined yet
-www/api/controllers/plugin.php	PluginRepoSlugFromURL	388	2	14	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginRepoSlugFromURL	388	2	14	test	web/tests/plugin-helper-branches.spec.ts	github and raw URLs, .git, other hosts, short and non-string values
 www/api/controllers/plugin.php	PluginSrcURLIsListed	433	2	7	todo		auto: not examined yet
 www/api/controllers/plugin.php	GetPluginRepoRecords	462	1	13	todo		auto: not examined yet
 www/api/controllers/plugin.php	SetPluginRepoRecords	483	1	11	todo		auto: not examined yet
@@ -349,10 +349,10 @@ www/api/controllers/plugin.php	RecordPluginInstallSource	562	6	21	todo		auto: no
 www/api/controllers/plugin.php	PluginAptFiles	649	1	9	todo		auto: not examined yet
 www/api/controllers/plugin.php	PluginPackageSnapshot	687	1	8	todo		auto: not examined yet
 www/api/controllers/plugin.php	PluginPackageChanges	705	7	40	todo		auto: not examined yet
-www/api/controllers/plugin.php	PluginPackageChangesKeep	770	1	8	todo		auto: not examined yet
-www/api/controllers/plugin.php	PluginPackageChangesMerge	788	1	32	todo		auto: not examined yet
-www/api/controllers/plugin.php	PluginDeclaredDependencies	838	1	7	todo		auto: not examined yet
-www/api/controllers/plugin.php	PluginPackageChangesText	863	1	22	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginPackageChangesKeep	770	1	8	test	web/tests/plugin-helper-branches.spec.ts	sorted, capped and counted when the list is cut
+www/api/controllers/plugin.php	PluginPackageChangesMerge	788	1	32	test	web/tests/plugin-helper-branches.spec.ts	an installed-then-removed package, the unknown flag and an empty merge
+www/api/controllers/plugin.php	PluginDeclaredDependencies	838	1	7	test	web/tests/plugin-helper-branches.spec.ts	a manifest with both dependency blocks, and a missing manifest as false
+www/api/controllers/plugin.php	PluginPackageChangesText	863	1	22	test	web/tests/plugin-helper-branches.spec.ts	added-only is silent; changed, unknown and apt-file lines name FPP's own task
 www/api/controllers/plugin.php	PluginTryQuickListFetch	949	7	19	todo		auto: not examined yet
 www/api/controllers/plugin.php	PluginWarmListDetached	990	1	9	todo		auto: not examined yet
 www/api/controllers/plugin.php	ResolveUnverifiedPlugins	1014	4	25	todo		auto: not examined yet
@@ -361,10 +361,10 @@ www/api/controllers/plugin.php	InstallPlugin	1320	15	49	todo		auto: not examined
 www/api/controllers/plugin.php	InstallPluginFromInfo	1413	23	168	todo		auto: not examined yet
 www/api/controllers/plugin.php	ResolveLocalDependencies	1768	3	60	todo		auto: not examined yet
 www/api/controllers/plugin.php	ResolveDependencyPlugins	1905	1	41	todo		auto: not examined yet
-www/api/controllers/plugin.php	SelectPluginVersion	2004	1	5	todo		auto: not examined yet
+www/api/controllers/plugin.php	SelectPluginVersion	2004	1	5	test	web/tests/plugin-helper-branches.spec.ts	branch and sha selected, and no versions entry
 www/api/controllers/plugin.php	SelectPluginVersionEntry	2031	1	27	todo		auto: not examined yet
-www/api/controllers/plugin.php	MergePluginDependencies	2085	1	15	todo		auto: not examined yet
-www/api/controllers/plugin.php	PluginVersionToNumber	2111	3	18	todo		auto: not examined yet
+www/api/controllers/plugin.php	MergePluginDependencies	2085	1	15	test	web/tests/plugin-helper-branches.spec.ts	top-level and per-version blocks concatenated; none means null
+www/api/controllers/plugin.php	PluginVersionToNumber	2111	3	18	test	web/tests/plugin-helper-branches.spec.ts	v prefix, short version, dash suffix, 9990 cap and the >99 clamp
 www/api/controllers/plugin.php	GetPluginInfo	2173	7	24	todo		auto: not examined yet
 www/api/controllers/plugin.php	PluginEmitIcon	2223	1	9	todo		auto: not examined yet
 www/api/controllers/plugin.php	PluginCachedIconData	2251	2	11	todo		auto: not examined yet
@@ -401,7 +401,7 @@ www/api/controllers/plugin.php	GitHubStatsSearchPage	4126	11	27	todo		auto: not 
 www/api/controllers/plugin.php	GitHubStatsSearchAll	4173	2	28	todo		auto: not examined yet
 www/api/controllers/plugin.php	PluginGitHubStatsFetchChunk	4218	13	31	todo		auto: not examined yet
 www/api/controllers/plugin.php	GetPluginGitHubStats	4288	4	44	todo		auto: not examined yet
-www/api/controllers/plugin.php	PluginOfferedReleaseNotesStyle	4431	1	6	todo		auto: not examined yet
+www/api/controllers/plugin.php	PluginOfferedReleaseNotesStyle	4431	1	6	test	web/tests/plugin-helper-branches.spec.ts	script present and missing, gitRelease with and without a repo, and an unknown style
 www/api/controllers/plugin.php	GetPluginReleaseNotes	4491	1	15	todo		auto: not examined yet
 www/api/controllers/plugin.php	PluginReleaseNotesGitHubGet	4517	2	23	todo		auto: not examined yet
 www/api/controllers/plugin.php	PluginReleaseNotesFromGitHub	4555	1	48	todo		auto: not examined yet
@@ -465,7 +465,7 @@ www/api/controllers/settings.php	PutSetting	123	11	139	test	web/tests/settings-p
 www/api/controllers/settings.php	ResetFanThermalTrips	428	4	4	todo		auto: not examined yet
 www/api/controllers/settings.php	UpdateJSONValueSetting	505	2	16	todo		auto: not examined yet
 www/api/controllers/stats.php	(top level)	0	1	2	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_generate	10	2	11	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_generate	10	2	11	test	web/tests/stats-helper-branches.spec.ts	a full payload written to a temp file runs every collector
 www/api/controllers/stats.php	stats_get_last_file	94	1	14	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_network	125	13	53	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_memory	274	27	45	todo		auto: not examined yet
@@ -473,25 +473,25 @@ www/api/controllers/stats.php	stats_significantSubset	371	1	23	todo		auto: not e
 www/api/controllers/stats.php	stats_publish_stats_file	537	1	30	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_getOutputProcessors	696	6	11	todo		auto: not examined yet
 www/api/controllers/stats.php	stats_getFiles	722	2	12	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_addressClass	754	8	12	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_stackOf	781	3	10	todo		auto: not examined yet
-www/api/controllers/stats.php	localPeerIdentity	810	1	1	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_addressClass	754	8	12	test	web/tests/stats-helper-branches.spec.ts	scope classes by family, including link-local, ULA, loopback and unknown
+www/api/controllers/stats.php	stats_stackOf	781	3	10	test	web/tests/stats-helper-branches.spec.ts	v4, v6, dual and none derived from address classes
+www/api/controllers/stats.php	localPeerIdentity	810	1	1	test	web/tests/stats-helper-branches.spec.ts	a peer with no UUID and no MAC gets a salted derived identity
 www/api/controllers/stats.php	peerMacIdentity	830	1	4	todo		auto: not examined yet
-www/api/controllers/stats.php	addMultiSyncUUID	851	2	11	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_multiSyncCollect	891	4	63	todo		auto: not examined yet
+www/api/controllers/stats.php	addMultiSyncUUID	851	2	11	test	web/tests/stats-helper-branches.spec.ts	MAC and Failed identities replaced with non-address identifiers; left: data with no systems key
+www/api/controllers/stats.php	stats_multiSyncCollect	891	4	63	test	web/tests/stats-helper-branches.spec.ts	injected peers: deduplicated by uuid, address classes and stacks counted, identities derived
 www/api/controllers/stats.php	stats_getSchedule	1080	0	14	covered		auto: every line reached
 www/api/controllers/stats.php	stats_getPlugins	1126	5	10	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_getSequenceShape	1156	27	64	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_universeRowChannels	1480	1	4	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_universeRowUniverses	1497	1	4	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_universe_in	1506	1	33	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_getSequenceShape	1156	27	64	test	web/tests/stats-helper-branches.spec.ts	step/channel/version/compression/playlist buckets, >250 truncation and bad metas; left: localhost unreadable and the mediaDirectory fallback
+www/api/controllers/stats.php	stats_universeRowChannels	1480	1	4	test	web/tests/stats-helper-branches.spec.ts	flat DDP/Twinkly rows keep channelCount; other rows multiply by universes
+www/api/controllers/stats.php	stats_universeRowUniverses	1497	1	4	test	web/tests/stats-helper-branches.spec.ts	flat rows contribute zero universes; a missing count means one
+www/api/controllers/stats.php	stats_universe_in	1506	1	33	test	web/tests/stats-helper-branches.spec.ts	flat types, an inactive row, a missing count and a missing file
 www/api/controllers/stats.php	stats_multiSyncPeerLookup	1599	5	27	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_addressForm	1672	2	11	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_universe_out	1702	9	87	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_panel_out	1937	1	12	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_other_out	1977	11	23	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_pixel_or_pi	2024	2	41	todo		auto: not examined yet
-www/api/controllers/stats.php	stats_pwm_out	2141	16	21	todo		auto: not examined yet
+www/api/controllers/stats.php	stats_addressForm	1672	2	11	test	web/tests/stats-helper-branches.spec.ts	unicast, broadcast, multicast, IPv6 and hostname forms
+www/api/controllers/stats.php	stats_universe_out	1702	9	87	test	web/tests/stats-helper-branches.spec.ts	two output blocks, flat rows, priority/deDupe/monitor and UDP target shapes; left: an entry with no universes
+www/api/controllers/stats.php	stats_panel_out	1937	1	12	test	web/tests/stats-helper-branches.spec.ts	panels counted from a crafted config; left: a config with no channelOutputs key
+www/api/controllers/stats.php	stats_other_out	1977	11	23	test	web/tests/stats-helper-branches.spec.ts	enabled types and their channel counts, plus both refusal statuses
+www/api/controllers/stats.php	stats_pixel_or_pi	2024	2	41	test	web/tests/stats-helper-branches.spec.ts	all six pixel buckets, virtual strings and protocols; left: a config with no channelOutputs key
+www/api/controllers/stats.php	stats_pwm_out	2141	16	21	test	web/tests/stats-helper-branches.spec.ts	LED and Servo counts and the frequency, plus both refusal statuses
 www/api/controllers/system.php	(top level)	0	1	4	todo		auto: not examined yet
 www/api/controllers/system.php	RebootDevice	18	1	5	todo		auto: not examined yet
 www/api/controllers/system.php	SystemShutdownOS	46	1	5	todo		auto: not examined yet
