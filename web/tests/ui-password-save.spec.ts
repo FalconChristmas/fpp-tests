@@ -4,8 +4,10 @@ import http from 'http';
 import { container, inPlayer } from './container';
 import { keepingSettings, setSettingInFile } from './privacy-helpers';
 
-// The player answers with an error on purpose here: the UI password it saves then guards the page.
-test.use({ allowFailedRequests: [/^GET \/settings\.php\S* 401/] });
+// The player answers with an error on purpose here: the UI password it saves
+// then guards the page, so whatever the open page asks for next (a reload, its
+// background polls such as api/plugin/updateStatus) is refused.
+test.use({ allowFailedRequests: [/^GET \S+ 401$/] });
 
 // Feature: 2d0e1ccf2 ("improve UI password handling and save process",
 // #2829).  The UI password fields on Settings > UI saved one at a time as
