@@ -383,6 +383,52 @@ def test_audio_sync_mode_and_port_change_while_running(fppd):
         stop_effects(fppd, "M")
 
 
+def test_moving_the_port_drops_the_old_ports_last_packet(fppd):
+    """The receive cache belongs to the socket that filled it. With stairs
+    streamed to the port fppd listens on, moving WLEDAudioSyncPort to another
+    port (while the stairs keep going to the old one, now closed) leaves the
+    effect on its simulated sound from the moment the new port is bound: no
+    frame of stairs after that. Done four times, back and forth.
+
+    Regression: 7edf80352, which clears the cached frame when the listener
+    stops (and sets the mode only once the socket is open). The
+    cached frame stayed live for its 250 ms after the listener that received
+    it was gone, so the old port's packets kept drawing (and a receive whose
+    bind failed could draw them, as test_audio_sync_mode_and_port_change_
+    while_running caught under TSan)."""
+    setup(fppd, [matrix("M", width=W, height=H)], channels=CHANNELS)
+    fppd.settings(WLEDAudioSyncMode="receive")
+    ports = [PORT, 12000]
+    with DdpReceiver(CHANNELS) as rx:
+        fppd.start()
+        start_geq(fppd)
+        sock = udp_socket(PEER)
+        try:
+            with Stream() as stream:
+                for i in range(4):
+                    old, new = ports[i % 2], ports[(i + 1) % 2]
+                    stream.send = [(sock, packet(bands(STAIRS)), old)]
+                    wait_frame(fppd, rx, bars(STAIRS), f"the stairs on {old}")
+                    fppd.settings(WLEDAudioSyncPort=str(new))
+                    fppd.wait_for(lambda: udp_bound(new) and not udp_bound(old), interval=0.01,
+                                  what=f"the listener to move to {new}")
+                    # A frame drawn just before the move may still be on its way
+                    # (output runs at ~20 fps under the sanitizers): two frame
+                    # periods' grace, which still leaves most of the 250 ms a
+                    # stale cache would draw for.
+                    time.sleep(0.1)
+                    since = time.monotonic()
+                    time.sleep(0.4)
+                    frames = frames_since(rx, since)
+                    assert len(frames) > 3, "output stopped"
+                    stale = [f for f in frames if f == bars(STAIRS)]
+                    assert not stale, (f"{len(stale)} of {len(frames)} frames after the move to {new} "
+                                       f"drew {old}'s last packet")
+        finally:
+            sock.close()
+        stop_effects(fppd, "M")
+
+
 def test_out_of_range_values_are_clamped(fppd):
     """A packet's floats are clamped to what WLED itself sends before the
     effects see them: a volume (sampleSmth) of 1e30 draws exactly what 255
