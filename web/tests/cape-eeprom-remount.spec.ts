@@ -35,7 +35,10 @@ test('signing re-mounts the EEPROM when the recorded device is missing', async (
   const r = await request.get('/api/cape/eeprom/signingData/FPP-TESTS-KEY/12345');
   expect(r.ok(), await r.text()).toBe(true);
   const log = inPlayer('cat', LOG);
-  expect(log).toContain("echo '24c256 0x50' > /sys/bus/i2c/devices/i2c-");
+  // Failed once in CI with an empty log and the fallback EEPROM served, which
+  // the player gives whether or not the re-mount ran: say what was there.
+  const state = () => inPlayer('sh', '-c', `echo "location: $(cat ${LOC} 2>&1)"; ls -l ${BASH} ${LOG} 2>&1; true`);
+  expect(log, log ? undefined : state()).toContain("echo '24c256 0x50' > /sys/bus/i2c/devices/i2c-");
   expect(log).toMatch(/\/sys\/bus\/i2c\/devices\/i2c-[12]\/new_device/);
   // And signing still falls back to the virtual EEPROM afterwards.
   const body = await r.json();
