@@ -28,7 +28,10 @@ test.beforeEach(async ({ request }) => {
     expect((await request.post(`/api/playlist/${p.name}`, { data: p })).ok()).toBe(true);
   }
 });
-test.afterEach(async ({ request }) => {
+test.afterEach(async ({ page, request }) => {
+  // The idle status page re-reads the picked playlist every second; left
+  // open, it asks for one deleted below and fails the test on the 404.
+  await page.goto('about:blank');
   await command(request, 'Stop Now', []);
   await request.put('/api/settings/verbosePlaylistItemDetails', { data: verbose });
   for (const name of [PAUSED, RANDOM, PLAIN]) await request.delete(`/api/playlist/${name}`);
